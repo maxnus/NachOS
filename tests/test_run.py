@@ -425,6 +425,18 @@ def _last_recorded_step(recording: Recording) -> int:
     return recorded_observations(recording)[-1].observation.game_loop
 
 
+def _api_leaving_at(step: int) -> Api:
+    """An api that leaves its game on its first turn at or after `step`."""
+    api = Api()
+
+    @api.on(TurnEvent)
+    def leave(_: TurnEvent) -> None:
+        if api.step >= step:
+            api.leave_game()
+
+    return api
+
+
 class TestPlayingARecording:
     def test_by_default_a_bot_that_asks_what_the_recording_was_not_asked_raises(self) -> None:
         api = Api()
@@ -489,21 +501,10 @@ class TestPlayingARecording:
     def test_by_default_a_bot_that_left_after_saving_its_replay_needs_where_to_save_it(self, tmp_path: Path) -> None:
         left = write_recording(tmp_path / "left.sc2rec", _pylon_game_left_after(100))
         last_step = _last_recorded_step(left)
-
-        def leaving_api() -> Api:
-            api = Api()
-
-            @api.on(TurnEvent)
-            def leave(_: TurnEvent) -> None:
-                if api.step >= last_step:
-                    api.leave_game()
-
-            return api
-
         with pytest.raises(ProtocolError, match="answers save_replay next, and was asked for leave_game"):
-            run_recording(left, leaving_api())
+            run_recording(left, _api_leaving_at(last_step))
         replay = tmp_path / "game.SC2Replay"
-        assert run_recording(left, leaving_api(), save_replay_to=replay) is Result.DEFEAT
+        assert run_recording(left, _api_leaving_at(last_step), save_replay_to=replay) is Result.DEFEAT
         assert replay.read_bytes() == b"the replay recorded"
 
     def test_a_permissive_one_saves_no_replay_and_says_so(self, tmp_path: Path, logged: list[str]) -> None:
@@ -891,18 +892,12 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     tmp_path: Path,
 ) -> None:
     """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins, then
-    plays it back exactly from its recording."""
+    plays it back exactly from its recording, with an api of its own."""
     try:
         game_map = MapFile.find(_LADDER_MAP)
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
-    api = Api()
-
-    @api.on(TurnEvent)
-    def give_up(event: TurnEvent) -> None:
-        if event.time.steps >= 16:
-            api.leave_game()
-
+    api = _api_leaving_at(16)
     port = free_port()
     replay, record = tmp_path / "game.SC2Replay", tmp_path / "game.sc2rec"
     result_file = tmp_path / "result.json"
@@ -928,8 +923,9 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]
 
     replayed = tmp_path / "replayed.SC2Replay"
-    assert run_recording(record, api, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
-    assert (api.step, api.enemy.ladder_id) == (left_at_step, "5a1f")
+    playing_back = _api_leaving_at(16)
+    assert run_recording(record, playing_back, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
+    assert (playing_back.step, playing_back.enemy.ladder_id) == (left_at_step, "5a1f")
     assert replayed.read_bytes() == replay.read_bytes()
 
 

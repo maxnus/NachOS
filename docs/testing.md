@@ -63,10 +63,38 @@ Underneath, `run_recording` plays the file through a `PlaybackTransport`.
 
 ## Playing any bot through a recording
 
+An api plays one game, so a bot's tests play each recording in a process of its own, where the bot's modules load
+afresh with an api of their own:
+
 ```python
-def test_the_bot_plays_a_whole_recorded_game() -> None:
-    run_recording("tests/games/pylon.sc2rec", api, permissive=True)
+# tests/play_recording.py
+import sys
+
+from sc2nachos import run_recording
+
+from my_bot import api
+
+run_recording(sys.argv[1], api, permissive=True)
 ```
+
+```python
+# tests/test_recorded_games.py
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+_PLAYER = Path(__file__).with_name("play_recording.py")
+
+
+@pytest.mark.parametrize("recording", sorted(Path(__file__).with_name("games").glob("*.sc2rec")))
+def test_the_bot_plays_a_whole_recorded_game(recording: Path) -> None:
+    played = subprocess.run([sys.executable, str(_PLAYER), str(recording)], capture_output=True, text=True)
+    assert played.returncode == 0, played.stderr
+```
+
+A handler's exception ends the process, and its traceback is in `played.stderr`.
 
 With `permissive=True`, it returns `UNDECIDED` if the recording stops before the game's end, as one made with a time
 limit does, and `DEFEAT` if the bot leaves first. The bot sees the game as recorded, whatever it does: its orders
@@ -119,4 +147,4 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
 
 The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
-a recorded game, as below.
+a recorded game, as above.

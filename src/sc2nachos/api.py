@@ -60,16 +60,16 @@ class Api:
     """Everything a bot talks to. It is built before there is a game.
 
     Construct one where the rest of your bot can reach it, module scope included, and pass it to `run_local` or
-    `run_ladder` for every game it plays. Never subclass it: your own helpers belong in your own modules, as
-    ordinary functions.
+    `run_ladder` for its game. An api plays one game: a program that plays several makes an api for each. Never
+    subclass it: your own helpers belong in your own modules, as ordinary functions.
 
     Time is counted in steps: one step is one game loop, and 22.4 make a second. A moment or a length of game time is a
     `GameTime`, but for the two counts of steps, `step` and `steps_per_turn`. The bot takes a turn every
     `steps_per_turn` steps, which the game is played with. Each turn hands its handlers a `TurnStartEvent`, then
     the events its observation reports, in the order `docs/events.md` gives, then a `TurnEvent`.
 
-    Anything of the game raises `NotPlayingError` until the first game starts. After a game ends, the api keeps
-    answering from it until the next one starts.
+    Anything of the game raises `NotPlayingError` until the game starts. After it ends, the api keeps answering from
+    it.
     """
 
     def __init__(
@@ -82,7 +82,7 @@ class Api:
         as `handler_timings`, if `time_handlers`. This connects to nothing."""
         self._enemy_upgrade_inference = enemy_upgrade_inference
         self._events = _EventBus(time_handlers=time_handlers)
-        # Everything that belongs to one game and nothing that outlives it; each game replaces it whole.
+        # Everything that comes with the game, from the moment it starts.
         self._game: _Game | None = None
 
     # A type checker refuses a parameterized event subscribed to bare: `None` is not callable.
@@ -133,9 +133,8 @@ class Api:
         before any handler of the next. The handler runs on every event unless held back: `min_interval` waits until
         that long has passed since it last ran, `at_time` runs it once, on the first event at or after that time, and
         `once` on the first event. `min_interval` with either of the others, or not above zero, raises `ValueError`,
-        and either of the two not a `GameTime`, `TypeError`. These count only the events selected, and start afresh
-        each game, as does a handler that returned `Done`. An exception it raises ends the game, unless
-        `catch_exceptions`, which logs it and goes on.
+        and either of the two not a `GameTime`, `TypeError`. These count only the events selected, those emitted before
+        the game included. An exception it raises ends the game, unless `catch_exceptions`, which logs it and goes on.
 
         The handler must take an event of `event_type`, which a type checker checks. One decorated for several event
         types takes an `Event`.
@@ -169,7 +168,7 @@ class Api:
 
     @property
     def handler_timings(self) -> Mapping[type[Event], Mapping[str, HandlerTiming]]:
-        """How long each handler has taken in the current game, or the last one played, by event type and handler name.
+        """How long each handler has taken, by event type and handler name, on events emitted before the game too.
 
         A handler is named by its module and qualified name, so every instance of a class counts under one name. Raises
         `RuntimeError` unless the api was made with `time_handlers=True`.
@@ -177,10 +176,15 @@ class Api:
         return self._events.timings
 
     def _current_game(self) -> _Game:
-        """The game being played, or the one played last."""
+        """The game being played, or the one that was."""
         if self._game is None:
             raise NotPlayingError("no game has been joined")
         return self._game
+
+    def _check_has_not_played(self) -> None:
+        """Raise `RuntimeError` if this api has started its game."""
+        if self._game is not None:
+            raise RuntimeError("this api has played its game; make a new Api to play another")
 
     @property
     def client(self) -> Client:
@@ -423,23 +427,22 @@ class Api:
         raised. Before the game starts, a `save_replay_to` in no folder that exists raises `FileNotFoundError`, and one
         that names a folder `IsADirectoryError`.
 
-        Each call starts from nothing, so one api plays any number of games in a row. Handlers stay subscribed from
-        one game to the next; what each has done starts afresh.
+        An api plays one game. Once it has started one, this and every runner raise `RuntimeError` before anything
+        else. A call that raised before the game started, on its arguments or while reading the game's map, tables and
+        first observation, leaves the api to play.
         """
+        self._check_has_not_played()
         if time_limit is not None:
             check_game_time(time_limit, "time_limit")
         replay_path = None if save_replay_to is None else Path(save_replay_to)
         if replay_path is not None:
             check_file_to_write(replay_path, "save the replay into")
-        if self._game is not None:
-            self._game.end()
         game = _Game.start(
             client, enemy_upgrade_inference=self._enemy_upgrade_inference, enemy_ladder_id=enemy_ladder_id
         )
         self._game = game
         logger.info("Playing {} at {} steps a turn", game.game_map.name, steps_per_turn)
         events = self._events
-        events._start_game()
         events._set_time(game.time)
         try:
             result = self._play_saving_the_replay(

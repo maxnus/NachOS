@@ -85,9 +85,8 @@ class DebugCommands:
 
     @property
     def refresh_interval(self) -> GameTime:
-        """The least time between two refreshes of the drawing, one step unless set; a `GameStartEvent` handler sets it
-        for every game. Set to anything but a `GameTime` it raises `TypeError`, and to one that is not a whole number
-        of steps, at least 1, `ValueError`."""
+        """The least time between two refreshes of the drawing, one step unless set. Set to anything but a `GameTime` it
+        raises `TypeError`, and to one that is not a whole number of steps, at least 1, `ValueError`."""
         return self._refresh_interval
 
     @refresh_interval.setter

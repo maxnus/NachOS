@@ -29,8 +29,11 @@ difference that rests on what the game does links there for its evidence.
   command line. The replay is saved however the game ends, after a handler raises too, and before leaving a game the bot
   leaves, since the game gives none to a client that has left ([game behavior](game-behavior/protocol.md)). A save
   that fails is logged, not raised.
-- **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
-  belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
+- **An api plays one game.** A second, through `Api.play` or any runner, raises `RuntimeError` before anything starts,
+  so a program that plays several games in one process makes an api for each, and a bot whose api is made at import
+  plays a game per process ([testing a bot](../testing.md#playing-any-bot-through-a-recording)). Before the game,
+  everything that belongs to it, such as `api.step` or `api.map`, raises `NotPlayingError`, and after it ends the api
+  keeps answering from it.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
   `path`, and `--RecordFile` on the command line. `run_recording(path, api)` then plays the bot through it again
   exactly with no game running, and with `permissive=True` plays any bot through it, answering what the bot asks of
@@ -58,9 +61,8 @@ difference that rests on what the game does links there for its evidence.
 - **The last observation gets no turn, as in python-sc2, but it is taken in.** A `GameEndEvent` handler reads the
   game as it ended; python-sc2's `on_end` sees the observation before it.
 - **A handler cannot be `async`.** One that is is refused when it subscribes.
-- **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it
-  is passed to `api.unsubscribe`; both are held strongly. A bot that makes new objects for each game
-  unsubscribes the old ones, or they go on handling events alongside the new.
+- **A subscription lasts until it is passed to `api.unsubscribe`**, a function's and an instance's alike, held
+  strongly: an object a bot drops goes on handling events until it is unsubscribed.
 - **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent`, in the
   order [events.md](../events.md) gives, and made only for the types something subscribes to:
 

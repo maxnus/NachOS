@@ -293,15 +293,6 @@ class TestDrawing:
     def test_a_game_that_draws_nothing_sends_no_debug_request(self) -> None:
         assert _play(Api(), lambda step: None, turns=3) == {}
 
-    def test_a_new_game_forgets_the_last_ones_drawing(self) -> None:
-        api = Api()
-        _play(
-            api,
-            lambda step: api.debug.draw((1.0, 1.0), DebugText("first game"), shown_for=GameTime(steps=100)),
-            turns=2,
-        )
-        assert _play(api, lambda step: None, turns=2) == {}
-
     @pytest.mark.parametrize(
         "draw",
         [
@@ -359,6 +350,14 @@ class TestDrawing:
         _play(api, turn, turns=1)
         assert raised == [True]
 
+    def test_the_refresh_interval_is_one_step_unless_set(self) -> None:
+        api = Api()
+        seen: list[GameTime] = []
+        # Subscribed before `_play` subscribes the handler that sets it.
+        api.on(GameStartEvent)(lambda event: seen.append(api.debug.refresh_interval))
+        _play(api, lambda step: None, turns=1)
+        assert seen == [GameTime(steps=1)]
+
     def test_the_refresh_interval_is_set_in_a_game_and_must_be_a_whole_number_of_steps_at_least_one(self) -> None:
         api = Api()
         seen: list[GameTime] = []
@@ -374,13 +373,6 @@ class TestDrawing:
         _play(api, turn, turns=1, refresh_interval=GameTime(steps=4))
 
         assert seen == [GameTime(steps=4)]
-
-    def test_each_game_starts_refreshing_every_step(self) -> None:
-        api = Api()
-        _play(api, lambda step: None, turns=1, refresh_interval=GameTime(steps=4))
-        seen: list[GameTime] = []
-        _play(api, lambda step: seen.append(api.debug.refresh_interval), turns=1)
-        assert seen == [GameTime(steps=1)]
 
     def test_a_drawing_lasts_until_it_is_removed(self) -> None:
         api = Api()

@@ -1,7 +1,7 @@
 """The api and the two runners, tested without a game wherever possible."""
 
 import itertools
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import closing
 from pathlib import Path
 
@@ -9,7 +9,16 @@ import pytest
 from loguru import logger
 from s2clientprotocol import error_pb2, sc2api_pb2
 
-from sc2nachos import Api, GameTime, NotPlayingError, run_ladder, run_local
+from sc2nachos import (
+    Api,
+    GameTime,
+    NotPlayingError,
+    run_from_command_line,
+    run_ladder,
+    run_local,
+    run_recording,
+    run_replay,
+)
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     Event,
@@ -39,6 +48,8 @@ from support import FakeTransport, make_game_info, make_observation, make_respon
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
+# A file in a folder that does not exist, which no runner can read or write.
+_IN_NO_FOLDER = Path("no folder here") / "file"
 
 
 def _game(*steps: int, ending: Result | None = Result.VICTORY, stepped: bool = True) -> list[sc2api_pb2.Response]:
@@ -409,16 +420,69 @@ class TestPlaying:
         assert field_tags == [[1, 2, 3, 4, 5, 6]]
         assert held == [True] * 12
 
-    def test_one_api_plays_game_after_game_each_from_nothing(self) -> None:
-        """An api at module scope plays every game of its process."""
+    def test_an_api_plays_one_game_and_refuses_a_second_before_asking_anything(self) -> None:
         api = Api()
         api.play(_joined(*_game(0, 4, 8, ending=Result.DEFEAT))[0], steps_per_turn=4)
-        client, transport = _joined(*_game(0, 4, stepped=False))
-        assert api.play(client, steps_per_turn=4, realtime=True) is Result.VICTORY
-        assert api.step == 4
-        assert api.client is client
-        asked = [request.observation.game_loop for request in transport.requests if request.HasField("observation")]
-        assert asked == [0, 4]
+        client, transport = _joined(*_game(0, 4))
+        with pytest.raises(RuntimeError, match="this api has played its game; make a new Api to play another"):
+            api.play(client, steps_per_turn=4)
+        assert _requests_asked(transport) == ["join_game"]
+        assert api.step == 8
+        assert api.result is Result.DEFEAT
+
+    def test_an_api_whose_game_a_handler_ended_has_played_it(self) -> None:
+        api = Api()
+
+        @api.on(TurnEvent)
+        def failing(event: TurnEvent) -> None:
+            raise RuntimeError("the handler failed")
+
+        with pytest.raises(RuntimeError, match="the handler failed"):
+            api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
+        with pytest.raises(RuntimeError, match="has played its game"):
+            api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
+
+    def test_a_play_that_refused_its_arguments_leaves_the_api_to_play(self, tmp_path: Path) -> None:
+        client, _ = _joined(*_game(0, 2))
+        api = Api()
+        with pytest.raises(FileNotFoundError):
+            api.play(client, save_replay_to=tmp_path / "no folder" / "game.SC2Replay")
+        assert api.play(client, steps_per_turn=2) is Result.VICTORY
+
+    def test_a_runner_that_refused_its_arguments_leaves_the_api_to_play(self) -> None:
+        api = Api()
+        with pytest.raises(FileNotFoundError):
+            run_local(_somewhere(), api, race=Race.TERRAN, record_to=_IN_NO_FOLDER)
+        assert api.play(_joined(*_game(0, 2))[0], steps_per_turn=2) is Result.VICTORY
+
+    def test_a_play_that_failed_reading_the_game_leaves_the_api_to_play(self) -> None:
+        never_joined = Client(FakeTransport(*_game(0, 2)))
+        api = Api()
+        with pytest.raises(ValueError, match="the client has joined no game"):
+            api.play(never_joined)
+        with pytest.raises(NotPlayingError):
+            _ = api.step
+        assert api.play(_joined(*_game(0, 2))[0], steps_per_turn=2) is Result.VICTORY
+
+    @pytest.mark.parametrize(
+        "run",
+        [
+            lambda api: run_local(_somewhere(), api, race=Race.TERRAN, record_to=_IN_NO_FOLDER),
+            lambda api: run_ladder(api, race=Race.TERRAN, host="127.0.0.1", port=0, record_to=_IN_NO_FOLDER),
+            lambda api: run_replay(_IN_NO_FOLDER, api, player_id=1, record_to=_IN_NO_FOLDER),
+            lambda api: run_recording(_IN_NO_FOLDER, api),
+            lambda api: run_from_command_line(api, ["--RecordFile", str(_IN_NO_FOLDER)], race=Race.TERRAN),
+        ],
+        ids=["run_local", "run_ladder", "run_replay", "run_recording", "run_from_command_line"],
+    )
+    def test_every_runner_refuses_an_api_that_has_played_before_anything_else(
+        self, run: Callable[[Api], object]
+    ) -> None:
+        """Each would otherwise raise for its file in no folder, or launch or join a game."""
+        api = Api()
+        api.play(_joined(*_game(0, 2))[0], steps_per_turn=2)
+        with pytest.raises(RuntimeError, match="has played its game"):
+            run(api)
 
 
 def _production_is_asked_by_types_or_by_ids(api: Api) -> None:
@@ -469,9 +533,8 @@ class TestEvents:
         api.play(client, steps_per_turn=112, time_limit=GameTime(seconds=5))
         assert results == [(112, Result.TIE)]
 
-    def test_what_subscribes_before_or_during_a_game_handles_the_next_one_too(self) -> None:
-        """A handler subscribed at import works in every game its process plays, and a `once` handler fires once per
-        game."""
+    def test_what_subscribes_before_or_during_the_game_handles_it(self) -> None:
+        """Including an instance a `GameStartEvent` handler subscribes before it unsubscribes itself."""
         api = Api()
         fired: list[tuple[str, float]] = []
 
@@ -492,15 +555,11 @@ class TestEvents:
 
         @api.on(GameStartEvent)
         def make(event: GameStartEvent) -> None:
-            # Created in the first game only, subscribed from then on.
             Handlers("during")
             api.unsubscribe(make)
 
         api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
-        first = list(fired)
-        fired.clear()
-        api.play(_joined(*_game(0, 2, 4))[0], steps_per_turn=2)
-        assert first == fired == [("before", 0), ("during", 0), ("function", 2)]
+        assert fired == [("before", 0), ("during", 0), ("function", 2)]
 
     def test_handler_timings_count_a_games_calls_for_an_api_made_to_time_handlers(self) -> None:
         api = Api(time_handlers=True)
@@ -518,32 +577,24 @@ class TestEvents:
         for kind in (OwnUnitCreatedEvent, AnyUnitDiedEvent):
             api.on(kind)(lambda event: seen.append((type(event).__name__, event.time.steps)))
 
-        def game() -> list[sc2api_pb2.Response]:
-            marine, scv = make_unit(1, build_progress=1.0), make_unit(2, build_progress=1.0)
-            return _game_of(
-                make_observation(0, units=[marine]),
-                make_observation(2, units=[marine, scv]),
-                make_observation(4, (1, Result.VICTORY), units=[scv], dead=(1,)),
-            )
-
-        api.play(_joined(*game())[0], steps_per_turn=2)
-        first = list(seen)
-        seen.clear()
-        api.play(_joined(*game())[0], steps_per_turn=2)
-        assert (
-            first
-            == seen
-            == [
-                ("GameStartEvent", 0),
-                ("TurnStartEvent", 0),
-                ("OwnUnitCreatedEvent", 0),
-                ("TurnEvent", 0),
-                ("TurnStartEvent", 2),
-                ("OwnUnitCreatedEvent", 2),
-                ("TurnEvent", 2),
-                ("GameEndEvent", 4),
-            ]
+        marine = make_unit(1, build_progress=1.0)
+        scv = make_unit(2, build_progress=1.0)
+        game = _game_of(
+            make_observation(0, units=[marine]),
+            make_observation(2, units=[marine, scv]),
+            make_observation(4, (1, Result.VICTORY), units=[scv], dead=(1,)),
         )
+        api.play(_joined(*game)[0], steps_per_turn=2)
+        assert seen == [
+            ("GameStartEvent", 0),
+            ("TurnStartEvent", 0),
+            ("OwnUnitCreatedEvent", 0),
+            ("TurnEvent", 0),
+            ("TurnStartEvent", 2),
+            ("OwnUnitCreatedEvent", 2),
+            ("TurnEvent", 2),
+            ("GameEndEvent", 4),
+        ]
 
     def test_a_handler_that_raises_ends_the_game_by_raising(self) -> None:
         client, _ = _joined(*_game(0, 2, 4))

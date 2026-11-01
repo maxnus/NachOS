@@ -358,13 +358,6 @@ class _UnitTracker:
             self._in_fog_tags.discard(tag)
             present.pop(tag, None)
 
-    def end(self) -> None:
-        """Mark every unit unlisted. The game is over."""
-        for unit in self._present_units_by_tag.values():
-            unit._mark_unlisted()
-        self._set_present_units({})
-        self._unfinished = {}
-
 
 def _holds_a_tag_of(tags: set[int], unit: Unit[Any]) -> bool:
     """Whether `tags` holds the tag `unit` was last reported under, or the one it was last visible under."""

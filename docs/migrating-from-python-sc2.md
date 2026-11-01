@@ -124,8 +124,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   ([in detail](reference/python-sc2.md#ids)).
 - **Half a supply is kept**: the game rounds a zergling's half down, and NachOS adds it back, so a zergling made at 14
   supply reads 14.5 ([in detail](reference/python-sc2.md#the-state)).
-- **Subscriptions outlive a game.** Objects a bot makes for each game unsubscribe the old ones, or both go on handling
-  events ([in detail](reference/python-sc2.md#events)).
+- **An api plays one game.** A second raises `RuntimeError`, so a bot plays a game per process, and a test suite plays
+  each recording in a process of its own ([in detail](reference/python-sc2.md#running-a-game)).
 - **`api.chat` and `api.leave_game()` act at the end of the turn**, and a goodbye sent in the turn that leaves never
   arrives ([in detail](reference/python-sc2.md#debug-chat-the-camera-and-leaving)).
 - **A pathing distance with no path is `math.inf`**, not `None` ([in detail](reference/python-sc2.md#the-map)).

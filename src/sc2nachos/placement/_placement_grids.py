@@ -171,7 +171,7 @@ class PlacementGrids:
         `is_free` and `nearest_free` from now, the rest of this turn included, until the reservation is withdrawn, until
         `max_time` has passed if given, or until an observation shows one of this player's structures standing on its
         site, whatever type it stands as. `max_time=GameTime(steps=1)` keeps it for this turn alone. Reservations may
-        overlap, and each game starts with none.
+        overlap, and the game starts with none.
 
         Raises `TypeError` for a `max_time` that is not a `GameTime` or a margin that is neither a count of tiles nor a
         tuple of four, and `ValueError` for a type with no footprint, for a gas building, which stands on a geyser, for

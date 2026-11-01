@@ -30,7 +30,7 @@ class UpgradeInference(ReadableIntEnum):
 
 @final
 class Enemy:
-    """The other player, and what NachOS has learned or been told about it. Each game has its own."""
+    """The other player, and what NachOS has learned or been told about it."""
 
     __slots__ = ("_id", "_ladder_id", "_name", "_race", "_requested_race", "_upgrades")
 

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 @final
 @dataclass(frozen=True, slots=True)
 class Player:
-    """This player: its id in the game, its race and the one it asked for, and its name. Each game has its own."""
+    """This player: its id in the game, its race and the one it asked for, and its name."""
 
     id: int
     """Its id in the game, which its units read as their `owner_id`."""

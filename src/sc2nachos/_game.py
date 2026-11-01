@@ -201,12 +201,6 @@ class _Game:
             observation = self._fog_off_playback.read(observation, step_observed)
         self._take_in(observation, step_observed)
 
-    def end(self) -> None:
-        """Mark every unit unlisted, in every tracker: the game is over, and another is starting."""
-        self.tracker.end()
-        if self._fog_off_playback is not None:
-            self._fog_off_playback.end()
-
     def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
         """Read `observation`: its units, the enemy upgrades they show if inference is on, and the rest it reports."""
         self.tracker.update(observation.observation.raw_data, step)
