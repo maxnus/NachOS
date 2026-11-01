@@ -71,7 +71,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
 - [Debugging](docs/debugging.md): drawing on the game's screen, cheats, and creating units.
 - [Running StarCraft II on GitHub Actions](docs/github-actions.md): playing matches in a bot repository's workflows.
 - [Playing on the ladder](docs/ladder.md): one script for the ladder and for local games, and what the ladder passes.
-- [Testing on a recorded game](docs/testing.md): playing a bot through a recorded game, with no game client.
+- [Testing a bot](docs/testing.md): making units for a unit test, and playing a bot through a recorded game, with no
+  game client.
 - [Playing back a replay](docs/replays.md): a replay played through an api as one of its players saw the game, with
   every unit besides if the fog is off, and recorded to play again with no game client.
 - [Migrating from python-sc2](docs/migrating-from-python-sc2.md): the same bot in both, and where a translation goes
