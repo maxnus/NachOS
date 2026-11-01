@@ -6,10 +6,11 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from s2clientprotocol import data_pb2, raw_pb2
+from s2clientprotocol import data_pb2
 
 from sc2nachos.geometry import Circle, Point, Rectangle, Tile
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
+from sc2nachos.testing import MadeUpUnits, ReportedOrder, UnitReport
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
 from support import make_enemy, make_observation, make_tables, make_unit
@@ -26,21 +27,21 @@ _TABLES = make_tables(
 )
 
 
-def _units(*protos: raw_pb2.Unit) -> Units[Unit[Any]]:
-    """`protos` observed once."""
-    tracker = _Tracker(_TABLES, make_enemy())
-    tracker.update(make_observation(0, units=protos).observation.raw_data, 0)
-    return tracker.unit_tracker.present
+def _units(*reports: UnitReport) -> Units[Unit[Any]]:
+    """The units of `reports`, observed once, as NachOS lists them."""
+    made_up_units = MadeUpUnits(_TABLES)
+    made_up_units.observe(*reports)
+    return made_up_units.units
 
 
 def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
     """`count` of this player's units, of assorted types, completeness and orders, scattered over a small map."""
     rng = random.Random(seed)
-    protos = []
+    reports = []
     for tag in range(1, count + 1):
-        orders = [raw_pb2.UnitOrder(ability_id=AbilityId.MOVE)] if rng.random() < 0.5 else []
-        protos.append(
-            make_unit(
+        orders: list[ReportedOrder] = [(AbilityId.MOVE, None)] if rng.random() < 0.5 else []
+        reports.append(
+            UnitReport(
                 tag,
                 rng.choice(_TYPES),
                 at=(rng.uniform(0, 40), rng.uniform(0, 40)),
@@ -48,34 +49,40 @@ def _mine(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
                 orders=orders,
             )
         )
-    return _units(*protos).own
+    return _units(*reports).own
 
 
 def _mixed() -> Units[Unit[Any]]:
-    """A unit of every alliance, plus a hidden and a remembered enemy."""
-    return _units(
+    """A unit of every alliance, plus a hidden and a remembered enemy. They are made from the game's own reports, as
+    `UnitReport` refuses an ally's unit, which a game of two players has none of."""
+    tracker = _Tracker(_TABLES, make_enemy())
+    reports = [
         make_unit(1, alliance=Alliance.OWN),
         make_unit(2, alliance=Alliance.ENEMY),
         make_unit(3, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE),
         make_unit(4, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG),
         make_unit(5, alliance=Alliance.NEUTRAL, visibility=Visibility.IN_FOG),
         make_unit(6, alliance=Alliance.ALLY),
-    )
+    ]
+    tracker.update(make_observation(0, units=reports).observation.raw_data, 0)
+    return tracker.unit_tracker.present
 
 
 def _held() -> Units[Unit[Any]]:
     """Units kept from one observation to the next. In the next, 1 and the enemy's 5 stay in sight, 2 is left out, as
     in a transport, 3 is reported dead, a neural parasite hands 4 to the enemy, 6 stays a hidden enemy and 7 an enemy
     depot remembered in the fog, and the enemy's 8 leaves sight."""
-    tracker = _Tracker(_TABLES, make_enemy())
-    hidden = make_unit(6, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
-    remembered = make_unit(7, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
-    first = [make_unit(tag) for tag in (1, 2, 3, 4)]
-    first += [make_unit(5, alliance=Alliance.ENEMY), hidden, remembered, make_unit(8, alliance=Alliance.ENEMY)]
-    tracker.update(make_observation(0, units=first).observation.raw_data, 0)
-    held = Units(tracker.unit_tracker.present)
-    second = [make_unit(1), make_unit(4, alliance=Alliance.ENEMY), make_unit(5, alliance=Alliance.ENEMY), hidden]
-    tracker.update(make_observation(16, units=[*second, remembered], dead=[3]).observation.raw_data, 16)
+    made_up_units = MadeUpUnits(_TABLES)
+    hidden = UnitReport(6, UnitTypeId.MARINE, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+    remembered = UnitReport(7, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
+    first = [UnitReport(tag, UnitTypeId.MARINE) for tag in (1, 2, 3, 4)]
+    first += [UnitReport(5, UnitTypeId.MARINE, alliance=Alliance.ENEMY), hidden, remembered]
+    first += [UnitReport(8, UnitTypeId.MARINE, alliance=Alliance.ENEMY)]
+    made_up_units.observe(*first, step=0)
+    held = Units(made_up_units.units)
+    second = [UnitReport(1, UnitTypeId.MARINE), UnitReport(4, UnitTypeId.MARINE, alliance=Alliance.ENEMY)]
+    second += [UnitReport(5, UnitTypeId.MARINE, alliance=Alliance.ENEMY), hidden]
+    made_up_units.observe(*second, remembered, step=16, dead=[3])
     return held
 
 
@@ -138,7 +145,7 @@ class TestCombining:
     def test_a_collection_of_own_units_combined_with_a_unit_is_a_collection_of_units(self) -> None:
         """For the type checker too: `Units` stays covariant, so the result holds both kinds."""
         own: Units[OwnUnit[Any]] = _mine(2)
-        (enemy,) = _units(make_unit(3, alliance=Alliance.ENEMY))
+        (enemy,) = _units(UnitReport(3, UnitTypeId.MARINE, alliance=Alliance.ENEMY))
         combined: Units[Unit[Any]] = own.combined_with(enemy)
         assert _tags(combined) == [1, 2, 3]
 
@@ -250,13 +257,13 @@ class TestFilters:
     def test_structures_and_non_structures_split_the_units(self) -> None:
         """A lifted barracks is a structure, and a larva, an egg and a sieged tank are not."""
         units = _units(
-            make_unit(1, UnitTypeId.SCV),
-            make_unit(2, UnitTypeId.BARRACKS_FLYING),
-            make_unit(3, UnitTypeId.LARVA),
-            make_unit(4, UnitTypeId.EGG),
-            make_unit(5, UnitTypeId.SIEGE_TANK_SIEGED),
-            make_unit(6, UnitTypeId.SUPPLY_DEPOT_LOWERED, alliance=Alliance.ENEMY),
-            make_unit(7, UnitTypeId.MARINE, alliance=Alliance.ENEMY),
+            UnitReport(1, UnitTypeId.SCV),
+            UnitReport(2, UnitTypeId.BARRACKS_FLYING),
+            UnitReport(3, UnitTypeId.LARVA),
+            UnitReport(4, UnitTypeId.EGG),
+            UnitReport(5, UnitTypeId.SIEGE_TANK_SIEGED),
+            UnitReport(6, UnitTypeId.SUPPLY_DEPOT_LOWERED, alliance=Alliance.ENEMY),
+            UnitReport(7, UnitTypeId.MARINE, alliance=Alliance.ENEMY),
         )
         assert _tags(units.non_structures) == [1, 3, 4, 5, 7]
         assert _tags(units.structures) == [2, 6]
@@ -265,13 +272,13 @@ class TestFilters:
     def test_the_groups_a_bot_reads_most(self) -> None:
         neutral = Alliance.NEUTRAL
         units = _units(
-            make_unit(1, UnitTypeId.SCV),
-            make_unit(2, UnitTypeId.MULE),
-            make_unit(3, UnitTypeId.COMMAND_CENTER_FLYING),
-            make_unit(4, UnitTypeId.MINERAL_FIELD_750, alliance=neutral),
-            make_unit(5, UnitTypeId.VESPENE_GEYSER_RICH, alliance=neutral),
-            make_unit(6, UnitTypeId.EXTRACTOR, alliance=Alliance.ENEMY),
-            make_unit(7, UnitTypeId.MARINE),
+            UnitReport(1, UnitTypeId.SCV),
+            UnitReport(2, UnitTypeId.MULE),
+            UnitReport(3, UnitTypeId.COMMAND_CENTER_FLYING),
+            UnitReport(4, UnitTypeId.MINERAL_FIELD_750, alliance=neutral),
+            UnitReport(5, UnitTypeId.VESPENE_GEYSER_RICH, alliance=neutral),
+            UnitReport(6, UnitTypeId.EXTRACTOR, alliance=Alliance.ENEMY),
+            UnitReport(7, UnitTypeId.MARINE),
         )
         assert _tags(units.workers) == [1]
         assert _tags(units.townhalls) == [3]
@@ -290,10 +297,12 @@ class TestFilters:
 
     def test_by_buff(self) -> None:
         units = _units(
-            make_unit(1, buff_ids=[BuffId.MARINE_STIMMED]),
-            make_unit(2, UnitTypeId.SCV, buff_ids=[BuffId.CARRYING_MINERALS]),
-            make_unit(3, buff_ids=[BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST], alliance=Alliance.ENEMY),
-            make_unit(4),
+            UnitReport(1, UnitTypeId.MARINE, buffs=(BuffId.MARINE_STIMMED,)),
+            UnitReport(2, UnitTypeId.SCV, buffs=(BuffId.CARRYING_MINERALS,)),
+            UnitReport(
+                3, UnitTypeId.MARINE, buffs=(BuffId.MARINE_STIMMED, BuffId.MEDIVAC_BOOST), alliance=Alliance.ENEMY
+            ),
+            UnitReport(4, UnitTypeId.MARINE),
         )
         assert _tags(units.with_buff(BuffId.MARINE_STIMMED)) == [1, 3]
         assert _tags(units.with_buff({BuffId.MEDIVAC_BOOST, BuffId.CARRYING_MINERALS})) == [2, 3]
@@ -324,9 +333,9 @@ class TestFilters:
     def test_on_the_ground_and_in_the_air(self) -> None:
         """A remembered structure never seen flying counts as on the ground, as `is_ground_structure` takes it."""
         units = _units(
-            make_unit(1),
-            make_unit(2, UnitTypeId.BARRACKS_FLYING, is_flying=True),
-            make_unit(3, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG),
+            UnitReport(1, UnitTypeId.MARINE),
+            UnitReport(2, UnitTypeId.BARRACKS_FLYING, is_flying=True),
+            UnitReport(3, UnitTypeId.SUPPLY_DEPOT, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG),
         )
         assert _tags(units.ground) == [1, 3]
         assert _tags(units.air) == [2]
@@ -393,7 +402,7 @@ class TestWhereTheyAre:
     @pytest.mark.parametrize("in_the_collection", [False, True], ids=["outside the collection", "in the collection"])
     def test_by_distance_to_a_unit_is_by_distance_to_its_position(self, in_the_collection: bool) -> None:
         units = _mine(60, seed=3)
-        enemy_outside = _units(make_unit(99, at=(12.5, 30.0), alliance=Alliance.ENEMY))[0]
+        enemy_outside = _units(UnitReport(99, UnitTypeId.MARINE, at=(12.5, 30.0), alliance=Alliance.ENEMY))[0]
         reference_unit = units[7] if in_the_collection else enemy_outside
         by_distance = sorted(units, key=lambda other: other.position.distance_to(reference_unit.position))
         assert _tags(units.sorted_by_distance_to(reference_unit)) == [other.tag for other in by_distance]
@@ -409,7 +418,11 @@ class TestWhereTheyAre:
         assert units.sorted_by_distance_to(units[7])[0] is units[7]
 
     def test_of_two_units_on_one_spot_the_first_is_the_nearest_to_either(self) -> None:
-        units = _units(make_unit(1, at=(4.0, 4.0)), make_unit(2, at=(4.0, 4.0)), make_unit(3, at=(9.0, 4.0)))
+        units = _units(
+            UnitReport(1, UnitTypeId.MARINE, at=(4.0, 4.0)),
+            UnitReport(2, UnitTypeId.MARINE, at=(4.0, 4.0)),
+            UnitReport(3, UnitTypeId.MARINE, at=(9.0, 4.0)),
+        )
         assert units.closest_to(units[1]) is units[0]
         assert _tags(units.sorted_by_distance_to(units[1])) == [1, 2, 3]
 
@@ -454,7 +467,11 @@ class TestWhereTheyAre:
             units.beyond(-1.0, of=(0.0, 0.0))
 
     def test_sorted_by_a_key_keeps_ties_in_their_order(self) -> None:
-        units = _units(make_unit(3, at=(1.0, 0.0)), make_unit(1, at=(5.0, 0.0)), make_unit(2, at=(1.0, 9.0)))
+        units = _units(
+            UnitReport(3, UnitTypeId.MARINE, at=(1.0, 0.0)),
+            UnitReport(1, UnitTypeId.MARINE, at=(5.0, 0.0)),
+            UnitReport(2, UnitTypeId.MARINE, at=(1.0, 9.0)),
+        )
         assert _tags(units.sorted(key=lambda unit: unit.position.x)) == [3, 2, 1]
         assert _tags(units.sorted(key=lambda unit: unit.position.x, reverse=True)) == [1, 3, 2]
         assert isinstance(units.sorted(key=lambda unit: unit.tag), Units)
@@ -475,7 +492,11 @@ class TestWhereTheyAre:
             units.closest_n_to(-1, (0, 0))
 
     def test_units_at_equal_distance_keep_their_order(self) -> None:
-        units = _units(make_unit(2, at=(1.0, 0.0)), make_unit(1, at=(-1.0, 0.0)), make_unit(3, at=(0.0, 1.0)))
+        units = _units(
+            UnitReport(2, UnitTypeId.MARINE, at=(1.0, 0.0)),
+            UnitReport(1, UnitTypeId.MARINE, at=(-1.0, 0.0)),
+            UnitReport(3, UnitTypeId.MARINE, at=(0.0, 1.0)),
+        )
         assert _tags(units.sorted_by_distance_to((0, 0))) == [2, 1, 3]
         assert units.closest_to((0, 0)).tag == 2
 
@@ -506,7 +527,9 @@ class TestWhereTheyAre:
 class TestStructureAt:
     def test_it_is_the_structure_whose_footprint_holds_the_point(self) -> None:
         """A depot at (4, 4) covers the tiles (3, 3) to (4, 4)."""
-        units = _units(make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), make_unit(2, at=(5.5, 4.5)))
+        units = _units(
+            UnitReport(1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), UnitReport(2, UnitTypeId.MARINE, at=(5.5, 4.5))
+        )
         (depot,) = units.of_type(UnitTypeId.SUPPLY_DEPOT)
         assert units.structure_at((3.5, 3.5)) is depot
         assert units.structure_at(Point((4.9, 4.1))) is depot
@@ -514,25 +537,25 @@ class TestStructureAt:
         assert Units().structure_at((3.5, 3.5)) is None
 
     def test_a_tile_reads_as_itself(self) -> None:
-        units = _units(make_unit(1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)))
+        units = _units(UnitReport(1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)))
         assert units.structure_at(Tile(3, 3)) is units[0]
         assert units.structure_at(Tile(5, 4)) is None
 
     def test_a_lifted_structure_covers_no_ground(self) -> None:
-        units = _units(make_unit(1, UnitTypeId.BARRACKS, at=(4.5, 4.5), is_flying=True))
+        units = _units(UnitReport(1, UnitTypeId.BARRACKS, at=(4.5, 4.5), is_flying=True))
         assert units.structure_at((4.5, 4.5)) is None
 
     def test_one_in_sight_comes_before_a_snapshot_over_the_same_ground(self) -> None:
-        snapshot = make_unit(
+        snapshot = UnitReport(
             1, UnitTypeId.SUPPLY_DEPOT, at=(5.0, 5.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
         )
-        units = _units(snapshot, make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)))
+        units = _units(snapshot, UnitReport(2, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)))
         assert units.structure_at((4.5, 4.5)) is units.own[0]
         assert units.structure_at((5.5, 5.5)) is units.enemy[0]
 
     def test_a_snapshot_never_seen_in_sight_counts_as_on_the_ground(self) -> None:
         """The game never said whether it flies, and reading `is_flying` of it raises."""
-        snapshot = make_unit(
+        snapshot = UnitReport(
             1, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
         )
         units = _units(snapshot)
@@ -542,6 +565,6 @@ class TestStructureAt:
 
 
 def test_a_distance_is_measured_on_the_ground() -> None:
-    units = _units(make_unit(1, at=(3.0, 4.0)))
+    units = _units(UnitReport(1, UnitTypeId.MARINE, at=(3.0, 4.0)))
     assert units.closest_distance_to(Point((0.0, 0.0)).with_height(100.0)) == pytest.approx(5.0)
     assert math.isclose(units.closest_distance_to((0.0, 0.0)), 5.0)

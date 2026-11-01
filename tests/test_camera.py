@@ -4,7 +4,6 @@ orders."""
 import math
 from contextlib import closing
 from pathlib import Path
-from typing import Any
 
 import pytest
 from s2clientprotocol import data_pb2, error_pb2, sc2api_pb2
@@ -18,12 +17,10 @@ from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, Status, WebSocketTransport
-from sc2nachos.units import Unit
-from sc2nachos.units._tracking import _Tracker
+from sc2nachos.testing import MadeUpUnits, UnitReport
 from support import (
     FakeTransport,
     RealGame,
-    make_enemy,
     make_game_info,
     make_observation,
     make_response,
@@ -108,14 +105,13 @@ def test_in_the_corpus_the_camera_starts_on_this_players_main(path: Path) -> Non
 
 
 class TestSelected:
-    def _one(self, **fields: Any) -> Unit[Any]:
-        tracker = _Tracker(make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE)), make_enemy())
-        tracker.update(make_observation(0, units=[make_unit(1, **fields)]).observation.raw_data, 0)
-        return tracker.unit_tracker.present[0]
-
     def test_a_unit_reads_selected_as_the_game_reports_it(self) -> None:
-        assert self._one(is_selected=True).is_selected
-        assert not self._one().is_selected
+        made_up_units = MadeUpUnits(make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE)))
+        selected_marine, other_marine = made_up_units.observe(
+            UnitReport(1, UnitTypeId.MARINE, is_selected=True), UnitReport(2, UnitTypeId.MARINE)
+        )
+        assert selected_marine.is_selected
+        assert not other_marine.is_selected
 
 
 @pytest.mark.integration

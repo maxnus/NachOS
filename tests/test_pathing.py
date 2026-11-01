@@ -7,7 +7,7 @@ from contextlib import closing
 from typing import Any
 
 import pytest
-from s2clientprotocol import data_pb2, query_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import data_pb2, query_pb2, sc2api_pb2
 
 from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import UnitTypeId
@@ -16,18 +16,15 @@ from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.pathing import Pathing
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
+from sc2nachos.testing import MadeUpUnits, UnitReport
 from sc2nachos.units import Alliance, Unit, Units, Visibility
-from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
     RealGame,
     make_client,
-    make_enemy,
     make_game_info,
-    make_observation,
     make_response,
     make_tables,
-    make_unit,
 )
 
 _TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.REAPER))
@@ -42,11 +39,10 @@ def _answering(*distances: float) -> tuple[Pathing, FakeTransport]:
 
 def _reaper(*, at: tuple[float, float] = (10.0, 10.0), left_out_since: bool = False) -> Unit[Any]:
     """This player's reaper under tag 7, which the last observation left out if `left_out_since`."""
-    tracker = _Tracker(_TABLES, make_enemy())
-    tracker.update(make_observation(0, units=[make_unit(7, UnitTypeId.REAPER, at=at)]).observation.raw_data, 0)
-    (reaper,) = tracker.unit_tracker.present
+    made_up_units = MadeUpUnits(_TABLES)
+    (reaper,) = made_up_units.observe(UnitReport(7, UnitTypeId.REAPER, at=at))
     if left_out_since:
-        tracker.update(make_observation(16).observation.raw_data, 16)
+        made_up_units.observe(step=16)
     return reaper
 
 
@@ -111,7 +107,7 @@ def _map_with_a_depot() -> sc2api_pb2.ResponseGameInfo:
 
 
 def _pathing_over_a_depot(
-    *, turns: int = 1, also: Iterable[raw_pb2.Unit] = ()
+    *, turns: int = 1, also: Iterable[UnitReport] = ()
 ) -> tuple[Pathing, FakeTransport, Units[Unit[Any]]]:
     """Pathing over a game that answers `_map_with_a_depot` for `turns` turns, with the units `also` present first,
     then the depot, under tag 5, and a marine at (1.5, 1.5), its transport, and those units."""
@@ -121,12 +117,13 @@ def _pathing_over_a_depot(
         data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS_FLYING, attributes=[_STRUCTURE]),
         data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE),
     )
-    tracker = _Tracker(tables, make_enemy())
-    units = [*also, make_unit(5, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), make_unit(6, at=(1.5, 1.5))]
-    tracker.update(make_observation(0, units=units).observation.raw_data, 0)
+    made_up_units = MadeUpUnits(tables)
+    made_up_units.observe(
+        *also, UnitReport(5, UnitTypeId.SUPPLY_DEPOT, at=(4.0, 4.0)), UnitReport(6, UnitTypeId.MARINE, at=(1.5, 1.5))
+    )
     pathing = Pathing(client)
-    pathing._update(tracker.unit_tracker.present)
-    return pathing, transport, tracker.unit_tracker.present
+    pathing._update(made_up_units.units)
+    return pathing, transport, made_up_units.units
 
 
 class TestTheTurnsGrid:
@@ -189,13 +186,13 @@ class TestPathsOverTheTurnsGrid:
 
     def test_a_lifted_structure_is_not_left_but_started_from_where_it_flies(self) -> None:
         """A barracks flying over the depot starts on the depot's ground, which stays blocked."""
-        flying = make_unit(8, UnitTypeId.BARRACKS_FLYING, at=(3.5, 3.5), is_flying=True)
+        flying = UnitReport(8, UnitTypeId.BARRACKS_FLYING, at=(3.5, 3.5), is_flying=True)
         pathing, _, units = _pathing_over_a_depot(also=[flying])
         (barracks,) = units.of_type(UnitTypeId.BARRACKS_FLYING)
         assert pathing.cheapest_paths_from(barracks).distances[Tile(0, 0)] == math.inf
 
     def test_a_snapshot_given_as_the_start_is_left_without_asking_whether_it_flies(self) -> None:
-        snapshot = make_unit(
+        snapshot = UnitReport(
             9, UnitTypeId.SUPPLY_DEPOT, at=(6.0, 6.0), alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG
         )
         pathing, _, units = _pathing_over_a_depot(also=[snapshot])

@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #195. `uv run pytest` passes 3097 tests with #196, on numpy 2.0.2 as on the newest;
+- nachOS `main` has every PR to #196. `uv run pytest` passes 3097 tests, on numpy 2.0.2 as on the newest;
   `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -827,6 +827,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `MockUnitReport` and `TestUnitReport`): the units are NachOS's real ones, and pytest warns that it cannot collect
     each `Test*` class with an `__init__` that a test module imports.
   - NachOS's own tests move onto it in the pull request after it (over the same one, and over not at all).
+    #196 merged as 1a7bc1e, and AvocaDOS's tests moved onto it, each test taking a fresh `MadeUpUnits` from a
+    `made_up_units` fixture (AvocaDOS #74, merged as 3336547, both 2026-11-01).
+  - Of the 27 places nachOS's tests built `_Tracker`, only the 6 helpers that need nothing but units move onto it, in
+    test_camera, test_units_collection, test_pathing and test_unit_types (the owner, over moving none, and over
+    widening `MadeUpUnits` until more could). The rest stay on `_Tracker` and the game's raw reports: test_units and
+    test_corpus test how NachOS reads a report, with fields `UnitReport` leaves out; the orders, placement,
+    reporter, state and expansion tests read the tracker's changes or hand it on; the combat and upgrade tests give
+    this player upgrades; and one collection helper reports an ally's unit, which `UnitReport` refuses.
 
 ## Next
 
@@ -910,7 +918,6 @@ In AvocaDOS's plan, section "M6 — Delete burnysc2". Done: python-sc2 gone from
 `external/pathfinding` retired onto `Grid` (AvocaDOS #70), and the sweep for AvocaDOS-shaped code (2026-11-01, above),
 whose numeric helpers went back to AvocaDOS (AvocaDOS #71) before nachOS deleted them (#194). AvocaDOS's tests play
 its own games, whole, one a map, and read nothing from nachOS's checkout; CI plays them only in a weekly run (AvocaDOS
-#72). Next, a pull request each:
-1. `sc2nachos.testing`, the public way for a bot's tests to make units (#196), then AvocaDOS's `tests/tracked_units.py`
-   moves onto it, then nachOS's own tests do.
-2. The README and the API docs, then the first release to PyPI, with the owner's permission, and AvocaDOS pinned to it.
+#72). A bot's tests make units through `sc2nachos.testing` (#196), and AvocaDOS's do (AvocaDOS #74), as nachOS's own
+do where they need nothing but units (above). Next, a pull request each: the README and the API docs, then the
+first release to PyPI, with the owner's permission, and AvocaDOS pinned to it.
