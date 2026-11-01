@@ -58,36 +58,70 @@ class TestUnitReport:
         assert (unhurt_marine.health, unhurt_marine.health_max) == (30, 30)
         assert (hurt_marine.health, hurt_marine.health_max, hurt_marine.health_fraction) == (30, 45, 30 / 45)
 
-    def test_each_field_reads_back_as_the_property_of_its_name(self):
+    @pytest.mark.parametrize(
+        ("field_name", "given", "read_back"),
+        [
+            ("height", 11.0, 11.0),
+            ("visibility", Visibility.INVISIBLE, Visibility.INVISIBLE),
+            ("build_progress", 0.5, 0.5),
+            ("shield", 5.0, 5.0),
+            ("shield_max", 40.0, 40.0),
+            ("energy", 50.0, 50.0),
+            ("energy_max", 200.0, 200.0),
+            ("radius", 0.375, 0.375),
+            ("facing", 1.5, 1.5),
+            ("cloak_state", CloakState.CLOAKED, CloakState.CLOAKED),
+            ("buffs", (BuffId.MARINE_STIMMED,), frozenset({BuffId.MARINE_STIMMED})),
+            ("is_selected", True, True),
+            ("is_flying", True, True),
+            ("is_burrowed", True, True),
+            ("is_hallucination", True, True),
+            ("is_powered", True, True),
+            ("is_active", True, True),
+            ("detect_range", 11.0, 11.0),
+            ("radar_range", 30.0, 30.0),
+            ("attack_upgrade_level", 1, 1),
+            ("armor_upgrade_level", 2, 2),
+            ("shield_upgrade_level", 3, 3),
+            ("mineral_contents", 1800, 1800),
+            ("vespene_contents", 2250, 2250),
+            ("assigned_harvesters", 14, 14),
+            ("ideal_harvesters", 16, 16),
+            ("cargo_used", 2, 2),
+            ("cargo_max", 8, 8),
+            ("weapon_cooldown", GameTime(steps=6), GameTime(steps=6)),
+            ("buff_duration_max", GameTime(steps=1344), GameTime(steps=1344)),
+        ],
+    )
+    def test_each_field_reads_back_as_the_property_of_its_name(self, field_name, given, read_back):
         """A field given reads back as given, through the unit's property of the same name."""
-        (marine,) = MadeUpUnits().observe(
+        (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE, **{field_name: given}))
+        assert getattr(marine, field_name) == read_back
+
+    def test_at_reads_back_as_the_position(self):
+        """The one field named otherwise."""
+        (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE, at=(20.5, 30.25)))
+        assert marine.position == Point((20.5, 30.25))
+
+    def test_what_is_left_of_a_timed_life_reads_back_beside_its_length(self):
+        """A MULE with 100 steps left of 1344 reads both; a length of a fraction of a step reads the nearest."""
+        (mule,) = MadeUpUnits().observe(
             UnitReport(
                 1,
-                UnitTypeId.MARINE,
-                at=(20.5, 30.25),
-                height=11.0,
-                shield=5,
-                energy=50,
-                facing=1.5,
-                buffs=(BuffId.MARINE_STIMMED,),
-                is_selected=True,
-                attack_upgrade_level=1,
-                weapon_cooldown=GameTime(steps=6),
+                UnitTypeId.MULE,
+                buff_duration_max=GameTime(steps=1343.5),
+                buff_duration_remaining=GameTime(steps=100),
             )
         )
-        assert (marine.position, marine.height, marine.shield, marine.energy, marine.facing) == (
-            Point((20.5, 30.25)),
-            11.0,
-            5,
-            50,
-            1.5,
+        assert (mule.buff_duration_max, mule.buff_duration_remaining) == (GameTime(steps=1344), GameTime(steps=100))
+
+    def test_an_engaged_target_is_named_by_its_report(self):
+        """A marine attacking a zergling reads the zergling as the unit it is engaged with."""
+        zergling_report = UnitReport(2, UnitTypeId.ZERGLING, at=(12.0, 10.0), alliance=Alliance.ENEMY)
+        marine, zergling = MadeUpUnits().observe(
+            UnitReport(1, UnitTypeId.MARINE, engaged_target=zergling_report), zergling_report
         )
-        assert (marine.buffs, marine.is_selected, marine.attack_upgrade_level, marine.weapon_cooldown) == (
-            frozenset({BuffId.MARINE_STIMMED}),
-            True,
-            1,
-            GameTime(steps=6),
-        )
+        assert marine.engaged_target is zergling
 
     def test_an_add_on_is_named_by_its_report_or_its_tag(self):
         """A barracks reported with its tech lab's report reads the tech lab as its add-on."""

@@ -54,7 +54,9 @@ class MadeUpUnits:
         observation = raw_pb2.ObservationRaw(
             units=[report._as_reported() for report in reports], event=raw_pb2.Event(dead_units=dead_tags)
         )
-        self._tracker.update(observation, step)
+        # Set first: an update that raises partway, as for a type the curated ids leave out, has taken in part of the
+        # observation at this step, so the next one must come after it.
         self._step = step
+        self._tracker.update(observation, step)
         unit_tracker = self._tracker.unit_tracker
         return [unit_tracker.by_tag(report.tag) for report in reports]

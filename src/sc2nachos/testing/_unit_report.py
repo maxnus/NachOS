@@ -29,7 +29,8 @@ type ReportedOrder = tuple[AbilityId, ReportedTarget] | tuple[AbilityId, Reporte
 class UnitReport:
     """A unit as the game reports it in one observation, for `MadeUpUnits` to take in.
 
-    By default it is this player's unit, finished and in sight, of half a tile's radius, doing nothing. Each field
+    By default it is this player's unit, finished, in sight and not cloaked, of half a tile's radius, doing nothing.
+    Each field
     reads back as the property of a `Unit` or `OwnUnit` of the same name, `at` as `position`. A field not given reads
     zero, as one the game leaves out does, and a maximum not given reads as its value. `dataclasses.replace` makes the
     report of the same unit in a later observation.
@@ -132,10 +133,10 @@ class UnitReport:
             cargo_space_taken=self.cargo_used,
             cargo_space_max=self.cargo_max,
             weapon_cooldown=0.0 if self.weapon_cooldown is None else self.weapon_cooldown.steps,
-            buff_duration_max=0 if self.buff_duration_max is None else round(self.buff_duration_max.steps),
+            buff_duration_max=0 if self.buff_duration_max is None else self.buff_duration_max.nearest_step,
             buff_duration_remain=0
             if self.buff_duration_remaining is None
-            else round(self.buff_duration_remaining.steps),
+            else self.buff_duration_remaining.nearest_step,
             add_on_tag=_tag_of(self.add_on),
             engaged_target_tag=_tag_of(self.engaged_target),
         )
