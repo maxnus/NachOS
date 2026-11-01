@@ -14,10 +14,10 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
+from sc2nachos.testing import MadeUpUnits, UnitReport
 from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType
 from sc2nachos.units import _unit_type as unit_type_module
-from sc2nachos.units._tracking import _Tracker
-from support import load_tool, make_enemy, make_observation, make_tables, make_unit
+from support import load_tool, make_tables
 
 
 def _unit_types_generator() -> Any:
@@ -238,10 +238,10 @@ class TestUnitType:
 _MARINE_TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 
 
-def _unit_observed(unit_type: int) -> Unit[Any]:
-    tracker = _Tracker(_MARINE_TABLES, make_enemy())
-    tracker.update(make_observation(0, units=[make_unit(1, unit_type)]).observation.raw_data, 0)
-    return tracker.unit_tracker.present[0]
+def _unit_observed(unit_type: UnitTypeId) -> Unit[Any]:
+    """This player's unit of `unit_type`, observed once."""
+    (observed_unit,) = MadeUpUnits(_MARINE_TABLES).observe(UnitReport(1, unit_type))
+    return observed_unit
 
 
 class TestIncludes:
@@ -254,7 +254,8 @@ class TestIncludes:
 
     def test_a_unit_of_an_uncurated_type_raises(self) -> None:
         with pytest.raises(UncuratedIdError):
-            UnitType.Marine.includes(_unit_observed(RawUnitTypeId.Viking))
+            # The game can report a type the curated ids leave out.
+            UnitType.Marine.includes(_unit_observed(RawUnitTypeId.Viking))  # pyright: ignore[reportArgumentType]
 
 
 def _collections_are_typed_by_unit_type(units: Units[Unit[Any]], own: Units[OwnUnit[Any]]) -> None:
