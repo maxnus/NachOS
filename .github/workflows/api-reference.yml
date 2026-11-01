@@ -1,0 +1,65 @@
+name: api-reference
+
+# Builds NachOS's API reference with tools/build_api_reference.py, and publishes it to GitHub Pages at each release, so
+# that it describes the version on PyPI. A pull request that changes what it is built from builds it as a check.
+# Started by hand from the Actions tab, it builds and publishes the branch it is started on.
+#
+# Publishing needs Pages switched on in the repository's settings, with GitHub Actions as its source, and the
+# `github-pages` environment allowing the release tags, `v*`, to deploy: by default it allows the default branch alone.
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - src/**
+      - tools/build_api_reference.py
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/api-reference.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Build
+        run: uv run python tools/build_api_reference.py --output build/api-reference
+
+      - name: Keep the pages for publishing
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/api-reference
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

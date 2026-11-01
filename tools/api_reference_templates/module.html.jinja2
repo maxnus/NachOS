@@ -1,0 +1,18 @@
+{#- pdoc's module page, listing every public submodule documented under a package: pdoc's own list follows the
+package's `__all__`, which names the package's classes and functions alone. -#}
+{% extends "default/module.html.jinja2" %}
+{% block nav_submodules %}
+    {% set prefix = module.modulename + "." %}
+    {% set submodules = [] %}
+    {% for name in all_modules if name.startswith(prefix) and "." not in name[prefix | length:] %}
+        {% set _ = submodules.append(name) %}
+    {% endfor %}
+    {% if submodules %}
+        <h2>Submodules</h2>
+        <ul>
+            {% for name in submodules %}
+                <li>{{ (name, "") | link(text=name[prefix | length:]) }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endblock %}

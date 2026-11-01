@@ -27,14 +27,16 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/maxnus/nachOS"
-Repository = "https://github.com/maxnus/nachOS"
+Homepage = "https://github.com/maxnus/NachOS"
+Repository = "https://github.com/maxnus/NachOS"
+Documentation = "https://maxnus.github.io/NachOS/"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "pyright>=1.1.390",
+    "pdoc>=15",
 ]
 
 [build-system]

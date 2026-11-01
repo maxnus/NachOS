@@ -1,4 +1,19 @@
-"""NachOS — an event-driven StarCraft II bot API for Python."""
+"""NachOS — an event-driven StarCraft II bot API for Python.
+
+A bot makes one `Api`, subscribes handlers to the events a game hands out with `Api.on`, and plays through a runner:
+`run_local` against the built-in computer, or `run_from_command_line` for the ladder and local games alike. Each turn
+it reads its units from `Api.units` and orders them through `Api.orders`.
+
+The guides are on GitHub: [events](https://github.com/maxnus/NachOS/blob/main/docs/events.md),
+[orders](https://github.com/maxnus/NachOS/blob/main/docs/orders.md),
+[debugging](https://github.com/maxnus/NachOS/blob/main/docs/debugging.md),
+[playing on the ladder](https://github.com/maxnus/NachOS/blob/main/docs/ladder.md),
+[running StarCraft II on GitHub Actions](https://github.com/maxnus/NachOS/blob/main/docs/github-actions.md),
+[testing a bot](https://github.com/maxnus/NachOS/blob/main/docs/testing.md),
+[playing back a replay](https://github.com/maxnus/NachOS/blob/main/docs/replays.md) and
+[migrating from python-sc2](https://github.com/maxnus/NachOS/blob/main/docs/migrating-from-python-sc2.md).
+[`examples/demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/demo_bot.py) is a whole bot in one file.
+"""
 
 from sc2nachos.__about__ import __version__
 from sc2nachos._errors import NachOSError
