@@ -307,8 +307,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     over handlers defined in the main block, which does not scale to many settings, and over a function that builds
     the api, which keeps it from the modules that register handlers. Subclassing `Api` stays out.
   - NachOS declares numpy 2.0 or later, as the aiarena ladder's bot image carries numpy 2.0.2 on Python 3.12, and
-    semita 0.2.1 or later, which declares the same (semita #7); a test job runs the tests on numpy 2.0 (the owner,
-    2026-10-31, over keeping 2.1, which the ladder zip does not install through pip).
+    semita 0.2.1 or later, which declares the same (semita #7), over keeping 2.1, which the ladder zip does not install
+    through pip (the owner, 2026-10-31). Checked once, all the tests on numpy 2.0.2 with Python 3.12, with no test job
+    on numpy 2.0 in every CI run (the owner, review of #193); semita keeps its own.
   - The result file holds `opponent_actual_race`, the race the opponent played as `Enemy.race` reads at the end, `null`
     if it was never known, as the match workflow's report reads for a `RANDOM` opponent (the owner, 2026-10-31, over
     AvocaDOS rewriting NachOS's file to add it and over AvocaDOS's report dropping it).
