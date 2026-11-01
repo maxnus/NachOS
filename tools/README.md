@@ -24,7 +24,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py` | yes |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py` | yes |
 | Check that the walls `api.placement` gives close each main's ramp of the pool | `uv run python tools/sweep_walls.py`, or with the maps to check | yes |
-| Record the corpus again, and the game's tables `sc2nachos.testing` ships from it | `uv run python tools/record_corpus.py`, then `uv run python tools/write_shipped_tables.py` | yes |
+| Record the corpus again, and the game's data `sc2nachos.testing` ships from it | `uv run python tools/record_corpus.py`, then `uv run python tools/write_shipped_game_data.py` | yes |
 | Regenerate the raw ids | `uv run python tools/generate_ids.py`, after refreshing `data/stableid.json` as [curating ids](../docs/maintaining/curating-ids.md) says | no |
 | Regenerate `UnitType` | `uv run python tools/generate_unit_types.py`, after changing `UnitTypeId` | no |
 | Regenerate `ActionResult` | `uv run python tools/generate_action_results.py`, after a protocol release adds results | no |

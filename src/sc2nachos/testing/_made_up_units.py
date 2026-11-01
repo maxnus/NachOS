@@ -8,7 +8,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
 from sc2nachos.match import Race
-from sc2nachos.testing._shipped_tables import shipped_tables
+from sc2nachos.testing._shipped_game_data import _load_newest_game_data
 from sc2nachos.testing._unit_report import ENEMY_PLAYER_ID, UnitReport
 from sc2nachos.units import Unit, Units
 from sc2nachos.units._tracking import _Tracker
@@ -18,17 +18,18 @@ class MadeUpUnits:
     """The units of a game made up for a test, taken in one observation after another, as NachOS takes them in from a
     game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client.
 
-    This player is player 1, and the enemy player 2. The tables are those NachOS ships unless `tables` are given.
+    This player is player 1, and the enemy player 2. The units read their types from `game_data`, by default the
+    game's data of the newest build NachOS ships, as `load_game_data` reads it.
     """
 
-    def __init__(self, tables: GameData | None = None) -> None:
+    def __init__(self, game_data: GameData | None = None) -> None:
         enemy = Enemy(player_id=ENEMY_PLAYER_ID, requested_race=Race.RANDOM, name=None, race=None, ladder_id=None)
-        self._tracker = _Tracker(shipped_tables() if tables is None else tables, enemy)
+        self._tracker = _Tracker(_load_newest_game_data() if game_data is None else game_data, enemy)
         self._step: int | None = None
 
     @property
-    def tables(self) -> GameData:
-        """The game's tables the units read their types from."""
+    def game_data(self) -> GameData:
+        """The game's data the units read their types from."""
         return self._tracker.game_data
 
     @property

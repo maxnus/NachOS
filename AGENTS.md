@@ -120,8 +120,8 @@ protobuf fixtures via the fixture transport.
 **The corpus** in `tests/corpus` is seven whole games, a bare api losing to the computer, one on each map of the
 current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is and holds. Playing a game back
 asks the same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until
-the corpus is recorded again. The tables `sc2nachos.testing` ships are the first game's: if they changed,
-`test_made_up_units.py` fails until `tools/write_shipped_tables.py` writes them again.
+the corpus is recorded again. The game's data `sc2nachos.testing` ships is the first game's: if it changed,
+`test_made_up_units.py` fails until `tools/write_shipped_game_data.py` writes it again.
 
 | Task | Command |
 |---|---|

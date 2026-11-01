@@ -9,7 +9,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Where things stand
 
-- nachOS `main` has every PR to #195. `uv run pytest` passes 3094 tests with #196, on numpy 2.0.2 as on the newest;
+- nachOS `main` has every PR to #195. `uv run pytest` passes 3096 tests with #196, on numpy 2.0.2 as on the newest;
   `uv run pytest -m integration` passed 41 against a real game with #192 (run 2026-10-31).
 - **The queue per unit (#115 to #120) is reversed** (#126, the owner, 2026-10-16): NachOS holds no order.
 - **M4 is done**: slice 4, orders (#42 to #46), one id per action (#103 to #107), slice 5, the derived reads
@@ -818,8 +818,15 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `MadeUpUnits().observe(*reports, step=)` takes in one observation after another and returns the units of the
     reports in their order; a tag reported again is the same object, read anew (over a dict by tag, and over a one-shot
     function).
-  - NachOS ships the tables of the version it is tested against, the first corpus game's, 50 KB xz-compressed;
-    `tables=` takes others (over a public `GameData.from_recording`, and over leaving it to the bot).
+  - NachOS ships the game's data of the build it is tested against, the first corpus game's, 50 KB xz-compressed,
+    as `game_data_75689.binpb.xz`; `game_data=` takes other data (over a public `GameData.from_recording`, and over
+    leaving it to the bot). At the owner's review, `load_game_data(base_build=75689)` reads it and raises `ValueError`
+    for a build not shipped, so a test that names its build fails once NachOS ships another, and `MadeUpUnits()`
+    reads the newest build shipped (over requiring every test to name its build, and over the build optional
+    everywhere).
+  - The names stay `MadeUpUnits` and `UnitReport` (the owner, open to either, over `MockUnits`, `TestUnits`,
+    `MockUnitReport` and `TestUnitReport`): the units are NachOS's real ones, and pytest warns that it cannot collect
+    each `Test*` class with an `__init__` that a test module imports.
   - NachOS's own tests move onto it in the pull request after it (over the same one, and over not at all).
 
 ## Next

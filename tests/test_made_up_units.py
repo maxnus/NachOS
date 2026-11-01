@@ -1,5 +1,5 @@
-"""`sc2nachos.testing`: the units a bot's tests make from `UnitReport`s through `MadeUpUnits`, on the tables NachOS
-ships."""
+"""`sc2nachos.testing`: the units a bot's tests make from `UnitReport`s through `MadeUpUnits`, on the game's data
+NachOS ships."""
 
 import dataclasses
 import lzma
@@ -9,9 +9,10 @@ import pytest
 from s2clientprotocol import data_pb2
 
 from sc2nachos import GameTime
+from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
-from sc2nachos.testing import MadeUpUnits, UnitReport, shipped_tables
+from sc2nachos.testing import MadeUpUnits, UnitReport, load_game_data
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, Visibility
 from support import load_tool, make_tables
 
@@ -227,22 +228,30 @@ class TestObservations:
             made_up_units.observe(marine_report, step=10)
 
 
-class TestTables:
-    """The tables the units read their types from."""
+class TestGameData:
+    """The game's data the units read their types from."""
 
-    def test_the_shipped_tables_are_the_first_corpus_games(self):
-        """Recording the corpus again needs `tools/write_shipped_tables.py` run again."""
-        shipped_file = resources.files("sc2nachos.testing").joinpath("game_tables.binpb.xz")
-        corpus_tables = load_tool("write_shipped_tables").first_corpus_game_tables()
-        assert lzma.decompress(shipped_file.read_bytes()) == corpus_tables.SerializeToString(deterministic=True)
+    def test_the_shipped_game_data_is_the_first_corpus_games_named_for_the_tech_trees_build(self):
+        """Recording the corpus again needs `tools/write_shipped_game_data.py` run again."""
+        shipped_file = resources.files("sc2nachos.testing").joinpath(f"game_data_{TECH_TREE.base_build}.binpb.xz")
+        corpus_game_data = load_tool("write_shipped_game_data").first_corpus_game_data()
+        assert lzma.decompress(shipped_file.read_bytes()) == corpus_game_data.SerializeToString(deterministic=True)
 
-    def test_the_shipped_tables_describe_the_units(self):
-        """A made-up marine reads its type's row of them: 50 minerals, a weapon of range 5."""
-        assert shipped_tables().units[UnitTypeId.MARINE].cost.minerals == 50
+    def test_the_game_data_of_the_build_shipped_describes_the_units(self):
+        """Build 75689's data holds a marine's row: 50 minerals."""
+        assert load_game_data(base_build=75689).units[UnitTypeId.MARINE].cost.minerals == 50
+
+    def test_a_build_not_shipped_raises(self):
+        """A test that names its build fails at once once NachOS ships the data of another."""
+        with pytest.raises(ValueError, match="no game data of build 12345, only of 75689"):
+            load_game_data(base_build=12345)
+
+    def test_by_default_the_units_read_the_newest_build_shipped(self):
+        """A made-up marine reads its type's row of build 75689's data: a weapon of range 5."""
         (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE))
         assert marine.ground_range == 5
 
-    def test_tables_given_are_read_in_their_place(self):
-        """A test may make units on tables of its own."""
-        own_tables = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
-        assert MadeUpUnits(own_tables).tables is own_tables
+    def test_game_data_given_is_read_in_its_place(self):
+        """A test may make units on game data of its own."""
+        own_game_data = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
+        assert MadeUpUnits(own_game_data).game_data is own_game_data

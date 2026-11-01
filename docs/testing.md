@@ -114,8 +114,10 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   read anew: `dataclasses.replace(report, at=(12, 10))` moves it, at the velocity the steps between give. A unit not
   reported again is no longer listed, `dead` reports units dead, and `units` lists every unit of the latest
   observation. Each observation is a step after the one before unless `step` says otherwise.
-- **The tables** the units read their types from are those NachOS ships, of StarCraft II 4.10 for Linux, build 75689,
-  read afresh in about 15 ms for each `MadeUpUnits`. A test may pass its own, or `shipped_tables()` read once for many.
+- **The game's data** the units read their types from is by default the newest NachOS ships, of StarCraft II 4.10 for
+  Linux, build 75689, read afresh in about 15 ms for each `MadeUpUnits`. A test that names its build reads it once with
+  `load_game_data(base_build=75689)` and passes it in, and fails with `ValueError` once NachOS ships another build's
+  instead. A test may pass game data of its own.
 
 The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
 a recorded game, as below.
