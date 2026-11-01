@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import ClassVar, overload
 
+from sc2nachos._rounding import rounded_half_up
 from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_NORMAL_SECOND
 
 # 22.4 steps a second as whole numbers, 112 steps in 5 seconds. Multiplying by the one and dividing by the other is
@@ -98,13 +99,10 @@ class GameTime:
     def nearest_step(self) -> int:
         """The step nearest it, a tie the later, where Python's `round` takes the even one. Raises `ValueError` for
         `INFINITE`, or any time not finite."""
-        # As `util._math._rounded_half_up`, which this module cannot import: `sc2nachos.util` imports the series,
-        # which imports `GameTime`. Not `math.floor(steps + 0.5)`: the addition rounds, taking 0.49999999999999994 to 1.
         try:
-            floored = math.floor(self.steps)
+            return rounded_half_up(self.steps)
         except (OverflowError, ValueError):
             raise ValueError(f"{self!r} is not finite, so it has no nearest step") from None
-        return floored + (self.steps - floored >= 0.5)
 
     def is_integer(self) -> bool:
         """Whether it is a whole number of steps."""

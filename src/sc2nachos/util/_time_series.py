@@ -156,7 +156,7 @@ class TimeSeries[T: float]:
         else:
             interpolated = numpy.linspace(self._buffer[index - gap], value, num=gap + 1)
             if numpy.issubdtype(self._buffer.dtype, numpy.integer):
-                # A tie up, as `sticky_round` has it; `numpy.rint` would send it to the even value.
+                # A tie up, as `GameTime.nearest_step` has it; `numpy.rint` would send it to the even value.
                 floored = numpy.floor(interpolated)
                 interpolated = floored + (interpolated - floored >= 0.5)
             self._buffer[index - gap + 1 : index + 1] = interpolated[1:]

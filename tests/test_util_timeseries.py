@@ -94,7 +94,7 @@ class TestAppend:
         assert series.values.tolist() == [0, 1, 1, 2]
 
     def test_a_tie_in_an_integer_gap_rounds_up(self):
-        """As `sticky_round` has it, where `numpy.rint` gave 0 to 1 over 2 steps as 0, 0, 1."""
+        """As `GameTime.nearest_step` has it, where `numpy.rint` gave 0 to 1 over 2 steps as 0, 0, 1."""
         series = TimeSeries.empty(int)
         series.append(GameTime(steps=0), 0)
         series.append(GameTime(steps=2), 1)
