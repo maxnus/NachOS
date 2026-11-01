@@ -13,7 +13,7 @@ from sc2nachos.extensions.speed_mining import SpeedMining
 from sc2nachos_threat import ThreatMap  # someone else's, made up for this example
 
 
-class BotExtensions:
+class Extensions:
     """This bot's extensions."""
 
     def __init__(self, api: Api) -> None:
@@ -21,7 +21,7 @@ class BotExtensions:
         self.threat = ThreatMap(api, decay=0.9)
 
 
-api = Api(extensions=BotExtensions)
+api = Api(extensions=Extensions)
 ```
 
 ```python
@@ -104,6 +104,8 @@ class ThreatMap:
           api.extensions.speed_mining.mine(worker, fields[index % len(fields)])
   ```
 
-  A worker the bot sends to build is left alone until it is idle or mining again, and then goes back to its field.
-  `release(worker)` takes one back. A worker on a move, unlike one on a gather or a return, can be stopped by other
-  units, so no move is given while a unit stands in a worker's way. The API reference says the rest.
+  A field takes two workers at most: with three, speed mining mined less than plain gathers. A worker the bot sends to
+  build is left alone until it is idle or mining again, and then goes back to its field; `release(worker)` takes one
+  back, and `miners` reads which worker mines which field. A worker on a move, unlike one on a gather or a return, can
+  be stopped by other units, so no move is given while a unit stands in a worker's way. A worker strikes an enemy it
+  can hit as it stands, then goes back to mining. The API reference says the rest.

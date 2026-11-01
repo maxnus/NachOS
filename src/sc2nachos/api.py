@@ -73,8 +73,8 @@ class Api[E]:
     Anything of the game raises `NotPlayingError` until the game starts. After it ends, the api keeps answering from
     it.
 
-    `E` is the type of `extensions`: an `Api()` is an `Api[None]`, and one made with `extensions=BotExtensions` an
-    `Api[BotExtensions]`. A function that takes any api takes an `Api[object]`.
+    `E` is the type of `extensions`: an `Api()` is an `Api[None]`, and one made with `extensions=Extensions` an
+    `Api[Extensions]`. A function that takes any api takes an `Api[object]`.
     """
 
     @overload

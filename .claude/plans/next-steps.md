@@ -926,6 +926,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
     the line from the worker to its trip's end, and takes a worker off the move once one does (over the whole base
     plain while a unit stood in the mineral line). `Point.distance_to_segment` is added to geometry for it. Speed mining
     loops by field, then by worker, each field's townhall, trip ends and nearby units read once a turn.
+  - The owner's second round on #201: the bot's class is `Extensions`. Larvae are never in a move's way, whoever owns
+    them, eggs are, and this player's workers are unless speed mining holds them. `mine` refuses a third worker at a
+    field (measured: three at a field, speed mined 1705 against plain 2115; two, 2310 against 2065). A read-only
+    `SpeedMining.miners` mapping reads each held worker's field. Held workers strike (the owner's rule, my reading
+    confirmed): a visible enemy on the ground, not a structure, in range and at most a step's turn away, the weapon's
+    cooldown at most a step, the one with least life; speed mining remembers its attacks and sends the worker back to
+    mining once it has fired, and leaves a bot's own attack alone. This reverses my earlier call that self-defense
+    stays the bot's.
 
 ## Next
 

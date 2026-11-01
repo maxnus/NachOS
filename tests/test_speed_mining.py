@@ -1,5 +1,6 @@
 """Speed mining, NachOS's first extension: what it orders the workers handed over, in a game drawn on Pylon's main."""
 
+import math
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
@@ -73,10 +74,14 @@ def _reported_scv(
     *orders: raw_pb2.UnitOrder,
     carrying: bool = False,
     tag: int = _HANDED_SCV,
+    **fields: Any,
 ) -> raw_pb2.Unit:
-    """This player's SCV at `at`, carrying out `orders`, and carrying minerals if `carrying`."""
+    """This player's SCV at `at`, carrying out `orders`, carrying minerals if `carrying`, with a worker's radius and the
+    rest of what `fields` report."""
     buffs = [BuffId.CARRYING_MINERALS] if carrying else []
-    return make_unit(tag, UnitTypeId.SCV, at=at, build_progress=1.0, orders=orders, buff_ids=buffs)
+    return make_unit(
+        tag, UnitTypeId.SCV, at=at, build_progress=1.0, orders=orders, buff_ids=buffs, radius=0.375, **fields
+    )
 
 
 def _gather_order(field: int = _MINED_FIELD) -> raw_pb2.UnitOrder:
@@ -242,8 +247,9 @@ class TestPlainMining:
         ]
 
 
-# Where a unit stands in the way of the move of `_HANDED_SCV` at (28.175, 24.5) to `_GATHER_POINT`, 0.4 off its line.
-_IN_THE_WAY = (28.9, 24.9)
+# Where a unit stands in the way of the move of `_HANDED_SCV` at (28.175, 24.5) to `_GATHER_POINT`, 0.4 off its line
+# and out of the SCV's reach.
+_IN_THE_WAY = (29.5, 24.9)
 
 
 def _unit_at(at: tuple[float, float], unit_type: UnitTypeId, **fields: Any) -> raw_pb2.Unit:
@@ -260,8 +266,10 @@ class TestUnitsInTheWay:
             _unit_at(_IN_THE_WAY, UnitTypeId.MARINE),
             _unit_at(_IN_THE_WAY, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY),
             _unit_at(_IN_THE_WAY, UnitTypeId.PROBE, alliance=Alliance.ENEMY),
+            _unit_at(_IN_THE_WAY, UnitTypeId.SCV),
+            _unit_at(_IN_THE_WAY, UnitTypeId.EGG),
         ],
-        ids=["this player's marine", "an enemy's zergling", "an enemy's worker"],
+        ids=["this player's marine", "an enemy's zergling", "an enemy's worker", "a worker not held", "an egg"],
     )
     def test_no_move_is_given_while_a_unit_stands_in_its_way(self, unit: raw_pb2.Unit) -> None:
         near = _reported_scv((28.175, 24.5), _gather_order())
@@ -276,15 +284,85 @@ class TestUnitsInTheWay:
         "unit",
         [
             _unit_at((27.0, 21.0), UnitTypeId.MARINE),
-            _unit_at(_IN_THE_WAY, UnitTypeId.SCV),
+            _unit_at(_IN_THE_WAY, UnitTypeId.LARVA),
+            _unit_at(_IN_THE_WAY, UnitTypeId.LARVA, alliance=Alliance.ENEMY),
             _unit_at(_IN_THE_WAY, UnitTypeId.ROACH_BURROWED, is_burrowed=True),
             _unit_at(_IN_THE_WAY, UnitTypeId.MEDIVAC, is_flying=True),
         ],
-        ids=["elsewhere in the mineral line", "this player's worker", "burrowed", "flying"],
+        ids=["elsewhere in the mineral line", "a larva", "an enemy's larva", "burrowed", "flying"],
     )
     def test_a_unit_out_of_its_way_or_never_in_it_leaves_the_move_given(self, unit: raw_pb2.Unit) -> None:
         near = _reported_scv((28.175, 24.5), _gather_order())
         assert _orders_sent([*_pylon_main(), near, unit]) == [_move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)]
+
+    def test_a_worker_speed_mining_holds_is_out_of_its_way(self) -> None:
+        """It mines `_OTHER_FIELD`, too far from where its trip ends to be given anything."""
+        near = _reported_scv((28.175, 24.5), _gather_order())
+        held = _reported_scv(_IN_THE_WAY, _gather_order(_OTHER_FIELD), tag=20)
+        both_held = [(_HANDED_SCV, _MINED_FIELD), (20, _OTHER_FIELD)]
+        assert _orders_sent([*_pylon_main(), near, held], assigned=both_held) == [
+            _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)
+        ]
+
+
+def _zergling_beside(scv_at: tuple[float, float], *, degrees_off_its_facing: float) -> raw_pb2.Unit:
+    """An enemy's zergling, tag 30, 0.8 from an SCV at `scv_at` facing east, within its reach of 0.95, its weapon's
+    0.2 and both radii; at `degrees_off_its_facing` round from east."""
+    angle = math.radians(degrees_off_its_facing)
+    at = (scv_at[0] + 0.8 * math.cos(angle), scv_at[1] + 0.8 * math.sin(angle))
+    return make_unit(30, UnitTypeId.ZERGLING, at=at, alliance=Alliance.ENEMY, build_progress=1.0, radius=0.375)
+
+
+class TestStriking:
+    """A worker strikes an enemy it can hit as it stands: its cooldown at most a step, and a step's turn away at most, a
+    worker's 62.5 degrees."""
+
+    @pytest.mark.parametrize("degrees_off_its_facing", [0.0, 60.0])
+    def test_a_worker_strikes_an_enemy_in_range_ahead_with_its_weapon_ready(
+        self, degrees_off_its_facing: float
+    ) -> None:
+        scv = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0)
+        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=degrees_off_its_facing)
+        assert _orders_sent([*_pylon_main(), scv, zergling]) == [[(AbilityId.ATTACK, 30, False)]]
+
+    @pytest.mark.parametrize(
+        ("degrees_off_its_facing", "weapon_cooldown"), [(180.0, 0.0), (0.0, 2.0)], ids=["behind it", "cooling down"]
+    )
+    def test_not_one_behind_it_or_while_its_weapon_cools_down(
+        self, degrees_off_its_facing: float, weapon_cooldown: float
+    ) -> None:
+        scv = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0, weapon_cooldown=weapon_cooldown)
+        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=degrees_off_its_facing)
+        assert _orders_sent([*_pylon_main(), scv, zergling]) == [[]]
+
+    def test_of_several_it_strikes_the_one_with_least_life(self) -> None:
+        scv = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0)
+        healthy = _zergling_beside((26.0, 30.0), degrees_off_its_facing=-30.0)
+        healthy.health, healthy.health_max = 35.0, 35.0
+        wounded = _zergling_beside((26.0, 30.0), degrees_off_its_facing=30.0)
+        wounded.tag, wounded.health, wounded.health_max = 31, 10.0, 35.0
+        assert _orders_sent([*_pylon_main(), scv, healthy, wounded]) == [[(AbilityId.ATTACK, 31, False)]]
+
+    def test_once_it_has_fired_it_goes_back_to_mining(self) -> None:
+        """The turn after the attack is sent, its orders may not show it, so nothing goes out."""
+        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
+        ready = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0)
+        attack = raw_pb2.UnitOrder(ability_id=RawAbilityId.attack_Attack, target_unit_tag=30)
+        winding_up = _reported_scv((26.0, 30.0), attack, facing=0.0)
+        fired = _reported_scv((26.0, 30.0), attack, facing=0.0, weapon_cooldown=20.0)
+        turns = [[*_pylon_main(), scv, zergling] for scv in (ready, winding_up, winding_up, fired)]
+        assert _orders_sent(*turns) == [
+            [(AbilityId.ATTACK, 30, False)],
+            [],
+            [],
+            [(AbilityId.GATHER, _MINED_FIELD, False)],
+        ]
+
+    def test_a_bots_own_attack_is_left_alone(self) -> None:
+        attack = raw_pb2.UnitOrder(ability_id=RawAbilityId.attack_Attack, target_unit_tag=30)
+        attacking = _reported_scv((26.0, 30.0), attack, facing=0.0, weapon_cooldown=20.0)
+        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
+        assert _orders_sent([*_pylon_main(), attacking, zergling]) == [[]]
 
 
 class TestHandingOver:
@@ -302,6 +380,43 @@ class TestHandingOver:
         marine = make_unit(20, UnitTypeId.MARINE, at=(10.0, 10.0), build_progress=1.0)
         _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0)), marine], assigned=(), started=try_others)
         assert refused == ["speed mining orders workers", "speed mining mines mineral fields"]
+
+    def test_mine_refuses_a_third_worker_at_a_field(self) -> None:
+        refused: list[str] = []
+
+        def hand_over_a_third(api: Api[SpeedMining]) -> None:
+            with pytest.raises(ValueError) as raised:
+                api.extensions.mine(_own_unit_of_tag(api, 12), _unit_of_tag(api, _MINED_FIELD))
+            refused.append(str(raised.value).split(",")[0])
+            api.extensions.mine(_own_unit_of_tag(api, 11), _unit_of_tag(api, _MINED_FIELD))
+
+        scvs = [_reported_scv((25.0, 30.0), _gather_order(), tag=tag) for tag in (_HANDED_SCV, 11, 12)]
+        two_at_the_field = [(_HANDED_SCV, _MINED_FIELD), (11, _MINED_FIELD)]
+        _orders_sent([*_pylon_main(), *scvs], assigned=two_at_the_field, started=hand_over_a_third)
+        assert refused == ["speed mining mines a field with 2 workers at most"]
+
+    def test_miners_reads_each_worker_held_with_its_field_and_no_dead_one(self) -> None:
+        read: list[tuple[bool, int | None, int]] = []
+
+        def read_the_miners(api: Api[SpeedMining]) -> None:
+            def read_them(event: TurnEvent) -> None:
+                miners = api.extensions.miners
+                scv = _own_unit_of_tag(api, 11) if event.time.steps == 0 else None
+                field = None if scv is None else miners.get(scv)
+                read.append((scv in miners, None if field is None else field.tag, len(miners)))
+
+            api.on(TurnEvent, priority=EventPriority.LOWEST)(read_them)
+
+        scvs = [_reported_scv((25.0, 30.0), _gather_order(), tag=tag) for tag in (_HANDED_SCV, 11)]
+        both = [(_HANDED_SCV, _MINED_FIELD), (11, _OTHER_FIELD)]
+        _orders_sent(
+            [*_pylon_main(), *scvs],
+            [*_pylon_main(), scvs[0]],
+            assigned=both,
+            started=read_the_miners,
+            dead=lambda step: [11] * (step == 1),
+        )
+        assert read == [(True, _OTHER_FIELD, 2), (False, None, 1)]
 
     def test_built_before_the_game_starts_it_raises(self) -> None:
         with pytest.raises(NotPlayingError):
