@@ -209,14 +209,12 @@ class TestSubscribing:
         assert bus._subscriptions.wants_every(TurnEvent)
         assert not bus._subscriptions.wants_every(TurnStartEvent)
 
-    def test_nothing_is_wanted_once_every_handler_is_done_until_the_next_game(self) -> None:
+    def test_nothing_is_wanted_once_every_handler_is_done(self) -> None:
         bus = _EventBus()
         bus.on(TurnEvent, once=True)(lambda event: None)
         bus.on(TurnEvent)(lambda event: Done)
         bus.emit(TurnEvent(time=GameTime(steps=0)))
         assert not bus._subscriptions.wants_every(TurnEvent)
-        bus._start_game()
-        assert bus._subscriptions.wants_every(TurnEvent)
 
     def test_a_coroutine_function_is_refused(self) -> None:
         """Handlers are called synchronously, so a coroutine function would only make a coroutine nobody awaits."""
@@ -315,7 +313,7 @@ class TestCadence:
 
 
 class TestStopping:
-    def test_a_handler_that_returns_done_is_called_no_more_this_game(self) -> None:
+    def test_a_handler_that_returns_done_is_called_no_more(self) -> None:
         bus, fired = _EventBus(), []
 
         @bus.on(TurnEvent)
@@ -341,24 +339,6 @@ class TestStopping:
     def test_done_is_returned_itself(self) -> None:
         with pytest.raises(TypeError, match="returns `Done` itself"):
             Done()
-
-    def test_a_new_game_starts_what_every_handler_has_done_afresh(self) -> None:
-        bus, fired = _EventBus(), []
-        bus.on(TurnEvent, once=True)(lambda event: fired.append(("once", event.time.steps)))
-        bus.on(TurnEvent, at_time=GameTime(steps=4))(lambda event: fired.append(("at_time", event.time.steps)))
-        bus.on(TurnEvent, min_interval=GameTime(steps=100))(
-            lambda event: fired.append(("min_interval", event.time.steps))
-        )
-
-        @bus.on(TurnEvent)
-        def done(event: TurnEvent) -> type[Done]:
-            fired.append(("done", event.time.steps))
-            return Done
-
-        for _ in range(2):
-            bus._start_game()
-            _turns(bus, 0, 4, 8)
-        assert fired == 2 * [("once", 0), ("min_interval", 0), ("done", 0), ("at_time", 4)]
 
 
 class TestUnsubscribing:
@@ -751,7 +731,6 @@ class TestTimings:
 
         bus.subscribe(Handlers())
         bus.subscribe(Handlers())
-        bus._start_game()
         _turns(bus, 0, 1, 2)
         (name, timings), *others = bus.timings[TurnEvent].items()
         assert not others
@@ -759,14 +738,6 @@ class TestTimings:
         assert timings.calls == 6
         assert 0 <= timings.max_seconds <= timings.total_seconds
         assert timings.seconds_per_call == pytest.approx(timings.total_seconds / 6)
-
-    def test_a_new_game_starts_them_afresh(self) -> None:
-        bus = _EventBus(time_handlers=True)
-        bus.on(GameEndEvent)(lambda event: None)
-        bus.emit(GameEndEvent(Result.VICTORY, time=GameTime(steps=10)))
-        assert bus.timings[GameEndEvent]
-        bus._start_game()
-        assert not bus.timings
 
 
 class _Scouted(Event):

@@ -49,7 +49,7 @@ def label(event: TurnEvent) -> None:
   of its own takes its group's, then the drawing's, then `api.debug.default_color`, white unless set; text with no size
   is `api.debug.default_text_size` pixels high, 8 unless set.
 
-Each game starts afresh, so a `GameStartEvent` handler sets `refresh_interval` and the defaults for every game.
+`api.debug` exists once the game starts, so a `GameStartEvent` handler sets `refresh_interval` and the defaults.
 
 ## Cheats
 

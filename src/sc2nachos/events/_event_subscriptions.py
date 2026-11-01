@@ -70,7 +70,7 @@ class _EventSubscriptions:
             kept = []
             for handler in handlers:
                 if removing(handler):
-                    # So an event being handed out skips it too. It is in no list any more, so no new game resets it.
+                    # So an event being handed out skips it too.
                     handler.done = removed = True
                     self._keyed -= handler.selects.keys is not None
                 else:
@@ -82,13 +82,6 @@ class _EventSubscriptions:
         if removed:
             self._forget()
         return removed
-
-    def start_game(self) -> None:
-        """Forget what every handler has done."""
-        for handler in self:
-            handler.last_steps = None
-            handler.done = False
-        self._wanted.clear()
 
     def resolve(self, event_type: type[Event]) -> tuple[_Handler, ...]:
         """The handlers events of `event_type` are handed to, its bases' included, in run order. Notes whether any of

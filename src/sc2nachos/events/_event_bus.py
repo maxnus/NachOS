@@ -154,12 +154,6 @@ class _EventBus:
                     raise TypeError(f"{name} of {cls.__name__} is marked with `on` under a {kind}")
         return found
 
-    def _start_game(self) -> None:
-        """Forget what every handler has done, and how long it took."""
-        self._subscriptions.start_game()
-        if self._timings is not None:
-            self._timings = {}
-
     def _set_time(self, time: GameTime | None) -> None:
         """Set the time given to events emitted without one: the game's, or `None` once it has ended."""
         self._time = time

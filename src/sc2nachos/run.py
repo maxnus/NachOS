@@ -53,8 +53,10 @@ def run_local(
     as `Api.play` says. Each must be in a folder that exists, or `FileNotFoundError` is raised before the game starts,
     and `IsADirectoryError` if it names a folder; so is `TypeError` for a `time_limit` that is not a `GameTime`. However
     the game ends, the client is stopped and its temporary directory removed. The newest build installed is played, with
-    a warning if it is not the one the tech tree was swept on.
+    a warning if it is not the one the tech tree was swept on. Raises `RuntimeError` before anything else if `api` has
+    played its game.
     """
+    api._check_has_not_played()
     _check_output_files(record_to, save_replay_to)
     _check_time_limit(time_limit)
     installation = installation or Installation.find()
@@ -103,8 +105,10 @@ def run_ladder(
     The ladder starts the client, creates the match, and passes the bot the client's address, `start_port` and the
     opponent's `enemy_ladder_id` on the command line. A game against the built-in computer has no `start_port`.
     `realtime` must match the ladder's `--RealTime` flag, as `Api.play` says. There is no time limit: a bot can only
-    end a game early by leaving it, which concedes. `record_to` and `save_replay_to` are as for `run_local`.
+    end a game early by leaving it, which concedes. `record_to` and `save_replay_to` are as for `run_local`. Raises
+    `RuntimeError` before anything else if `api` has played its game.
     """
+    api._check_has_not_played()
     _check_output_files(record_to, save_replay_to)
     with closing(_connect(f"ws://{host}:{port}/sc2api", record_to)) as client:
         try:
@@ -150,8 +154,10 @@ def run_replay(
     path is an absolute path to a file here, the map it names under the installation's maps goes with the replay, or
     else the map of its name there. `record_to` is a file to
     record the whole conversation into, as for `run_local`, which `run_recording` plays back. However the replay ends,
-    the client is stopped and its temporary directory removed.
+    the client is stopped and its temporary directory removed. Raises `RuntimeError` before anything else if `api` has
+    played its game.
     """
+    api._check_has_not_played()
     _check_output_files(record_to, None)
     _check_time_limit(time_limit)
     replay_data = Path(replay).read_bytes()
@@ -241,7 +247,10 @@ def run_recording(
 
     A replay played back by `run_replay` is played back again as it was recorded, as the player it was played for and
     with the fog as it was, by default only: `permissive` raises `ValueError` for one.
+
+    Raises `RuntimeError` before anything else if `api` has played its game.
     """
+    api._check_has_not_played()
     _check_time_limit(time_limit)
     if not isinstance(recording, Recording):
         recording = Recording(Path(recording))
@@ -301,7 +310,10 @@ def run_from_command_line(
     connection before the game began, and `opponent_actual_race`, the race the opponent played as `Enemy.race` reads at
     the end, `null` if it was never known. An argument of the other kind of game is logged as ignored, and one NachOS
     does not read is left for the bot, listed in the log. `argv` defaults to `sys.argv[1:]`.
+
+    Raises `RuntimeError` before anything else if `api` has played its game.
     """
+    api._check_has_not_played()
     command_line_arguments = _CommandLineArguments(argv)
     command_line_arguments.log_arguments_not_used()
     if command_line_arguments.is_ladder_game:

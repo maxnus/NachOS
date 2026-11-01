@@ -45,6 +45,8 @@ These are the non-negotiables. They exist because this library is published for 
 - **`Api.__init__` must be cheap and must not require a live connection.** Consumers construct it at import time
   so that `@api.on(...)` decorators can run as their modules load. Connecting happens in `run_local` /
   `run_ladder`, which take an already-built instance.
+- **An api plays one game.** `play` refuses a second, so nothing is reset between games, and a test or tool that
+  plays several builds an api for each.
 - **No AvocaDOS-shaped quirks.** Nothing may exist in NachOS solely to make something work in AvocaDOS. If in
   doubt, the awkwardness stays in AvocaDOS. Better still, fix it so neither side needs it.
 - **NachOS owes python-sc2 nothing.** This is a new package, not a fork and not a compatible replacement — no API

@@ -264,9 +264,6 @@ class TestLifecycle:
         assert not game.tracker.last_changes.units_found_dead
         game.observe(32, make_unit(2))
         assert not game.tracker.last_changes.units_died
-        game.tracker.update(make_observation(48, dead=(2,)).observation.raw_data, 48)
-        game.tracker.end()
-        assert not game.tracker.last_changes.units_died
 
     def test_a_morph_keeps_the_unit_and_changes_its_type(self) -> None:
         game = _Game()
@@ -290,13 +287,6 @@ class TestLifecycle:
         game.observe(0, make_unit(3), make_unit(1))
         game.observe(16, make_unit(2), make_unit(3), make_unit(4), make_unit(1))
         assert [unit.tag for unit in game.tracker.unit_tracker.present] == [2, 3, 4, 1]
-
-    def test_ending_the_game_leaves_no_unit_listed(self) -> None:
-        game = _Game()
-        (marine,) = game.observe(0, make_unit(1))
-        game.tracker.end()
-        assert not marine.is_listed
-        assert not game.tracker.unit_tracker.present
 
 
 class TestTheFog:
@@ -1548,16 +1538,6 @@ class TestWhatChanged:
         game.observe(16)
         assert not game.tracker.last_changes.enemy_units_left_sight
 
-    def test_ending_the_game_forgets_what_changed(self) -> None:
-        game = _Game()
-        game.observe(0, make_unit(1, build_progress=0.5), make_unit(2, alliance=_ENEMY))
-        game.tracker.end()
-        changes = game.tracker.last_changes
-        assert not any(getattr(changes, name) for name in changes.__slots__ if name not in {"update", "own", "enemy"})
-        assert not any(getattr(side, name) for side in (changes.own, changes.enemy) for name in side.__slots__)
-        assert not game.tracker.unit_tracker._unfinished
-        assert not game.tracker.unit_comparer._compared.value
-
 
 class TestThroughTheApi:
     @staticmethod
@@ -1582,7 +1562,7 @@ class TestThroughTheApi:
         assert api.units.ids == {100001}
         assert api.known_units.ids == {100001, 400001}
 
-    def test_the_enemy_holds_what_it_is_assumed_to_have_and_is_new_for_each_game(self) -> None:
+    def test_the_enemy_holds_what_it_is_assumed_to_have(self) -> None:
         api = Api()
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         enemy = api.enemy
@@ -1592,18 +1572,6 @@ class TestThroughTheApi:
         enemy.forget_upgrades(UpgradeId.STIMPACK)
         assert enemy.upgrades == {UpgradeId.COMBAT_SHIELD}
         assert repr(enemy) == "Enemy(id=2, race=ZERG, requested_race=ZERG, name=None, ladder_id=None)"
-        self._play(api, make_observation(0, (1, Result.VICTORY)))
-        assert api.enemy is not enemy
-        assert not api.enemy.upgrades
-
-    def test_the_last_games_units_are_not_listed_once_the_next_game_starts(self) -> None:
-        api = Api()
-        self._play(api, make_observation(0, (1, Result.VICTORY), units=[make_unit(1)]))
-        marine = api.units.by_id(100001)
-        assert marine.is_listed
-        self._play(api, make_observation(0, (1, Result.VICTORY), units=[make_unit(1)]))
-        assert not marine.is_listed
-        assert api.units.by_id(100001) is not marine
 
 
 @pytest.mark.integration

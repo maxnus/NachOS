@@ -131,11 +131,6 @@ class _BuilderTracker:
         self._under_construction = None
         self._builders_now = None
 
-    def end(self) -> None:
-        """Forget the builders the game has yet to report dead. The game is over."""
-        self._used_up_builders = []
-        self.forget_observation()
-
     def _order_target_position(self, order: raw_pb2.UnitOrder) -> tuple[float, float] | None:
         """Where `order` is aimed: its point, or the position of its target unit, such as the geyser a gas building
         goes on or the unfinished structure construction resumes on."""

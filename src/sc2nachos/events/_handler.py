@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 @final
 class _Handler:
     """A function handling the events a filter selects, called alone or on the instance it is a method of, with how
-    often it runs and what it has done in the current game."""
+    often it runs and what it has done."""
 
     __slots__ = (
         "at_time",
@@ -57,8 +57,7 @@ class _Handler:
         self.instance = instance
         # Its place in subscription order across the whole bus, which orders one priority's handlers across event types.
         self.order = 0
-        # What it has done this game; the next game resets it. An unsubscribed handler is `done` too, since an event
-        # being handed out may still reach it.
+        # What it has done. An unsubscribed handler is `done` too, since an event being handed out may still reach it.
         self.last_steps: float | None = None
         self.done = False
 

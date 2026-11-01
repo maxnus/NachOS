@@ -849,9 +849,37 @@ Keep this file current: when a step is done, say so here in the same pull reques
     it can be published by hand from the Actions tab.
   - The README says alpha, with AvocaDOS on the ladder, and gains a getting started and a list of what NachOS has;
     its links are whole GitHub URLs, which the PyPI page can follow.
+- **An api plays one game** (the owner, 2026-11-01, one question at a time). Asked while planning plugins, whose
+  state carried from one game into the next was the problem, which one game per api removes with no lifetime for
+  subscriptions (an implicit rule, a `for_this_game` keyword and a per-game `api.for_this_game` were weighed first).
+  Nothing played two games on one api: the runners launch a client for every game, AvocaDOS plays a game per process
+  everywhere (its recorded-game tests, `test_maps.py`, and `capture_baseline.py`, whose module-level step timer a
+  second game would extend), and the corpus recorder makes an api for each game.
+  - A second game is refused in `play` and in every runner before it launches anything, through one private check,
+    `Api._check_has_not_played` (over `play` alone, which would launch and join a game first).
+  - It raises the built-in `RuntimeError`, naming the fix, as misuse does (over a new exported `AlreadyPlayedError`).
+  - The game is used up once `play` starts it: what fails before, a runner's checks or `play`'s, or `_Game.start`
+    reading the game, leaves the api to play (over used up by any call, which would make a process whose api is made at
+    import restart after a typo).
+  - AGENTS.md says so under the core design rules; its line on a connection playing game after game stays, for
+    `Client`.
+  - `docs/testing.md` shows a bot's tests playing each recording in a process of its own, as AvocaDOS's do (over a
+    helper such as `run_recording_in_new_process`, to add once a second bot needs it; Windows has no fork for pytest's
+    fork plugins).
+  - What existed for a next game went: resetting what each handler has done and its timings, and the trackers'
+    `end`, which marked the last game's units unlisted.
 
 ## Next
 
+- **Plugins**, opt-in features of NachOS's or anyone's (the owner, 2026-11-01: the direction, not its details). The bot
+  hands the api one function, `Api(plugins=build_plugins)`, which NachOS calls once as the game starts, before
+  `GameStartEvent`; `api.plugins.threat` reads the object it returns, typed by the bot's own class, whose names cannot
+  clash with NachOS's. A plugin is any class taking the api, given what it depends on and its options in its
+  constructor, where it subscribes with `api.on`. Bots keep `api.on`; decorators without an api, a `Plugin` base class
+  with `add_plugin` and `api.plugin(T)`, `api.threat` itself (untyped through `__getattr__`, and sharing `Api`'s names)
+  and handles from an `api.per_game` were weighed and dropped. It needs an exception to AGENTS.md's "no extension
+  hook" for the one attribute. Open: whether pyright takes `Api` generic in its plugins' type, and the names. To plan
+  one question at a time and build with a first real plugin, adding to NachOS only the gaps it hits.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

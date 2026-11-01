@@ -22,8 +22,8 @@ class Economy:
 A function is subscribed when it is defined, a static method included. A method, which takes `self` and the event, is
 marked, then subscribed for each instance passed to `api.subscribe`, and `api.unsubscribe` takes a function, a method or
 an instance off again. `on` takes a `priority`, and `min_interval`, `at_time` or `once` to limit when the handler runs,
-the first two a `GameTime`. A handler that returns `Done` is not called again that game. All of this starts over with each game. An api made with
-`time_handlers=True` says how long each handler took in `api.handler_timings`.
+the first two a `GameTime`. A handler that returns `Done` is not called again. An api made with `time_handlers=True`
+says how long each handler took in `api.handler_timings`.
 
 ## Selecting some events
 

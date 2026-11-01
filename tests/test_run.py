@@ -891,18 +891,23 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     tmp_path: Path,
 ) -> None:
     """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins, then
-    plays it back exactly from its recording."""
+    plays it back exactly from its recording, with an api of its own."""
     try:
         game_map = MapFile.find(_LADDER_MAP)
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
-    api = Api()
 
-    @api.on(TurnEvent)
-    def give_up(event: TurnEvent) -> None:
-        if event.time.steps >= 16:
-            api.leave_game()
+    def leaving_api() -> Api:
+        api = Api()
 
+        @api.on(TurnEvent)
+        def give_up(event: TurnEvent) -> None:
+            if event.time.steps >= 16:
+                api.leave_game()
+
+        return api
+
+    api = leaving_api()
     port = free_port()
     replay, record = tmp_path / "game.SC2Replay", tmp_path / "game.sc2rec"
     result_file = tmp_path / "result.json"
@@ -928,8 +933,9 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]
 
     replayed = tmp_path / "replayed.SC2Replay"
-    assert run_recording(record, api, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
-    assert (api.step, api.enemy.ladder_id) == (left_at_step, "5a1f")
+    playing_back = leaving_api()
+    assert run_recording(record, playing_back, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
+    assert (playing_back.step, playing_back.enemy.ladder_id) == (left_at_step, "5a1f")
     assert replayed.read_bytes() == replay.read_bytes()
 
 
