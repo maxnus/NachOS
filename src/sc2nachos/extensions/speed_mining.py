@@ -37,7 +37,7 @@ _TYPES_CLEAR_OF_THE_MINERAL_LINE = (
 class SpeedMining:
     """Speed mining: each worker handed over mines its mineral field, each trip ending in a move with the gather or the
     return queued behind, which keeps the worker's speed into it, where the gather or return alone slows the worker as
-    it nears the field or the townhall. Twelve SCVs on the eight fields of Pylon's main mine some 12% more (in game).
+    it nears the field or the townhall.
 
     Build it once the game has started, as the function an api is given as `extensions` does:
 
@@ -52,29 +52,39 @@ class SpeedMining:
     `TurnEvent`, at `EventPriority.LOW`, speed mining orders each worker it holds:
 
     - A worker idle, gathering minerals, returning cargo, or on speed mining's own move, is kept mining its field: one
-      gathering at another field, as the game sends a worker whose field is taken, is sent back. When it comes within
-      0.75 to 2 of where its trip ends, it is given the move there, with the gather at the field queued behind, or a
-      right-click on the townhall, which the worker shows as a return.
+      gathering at another field, as the game sends a worker whose field is taken, or on its way to a field it was
+      handed before, is sent to its own. When it comes within 0.75 to 2 of where its trip ends, it is given the move
+      there, with the gather at the field queued behind, or a right-click on the townhall, which the worker shows as a
+      return.
     - Cargo goes back to the townhall standing at the center of the field's expansion: one of this player's, finished.
       Where there is none, or where this player's ground units other than workers, larvae and eggs stand in the
-      expansion's mineral line, the worker mines with plain gathers and returns. A field two expansions share counts
-      as the first's, by `Api.expansions`, that has such a townhall.
+      expansion's mineral line, burrowed ones aside, the worker mines with plain gathers and returns. A field two
+      expansions share counts as the first's, by `Api.expansions`, that has such a townhall.
     - A worker doing anything else, building, attacking or collecting vespene among them, is left alone until it is
-      idle or mining minerals again, and so is one given an order this turn, or sent one lately that may not show yet,
-      as `OrderBook.issued_to` reads with `include_sent`. So a miner sent to build comes back to its field by itself,
-      and one handed over while it collects vespene stays there until it is ordered to gather minerals.
+      idle or mining minerals again, and so is a burrowed drone, and one given an order this turn, or sent one lately
+      that may not show yet, as `OrderBook.issued_to` reads with `include_sent`. So a miner sent to build comes back to
+      its field by itself, and one handed over while it collects vespene stays there until it is ordered to gather
+      minerals.
     - A worker is let go once it or its field is dead.
 
     Raises `NotPlayingError` if built before the game starts.
     """
 
-    __slots__ = ("_api", "_field_of_worker", "_mineral_lines_of_field")
+    __slots__ = ("_api", "_every_trip_end", "_field_of_worker", "_mineral_lines_of_field")
 
     def __init__(self, api: Api[object]) -> None:
         """Speed mining for the workers of `api`'s game, from the next `TurnEvent`."""
         self._api = api
         self._field_of_worker: UnitDict[OwnUnit[Any], Unit[UnitType.AnyMineralField]] = UnitDict()
         self._mineral_lines_of_field = _mineral_lines_by_field(api.expansions)
+        # Where the move of any trip ends, to any field from any expansion, so a move to a field the worker was handed
+        # before reads as speed mining's own.
+        self._every_trip_end = frozenset(
+            trip_end
+            for mineral_lines in self._mineral_lines_of_field.values()
+            for mineral_line in mineral_lines
+            for trip_end in (*mineral_line.gather_points.values(), *mineral_line.return_points.values())
+        )
         api.on(TurnEvent, priority=EventPriority.LOW)(self._order_the_miners)
 
     def mine(self, worker: OwnUnit[Any], field: Unit[UnitType.AnyMineralField]) -> None:
@@ -104,13 +114,13 @@ class SpeedMining:
             if field.is_dead:
                 mined_out.append(worker)
                 continue
-            if not worker.is_orderable or order_book.issued_to(worker, include_sent=True):
+            if not worker.is_orderable or worker.is_burrowed or order_book.issued_to(worker, include_sent=True):
                 continue
-            mineral_lines = self._mineral_lines_of_field.get(field, ())
             if (current_order := worker.current_order) is not None and not _is_mining(
-                current_order, field, mineral_lines
+                current_order, self._every_trip_end
             ):
                 continue
+            mineral_lines = self._mineral_lines_of_field.get(field, ())
             speed_mined = turn.speed_mined_line(mineral_lines)
             if speed_mined is None:
                 self._mine_plainly(worker, field, current_order)
@@ -190,10 +200,6 @@ class _MineralLine:
         self.area = _bounding_rectangle([center, *(field.position for field in fields)])
         """The ground between the townhall's center and the fields."""
 
-    def trip_ends(self, field: Unit[Any]) -> tuple[Point, Point]:
-        """Where the moves of the trips to `field` and back end."""
-        return self.gather_points[field], self.return_points[field]
-
 
 @final
 class _MiningTurn:
@@ -208,7 +214,8 @@ class _MiningTurn:
 
     def speed_mined_line(self, mineral_lines: Iterable[_MineralLine]) -> tuple[_MineralLine, Unit[Any]] | None:
         """The first of `mineral_lines` with a finished townhall of this player's at its center and none of this
-        player's ground units other than workers, larvae and eggs in it, with that townhall; or `None`."""
+        player's ground units other than workers, larvae and eggs, burrowed ones aside, in it, with that townhall; or
+        `None`."""
         townhall_of_line = self._townhall_of_line
         for mineral_line in mineral_lines:
             if mineral_line not in townhall_of_line:
@@ -219,7 +226,8 @@ class _MiningTurn:
 
     def _speed_mined_townhall(self, mineral_line: _MineralLine) -> Unit[Any] | None:
         """The finished townhall of this player's standing at the center of `mineral_line`, if there is one and none of
-        this player's ground units other than workers, larvae and eggs stand in it; else `None`."""
+        this player's ground units other than workers, larvae and eggs, burrowed ones aside, stand in it; else
+        `None`."""
         expansion = mineral_line.expansion
         townhall = expansion.townhall
         if townhall is None or not townhall.is_own or not townhall.is_complete or townhall.position != expansion.center:
@@ -229,15 +237,18 @@ class _MiningTurn:
             blocker_positions = self._blocker_positions = [
                 unit.position
                 for unit in self._api.units
-                if unit.is_own and unit.type_id not in _TYPES_CLEAR_OF_THE_MINERAL_LINE and not unit.is_flying
+                if unit.is_own
+                and unit.type_id not in _TYPES_CLEAR_OF_THE_MINERAL_LINE
+                and not unit.is_flying
+                and not unit.is_burrowed
             ]
         area = mineral_line.area
         return None if any(position in area for position in blocker_positions) else townhall
 
 
-def _is_mining(order: UnitOrder, field: Unit[Any], mineral_lines: Iterable[_MineralLine]) -> bool:
+def _is_mining(order: UnitOrder, every_trip_end: frozenset[Point]) -> bool:
     """Whether `order`, a worker's current one, is mining: a gather of a mineral field, a return of cargo, or a move to
-    where a trip to `field` or back ends."""
+    one of `every_trip_end`, where speed mining's moves end."""
     match order.ability:
         case AbilityId.GATHER:
             target = order.known_target
@@ -245,8 +256,7 @@ def _is_mining(order: UnitOrder, field: Unit[Any], mineral_lines: Iterable[_Mine
         case AbilityId.RETURN:
             return True
         case AbilityId.MOVE:
-            target = order.known_target
-            return any(target in mineral_line.trip_ends(field) for mineral_line in mineral_lines)
+            return order.known_target in every_trip_end
         case _:
             return False
 

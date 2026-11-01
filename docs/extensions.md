@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from sc2nachos import Api
 from sc2nachos.extensions.speed_mining import SpeedMining
-from sc2nachos_threat import ThreatMap  # someone else's
+from sc2nachos_threat import ThreatMap  # someone else's, made up for this example
 
 
 @dataclass(frozen=True)
@@ -81,11 +81,9 @@ class ThreatMap:
         self._last_seen: UnitDict[Unit[Any], GameTime] = UnitDict()
         api.on(TurnEvent, priority=EventPriority.HIGH)(self._update)
 
-    def damage_at(self, point: PointLike) -> float:
-        ...
+    def damage_at(self, point: PointLike) -> float: ...
 
-    def _update(self, event: TurnEvent) -> None:
-        ...
+    def _update(self, event: TurnEvent) -> None: ...
 ```
 
 - **Take the api as `Api[object]`**, which takes an api of any extensions. Under a type checker's standard mode a bare
@@ -102,7 +100,8 @@ class ThreatMap:
 
 - **Speed mining**, `sc2nachos.extensions.speed_mining.SpeedMining`: the workers the bot hands over mine their
   mineral fields, each trip ending in a move with the gather or return queued behind, which keeps the worker's speed
-  into it. Twelve SCVs on a main mine some 12% more. Which worker mines which field stays the bot's:
+  into it ([measured](reference/game-behavior/abilities-and-orders.md#what-an-order-does-to-a-units-orders)). Which
+  worker mines which field stays the bot's:
 
   ```python
   api = Api(extensions=SpeedMining)

@@ -145,7 +145,11 @@ class ScriptedGame:
             if request.HasField("observation"):
                 commands.append([])
             elif request.HasField("action"):
-                commands[-1] += [action.action_raw.unit_command for action in request.action.actions]
+                commands[-1] += [
+                    action.action_raw.unit_command
+                    for action in request.action.actions
+                    if action.action_raw.HasField("unit_command")
+                ]
         return commands
 
 

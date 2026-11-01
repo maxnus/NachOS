@@ -14,11 +14,11 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.units import Unit
 from support import ScriptedGame, make_observation, make_unit
 
-_PACKAGE = Path(__file__).parents[1] / "src" / "sc2nachos"
-_EXTENSIONS = _PACKAGE / "extensions"
+_NACHOS_SOURCE = Path(__file__).parents[1] / "src" / "sc2nachos"
+_EXTENSIONS_SOURCE = _NACHOS_SOURCE / "extensions"
 
 
-def _play(api: Api[object], *, turns: int = 2) -> ScriptedGame:
+def _play_turns(api: Api[object], *, turns: int = 2) -> ScriptedGame:
     """Play `turns` turns of one step with `api`, this player's marine, tag 1, standing on open ground, and return the
     game."""
     game = ScriptedGame([make_observation(step, units=[make_unit(1)]) for step in range(turns + 1)])
@@ -42,7 +42,7 @@ class TestBuildingTheExtensions:
 
         with pytest.raises(NotPlayingError):
             _ = api.extensions
-        _play(api)
+        _play_turns(api)
 
         assert seen == [None]
         assert api.extensions is None
@@ -60,7 +60,7 @@ class TestBuildingTheExtensions:
 
         with pytest.raises(NotPlayingError):
             _ = api.extensions
-        _play(api)
+        _play_turns(api)
 
         assert happened == ["built", "started", "turn", "turn"]
         assert api.extensions.step == 0
@@ -76,7 +76,7 @@ class TestBuildingTheExtensions:
                 self.turns += 1
 
         api = Api(extensions=Recorder)
-        _play(api, turns=3)
+        _play_turns(api, turns=3)
 
         assert api.extensions.turns == 3
 
@@ -86,7 +86,7 @@ class TestBuildingTheExtensions:
 
         api = Api(extensions=build_extensions)
         with pytest.raises(RuntimeError, match="not built"):
-            _play(api)
+            _play_turns(api)
         with pytest.raises(RuntimeError, match="not built"):
             _ = api.extensions
 
@@ -108,7 +108,7 @@ class TestWhereTheirHandlersRun:
         api = Api(extensions=Extension)
         api.on(TurnEvent, priority=EventPriority.HIGH)(lambda event: ran.append("bot, high"))
         api.on(TurnEvent)(lambda event: ran.append("bot"))
-        _play(api, turns=1)
+        _play_turns(api, turns=1)
 
         assert ran == ["bot, high", "extension", "bot", "extension, later", "extension, low"]
 
@@ -124,7 +124,7 @@ class TestWhereTheirHandlersRun:
         def stop(event: TurnEvent) -> None:
             api.orders.issue(api.units.own[0], AbilityId.STOP)
 
-        game = _play(api, turns=1)
+        game = _play_turns(api, turns=1)
 
         (sent,) = game.commands_by_turn()[0]
         assert sent.ability_id == AbilityId.STOP
@@ -140,15 +140,36 @@ def test_an_api_of_any_extensions_is_taken_where_any_api_is() -> None:
     assert takes_any_api(Api())
 
 
-def _imports(path: Path) -> list[tuple[str, str]]:
-    """Each module `path` imports from, with the name it imports, or `""` for the module itself."""
+def _package_of(path: Path) -> str:
+    """The dotted name of the package the NachOS module at `path` is in."""
+    return ".".join(path.parent.relative_to(_NACHOS_SOURCE.parent).parts)
+
+
+def _modules_imported_by(source: str, package: str) -> list[tuple[str, str]]:
+    """Each module `source`, a module of `package`, imports from, by its absolute name, with the name it imports, or
+    `""` for the module itself."""
     imported: list[tuple[str, str]] = []
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+    for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             imported += [(alias.name, "") for alias in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            imported += [(node.module, alias.name) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = ".".join(package.split(".")[: len(package.split(".")) - node.level + 1])
+                module = base if node.module is None else f"{base}.{node.module}"
+            else:
+                module = node.module or ""
+            imported += [(module, alias.name) for alias in node.names]
     return imported
+
+
+def _private_names_imported(source: str, package: str) -> list[tuple[str, str]]:
+    """Each module of NachOS `source` imports from, or name it imports, that starts with an underscore."""
+    return [
+        (module, name)
+        for module, name in _modules_imported_by(source, package)
+        if module.split(".")[0] == "sc2nachos"
+        and (any(part.startswith("_") for part in module.split(".")) or name.startswith("_"))
+    ]
 
 
 def _private_attributes_off_self(path: Path) -> list[str]:
@@ -163,24 +184,29 @@ def _private_attributes_off_self(path: Path) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("path", sorted(_EXTENSIONS.glob("*.py")), ids=lambda path: path.name)
+@pytest.mark.parametrize("path", sorted(_EXTENSIONS_SOURCE.glob("*.py")), ids=lambda path: path.name)
 def test_an_extension_uses_only_what_nachos_makes_public(path: Path) -> None:
     """So it could move to a package of its own unchanged."""
-    private = [
-        (module, name)
-        for module, name in _imports(path)
-        if module.split(".")[0] == "sc2nachos"
-        and (any(part.startswith("_") for part in module.split(".")) or name.startswith("_"))
-    ]
-    assert private == []
+    assert _private_names_imported(path.read_text(encoding="utf-8"), _package_of(path)) == []
     assert _private_attributes_off_self(path) == []
 
 
+def test_a_relative_import_counts_by_the_module_it_names() -> None:
+    source = "from .. import _game\nfrom .._game import _Game\nfrom . import speed_mining\n"
+    assert _private_names_imported(source, "sc2nachos.extensions") == [
+        ("sc2nachos", "_game"),
+        ("sc2nachos._game", "_Game"),
+    ]
+
+
 def test_nachos_imports_no_extension() -> None:
-    core = [path for path in _PACKAGE.rglob("*.py") if _EXTENSIONS not in path.parents]
+    core = [path for path in _NACHOS_SOURCE.rglob("*.py") if _EXTENSIONS_SOURCE not in path.parents]
     importing = [
-        path.relative_to(_PACKAGE).as_posix()
+        path.relative_to(_NACHOS_SOURCE).as_posix()
         for path in core
-        if any(module.startswith("sc2nachos.extensions") for module, _ in _imports(path))
+        if any(
+            module.startswith("sc2nachos.extensions")
+            for module, _ in _modules_imported_by(path.read_text(encoding="utf-8"), _package_of(path))
+        )
     ]
     assert importing == []
