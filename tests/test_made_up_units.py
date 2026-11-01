@@ -241,12 +241,16 @@ class TestGameData:
         """Build 75689's data holds a marine's row: 50 minerals."""
         assert load_game_data(base_build=75689).units[UnitTypeId.MARINE].cost.minerals == 50
 
+    def test_by_default_it_is_build_75689s(self):
+        """Not whatever build is newest among those shipped."""
+        assert load_game_data().units[UnitTypeId.MARINE].cost.minerals == 50
+
     def test_a_build_not_shipped_raises(self):
         """A test that names its build fails at once once NachOS ships the data of another."""
         with pytest.raises(ValueError, match="no game data of build 12345, only of 75689"):
             load_game_data(base_build=12345)
 
-    def test_by_default_the_units_read_the_newest_build_shipped(self):
+    def test_by_default_the_units_read_build_75689s(self):
         """A made-up marine reads its type's row of build 75689's data: a weapon of range 5."""
         (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE))
         assert marine.ground_range == 5
