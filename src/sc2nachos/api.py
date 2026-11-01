@@ -73,8 +73,8 @@ class Api[E]:
     Anything of the game raises `NotPlayingError` until the game starts. After it ends, the api keeps answering from
     it.
 
-    `E` is the type of `extensions`: an `Api()` is an `Api[None]`, and one made with `extensions=build_extensions` an
-    api of what `build_extensions` returns. A function that takes any api takes an `Api[object]`.
+    `E` is the type of `extensions`: an `Api()` is an `Api[None]`, and one made with `extensions=BotExtensions` an
+    `Api[BotExtensions]`. A function that takes any api takes an `Api[object]`.
     """
 
     @overload
@@ -106,8 +106,8 @@ class Api[E]:
         `api.enemy.upgrades` as `enemy_upgrade_inference` says; and time every handler call, read as
         `handler_timings`, if `time_handlers`. This connects to nothing.
 
-        `extensions` takes this api and returns what `Api.extensions` reads: an extension's class, whose constructor
-        takes the api, or a function that builds several and returns the bot's own object holding them.
+        `extensions` builds what `Api.extensions` reads, the bot's own object holding its extensions, from this api:
+        its class, whose constructor takes the api and builds each extension.
         """
         self._extensions_builder = extensions
         self._extensions: object = _NOT_BUILT
@@ -209,12 +209,12 @@ class Api[E]:
 
     @property
     def extensions(self) -> E:
-        """The bot's extensions: what the function the api was given as `extensions` returned, or `None` for an api made
-        without one.
+        """The bot's own object holding its extensions, built by what the api was given as `extensions`, or `None` for
+        an api made without.
 
-        NachOS calls that function once, with this api, after reading the game's map, tables and first observation and
-        before `GameStartEvent`, so `api.map`, `api.units` and the rest answer in it. Every handler subscribed while it
-        runs goes before the handlers of its priority subscribed otherwise, in the order they subscribed: what an
+        NachOS builds it once, with this api, after reading the game's map, tables and first observation and before
+        `GameStartEvent`, so `api.map`, `api.units` and the rest answer while it is built. Every handler subscribed
+        meanwhile goes before the handlers of its priority subscribed otherwise, in the order they subscribed: what an
         extension works out on an event is up to date when the bot's handlers of its priority read it, and an order a
         bot's handler gives a unit an extension also ordered goes out last, and stands. A handler an extension
         subscribes later takes its place in subscription order like any other.
@@ -228,7 +228,7 @@ class Api[E]:
             raise RuntimeError(
                 "the extensions are not built: an extension is handed the others it needs in its constructor"
             )
-        # Built by the function typed as returning `E`; `cast` would cost a call on every read.
+        # Built by what `extensions` was, typed as building an `E`; `cast` would cost a call on every read.
         built: E = extensions  # pyright: ignore[reportAssignmentType]
         return built
 

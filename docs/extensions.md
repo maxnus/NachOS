@@ -4,28 +4,24 @@ An extension is a feature a bot opts into: speed mining, a threat map, map analy
 changes nothing NachOS does. NachOS's own are in `sc2nachos.extensions`; anyone else's is a package of its own,
 named `sc2nachos-<name>` by convention.
 
-A bot hands its api one function, which NachOS calls once the game has started and whose result `api.extensions`
-holds:
+A bot gathers its extensions in an object of its own, whose class it hands its api: NachOS builds it once the game
+has started, and `api.extensions` holds it.
 
 ```python
-from dataclasses import dataclass
-
 from sc2nachos import Api
 from sc2nachos.extensions.speed_mining import SpeedMining
 from sc2nachos_threat import ThreatMap  # someone else's, made up for this example
 
 
-@dataclass(frozen=True)
 class BotExtensions:
-    speed_mining: SpeedMining
-    threat: ThreatMap
+    """This bot's extensions."""
+
+    def __init__(self, api: Api) -> None:
+        self.speed_mining = SpeedMining(api)
+        self.threat = ThreatMap(api, decay=0.9)
 
 
-def build_extensions(api: Api) -> BotExtensions:
-    return BotExtensions(SpeedMining(api), ThreatMap(api, decay=0.9))
-
-
-api = Api(extensions=build_extensions)
+api = Api(extensions=BotExtensions)
 ```
 
 ```python
@@ -35,19 +31,16 @@ def defend(event: TurnEvent) -> None:
         ...
 ```
 
-A bot with one extension hands over its class: `Api(extensions=SpeedMining)`, and `api.extensions` is the
-`SpeedMining`.
-
 ## Building them
 
-- **NachOS calls the function once, with the api, after reading the game's map, tables and first observation and
-  before `GameStartEvent`.** `api.map`, `api.expansions`, `api.units` and the rest answer in it, so an extension works
-  out what it needs from the map in its constructor.
-- **What the function returns is the bot's own**, typed by the function: a type checker knows
-  `api.extensions.threat` is a `ThreatMap` and refuses `api.extensions.thret`. An `Api()` is an `Api[None]`, whose
-  `extensions` is `None`. `api.extensions` raises `NotPlayingError` before the game starts, and `RuntimeError` while
-  the function runs: an extension is handed the others it needs in its constructor, as `ThreatMap` would be handed a
-  map analysis.
+- **NachOS builds the bot's object once, with the api, after reading the game's map, tables and first observation
+  and before `GameStartEvent`.** `api.map`, `api.expansions`, `api.units` and the rest answer while it is built, so an
+  extension works out what it needs from the map in its constructor.
+- **The object is the bot's own, and typed as its class**: a type checker knows `api.extensions.threat` is a
+  `ThreatMap` and refuses `api.extensions.thret`. An `Api()` is an `Api[None]`, whose `extensions` is `None`.
+  `api.extensions` raises `NotPlayingError` before the game starts, and `RuntimeError` while the object is built: an
+  extension is handed the others it needs in its constructor, as `ThreatMap` would be handed a map analysis built on
+  the line before.
 - **An api plays one game**, so the extensions are built once, and nothing about them is reset.
 
 ## Where their handlers run
@@ -104,15 +97,13 @@ class ThreatMap:
   worker mines which field stays the bot's:
 
   ```python
-  api = Api(extensions=SpeedMining)
-
-
   @api.on(GameStartEvent)
   def start_mining(event: GameStartEvent) -> None:
       fields = api.expansions[0].mineral_fields
       for index, worker in enumerate(api.units.own.workers):
-          api.extensions.mine(worker, fields[index % len(fields)])
+          api.extensions.speed_mining.mine(worker, fields[index % len(fields)])
   ```
 
   A worker the bot sends to build is left alone until it is idle or mining again, and then goes back to its field.
-  `release(worker)` takes one back. The API reference says the rest.
+  `release(worker)` takes one back. A worker on a move, unlike one on a gather or a return, can be stopped by other
+  units, so no move is given while a unit stands in a worker's way. The API reference says the rest.

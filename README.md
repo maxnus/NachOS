@@ -104,8 +104,8 @@ ladder, and two bots playing each other run in a process each. A program that pl
 such as a script reading replays, makes an api for each.
 
 Your own helpers live in your own modules, as ordinary functions and objects, and there is no mixin to inherit. A
-feature a bot opts into, NachOS's or anyone's, is an extension: `Api(extensions=build_extensions)` builds it once the
-game starts, and `api.extensions` holds it
+feature a bot opts into, NachOS's or anyone's, is an extension: `Api(extensions=BotExtensions)` builds the bot's own
+object holding its extensions once the game starts, and `api.extensions` holds it
 ([extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md)). If you want to subclass so you can
 hang a helper off `api`, that is a gap in NachOS, not a pattern to follow — please open an issue.
 

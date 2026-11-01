@@ -218,7 +218,7 @@ class TestWhatIsLeftAlone:
 
         def count_the_workers_held(api: Api[SpeedMining]) -> None:
             api.on(TurnEvent, priority=EventPriority.LOWEST)(
-                lambda event: held.append(len(api.extensions._field_of_worker))
+                lambda event: held.append(len(api.extensions._field_by_worker))
             )
 
         idle = _reported_scv((25.0, 30.0))
@@ -230,8 +230,6 @@ class TestWhatIsLeftAlone:
 
 
 class TestPlainMining:
-    """Where speed mining mines with plain gathers and returns."""
-
     def test_without_a_finished_townhall_of_this_players_at_the_center(self) -> None:
         idle_with_cargo = _reported_scv((25.0, 30.0), carrying=True, tag=11)
         units = [
@@ -243,15 +241,50 @@ class TestPlainMining:
             [(AbilityId.RETURN, None, False)]
         ]
 
-    def test_with_this_players_army_in_the_mineral_line_but_not_its_workers_or_burrowed_units(self) -> None:
-        marine = make_unit(20, UnitTypeId.MARINE, at=(27.0, 22.0), build_progress=1.0)
-        other_worker = _reported_scv((27.0, 21.0), tag=11)
-        burrowed_roach = make_unit(21, UnitTypeId.ROACH_BURROWED, at=(27.0, 22.0), build_progress=1.0, is_burrowed=True)
+
+# Where a unit stands in the way of the move of `_HANDED_SCV` at (28.175, 24.5) to `_GATHER_POINT`, 0.4 off its line.
+_IN_THE_WAY = (28.9, 24.9)
+
+
+def _unit_at(at: tuple[float, float], unit_type: UnitTypeId, **fields: Any) -> raw_pb2.Unit:
+    """A unit of `unit_type` at `at`, tag 20, this player's unless `fields` say otherwise, with a marine's radius."""
+    return make_unit(20, unit_type, at=at, build_progress=1.0, radius=0.375, **fields)
+
+
+class TestUnitsInTheWay:
+    """A worker on a move, unlike one on a gather or a return, can be stopped by other units."""
+
+    @pytest.mark.parametrize(
+        "unit",
+        [
+            _unit_at(_IN_THE_WAY, UnitTypeId.MARINE),
+            _unit_at(_IN_THE_WAY, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY),
+            _unit_at(_IN_THE_WAY, UnitTypeId.PROBE, alliance=Alliance.ENEMY),
+        ],
+        ids=["this player's marine", "an enemy's zergling", "an enemy's worker"],
+    )
+    def test_no_move_is_given_while_a_unit_stands_in_its_way(self, unit: raw_pb2.Unit) -> None:
         near = _reported_scv((28.175, 24.5), _gather_order())
-        speed_mined = [_move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)]
-        assert _orders_sent([*_pylon_main(), near, marine]) == [[]]
-        assert _orders_sent([*_pylon_main(), near, other_worker]) == speed_mined
-        assert _orders_sent([*_pylon_main(), near, burrowed_roach]) == speed_mined
+        assert _orders_sent([*_pylon_main(), near, unit]) == [[]]
+
+    def test_a_worker_on_the_move_with_a_unit_come_in_its_way_is_given_its_gather_back(self) -> None:
+        on_its_way = _reported_scv((28.175, 24.5), _move_order(_GATHER_POINT), _gather_order())
+        marine = _unit_at(_IN_THE_WAY, UnitTypeId.MARINE)
+        assert _orders_sent([*_pylon_main(), on_its_way, marine]) == [[(AbilityId.GATHER, _MINED_FIELD, False)]]
+
+    @pytest.mark.parametrize(
+        "unit",
+        [
+            _unit_at((27.0, 21.0), UnitTypeId.MARINE),
+            _unit_at(_IN_THE_WAY, UnitTypeId.SCV),
+            _unit_at(_IN_THE_WAY, UnitTypeId.ROACH_BURROWED, is_burrowed=True),
+            _unit_at(_IN_THE_WAY, UnitTypeId.MEDIVAC, is_flying=True),
+        ],
+        ids=["elsewhere in the mineral line", "this player's worker", "burrowed", "flying"],
+    )
+    def test_a_unit_out_of_its_way_or_never_in_it_leaves_the_move_given(self, unit: raw_pb2.Unit) -> None:
+        near = _reported_scv((28.175, 24.5), _gather_order())
+        assert _orders_sent([*_pylon_main(), near, unit]) == [_move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)]
 
 
 class TestHandingOver:

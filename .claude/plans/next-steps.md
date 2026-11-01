@@ -918,6 +918,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
     return is queued as a right-click on the townhall, since a return aimed at nothing stops the worker at the move's
     end and speed mining then mined less than plain gathers (2050 against 2070 minerals); AvocaDOS's points and
     distances are kept, its gather points for a field behind two others lying in the gap between them.
+  - The owner's review of #201: the guide teaches one shape, the bot's own class whose `__init__` takes the api and
+    builds each extension, `Api(extensions=BotExtensions)` (over a frozen dataclass and a builder function, and over
+    handing one extension's class itself, which the owner found confusing); NachOS still takes any callable. A worker
+    on a move is not mineral walking, so units stop it (the owner): speed mining gives no move while a unit, of either
+    player, ground and not burrowed, but structures and this player's workers, larvae and eggs, stands within 0.5 of
+    the line from the worker to its trip's end, and takes a worker off the move once one does (over the whole base
+    plain while a unit stood in the mineral line). `Point.distance_to_segment` is added to geometry for it. Speed mining
+    loops by field, then by worker, each field's townhall, trip ends and nearby units read once a turn.
 
 ## Next
 

@@ -258,6 +258,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   so. One SCV mining the nearest field of Pylon's main took 98 steps a round trip moved so, against 105 on plain
   gathers and returns and 107 with the return aimed at nothing, and twelve on its eight fields mined 2315 minerals in
   three minutes against 2070 (tested; #201, local game, build 75689).
+- A worker on a gather or a return passes through other units, which players call mineral walking: twelve SCVs on
+  Pylon's main mined 2070 minerals in three minutes on plain gathers and returns with a marine standing halfway from
+  the command center to the nearest field, as many as without it (#201, local game, build 75689). A worker on a move
+  is stopped by them (stated). Speed mined, they mined 2275 with the marine there against 2315 without, its move given
+  only while no unit stood in the worker's way.
 
 ## Loading and unloading
 

@@ -35,6 +35,18 @@ class TestPoint2:
         assert Point((0, 0)).is_closer_than(6, (3, 4))
         assert not Point((0, 0)).is_closer_than(5, (3, 4))
 
+    @pytest.mark.parametrize(
+        ("point", "distance"),
+        [((2, 3), 3), ((-3, 4), 5), ((7, 4), 5), ((4, 0), 0), ((0, 0), 0)],
+        ids=["beside it", "before its start", "past its end", "on it", "at its start"],
+    )
+    def test_distance_to_a_segment_is_to_its_nearest_point(self, point: tuple[int, int], distance: float) -> None:
+        assert Point(point).distance_to_segment((0, 0), (4, 0)) == distance
+
+    def test_distance_to_a_segment_of_one_point_is_to_that_point(self) -> None:
+        assert Point((3, 4)).distance_to_segment((0, 0), (0, 0)) == 5
+        assert Point3D((3, 4, 9)).distance_to_segment((0, 0, 1), (0, 0, 2)) == 5
+
     def test_arithmetic(self) -> None:
         assert Point((1, 2)) + (3, 4) == (4, 6)
         assert Point((1, 2)) - (3, 4) == (-2, -2)
