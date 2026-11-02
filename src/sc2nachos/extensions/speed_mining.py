@@ -13,10 +13,12 @@ from sc2nachos.constants import POINT_PRECISION
 from sc2nachos.events import EventPriority, TurnEvent
 from sc2nachos.game_time import GameTime
 from sc2nachos.geometry import Circle, Point
-from sc2nachos.ids import AbilityId
+from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units import OwnUnit, Unit, UnitDict, Units, UnitType
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from sc2nachos import Api
     from sc2nachos.gamemap import Expansion
     from sc2nachos.units import UnitOrder
@@ -44,6 +46,14 @@ _MOST_MINERS_AT_A_FIELD = 2
 # costs nothing (in game).
 _MOST_COOLDOWN_TO_ATTACK = GameTime(steps=1)
 _MOST_TURN_TO_ATTACK = GameTime(steps=1)
+# No worker's weapon reaches farther: an SCV's, a drone's and a probe's reach 0.19995, and no upgrade changes it
+# (corpus). An enemy farther than this and both radii from a worker is out of its reach without the full check.
+_MOST_WEAPON_RANGE_OF_A_WORKER = 0.2
+# The townhalls only a morph makes, of a finished command center or hatchery: one that reads unfinished is finishing its
+# morph, as an orbital reads at build progress 0.998 the step before it does (in game).
+_TOWNHALLS_ONLY_A_MORPH_MAKES = frozenset(
+    {UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.LAIR, UnitTypeId.HIVE}
+)
 
 
 @final
@@ -81,13 +91,15 @@ class SpeedMining:
     - No move is given while a unit stands in the worker's way, its circle within 0.5 of the line from the worker to
       where its trip ends, and a worker on the move that a unit comes in the way of is given its gather or return back.
       Units of both players count, on the ground and not burrowed, but structures, larvae, and the workers speed mining
-      holds.
+      holds; a worker it lets go in the turn counts.
     - A worker attacks an enemy it can hit as it stands, unless speed mining was built with `attack_enemies=False`:
       its weapon cooldown at most a step, the enemy visible, on the ground, not a structure, in range
       (`Unit.has_in_range`), and no more than a step's turn away (`Unit.time_to_face`); the one with least life, among
       several. It goes back to mining once it has fired.
     - Cargo goes back to the townhall standing at the center of the field's expansion: one of this player's, finished.
-      A field two expansions share counts as the first's, by `Api.expansions`, that has such a townhall.
+      An orbital, a planetary fortress, a lair and a hive count as finished, as one reads unfinished in the step before
+      its morph finishes. A field two expansions share counts as the first's, by `Api.expansions`, that has such a
+      townhall.
     - A worker doing anything else, building, attacking on the bot's order or collecting vespene among them, is left
       alone until it is idle or mining minerals again, and so is a burrowed drone, and one given an order this turn,
       or sent one lately that may not show yet, as `OrderBook.issued_to` reads with `include_sent`. So a miner sent to
@@ -234,19 +246,35 @@ class SpeedMining:
         return None
 
     def _order_the_miners(self, _: TurnEvent) -> None:
-        """Order each worker held, field by field, as the class's docstring says."""
+        """Order each worker held, field by field, as the class's docstring says, once the workers of the fields no
+        longer mined are let go: they count among the units in a move's way."""
         workers_by_field: dict[Unit[Any], list[OwnUnit[UnitType.Worker]]] = {}
         for worker, field in self._field_by_worker.items():
             workers_by_field.setdefault(field, []).append(worker)
         townhall_by_center: dict[Point, Unit[Any] | None] = {}
-        units_in_the_way: Units[Unit[Any]] | None = None
-        enemies_to_attack: Units[Unit[Any]] | None = None
+        mined_fields = []
         for field, workers in workers_by_field.items():
             speed_mined = None if field.is_dead else self._speed_mined_trip_end_points(field, townhall_by_center)
             if speed_mined is None:
                 for worker in workers:
                     del self._field_by_worker[worker]
-                continue
+            else:
+                mined_fields.append((field, workers, *speed_mined))
+        units_in_the_way: Units[Unit[Any]] | None = None
+        units_near_each_trip_end: dict[Point, Units[Unit[Any]]] = {}
+        enemies_to_attack: Units[Unit[Any]] | None = None
+
+        def units_near_the_trip_end(trip_end: Point) -> Units[Unit[Any]]:
+            """The units that can stand in the way of a move to `trip_end`, worked out once a turn, and only for a trip
+            end a worker comes near: over half of speed mining's time went to working them out for every field."""
+            nonlocal units_in_the_way
+            if (near := units_near_each_trip_end.get(trip_end)) is None:
+                if units_in_the_way is None:
+                    units_in_the_way = self._units_in_the_way_of_a_move()
+                near = units_near_each_trip_end[trip_end] = _units_within_reach_of(trip_end, units_in_the_way)
+            return near
+
+        for field, workers, trip_end_points, townhall in mined_fields:
             if not (free_workers := [worker for worker in workers if not self._is_left_alone(worker)]):
                 continue
             if self._attack_enemies:
@@ -256,16 +284,11 @@ class SpeedMining:
                     continue
             else:
                 miners = free_workers
-            trip_end_points, townhall = speed_mined
-            if units_in_the_way is None:
-                units_in_the_way = self._units_in_the_way_of_a_move()
-            near_the_gather_point = _units_within_reach_of(trip_end_points.gather_point, units_in_the_way)
-            near_the_return_point = _units_within_reach_of(trip_end_points.return_point, units_in_the_way)
             for worker in miners:
                 if worker.is_carrying_resource:
-                    self._speed_mine(worker, field, townhall, trip_end_points.return_point, near_the_return_point)
+                    self._speed_mine(worker, field, townhall, trip_end_points.return_point, units_near_the_trip_end)
                 else:
-                    self._speed_mine(worker, field, townhall, trip_end_points.gather_point, near_the_gather_point)
+                    self._speed_mine(worker, field, townhall, trip_end_points.gather_point, units_near_the_trip_end)
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker]) -> bool:
         """Whether speed mining leaves `worker` alone this turn: not orderable, burrowed, given an order lately, or
@@ -309,7 +332,12 @@ class SpeedMining:
             del self._target_by_attacker[worker]
         if not ready or not enemies:
             return False
-        reachable = [enemy for enemy in enemies if _can_attack(worker, enemy)]
+        position, reach = worker.position, _MOST_WEAPON_RANGE_OF_A_WORKER + worker.radius
+        reachable = [
+            enemy
+            for enemy in enemies
+            if position.distance_to(enemy.position) <= reach + enemy.radius and _can_attack(worker, enemy)
+        ]
         if not reachable:
             return False
         target = min(reachable, key=lambda enemy: enemy.life)
@@ -360,17 +388,19 @@ class SpeedMining:
         field: Unit[Any],
         townhall: Unit[Any],
         trip_end: Point,
-        units_near_the_trip_end: Units[Unit[Any]],
+        units_near_the_trip_end: Callable[[Point], Units[Unit[Any]]],
     ) -> None:
         """Keep `worker` mining `field`, with `townhall` taking its cargo: give it the move to `trip_end`, where the
-        trip it is on ends, near the end of the trip while none of `units_near_the_trip_end` stands in its way, and take
-        it off the move once one does."""
+        trip it is on ends, near the end of the trip while none of the units `units_near_the_trip_end` reads for it
+        stands in its way, and take it off the move once one does. They are read only for a worker on the move or near
+        enough to be given it."""
         current_order = worker.current_order
         carrying = worker.is_carrying_resource
-        in_the_way = _is_any_in_the_way(units_near_the_trip_end, worker.position, trip_end)
         if current_order is not None and current_order.ability is AbilityId.MOVE:
             # Speed mining's own move, to where this trip or the other ends.
-            if current_order.known_target != trip_end or in_the_way:
+            if current_order.known_target != trip_end or _is_any_in_the_way(
+                units_near_the_trip_end(trip_end), worker.position, trip_end
+            ):
                 self._mine_plainly(worker, field)
                 return
             if len(worker.orders) == 2:
@@ -379,9 +409,9 @@ class SpeedMining:
         elif not (_is_returning(current_order) if carrying else _is_gathering_at(current_order, field)):
             self._mine_plainly(worker, field)
             return
-        elif in_the_way or not (
+        elif not (
             _NEAREST_DISTANCE_FOR_THE_MOVE < worker.distance_to(trip_end) < _FARTHEST_DISTANCE_FOR_THE_MOVE
-        ):
+        ) or _is_any_in_the_way(units_near_the_trip_end(trip_end), worker.position, trip_end):
             return
         order_book = self._api.orders
         order_book.issue(worker, AbilityId.MOVE, target=trip_end, force=True)
@@ -435,9 +465,15 @@ def _trip_end_points_of_each_field(expansions: Iterable[Expansion]) -> dict[Unit
 
 
 def _finished_own_townhall_at_center(expansion: Expansion) -> Unit[Any] | None:
-    """The townhall standing at the center of `expansion` if it is this player's and finished, else `None`."""
+    """The townhall standing at the center of `expansion` if it is this player's and finished, else `None`. One only a
+    morph makes counts as finished as it reads."""
     townhall = expansion.townhall
-    if townhall is None or not townhall.is_own or not townhall.is_complete or townhall.position != expansion.center:
+    if (
+        townhall is None
+        or not townhall.is_own
+        or not (townhall.is_complete or townhall.type_id in _TOWNHALLS_ONLY_A_MORPH_MAKES)
+        or townhall.position != expansion.center
+    ):
         return None
     return townhall
 

@@ -168,7 +168,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   larva's order ends with its egg dying, and an egg killed before it hatches looks the same (tested).
 - A morph keeps the tag: a tank sieging, a depot lowering, a zergling through `BANELING_COCOON` to a baneling, an
   overlord through `OVERLORD_COCOON` to an overseer. A lair or an orbital command changes type only once the morph
-  finishes (#37; tested). A unit's type changes on burrowing too (#37).
+  finishes (#37; tested). For one step it then reads unfinished: a command center that had read a finished
+  `COMMAND_CENTER` with the morph as its order read `ORBITAL_COMMAND` at build progress 0.998, and 1.0 from the next
+  step (#203, two of AvocaDOS's games against the computer; local game, build 75689). A unit's type changes on
+  burrowing too (#37).
 - A drone that becomes a structure leaves the observation with no death reported, and the structure appears under a
   new tag. The game reports the drone dead when the structure finishes or is killed, in the same step in 3 games of
   6 and a step later in the other 3. On a cancel the structure is reported dead and the drone returns in that

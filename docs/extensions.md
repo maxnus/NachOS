@@ -105,10 +105,10 @@ class ThreatMap:
 
   Given no field, `mine` picks one at the base nearest the worker, its nearer fields first, and given one field or
   several, `mine(worker, expansion.mineral_fields)` say, it picks among them alike. It mines only at a base with a
-  finished townhall of this player's, and lets a base's workers go, their orders as they are, once its townhall is
-  gone, dead or lifted off: long-distance mining is the bot's to do. A field takes two workers at most: with three,
-  speed mining mined less than plain gathers. Where there is no room, `mine` returns `None` and leaves the worker as
-  it was.
+  finished townhall of this player's, an orbital finishing its morph among them, and lets a base's workers go, their
+  orders as they are, once its townhall is gone, dead or lifted off: long-distance mining is the bot's to do. A field
+  takes two workers at most: with three, speed mining mined less than plain gathers. Where there is no room, `mine`
+  returns `None` and leaves the worker as it was.
   `mine` sends the worker to its field at once, its cargo handed in first, unless it is mining minerals already or
   building, so a worker pulled into a fight or collecting vespene mines from that turn. A worker held that the bot
   later sends to build is left alone until it is idle or mining again, and then goes back to its field;

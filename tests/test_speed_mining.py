@@ -353,6 +353,29 @@ class TestLettingGoOfABase:
         assert _orders_sent(*turns, started=count_the_workers_held, dead=dead) == [[], []]
         assert held == [1, 0]
 
+    @pytest.mark.parametrize("morphed", [UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS])
+    def test_the_workers_of_a_townhall_finishing_its_morph_are_kept(self, morphed: UnitTypeId) -> None:
+        """The game reports an orbital at build progress 0.998 the step before its morph finishes (in game); `mine`
+        picks a field there too, and SCV 11, gathering there already, is sent nothing."""
+        held: list[int] = []
+        picked: list[int | None] = []
+
+        def hand_over_and_count(api: Api[SpeedMining]) -> None:
+            def count_and_hand_over(event: TurnEvent) -> None:
+                held.append(len(api.extensions.miners))
+                if event.time.steps == 1:
+                    field = api.extensions.mine(_own_unit_of_tag(api, 11))
+                    picked.append(None if field is None else field.tag)
+
+            api.on(TurnEvent, priority=EventPriority.LOWEST)(count_and_hand_over)
+
+        finishing = [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER] + [
+            make_unit(_COMMAND_CENTER, morphed, at=_TOWNHALL_CENTER, build_progress=0.998)
+        ]
+        scvs = [_reported_scv((25.0, 30.0), _gather_order()), _reported_scv((26.0, 30.0), _gather_order(), tag=11)]
+        sent = _orders_sent([*_pylon_main(), *scvs], [*finishing, *scvs], started=hand_over_and_count)
+        assert (sent, held, picked) == ([[], []], [1, 1], [_MINED_FIELD])
+
     def test_the_workers_of_another_base_are_kept(self) -> None:
         """A second base, its townhall at (56.5, 24.5), tag 2, and its fields tagged from 201."""
         kept: list[list[int]] = []
@@ -423,6 +446,21 @@ class TestUnitsInTheWay:
     def test_a_unit_out_of_its_way_or_never_in_it_leaves_the_move_given(self, unit: raw_pb2.Unit) -> None:
         near = _reported_scv((28.175, 24.5), _gather_order())
         assert _orders_sent([*_pylon_main(), near, unit]) == [_move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)]
+
+    def test_a_worker_let_go_in_the_turn_is_in_its_way(self) -> None:
+        """SCV 20, handed over after `_HANDED_SCV`, mines `_OTHER_FIELD`, mined out in the second turn."""
+        far = _reported_scv((25.0, 30.0), _gather_order())
+        near = _reported_scv((28.175, 24.5), _gather_order())
+        let_go = _reported_scv(_IN_THE_WAY, _gather_order(_OTHER_FIELD), tag=20)
+        mined_out = [unit for unit in _pylon_main() if unit.tag != _OTHER_FIELD]
+        both_held = [(_HANDED_SCV, _MINED_FIELD), (20, _OTHER_FIELD)]
+        sent = _orders_sent(
+            [*_pylon_main(), far, let_go],
+            [*mined_out, near, let_go],
+            assigned=both_held,
+            dead=lambda step: [_OTHER_FIELD] * (step == 1),
+        )
+        assert sent == [[], []]
 
     def test_a_worker_speed_mining_holds_is_out_of_its_way(self) -> None:
         """It mines `_OTHER_FIELD`, too far from where its trip ends to be given anything."""

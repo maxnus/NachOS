@@ -980,6 +980,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
     idle with vespene comes to its field. Nothing is sent again to a worker sent the gather lately. A worker handed
     over inside a refinery is sent nothing and goes on collecting vespene until handed over again, which a bot only
     does with a unit it kept from an earlier observation. Built in #203.
+  - Two findings of AvocaDOS's smoke round on #203 went into it (the owner, 2026-11-02):
+    - An orbital's morph let its base's workers go: in the step before it finishes, the game reports the new orbital at
+      build progress 0.998. A townhall only a morph makes, an orbital, a planetary fortress, a lair or a hive, now
+      counts as finished as it reads. This answers #202's check in game, which the round's orbitals showed.
+    - Speed mining cost 0.82 ms a step at the median in AvocaDOS's games, where AvocaDOS's own loop cost 0.09, over
+      half of it working out the units near each trip's end for every field each turn. They are now worked out only
+      for a worker on the move or near enough to be given it, once a trip end a turn, and an attack's full check runs
+      only on an enemy within a worker's reach. The workers of a field no longer mined are let go before anything
+      else in the turn, so a worker let go counts among the units in a move's way; before, that hung on the order the
+      fields came in. Played back through AvocaDOS, the orders were the same order for order but for that.
 - **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
   with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
@@ -994,8 +1004,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   AvocaDOS #75), and its `docs/plans/nachOS-plan.md` records #199 to #203. Planned with the owner (2026-11-02): an
   AvocaDOS expansion keeps no map of its miners and reads speed mining's, a worker speed mining lets go is found by its
   mining role and handed out again, and speed mining picks each field among the base's.
-- #202's checks in game, not run before it merged: the demo bot's integration test and its 21 games, and an orbital or
-  planetary fortress morph keeping its base's workers, which AvocaDOS's smoke games, morphing orbitals, will show.
+- #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
+  an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:
