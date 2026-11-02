@@ -192,8 +192,11 @@ def test_an_extension_uses_only_what_nachos_makes_public(path: Path) -> None:
 
 
 def test_a_relative_import_counts_by_the_module_it_names() -> None:
-    source = "from ..api import _game\nfrom ..api._game import _Game\nfrom . import speed_mining\n"
+    source = (
+        "from .. import _shared\nfrom ..api import _game\nfrom ..api._game import _Game\nfrom . import speed_mining\n"
+    )
     assert _private_names_imported(source, "sc2nachos.extensions") == [
+        ("sc2nachos", "_shared"),
         ("sc2nachos.api", "_game"),
         ("sc2nachos.api._game", "_Game"),
     ]
