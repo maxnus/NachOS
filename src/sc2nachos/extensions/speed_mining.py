@@ -97,9 +97,9 @@ class SpeedMining:
       (`Unit.has_in_range`), and no more than a step's turn away (`Unit.time_to_face`); the one with least life, among
       several. It goes back to mining once it has fired.
     - Cargo goes back to the townhall standing at the center of the field's expansion: one of this player's, finished.
-      An orbital, a planetary fortress, a lair and a hive count as finished, as one reads unfinished in the step before
-      its morph finishes. A field two expansions share counts as the first's, by `Api.expansions`, that has such a
-      townhall.
+      An orbital, a planetary fortress, a lair and a hive count as finished, since only a morph makes them: an orbital
+      reads unfinished in the step before its morph finishes. A field two expansions share counts as the first's, by
+      `Api.expansions`, that has such a townhall.
     - A worker doing anything else, building, attacking on the bot's order or collecting vespene among them, is left
       alone until it is idle or mining minerals again, and so is a burrowed drone, and one given an order this turn,
       or sent one lately that may not show yet, as `OrderBook.issued_to` reads with `include_sent`. So a miner sent to
@@ -252,7 +252,7 @@ class SpeedMining:
         for worker, field in self._field_by_worker.items():
             workers_by_field.setdefault(field, []).append(worker)
         townhall_by_center: dict[Point, Unit[Any] | None] = {}
-        mined_fields = []
+        mined_fields: list[tuple[Unit[Any], list[OwnUnit[UnitType.Worker]], _TripEndPoints, Unit[Any]]] = []
         for field, workers in workers_by_field.items():
             speed_mined = None if field.is_dead else self._speed_mined_trip_end_points(field, townhall_by_center)
             if speed_mined is None:
@@ -266,7 +266,7 @@ class SpeedMining:
 
         def units_near_the_trip_end(trip_end: Point) -> Units[Unit[Any]]:
             """The units that can stand in the way of a move to `trip_end`, worked out once a turn, and only for a trip
-            end a worker comes near: over half of speed mining's time went to working them out for every field."""
+            end a worker comes near."""
             nonlocal units_in_the_way
             if (near := units_near_each_trip_end.get(trip_end)) is None:
                 if units_in_the_way is None:

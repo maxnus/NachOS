@@ -353,10 +353,13 @@ class TestLettingGoOfABase:
         assert _orders_sent(*turns, started=count_the_workers_held, dead=dead) == [[], []]
         assert held == [1, 0]
 
-    @pytest.mark.parametrize("morphed", [UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS])
+    @pytest.mark.parametrize(
+        "morphed", [UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.LAIR, UnitTypeId.HIVE]
+    )
     def test_the_workers_of_a_townhall_finishing_its_morph_are_kept(self, morphed: UnitTypeId) -> None:
-        """The game reports an orbital at build progress 0.998 the step before its morph finishes (in game); `mine`
-        picks a field there too, and SCV 11, gathering there already, is sent nothing."""
+        """The game reports an orbital at build progress 0.998 the step before its morph finishes (in game), and only a
+        morph makes any of these; `mine` picks a field there too, and SCV 11, gathering there already, is sent
+        nothing."""
         held: list[int] = []
         picked: list[int | None] = []
 
