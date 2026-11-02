@@ -18,7 +18,8 @@ _TOWNHALL = 7
 
 def _playback() -> _FogOffPlayback:
     """A playback with the fog off, from its first observation."""
-    return _FogOffPlayback(make_tables(), make_enemy())
+    tables = make_tables()
+    return _FogOffPlayback(tables, make_enemy(tables))
 
 
 def _observed(

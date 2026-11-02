@@ -85,7 +85,7 @@ class _MapAtStart:
 
     def __init__(self, rows: Sequence[str], neutral_units: _NeutralUnits, *, start: tuple[float, float]) -> None:
         self.map = GameMap(make_game_info(*rows), start_location=Point(start))
-        self.tracker = _Tracker(_TABLES, make_enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
     @property
@@ -347,7 +347,8 @@ def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:
         elif response.HasField("observation"):
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
-            tracker = _Tracker(GameData(data), make_enemy())
+            tables = GameData(data)
+            tracker = _Tracker(tables, make_enemy(tables))
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
             return GameMap._from_game(info, observation), tracker.unit_tracker
     raise AssertionError(f"{path.name} holds no observation")

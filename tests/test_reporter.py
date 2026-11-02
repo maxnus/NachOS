@@ -114,7 +114,7 @@ class _Game:
 
     def __init__(self, events: _EventBus | None = None) -> None:
         self.events = events or _EventBus()
-        self.tracker = _Tracker(_TABLES, make_enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.state: _State | None = None
         self._client, _ = make_client()

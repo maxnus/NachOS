@@ -980,6 +980,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     idle with vespene comes to its field. Nothing is sent again to a worker sent the gather lately. A worker handed
     over inside a refinery is sent nothing and goes on collecting vespene until handed over again, which a bot only
     does with a unit it kept from an earlier observation. Built in #203.
+- **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
+  with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
+  tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
+  every one that needs it. In the tables only a level needs another upgrade, the one below it. `Enemy` takes the
+  game's data for this.
 
 ## Next
 
