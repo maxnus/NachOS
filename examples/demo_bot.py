@@ -8,7 +8,6 @@ It takes the options of `run_from_command_line`, so the match workflow can play 
 
 from __future__ import annotations
 
-import contextlib
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -97,8 +96,7 @@ def hand_scvs_to_speed_mining(event: TurnEvent) -> None:
     speed_mining = api.extensions.speed_mining
     for scv in _free_scvs():
         if scv not in speed_mining.miners:
-            with contextlib.suppress(ValueError):
-                speed_mining.mine(scv)
+            speed_mining.mine(scv)
 
 
 # --- Building
