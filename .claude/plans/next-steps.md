@@ -945,12 +945,27 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - The owner's review of #202: where there is no room, at a field the bot names or with none to pick, `mine` returns
     `None` and leaves the worker as it was (over a bool, which drops the picked field, and over raising, which the demo
     bot had to catch). It raises `ValueError` only for a unit that is not a worker or a field that is not minerals.
+  - Speed mining without a hand-over, of every worker on a plain gather at a mineral field or a return, was weighed and
+    dropped (the owner, review of #202, over building it, which I had recommended): workers would not stay on their
+    fields, and a bot's own gathers could undo it by accident. `mine` and `release` stay the one way in and out.
+  - To build after #202 (the owner, review of #202): `mine(worker, fields)` takes a field, a collection of fields or
+    `None`, and picks among the fields given by the rules for `None`. A field given may be at a base with no finished
+    townhall of this player's, and is then mined plainly.
+  - To build after #202 (the owner, review of #202): once a base stops having a finished townhall of this player's at
+    its center, the townhall dead or lifted, speed mining releases the workers it holds at that base's fields, and what
+    they do next is the bot's (over reassigning them through `mine(worker)`, and over releasing on a death alone).
+    Workers at the fields of a base that never had one stay. Today they stay held and mine plainly.
+  - Open: whether `mine` with no field may pick one at a base with no townhall as a last resort, behind an option (the
+    owner's idea). My recommendation is no, since a bot writes `mine(worker) or mine(worker, far_fields)` and picks the
+    far fields itself, safe ones among them.
 
 ## Next
 
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
   as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
   extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
+- **Speed mining, in NachOS**: the demo bot speed mining (#202), then `mine(worker, fields)` and the release of a base's
+  workers once its townhall is gone (above), in a pull request of their own.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:
