@@ -942,6 +942,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     12.1 and 12.9 with 20 enemies among 183 units). `mine(worker)` with no field picks one (the owner's choice): among
     expansions with a finished townhall of this player's, the one nearest the worker with a field of fewer than two
     miners, the nearer half of its fields first, then the nearest to the worker; it returns the field.
+  - The owner's review of #202: where there is no room, at a field the bot names or with none to pick, `mine` returns
+    `None` and leaves the worker as it was (over a bool, which drops the picked field, and over raising, which the demo
+    bot had to catch). It raises `ValueError` only for a unit that is not a worker or a field that is not minerals.
 
 ## Next
 

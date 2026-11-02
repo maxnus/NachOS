@@ -386,19 +386,27 @@ class TestHandingOver:
         _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0)), marine], assigned=(), started=try_others)
         assert refused == ["speed mining orders workers", "speed mining mines mineral fields"]
 
-    def test_mine_refuses_a_third_worker_at_a_field(self) -> None:
-        refused: list[str] = []
+    def test_mine_hands_no_third_worker_to_a_field_and_leaves_it_at_its_own(self) -> None:
+        """SCV 12 mines `_OTHER_FIELD`; SCV 11, one of the two at `_MINED_FIELD`, can be handed it again."""
+        handed: list[tuple[int | None, int | None, int | None]] = []
 
         def hand_over_a_third(api: Api[SpeedMining]) -> None:
-            with pytest.raises(ValueError) as raised:
-                api.extensions.mine(_own_unit_of_tag(api, 12), _unit_of_tag(api, _MINED_FIELD))
-            refused.append(str(raised.value).split(",")[0])
-            api.extensions.mine(_own_unit_of_tag(api, 11), _unit_of_tag(api, _MINED_FIELD))
+            third = _own_unit_of_tag(api, 12)
+            refused = api.extensions.mine(third, _unit_of_tag(api, _MINED_FIELD))
+            handed_again = api.extensions.mine(_own_unit_of_tag(api, 11), _unit_of_tag(api, _MINED_FIELD))
+            still_mined = api.extensions.miners.get(third)
+            handed.append(
+                (
+                    None if refused is None else refused.tag,
+                    None if handed_again is None else handed_again.tag,
+                    None if still_mined is None else still_mined.tag,
+                )
+            )
 
         scvs = [_reported_scv((25.0, 30.0), _gather_order(), tag=tag) for tag in (_HANDED_SCV, 11, 12)]
-        two_at_the_field = [(_HANDED_SCV, _MINED_FIELD), (11, _MINED_FIELD)]
+        two_at_the_field = [(_HANDED_SCV, _MINED_FIELD), (11, _MINED_FIELD), (12, _OTHER_FIELD)]
         _orders_sent([*_pylon_main(), *scvs], assigned=two_at_the_field, started=hand_over_a_third)
-        assert refused == ["speed mining mines a field with 2 workers at most"]
+        assert handed == [(None, _MINED_FIELD, _OTHER_FIELD)]
 
     def test_miners_reads_each_worker_held_with_its_field_and_no_dead_one(self) -> None:
         read: list[tuple[bool, int | None, int, list[int]]] = []
@@ -437,10 +445,11 @@ class TestHandingOver:
         at (31.0, 22.5), but comes after it."""
         others = [(20 + index, field) for index, field in enumerate(held_at_its_nearest_fields)]
         scvs = [_reported_scv((25.0, 30.0), tag=tag) for tag, _ in others]
-        picked_fields: list[int] = []
+        picked_fields: list[int | None] = []
 
         def hand_over_with_no_field(api: Api[SpeedMining]) -> None:
-            picked_fields.append(api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV)).tag)
+            field = api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV))
+            picked_fields.append(None if field is None else field.tag)
 
         newcomer = _reported_scv((31.0, 28.0))
         _orders_sent([*_pylon_main(), newcomer, *scvs], assigned=others, started=hand_over_with_no_field)
@@ -458,28 +467,36 @@ class TestHandingOver:
         it."""
         others = [(20 + index, field) for index, field in enumerate(held_at_the_nearer_base)]
         scvs = [_reported_scv((50.0, 30.0), tag=tag) for tag, _ in others]
-        picked_fields: list[int] = []
+        picked_fields: list[int | None] = []
 
         def hand_over_with_no_field(api: Api[SpeedMining]) -> None:
-            picked_fields.append(api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV)).tag)
+            field = api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV))
+            picked_fields.append(None if field is None else field.tag)
 
         bases = [*_pylon_main(), *_pylon_main(at=(56.5, 24.5), tags_from=200)]
         newcomer = _reported_scv((45.0, 28.0))
         _orders_sent([*bases, newcomer, *scvs], assigned=others, started=hand_over_with_no_field, map_width=80)
         assert picked_fields == [picked]
 
-    def test_mine_with_no_field_raises_with_no_finished_townhall_of_this_players(self) -> None:
-        refused: list[str] = []
+    @pytest.mark.parametrize(
+        ("command_center_progress", "held_at_each_field"),
+        [(0.5, 0), (1.0, 2)],
+        ids=["no finished townhall of this player's", "two workers at each field"],
+    )
+    def test_mine_with_no_field_returns_none_where_no_base_has_room(
+        self, command_center_progress: float, held_at_each_field: int
+    ) -> None:
+        others = [(20 + index, 101 + index // 2) for index in range(8 * held_at_each_field)]
+        scvs = [_reported_scv((25.0, 30.0), tag=tag) for tag, _ in others]
+        handed: list[tuple[bool, bool]] = []
 
         def hand_over_with_no_field(api: Api[SpeedMining]) -> None:
-            with pytest.raises(ValueError) as raised:
-                api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV))
-            refused.append(str(raised.value).split(":")[0])
+            newcomer = _own_unit_of_tag(api, _HANDED_SCV)
+            handed.append((api.extensions.mine(newcomer) is None, newcomer in api.extensions.miners))
 
-        units = [*_pylon_main(command_center_progress=0.5), _reported_scv((31.0, 28.0))]
-        _orders_sent(units, assigned=(), started=hand_over_with_no_field)
-        assert len(refused) == 1
-        assert refused[0].startswith("speed mining has no field for")
+        units = [*_pylon_main(command_center_progress=command_center_progress), _reported_scv((31.0, 28.0)), *scvs]
+        _orders_sent(units, assigned=others, started=hand_over_with_no_field)
+        assert handed == [(True, False)]
 
     def test_built_before_the_game_starts_it_raises(self) -> None:
         with pytest.raises(NotPlayingError):

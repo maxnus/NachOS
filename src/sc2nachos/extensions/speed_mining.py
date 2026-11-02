@@ -138,28 +138,30 @@ class SpeedMining:
 
     def mine(
         self, worker: OwnUnit[Any], field: Unit[UnitType.AnyMineralField] | None = None
-    ) -> Unit[UnitType.AnyMineralField]:
-        """Have `worker` mine `field` until it is released, or either is dead, and return the field. A worker mining
-        another field moves to this one.
+    ) -> Unit[UnitType.AnyMineralField] | None:
+        """Have `worker` mine `field` until it is released, or either is dead, and return the field, or `None` where
+        there is no room. A worker mining another field moves to this one.
 
         With no `field`, speed mining picks one, among the expansions with a finished townhall of this player's at their
         center: at the one nearest `worker` with a field fewer than two other workers mine, a field of the nearer half
         of its fields before one of the farther half, and then the one nearest `worker`.
 
-        Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, for one that is not a mineral
-        field, and for a field two other workers mine already: three at a field mine less speed mined than plain. With
-        no `field`, it raises `ValueError` where those expansions have no field with room.
+        There is no room at a field two other workers mine already, and, with no `field`, where those expansions have no
+        field with room. `mine` then returns `None` and leaves `worker` as it was, mining the field it had, if any.
+
+        Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one that is not a
+        mineral field.
         """
         if not UnitType.Worker.includes(worker):
             raise ValueError(f"speed mining orders workers, not {worker!r}")
         if field is None:
             field = self._nearest_field_with_room(worker)
+            if field is None:
+                return None
         elif not UnitType.AnyMineralField.includes(field):
             raise ValueError(f"speed mining mines mineral fields, not {field!r}")
         elif sum(miner is not worker for miner in self.miners_at(field)) >= _MOST_MINERS_AT_A_FIELD:
-            raise ValueError(
-                f"speed mining mines a field with {_MOST_MINERS_AT_A_FIELD} workers at most, and {field!r} has as many"
-            )
+            return None
         self._field_by_worker[worker] = field
         return field
 
@@ -167,8 +169,8 @@ class SpeedMining:
         """Stop ordering `worker`, leaving its orders as they are. Nothing happens for a worker not handed over."""
         self._field_by_worker.pop(worker, None)
 
-    def _nearest_field_with_room(self, worker: OwnUnit[Any]) -> Unit[UnitType.AnyMineralField]:
-        """The field `mine` picks for `worker` given none, as it says. Raises `ValueError` where there is none."""
+    def _nearest_field_with_room(self, worker: OwnUnit[Any]) -> Unit[UnitType.AnyMineralField] | None:
+        """The field `mine` picks for `worker` given none, as it says, or `None` where there is none."""
         miner_counts = Counter(field for miner, field in self._field_by_worker.items() if miner is not worker)
         expansions = sorted(self._api.expansions, key=lambda expansion: worker.distance_to(expansion.center))
         for expansion in expansions:
@@ -183,10 +185,7 @@ class SpeedMining:
             ]
             if with_room:
                 return min(with_room, key=lambda candidate: candidate[:2])[2]
-        raise ValueError(
-            f"speed mining has no field for {worker!r}: no expansion with a finished townhall of this player's has a "
-            f"field fewer than {_MOST_MINERS_AT_A_FIELD} workers mine"
-        )
+        return None
 
     def _order_the_miners(self, _: TurnEvent) -> None:
         """Order each worker held, field by field, as the class's docstring says."""
