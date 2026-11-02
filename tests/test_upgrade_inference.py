@@ -1,7 +1,7 @@
 """Upgrade inference, the extension that reads the enemy's upgrades off what only an upgrade can cause: what each sign
 shows, in made-up observations and in a real game, and when a game's api learns it."""
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from typing import Any
 
@@ -10,14 +10,7 @@ from s2clientprotocol import common_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NoEnemyError
 from sc2nachos.events import EventPriority, GameEndEvent, GameStartEvent, TurnStartEvent
-from sc2nachos.extensions.upgrade_inference import (
-    UpgradeInference,
-    _enemy_upgrades_shown,
-    _opponent_upgrades_shown_by_unit,
-    _owner_upgrades_shown_by_effect,
-    _owner_upgrades_shown_by_unit,
-    _upgrades_needed_by_each_unit_type,
-)
+from sc2nachos.extensions.upgrade_inference import UpgradeInference
 from sc2nachos.gamedata import GameData
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
@@ -54,7 +47,7 @@ def _upgrades_revealed(
     """The enemy upgrades `UpgradeInference` reads in one observation listing `units` and `effects`."""
     tracker = _tracker_against_the_computer(tables)
     _units_observed(tracker, *units)
-    return _enemy_upgrades_shown(tracker.unit_tracker.present, effects, _upgrades_needed_by_each_unit_type(tables))
+    return UpgradeInference._enemy_upgrades_shown(tracker.unit_tracker.present, effects)
 
 
 def _storm_of(alliance: Alliance) -> Effect:
@@ -136,8 +129,7 @@ class TestWhatAUnitGivesAway:
         _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING_BURROWED))
         taken = make_unit(1, UnitTypeId.ZERGLING_BURROWED, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
         _units_observed(tracker, taken, step=1)
-        needed_by_type = _upgrades_needed_by_each_unit_type(first_corpus_tables)
-        assert not _enemy_upgrades_shown(tracker.unit_tracker.present, (), needed_by_type)
+        assert not UpgradeInference._enemy_upgrades_shown(tracker.unit_tracker.present, ())
 
     def test_only_the_enemys_storm_shows_storm(self, first_corpus_tables: GameData) -> None:
         assert _upgrades_revealed(first_corpus_tables, effects=(_storm_of(Alliance.ENEMY),)) == {UpgradeId.STORM}
@@ -165,7 +157,7 @@ def _api_after_playing(
     ended_on: tuple[raw_pb2.Unit, ...] = (),
     with_inference: bool = True,
     game_info: sc2api_pb2.ResponseGameInfo | None = None,
-    started: Callable[[Api[Any]], object] = lambda api: None,
+    started: Callable[[Api[Any]], object] = lambda _: None,
 ) -> Api[Any]:
     """An api, built with `UpgradeInference` if `with_inference`, after playing a turn on each of `observed`, the units
     each observation lists, and ending on an observation listing `ended_on`, in the game `game_info` describes, or
@@ -193,7 +185,7 @@ class TestWhenAGameLearnsIt:
         known_at_start: list[frozenset[UpgradeId]] = []
 
         def watch(api: Api[Any]) -> None:
-            api.on(GameStartEvent)(lambda event: known_at_start.append(api.enemy.upgrades))
+            api.on(GameStartEvent)(lambda _: known_at_start.append(api.enemy.upgrades))
 
         _api_after_playing((_BURROWED_ZERGLING,), started=watch)
         assert known_at_start == [{UpgradeId.BURROW}]
@@ -202,9 +194,7 @@ class TestWhenAGameLearnsIt:
         known_each_turn: list[frozenset[UpgradeId]] = []
 
         def watch(api: Api[Any]) -> None:
-            api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(
-                lambda event: known_each_turn.append(api.enemy.upgrades)
-            )
+            api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(lambda _: known_each_turn.append(api.enemy.upgrades))
 
         _api_after_playing((), (_BURROWED_ZERGLING,), started=watch)
         assert known_each_turn == [frozenset(), {UpgradeId.BURROW}]
@@ -213,7 +203,7 @@ class TestWhenAGameLearnsIt:
         known_at_end: list[frozenset[UpgradeId]] = []
 
         def watch(api: Api[Any]) -> None:
-            api.on(GameEndEvent)(lambda event: known_at_end.append(api.enemy.upgrades))
+            api.on(GameEndEvent)(lambda _: known_at_end.append(api.enemy.upgrades))
 
         _api_after_playing((), ended_on=(_BURROWED_ZERGLING,), started=watch)
         assert known_at_end == [{UpgradeId.BURROW}]
@@ -233,9 +223,8 @@ class TestWhenAGameLearnsIt:
 
 
 @contextmanager
-def _signs_game(race: Race) -> Iterator[tuple[RealGame, Mapping[UnitTypeId, frozenset[UpgradeId]], Point]]:
-    """A game as `race` under the `free` and `fast_build` cheats, the upgrades each unit type of it cannot exist
-    without, and a point 10 tiles from home toward the middle."""
+def _signs_game(race: Race) -> Iterator[tuple[RealGame, Point]]:
+    """A game as `race` under the `free` and `fast_build` cheats, and a point 10 tiles from home toward the middle."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -250,8 +239,7 @@ def _signs_game(race: Race) -> Iterator[tuple[RealGame, Mapping[UnitTypeId, froz
             units = game.turn(1)
             townhalls = (UnitTypeId.COMMAND_CENTER, UnitTypeId.NEXUS, UnitTypeId.HATCHERY)
             home = next(unit for unit in units.own if unit.type_id in townhalls).position
-            needed_by_type = _upgrades_needed_by_each_unit_type(game.tracker.game_data)
-            yield game, needed_by_type, home.towards(game.map.playable_area.center, 10)
+            yield game, home.towards(game.map.playable_area.center, 10)
             client.leave_game()
 
 
@@ -293,7 +281,7 @@ def _with_tech_lab(game: RealGame, unit_type: UnitTypeId, tech_lab: UnitTypeId, 
 def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
     """Run with `pytest -m integration`. Researches what each terran sign needs, produces each with this player's
     units, and reads what each reveals as `UpgradeInference` reads the enemy's."""
-    with _signs_game(Race.TERRAN) as (game, needed_by_type, toward):
+    with _signs_game(Race.TERRAN) as (game, toward):
         enemy = 3 - game.player
         barracks_lab = _with_tech_lab(
             game, UnitTypeId.BARRACKS, UnitTypeId.TECH_LAB_BARRACKS, game.open_ground(toward, size=5)
@@ -303,7 +291,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         )
         academy = _unit_made(game, UnitTypeId.GHOST_ACADEMY, game.open_ground(toward + (0, -8), size=3))
         marine = _unit_made(game, UnitTypeId.MARINE, toward + (-6, 0))
-        assert (marine.health_max, _owner_upgrades_shown_by_unit(marine, needed_by_type)) == (45.0, frozenset())
+        assert (marine.health_max, UpgradeInference._owner_upgrades_shown_by_unit(marine)) == (45.0, frozenset())
 
         _research_in_game(
             game,
@@ -315,18 +303,18 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
             (AbilityId.GHOST_ACADEMY_RESEARCH_GHOST_CLOAK, academy, UpgradeId.GHOST_CLOAK),
         )
         game.turn(22)
-        assert (marine.health_max, _owner_upgrades_shown_by_unit(marine, needed_by_type)) == (
+        assert (marine.health_max, UpgradeInference._owner_upgrades_shown_by_unit(marine)) == (
             55.0,
             {UpgradeId.COMBAT_SHIELD},
         )
         game.order(AbilityId.STIM, marine)
         game.turn(4)
-        assert _owner_upgrades_shown_by_unit(marine, needed_by_type) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(marine) == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
 
         marauder = _unit_made(game, UnitTypeId.MARAUDER, toward + (-6, 2))
         game.order(AbilityId.STIM, marauder)
         game.turn(4)
-        assert _owner_upgrades_shown_by_unit(marauder, needed_by_type) == {UpgradeId.STIMPACK}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(marauder) == {UpgradeId.STIMPACK}
 
         banshee = _unit_made(game, UnitTypeId.BANSHEE, toward + (-6, 4))
         ghost = _unit_made(game, UnitTypeId.GHOST, toward + (-6, 6))
@@ -334,8 +322,8 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         game.order(AbilityId.CLOAK_ON, ghost)
         game.turn(8)
         assert (
-            _owner_upgrades_shown_by_unit(banshee, needed_by_type),
-            _owner_upgrades_shown_by_unit(ghost, needed_by_type),
+            UpgradeInference._owner_upgrades_shown_by_unit(banshee),
+            UpgradeInference._owner_upgrades_shown_by_unit(ghost),
         ) == (
             {UpgradeId.BANSHEE_CLOAK},
             {UpgradeId.GHOST_CLOAK},
@@ -344,7 +332,7 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         roach = _unit_made(game, UnitTypeId.ROACH, toward + (-1, 2), owner=enemy)
         game.order(AbilityId.ATTACK, marauder, target=roach)
         _turn_until(game, lambda: BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW in roach.buffs)
-        assert _opponent_upgrades_shown_by_unit(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
+        assert UpgradeInference._opponent_upgrades_shown_by_unit(roach) == {UpgradeId.CONCUSSIVE_SHELLS}
         # Killed, or the marauder would slow the tank too.
         game.debug(game.kill(marauder, roach))
 
@@ -352,13 +340,13 @@ def test_in_a_real_game_terran_units_give_away_their_upgrades() -> None:
         tank = _unit_made(game, UnitTypeId.SIEGE_TANK, toward + (-1, 8), owner=enemy)
         game.order(AbilityId.RAVEN_INTERFERENCE_MATRIX, raven, target=tank)
         _turn_until(game, lambda: BuffId.RAVEN_INTERFERENCE_MATRIX in tank.buffs)
-        assert _opponent_upgrades_shown_by_unit(tank) == {UpgradeId.INTERFERENCE_MATRIX}
+        assert UpgradeInference._opponent_upgrades_shown_by_unit(tank) == {UpgradeId.INTERFERENCE_MATRIX}
 
 
 @pytest.mark.integration
 def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> None:
     """Run with `pytest -m integration`. As the terran test, for the protoss signs."""
-    with _signs_game(Race.PROTOSS) as (game, needed_by_type, toward):
+    with _signs_game(Race.PROTOSS) as (game, toward):
         enemy = 3 - game.player
         spots = [game.open_ground(toward + (0, 7 * index), size=5) - (1, 1) for index in range(4)]
         for spot in spots:
@@ -368,7 +356,7 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
         council = _unit_made(game, UnitTypeId.TWILIGHT_COUNCIL, spots[1])
         archive = _unit_made(game, UnitTypeId.TEMPLAR_ARCHIVE, spots[2])
         gateway = _unit_made(game, UnitTypeId.GATEWAY, spots[3])
-        assert _owner_upgrades_shown_by_unit(gateway, needed_by_type) == frozenset()
+        assert UpgradeInference._owner_upgrades_shown_by_unit(gateway) == frozenset()
 
         _research_in_game(
             game,
@@ -377,25 +365,28 @@ def test_in_a_real_game_protoss_units_and_effects_give_away_their_upgrades() -> 
             (AbilityId.TEMPLAR_ARCHIVE_RESEARCH_STORM, archive, UpgradeId.STORM),
         )
         _turn_until(game, lambda: gateway.type_id is UnitTypeId.WARP_GATE, steps=22)
-        assert _owner_upgrades_shown_by_unit(gateway, needed_by_type) == {UpgradeId.WARP_GATE}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(gateway) == {UpgradeId.WARP_GATE}
 
         zealot = _unit_made(game, UnitTypeId.ZEALOT, toward + (-8, 0))
         roach = _unit_made(game, UnitTypeId.ROACH, toward + (-14, 0), owner=enemy)
         game.order(AbilityId.ATTACK, zealot, target=roach)
         _turn_until(game, lambda: BuffId.ZEALOT_CHARGING in zealot.buffs, turns=60)
-        assert _owner_upgrades_shown_by_unit(zealot, needed_by_type) == {UpgradeId.CHARGE}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(zealot) == {UpgradeId.CHARGE}
 
         templar = _unit_made(game, UnitTypeId.HIGH_TEMPLAR, toward + (-8, 4))
         game.order(AbilityId.HIGH_TEMPLAR_STORM, templar, target=toward + (-10, 4))
         _turn_until(game, lambda: any(effect.id is EffectId.HIGH_TEMPLAR_STORM for effect in game.state.effects))
         (storm,) = [effect for effect in game.state.effects if effect.id is EffectId.HIGH_TEMPLAR_STORM]
-        assert (storm.alliance, _owner_upgrades_shown_by_effect(storm)) == (Alliance.OWN, {UpgradeId.STORM})
+        assert (storm.alliance, UpgradeInference._owner_upgrades_shown_by_effect(storm)) == (
+            Alliance.OWN,
+            {UpgradeId.STORM},
+        )
 
 
 @pytest.mark.integration
 def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
     """Run with `pytest -m integration`. As the terran test, for the zerg signs, on the creep around the hatchery."""
-    with _signs_game(Race.ZERG) as (game, needed_by_type, _):
+    with _signs_game(Race.ZERG) as (game, _):
         enemy = 3 - game.player
         hatchery = game.tracker.unit_tracker.present.own.of_type(UnitTypeId.HATCHERY)[0]
         near = hatchery.position.towards(game.map.playable_area.center, 7)
@@ -412,19 +403,19 @@ def test_in_a_real_game_zerg_units_give_away_their_upgrades() -> None:
             (AbilityId.INFESTATION_PIT_RESEARCH_NEURAL_PARASITE, pit, UpgradeId.NEURAL_PARASITE),
         )
         zergling = _unit_made(game, UnitTypeId.ZERGLING, near + (-4, 0))
-        assert _owner_upgrades_shown_by_unit(zergling, needed_by_type) == frozenset()
+        assert UpgradeInference._owner_upgrades_shown_by_unit(zergling) == frozenset()
         game.order(AbilityId.BURROW, zergling)
         _turn_until(game, lambda: zergling.type_id is UnitTypeId.ZERGLING_BURROWED)
-        assert _owner_upgrades_shown_by_unit(zergling, needed_by_type) == {UpgradeId.BURROW}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(zergling) == {UpgradeId.BURROW}
 
         hydralisk = _unit_made(game, UnitTypeId.HYDRALISK, near + (-4, 3))
         game.order(AbilityId.HYDRALISK_LUNGE, hydralisk)
         _turn_until(game, lambda: BuffId.HYDRALISK_LUNGE in hydralisk.buffs)
-        assert _owner_upgrades_shown_by_unit(hydralisk, needed_by_type) == {UpgradeId.HYDRALISK_LUNGE}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(hydralisk) == {UpgradeId.HYDRALISK_LUNGE}
 
         infestor = _unit_made(game, UnitTypeId.INFESTOR, near + (-4, 6))
         marine = _unit_made(game, UnitTypeId.MARINE, near + (-1, 6), owner=enemy)
         game.order(AbilityId.INFESTOR_NEURAL_PARASITE, infestor, target=marine)
         _turn_until(game, lambda: marine.alliance is Alliance.OWN)
         assert BuffId.INFESTOR_NEURAL_PARASITE in marine.buffs
-        assert _owner_upgrades_shown_by_unit(marine, needed_by_type) == {UpgradeId.NEURAL_PARASITE}
+        assert UpgradeInference._owner_upgrades_shown_by_unit(marine) == {UpgradeId.NEURAL_PARASITE}

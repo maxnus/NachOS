@@ -14,16 +14,19 @@ from typing import TYPE_CHECKING, Any
 from sc2nachos import AbilityId, Api, GameTime, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
 from sc2nachos.events import EventPriority, OwnConstructionFinishedEvent, TurnEvent
 from sc2nachos.extensions.speed_mining import SpeedMining
+from sc2nachos.extensions.upgrade_inference import UpgradeInference
 
 if TYPE_CHECKING:
     from sc2nachos import Expansion, Point, Units
 
 
 class Extensions:
-    """The demo bot's extensions."""
+    """The demo bot's extensions: speed mining for its SCVs, and upgrade inference, whose findings every enemy unit's
+    weapons and speed count."""
 
     def __init__(self, api: Api) -> None:
         self.speed_mining = SpeedMining(api)
+        self.upgrade_inference = UpgradeInference(api)
 
 
 api = Api(extensions=Extensions)
@@ -60,7 +63,7 @@ class Budget:
 
 
 @api.on(TurnEvent)
-def macro(event: TurnEvent) -> None:
+def macro(_: TurnEvent) -> None:
     """Spend the turn's money, most important first."""
     budget = Budget()
     train_workers(budget)
@@ -90,7 +93,7 @@ def train_workers(budget: Budget) -> None:
 
 # At a low priority, so it runs after `macro`, whose builders `_free_scvs` then leaves out.
 @api.on(TurnEvent, min_interval=GameTime(steps=8), priority=EventPriority.LOW)
-def hand_scvs_to_speed_mining(event: TurnEvent) -> None:
+def hand_scvs_to_speed_mining(_: TurnEvent) -> None:
     """Hand each free SCV that speed mining does not hold over to it, which picks the SCV's field: at the base nearest
     it with a field fewer than two SCVs mine. An SCV with no such field keeps on as it is, to build or for the next
     base: idle, or gathering where speed mining let it go, its base's command center gone."""
@@ -227,7 +230,7 @@ class Army:
         api.subscribe(self)
 
     @api.on(TurnEvent, min_interval=GameTime(steps=4))
-    def command(self, event: TurnEvent) -> None:
+    def command(self, _: TurnEvent) -> None:
         """Defend against what comes near the bases, attack once there are enough marines, and fall back once too few
         are left."""
         marines = api.units.own.of_type(UnitType.Marine)

@@ -28,6 +28,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Keyword-only args**: use `*` in signatures liberally.
 - **Type hints** on all parameters and return types.
 - **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
+- **A parameter a function never reads is named `_`**, and `*_` takes any number of them: `def macro(_: TurnEvent)`
+  in the demo bot, and `UpgradeInference._assume_the_upgrades_shown(self, *_: object)`, a handler also called with
+  nothing, over a second method that only forwards to it.
 
 ## Structure
 

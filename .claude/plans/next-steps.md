@@ -986,6 +986,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `tech_requirements`, plus the warp gate's hand entry.
   - The level reading left in the core is private, `_UpgradeLevelReader` beside the upgrade tracker, over keeping
     `sc2nachos.upgrade_reader` public.
+  - The owner's review of #206: the extension's reading is classmethods of it, over module functions, and the
+    public-names test lets an extension read its own private names through `cls` as through `self`; what a unit's
+    type needs is read off `unit.type_data`, over a map built up front (2 us more a turn for 100 enemy units,
+    against 68 us for the whole read); and the demo bot builds it beside speed mining.
 
 ## Next
 

@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from sc2nachos import Api
-    from sc2nachos.gamedata import GameData
     from sc2nachos.state import Effect
     from sc2nachos.units import Unit
 
@@ -92,94 +91,75 @@ class UpgradeInference:
     raises `UncuratedIdError` from its handler, as reading `Unit.buffs` does.
     """
 
-    __slots__ = ("_api", "_upgrades_needed_by_type")
+    __slots__ = ("_api",)
 
     def __init__(self, api: Api[object]) -> None:
         """Upgrade inference for the enemy of `api`'s game, from the observation the game started on."""
         self._api = api
-        self._upgrades_needed_by_type = _upgrades_needed_by_each_unit_type(api.data)
         try:
             _ = api.enemy
         except NoEnemyError:
             return
         self._assume_the_upgrades_shown()
-        api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._infer_from_the_observation)
-        api.on(GameEndEvent, priority=EventPriority.HIGHEST)(self._infer_from_the_observation)
+        api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
+        api.on(GameEndEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
 
-    def _infer_from_the_observation(self, event: TurnStartEvent | GameEndEvent) -> None:
-        self._assume_the_upgrades_shown()
-
-    def _assume_the_upgrades_shown(self) -> None:
+    def _assume_the_upgrades_shown(self, *_: object) -> None:
         """Assume the enemy has the upgrades the last observation shows."""
         api = self._api
-        api.enemy.assume_upgrades(*_enemy_upgrades_shown(api.units, api.effects, self._upgrades_needed_by_type))
+        api.enemy.assume_upgrades(*self._enemy_upgrades_shown(api.units, api.effects))
 
+    @classmethod
+    def _enemy_upgrades_shown(cls, units: Iterable[Unit[Any]], effects: Iterable[Effect]) -> frozenset[UpgradeId]:
+        """The enemy's upgrades shown by its units and effects and by the buffs on this player's units, beyond the
+        levels its units report."""
+        shown: set[UpgradeId] = set()
+        for unit in units:
+            if unit.alliance is Alliance.ENEMY:
+                shown |= cls._owner_upgrades_shown_by_unit(unit)
+            elif unit.alliance is Alliance.OWN:
+                shown |= cls._opponent_upgrades_shown_by_unit(unit)
+        for effect in effects:
+            if effect.alliance is Alliance.ENEMY:
+                shown |= cls._owner_upgrades_shown_by_effect(effect)
+        return frozenset(shown)
 
-def _enemy_upgrades_shown(
-    units: Iterable[Unit[Any]],
-    effects: Iterable[Effect],
-    upgrades_needed_by_type: Mapping[UnitTypeId, frozenset[UpgradeId]],
-) -> frozenset[UpgradeId]:
-    """The enemy's upgrades shown by its units and effects and by the buffs on this player's units, beyond the levels
-    its units report, with `upgrades_needed_by_type` the upgrades each unit type cannot exist without."""
-    shown: set[UpgradeId] = set()
-    for unit in units:
-        if unit.alliance is Alliance.ENEMY:
-            shown |= _owner_upgrades_shown_by_unit(unit, upgrades_needed_by_type)
-        elif unit.alliance is Alliance.OWN:
-            shown |= _opponent_upgrades_shown_by_unit(unit)
-    for effect in effects:
-        if effect.alliance is Alliance.ENEMY:
-            shown |= _owner_upgrades_shown_by_effect(effect)
-    return frozenset(shown)
+    @classmethod
+    def _owner_upgrades_shown_by_unit(cls, unit: Unit[Any]) -> frozenset[UpgradeId]:
+        """The upgrades `unit` shows its owner has: by its type, and while visible, by its buffs and its health.
 
+        A unit under a neural parasite shows only that its controller has Neural Parasite: its buffs and type belong to
+        the player it was taken from. One on another side than when first seen shows nothing by its type, even out of
+        sight.
+        """
+        shown = cls._upgrades_its_type_needs(unit) if unit.alliance is unit.first_alliance else _NO_UPGRADES
+        if unit.visibility is not Visibility.VISIBLE:
+            return shown
+        buffs = unit.buffs
+        if BuffId.INFESTOR_NEURAL_PARASITE in buffs:
+            return frozenset({UpgradeId.NEURAL_PARASITE})
+        worn = {_BUFF_EVIDENCE_OF_OWNER[buff] for buff in buffs if buff in _BUFF_EVIDENCE_OF_OWNER}
+        if (health := _HEALTH_EVIDENCE.get(unit.type_id)) is not None and unit.health_max > health[0]:
+            worn.add(health[1])
+        return shown | worn if worn else shown
 
-def _owner_upgrades_shown_by_unit(
-    unit: Unit[Any], upgrades_needed_by_type: Mapping[UnitTypeId, frozenset[UpgradeId]]
-) -> frozenset[UpgradeId]:
-    """The upgrades `unit` shows its owner has: by its type, from `upgrades_needed_by_type`, and while visible, by its
-    buffs and its health.
+    @classmethod
+    def _upgrades_its_type_needs(cls, unit: Unit[Any]) -> frozenset[UpgradeId]:
+        """The upgrades nothing makes a unit of `unit`'s type without: those its type's `tech_requirements` name, as a
+        zergling needs Burrow to burrow, and those of `_UNIT_TYPE_EVIDENCE`."""
+        needed = unit.type_data.tech_requirements.upgrades
+        only = _UNIT_TYPE_EVIDENCE.get(unit.type_id)
+        return needed if only is None else needed | {only}
 
-    A unit under a neural parasite shows only that its controller has Neural Parasite: its buffs and type belong to the
-    player it was taken from. One on another side than when first seen shows nothing by its type, even out of sight.
-    """
-    shown = (
-        upgrades_needed_by_type.get(unit.type_id, _NO_UPGRADES)
-        if unit.alliance is unit.first_alliance
-        else _NO_UPGRADES
-    )
-    if unit.visibility is not Visibility.VISIBLE:
-        return shown
-    buffs = unit.buffs
-    if BuffId.INFESTOR_NEURAL_PARASITE in buffs:
-        return frozenset({UpgradeId.NEURAL_PARASITE})
-    worn = {_BUFF_EVIDENCE_OF_OWNER[buff] for buff in buffs if buff in _BUFF_EVIDENCE_OF_OWNER}
-    if (health := _HEALTH_EVIDENCE.get(unit.type_id)) is not None and unit.health_max > health[0]:
-        worn.add(health[1])
-    return shown | worn if worn else shown
+    @classmethod
+    def _opponent_upgrades_shown_by_unit(cls, unit: Unit[Any]) -> frozenset[UpgradeId]:
+        """The upgrades the buffs on `unit` show its owner's opponent has. Nothing for a unit not visible."""
+        if unit.visibility is not Visibility.VISIBLE:
+            return _NO_UPGRADES
+        return frozenset(_BUFF_EVIDENCE_OF_OPPONENT[buff] for buff in unit.buffs if buff in _BUFF_EVIDENCE_OF_OPPONENT)
 
-
-def _opponent_upgrades_shown_by_unit(unit: Unit[Any]) -> frozenset[UpgradeId]:
-    """The upgrades the buffs on `unit` show its owner's opponent has. Nothing for a unit not visible."""
-    if unit.visibility is not Visibility.VISIBLE:
-        return _NO_UPGRADES
-    return frozenset(_BUFF_EVIDENCE_OF_OPPONENT[buff] for buff in unit.buffs if buff in _BUFF_EVIDENCE_OF_OPPONENT)
-
-
-def _owner_upgrades_shown_by_effect(effect: Effect) -> frozenset[UpgradeId]:
-    """The upgrades `effect` shows its owner has."""
-    upgrade = _EFFECT_EVIDENCE.get(effect.id)
-    return _NO_UPGRADES if upgrade is None else frozenset({upgrade})
-
-
-def _upgrades_needed_by_each_unit_type(game_data: GameData) -> Mapping[UnitTypeId, frozenset[UpgradeId]]:
-    """The upgrades a unit of each type of `game_data` cannot exist without, for each type that needs any: those its
-    `tech_requirements` name, as a zergling needs Burrow to burrow, and those of `_UNIT_TYPE_EVIDENCE`."""
-    needed_by_type: dict[UnitTypeId, frozenset[UpgradeId]] = {}
-    for unit_type, row in game_data.units.items():
-        needed = row.tech_requirements.upgrades
-        if (only := _UNIT_TYPE_EVIDENCE.get(unit_type)) is not None:
-            needed |= {only}
-        if needed:
-            needed_by_type[unit_type] = needed
-    return MappingProxyType(needed_by_type)
+    @classmethod
+    def _owner_upgrades_shown_by_effect(cls, effect: Effect) -> frozenset[UpgradeId]:
+        """The upgrades `effect` shows its owner has."""
+        upgrade = _EFFECT_EVIDENCE.get(effect.id)
+        return _NO_UPGRADES if upgrade is None else frozenset({upgrade})
