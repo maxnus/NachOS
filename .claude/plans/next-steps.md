@@ -948,8 +948,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Speed mining without a hand-over, of every worker on a plain gather at a mineral field or a return, was weighed and
     dropped (the owner, review of #202, over building it, which I had recommended): workers would not stay on their
     fields, and a bot's own gathers could undo it by accident. `mine` and `release` stay the one way in and out.
-  - To build after #202 (the owner, review of #202): speed mining supports no long-distance mining. A worker is held
-    only at a field of a base with a finished townhall of this player's at its center, so the rules become:
+  - Built in #202 (the owner, review of #202, over a pull request after it): speed mining supports no long-distance
+    mining. A worker is held only at a field of a base with a finished townhall of this player's at its center:
     - `mine(worker, fields)` takes a field, a collection of fields or `None`, and picks only among the fields given at
       such bases, by the rules for `None`. A field at a base without one gets `None`, as a full field does; `mine`
       raises `ValueError` only for a unit that is not a worker or a field that is not minerals.
@@ -972,9 +972,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
   as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
   extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
-- **Speed mining, in NachOS**: the demo bot speed mining (#202), then, in a pull request of their own, `mine(worker,
-  fields)` and speed mining only at bases with a finished townhall of this player's, releasing the workers of one whose
-  townhall is gone (above).
+- **Speed mining, in NachOS** (#202): the demo bot speed mining, and speed mining only at bases with a finished
+  townhall of this player's (above). To run in game before it merges: the demo bot's integration test and its 21 games,
+  and an orbital or planetary fortress morph keeping its base's workers.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

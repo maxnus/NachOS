@@ -234,17 +234,54 @@ class TestWhatIsLeftAlone:
         assert held == [1, 0, 0]
 
 
-class TestPlainMining:
-    def test_without_a_finished_townhall_of_this_players_at_the_center(self) -> None:
-        idle_with_cargo = _reported_scv((25.0, 30.0), carrying=True, tag=11)
-        units = [
-            *_pylon_main(command_center_progress=0.5),
-            _reported_scv((28.175, 24.5), _gather_order()),
-            idle_with_cargo,
+class TestLettingGoOfABase:
+    @pytest.mark.parametrize(
+        "townhall_gone",
+        [
+            [],
+            [make_unit(_COMMAND_CENTER, UnitTypeId.COMMAND_CENTER_FLYING, at=_TOWNHALL_CENTER, build_progress=1.0)],
+        ],
+        ids=["it dies", "it lifts off"],
+    )
+    def test_the_workers_of_a_base_whose_townhall_is_gone_are_let_go_with_their_orders_as_they_are(
+        self, townhall_gone: list[raw_pb2.Unit]
+    ) -> None:
+        """The second turn's worker, idle with cargo, would be sent to return it if speed mining held it."""
+        held: list[int] = []
+
+        def count_the_workers_held(api: Api[SpeedMining]) -> None:
+            api.on(TurnEvent, priority=EventPriority.LOWEST)(lambda event: held.append(len(api.extensions.miners)))
+
+        without_the_townhall = [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER] + townhall_gone
+        turns = [
+            [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())],
+            [*without_the_townhall, _reported_scv((25.0, 30.0), carrying=True)],
         ]
-        assert _orders_sent(units, assigned=[(_HANDED_SCV, _MINED_FIELD), (11, _MINED_FIELD)]) == [
-            [(AbilityId.RETURN, None, False)]
-        ]
+        dead = (lambda step: [_COMMAND_CENTER] * (step == 1)) if not townhall_gone else (lambda step: ())
+        assert _orders_sent(*turns, started=count_the_workers_held, dead=dead) == [[], []]
+        assert held == [1, 0]
+
+    def test_the_workers_of_another_base_are_kept(self) -> None:
+        """A second base, its townhall at (56.5, 24.5), tag 2, and its fields tagged from 201."""
+        kept: list[list[int]] = []
+
+        def read_the_workers_held(api: Api[SpeedMining]) -> None:
+            api.on(TurnEvent, priority=EventPriority.LOWEST)(
+                lambda event: kept.append(sorted(worker.tag for worker in api.extensions.miners))
+            )
+
+        second_base = _pylon_main(at=(56.5, 24.5), tags_from=200)
+        main_without_its_townhall = [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER]
+        scvs = [_reported_scv((25.0, 30.0), _gather_order()), _reported_scv((57.0, 30.0), _gather_order(202), tag=11)]
+        turns = [[*_pylon_main(), *second_base, *scvs], [*main_without_its_townhall, *second_base, *scvs]]
+        _orders_sent(
+            *turns,
+            assigned=[(_HANDED_SCV, _MINED_FIELD), (11, 202)],
+            started=read_the_workers_held,
+            dead=lambda step: [_COMMAND_CENTER] * (step == 1),
+            map_width=80,
+        )
+        assert kept == [[_HANDED_SCV, 11], [11]]
 
 
 # Where a unit stands in the way of the move of `_HANDED_SCV` at (28.175, 24.5) to `_GATHER_POINT`, 0.4 off its line
@@ -372,19 +409,26 @@ class TestAttacking:
 
 class TestHandingOver:
     def test_mine_refuses_a_unit_that_is_not_a_worker_or_a_field_that_is_not_minerals(self) -> None:
+        """Geyser 111 is not minerals, alone or among fields."""
         refused: list[str] = []
 
         def try_others(api: Api[SpeedMining]) -> None:
             marine = _own_unit_of_tag(api, 20)
             scv = _own_unit_of_tag(api, _HANDED_SCV)
-            for worker, field in [(marine, _unit_of_tag(api, _MINED_FIELD)), (scv, _unit_of_tag(api, 111))]:
+            field = _unit_of_tag(api, _MINED_FIELD)
+            geyser = _unit_of_tag(api, 111)
+            for worker, fields in [(marine, field), (scv, geyser), (scv, [field, geyser])]:
                 with pytest.raises(ValueError) as raised:
-                    api.extensions.mine(worker, field)
+                    api.extensions.mine(worker, fields)
                 refused.append(str(raised.value).split(",")[0])
 
         marine = make_unit(20, UnitTypeId.MARINE, at=(10.0, 10.0), build_progress=1.0)
         _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0)), marine], assigned=(), started=try_others)
-        assert refused == ["speed mining orders workers", "speed mining mines mineral fields"]
+        assert refused == [
+            "speed mining orders workers",
+            "speed mining mines mineral fields",
+            "speed mining mines mineral fields",
+        ]
 
     def test_mine_hands_no_third_worker_to_a_field_and_leaves_it_at_its_own(self) -> None:
         """SCV 12 mines `_OTHER_FIELD`; SCV 11, one of the two at `_MINED_FIELD`, can be handed it again."""
@@ -496,6 +540,48 @@ class TestHandingOver:
 
         units = [*_pylon_main(command_center_progress=command_center_progress), _reported_scv((31.0, 28.0)), *scvs]
         _orders_sent(units, assigned=others, started=hand_over_with_no_field)
+        assert handed == [(True, False)]
+
+    @pytest.mark.parametrize(
+        ("given", "picked"),
+        [((107, 104, 108), 104), ((107, 108), 107), (108, 108)],
+        ids=["a near field before a nearer far one", "the nearest of the far ones", "a single field"],
+    )
+    def test_mine_given_fields_picks_among_them_as_with_none(self, given: int | tuple[int, ...], picked: int) -> None:
+        """An SCV at (31.0, 28.0), above `_MINED_FIELD`, 102, which `mine` picks given no field: far field 107, at
+        (32.0, 23.5), is nearer than near field 104, at (31.0, 22.5), and far field 108, at (31.0, 20.5)."""
+        picked_fields: list[int | None] = []
+
+        def hand_over_given_fields(api: Api[SpeedMining]) -> None:
+            fields = _unit_of_tag(api, given) if isinstance(given, int) else [_unit_of_tag(api, tag) for tag in given]
+            field = api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV), fields)
+            picked_fields.append(None if field is None else field.tag)
+
+        newcomer = _reported_scv((31.0, 28.0))
+        _orders_sent([*_pylon_main(), newcomer], assigned=(), started=hand_over_given_fields)
+        assert picked_fields == [picked]
+
+    @pytest.mark.parametrize(
+        "base",
+        [
+            _pylon_main(command_center_progress=0.5),
+            [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER],
+            [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER]
+            + [make_unit(_COMMAND_CENTER, UnitTypeId.COMMAND_CENTER, at=(25.5, 24.5), build_progress=1.0)],
+        ],
+        ids=["an unfinished townhall", "no townhall", "a townhall off its center"],
+    )
+    def test_mine_given_a_field_at_a_base_without_a_finished_townhall_at_its_center_returns_none(
+        self, base: list[raw_pb2.Unit]
+    ) -> None:
+        handed: list[tuple[bool, bool]] = []
+
+        def hand_over_at_the_field(api: Api[SpeedMining]) -> None:
+            worker = _own_unit_of_tag(api, _HANDED_SCV)
+            refused = api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD)) is None
+            handed.append((refused, worker in api.extensions.miners))
+
+        _orders_sent([*base, _reported_scv((25.0, 30.0))], assigned=(), started=hand_over_at_the_field)
         assert handed == [(True, False)]
 
     def test_built_before_the_game_starts_it_raises(self) -> None:
