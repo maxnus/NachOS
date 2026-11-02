@@ -75,9 +75,9 @@ class SpeedMining:
 
     - A worker idle, gathering minerals, returning minerals, or on speed mining's own move, is kept mining its field:
       one gathering at another field, as the game sends a worker whose field is taken, or on its way to a field it was
-      handed before, is sent to its own. When it comes within 0.75 to 2 of where its trip ends, it is given the move
-      there, with the gather at the field queued behind, or a right-click on the townhall, which the worker shows as a
-      return.
+      handed before, is sent to its own, and one carrying cargo but not returning it is given a return with the gather
+      queued behind. When it comes within 0.75 to 2 of where its trip ends, it is given the move there, with the gather
+      at the field queued behind, or a right-click on the townhall, which the worker shows as a return.
     - No move is given while a unit stands in the worker's way, its circle within 0.5 of the line from the worker to
       where its trip ends, and a worker on the move that a unit comes in the way of is given its gather or return back.
       Units of both players count, on the ground and not burrowed, but structures, larvae, and the workers speed mining
@@ -155,8 +155,10 @@ class SpeedMining:
         Handed over, `worker` is sent to the field at once: a gather at the field, behind a return of any cargo it
         carries, minerals or vespene. So a worker pulled into a fight, or collecting vespene, mines from this turn.
         Nothing is sent to a worker mining minerals already, which speed mining keeps at the field from the next turn,
-        nor to one building, burrowed, or out of reach of orders (`OwnUnit.is_orderable`), which comes to the field once
-        it is idle or mining again.
+        nor again to one sent there lately, whose orders may not show it yet. Nor is anything sent to one building or
+        burrowed, which comes to the field once it is idle or mining again, nor to one out of reach of orders
+        (`OwnUnit.is_orderable`): one inside a refinery comes out with vespene and goes on collecting it until it is
+        handed over again.
 
         Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one of `fields` that is
         not a mineral field.
@@ -189,14 +191,26 @@ class SpeedMining:
         if current_order is not None and self._is_mining(worker, current_order):
             return
         order_book = self._api.orders
+        if any(
+            order.ability is AbilityId.GATHER and order.target is field
+            for order in order_book.issued_to(worker, include_sent=True)
+        ):
+            return
         if worker.is_carrying_resource:
-            # Forced, since a worker returning vespene shows a return already, which NachOS would leave out, and a
-            # gather queued behind the return the game shows takes its place: the worker carries its cargo to the field
-            # first (in game).
-            order_book.issue(worker, AbilityId.RETURN, force=True)
-            order_book.issue(worker, AbilityId.GATHER, target=field, queued=True)
+            self._hand_in_then_gather(worker, field)
         else:
             order_book.issue(worker, AbilityId.GATHER, target=field)
+
+    def _hand_in_then_gather(self, worker: OwnUnit[UnitType.Worker], field: Unit[Any]) -> None:
+        """Have `worker` hand in its cargo and then gather at `field`: a return with the gather queued behind it, which
+        waits for the cargo to be handed in, so that a worker carrying vespene does not go back to its geyser (in
+        game)."""
+        order_book = self._api.orders
+        # Forced: NachOS leaves out a return to a worker the game reports returning aimed at nothing, and a gather
+        # queued behind the return the worker shows of itself takes its place, the worker carrying its cargo to the
+        # field first (in game).
+        order_book.issue(worker, AbilityId.RETURN, force=True)
+        order_book.issue(worker, AbilityId.GATHER, target=field, queued=True)
 
     def _nearest_field_with_room(
         self, worker: OwnUnit[UnitType.Worker], only_fields: frozenset[Unit[UnitType.AnyMineralField]] | None
@@ -332,14 +346,13 @@ class SpeedMining:
         )
 
     def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[Any]) -> None:
-        """Keep `worker` mining `field` with a plain gather, or returning its cargo."""
-        order_book = self._api.orders
+        """Keep `worker` mining `field` with a plain gather, or returning its cargo with the gather queued behind."""
         current_order = worker.current_order
         if worker.is_carrying_resource:
             if current_order is None or current_order.ability is not AbilityId.RETURN:
-                order_book.issue(worker, AbilityId.RETURN)
+                self._hand_in_then_gather(worker, field)
         elif not _is_gathering_at(current_order, field):
-            order_book.issue(worker, AbilityId.GATHER, target=field)
+            self._api.orders.issue(worker, AbilityId.GATHER, target=field)
 
     def _speed_mine(
         self,

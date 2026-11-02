@@ -177,9 +177,18 @@ class TestATrip:
         on_its_way = _reported_scv((28.175, 24.5), _move_order(_GATHER_POINT), _gather_order())
         assert _orders_sent([*_pylon_main(), on_its_way]) == [[]]
 
-    def test_a_worker_with_cargo_but_no_return_returns_it(self) -> None:
+    def test_a_worker_with_cargo_but_no_return_returns_it_with_the_gather_queued_behind(self) -> None:
         assert _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order(), carrying=True)]) == [
-            [(AbilityId.RETURN, None, False)]
+            [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _MINED_FIELD, True)]
+        ]
+
+    def test_a_worker_idle_with_vespene_hands_it_in_and_comes_to_its_field(self) -> None:
+        """Left to its return alone, it would go back to its geyser."""
+        mining = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())]
+        idle_with_vespene = [*_pylon_main(), _scv_carrying_vespene((25.0, 30.0))]
+        assert _orders_sent(mining, idle_with_vespene) == [
+            [],
+            [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _MINED_FIELD, True)],
         ]
 
     def test_a_worker_the_game_sent_to_another_field_is_sent_back(self) -> None:
@@ -196,10 +205,40 @@ class TestATrip:
 class TestSendingAtOnce:
     """`mine` sends a worker to its field in the turn it is handed over, unless it mines minerals already."""
 
-    def test_a_worker_on_another_order_is_sent_to_gather_once(self) -> None:
+    @pytest.mark.parametrize(
+        "order", [_move_order(Point((10.0, 40.0))), _gather_order(111)], ids=["a move", "collecting vespene"]
+    )
+    def test_a_worker_on_another_order_is_sent_to_gather_once(self, order: raw_pb2.UnitOrder) -> None:
         """The next turn's orders may not show the gather yet; nothing goes out again."""
-        moving = [*_pylon_main(), _reported_scv((20.0, 30.0), _move_order(Point((10.0, 40.0))))]
-        assert _orders_sent(moving, moving) == [[(AbilityId.GATHER, _MINED_FIELD, False)], []]
+        elsewhere = [*_pylon_main(), _reported_scv((20.0, 30.0), order)]
+        assert _orders_sent(elsewhere, elsewhere) == [[(AbilityId.GATHER, _MINED_FIELD, False)], []]
+
+    def test_a_worker_handed_over_again_before_its_orders_show_is_sent_nothing_again(self) -> None:
+        def hand_over_again_next_turn(api: Api[SpeedMining]) -> None:
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def hand_over_again(event: TurnEvent) -> None:
+                if event.time.steps == 1:
+                    api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV), _unit_of_tag(api, _MINED_FIELD))
+
+        carrying = [*_pylon_main(), _reported_scv((20.0, 30.0), _move_order(Point((10.0, 40.0))), carrying=True)]
+        assert _orders_sent(carrying, carrying, started=hand_over_again_next_turn) == [
+            [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _MINED_FIELD, True)],
+            [],
+        ]
+
+    def test_nothing_is_sent_to_a_worker_out_of_reach_of_orders(self) -> None:
+        """The SCV goes unlisted, as inside a refinery, and is handed over then."""
+
+        def hand_over_once_unlisted(api: Api[SpeedMining]) -> None:
+            scv = _own_unit_of_tag(api, _HANDED_SCV)
+
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def hand_over(event: TurnEvent) -> None:
+                if event.time.steps == 1:
+                    api.extensions.mine(scv, _unit_of_tag(api, _MINED_FIELD))
+
+        turns = [[*_pylon_main(), _reported_scv((25.0, 30.0))], _pylon_main()]
+        assert _orders_sent(*turns, assigned=(), started=hand_over_once_unlisted) == [[], []]
 
     @pytest.mark.parametrize(
         "carrying",
@@ -251,11 +290,15 @@ class TestWhatIsLeftAlone:
         drone = make_unit(_HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True)
         assert _orders_sent([*_pylon_main(), drone]) == [[]]
 
-    def test_a_worker_returning_vespene(self) -> None:
-        """Sent to collect vespene after it was handed over: returning minerals there, it would be given the move."""
+    @pytest.mark.parametrize(
+        "collecting",
+        [_reported_scv((25.0, 30.0), _gather_order(111)), _scv_carrying_vespene((29.125, 24.5), _return_order())],
+        ids=["on its way to the geyser", "on its way back, where a worker returning minerals is given the move"],
+    )
+    def test_a_worker_collecting_vespene(self, collecting: raw_pb2.Unit) -> None:
+        """Sent to collect vespene by the bot after it was handed over."""
         mining = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())]
-        returning_vespene = [*_pylon_main(), _scv_carrying_vespene((29.125, 24.5), _return_order())]
-        assert _orders_sent(mining, returning_vespene) == [[], []]
+        assert _orders_sent(mining, [*_pylon_main(), collecting]) == [[], []]
 
     def test_a_released_worker(self) -> None:
         """It gathers at another field, where speed mining would send it back to its own."""

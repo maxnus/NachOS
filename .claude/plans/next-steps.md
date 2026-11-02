@@ -976,7 +976,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     walked on to their order's end before mining. The return is forced, since a worker returning vespene shows one
     already; a gather queued behind a return given waits for the cargo, and queued behind the return a worker shows of
     itself, it takes its place (in game). A worker returning vespene no longer counts as mining, which held it while it
-    went back to its geyser. Built in #203.
+    went back to its geyser, and speed mining's own return to a worker it holds queues the gather behind too, so one
+    idle with vespene comes to its field. Nothing is sent again to a worker sent the gather lately. A worker handed
+    over inside a refinery is sent nothing and goes on collecting vespene until handed over again, which a bot only
+    does with a unit it kept from an earlier observation. Built in #203.
 
 ## Next
 

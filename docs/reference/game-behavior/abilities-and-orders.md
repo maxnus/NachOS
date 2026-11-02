@@ -256,7 +256,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   and went to that field, the one with vespene not back to its refinery; so did those given a right-click on the
   command center with the gather queued. A gather queued behind the return a worker shows of itself, with no return
   given, takes its place instead: the SCV went to the field with its minerals, returned them from there, and came back
-  (tested; local game, build 75689).
+  (tested; #203, local game, build 75689).
 - A worker on a move with an order aimed at a unit queued behind goes on into that order at full speed: an SCV moved
   toward its field with a gather at the field queued, and one moved toward its command center with a right-click on
   it queued, which it shows as a return at the command center. With a return aimed at nothing queued instead, it slows
