@@ -9,7 +9,7 @@ import pytest
 from s2clientprotocol import common_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NoEnemyError
-from sc2nachos.events import EventPriority, GameStartEvent, TurnStartEvent
+from sc2nachos.events import EventPriority, GameEndEvent, GameStartEvent, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference import (
     UpgradeInference,
     _enemy_upgrades_shown,
@@ -162,14 +162,15 @@ class TestWhatAUnitGivesAway:
 
 def _api_after_playing(
     *observed: tuple[raw_pb2.Unit, ...],
+    ended_on: tuple[raw_pb2.Unit, ...] = (),
     with_inference: bool = True,
     game_info: sc2api_pb2.ResponseGameInfo | None = None,
     started: Callable[[Api[Any]], object] = lambda api: None,
 ) -> Api[Any]:
     """An api, built with `UpgradeInference` if `with_inference`, after playing a turn on each of `observed`, the units
-    each observation lists, in the game `game_info` describes, or against the computer of `make_game_info`. `started`
-    runs before the game starts, once the api is built."""
-    observations = [make_observation(step, units=units) for step, units in enumerate([*observed, ()])]
+    each observation lists, and ending on an observation listing `ended_on`, in the game `game_info` describes, or
+    against the computer of `make_game_info`. `started` runs before the game starts, once the api is built."""
+    observations = [make_observation(step, units=units) for step, units in enumerate([*observed, ended_on])]
     game = ScriptedGame(observations, game_info=game_info, data=shipped_game_data())
     api: Api[Any] = Api(extensions=UpgradeInference) if with_inference else Api()
     started(api)
@@ -207,6 +208,20 @@ class TestWhenAGameLearnsIt:
 
         _api_after_playing((), (_BURROWED_ZERGLING,), started=watch)
         assert known_each_turn == [frozenset(), {UpgradeId.BURROW}]
+
+    def test_what_only_the_observation_the_game_ended_on_shows_is_known_as_it_ends(self) -> None:
+        known_at_end: list[frozenset[UpgradeId]] = []
+
+        def watch(api: Api[Any]) -> None:
+            api.on(GameEndEvent)(lambda event: known_at_end.append(api.enemy.upgrades))
+
+        _api_after_playing((), ended_on=(_BURROWED_ZERGLING,), started=watch)
+        assert known_at_end == [{UpgradeId.BURROW}]
+
+    def test_a_buff_the_curated_ids_leave_out_ends_the_game_from_its_handler(self) -> None:
+        slowed = make_unit(1, alliance=Alliance.ENEMY, buff_ids=[RawBuffId.DutchMarauderSlow])
+        with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
+            _api_after_playing((), (slowed,))
 
     def test_in_a_game_with_no_other_player_it_reads_nothing(self) -> None:
         alone = sc2api_pb2.PlayerInfo(

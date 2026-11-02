@@ -980,9 +980,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `Api(enemy_upgrade_inference=...)` go, and `NONE` with them, which nothing used.
   - What only an upgrade can cause, `INTERMEDIATE` before, is the extension
     `sc2nachos.extensions.upgrade_inference.UpgradeInference` (the owner's name, over `EnemyUpgradeInference`,
-    `UpgradeScouting` and `UpgradeEvidence`). It reads the observation the game started on as it is built and each
-    later one on `TurnStartEvent` at `HIGHEST`, before any handler of the bot's, and adds what it reads with
-    `assume_upgrades`.
+    `UpgradeScouting` and `UpgradeEvidence`). It reads the observation the game started on as it is built, each
+    later one on `TurnStartEvent`, and the one the game ended on on `GameEndEvent`, both at `HIGHEST`, before any
+    handler of the bot's, and adds what it reads with `assume_upgrades`. What a unit type needs is its
+    `tech_requirements`, plus the warp gate's hand entry.
   - The level reading left in the core is private, `_UpgradeLevelReader` beside the upgrade tracker, over keeping
     `sc2nachos.upgrade_reader` public.
 

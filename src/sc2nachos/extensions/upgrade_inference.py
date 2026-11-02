@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, final
 
 from sc2nachos import NoEnemyError
-from sc2nachos.events import EventPriority, TurnStartEvent
+from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
 from sc2nachos.ids import BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance, Visibility
 
@@ -72,8 +72,9 @@ class UpgradeInference:
     api = Api(extensions=Extensions)
     ```
 
-    It reads the observation the game started on as it is built, and each later one on its `TurnStartEvent`, at
-    `EventPriority.HIGHEST`, before any handler of the bot's, so every handler sees what it read that turn:
+    It reads the observation the game started on as it is built, each later one on its `TurnStartEvent`, and the one
+    the game ended on, which gets no turn, on `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of
+    the bot's, so every handler sees what it read:
 
     - An enemy unit of a type nothing makes without an upgrade, in sight or remembered: a burrowed unit shows Burrow,
       but a lurker, a widow mine or a creep tumor, which burrow without it, and a warp gate shows Warp Gate.
@@ -91,26 +92,27 @@ class UpgradeInference:
     raises `UncuratedIdError` from its handler, as reading `Unit.buffs` does.
     """
 
-    __slots__ = ("_api", "_enemy", "_upgrades_needed_by_type")
+    __slots__ = ("_api", "_upgrades_needed_by_type")
 
     def __init__(self, api: Api[object]) -> None:
         """Upgrade inference for the enemy of `api`'s game, from the observation the game started on."""
         self._api = api
         self._upgrades_needed_by_type = _upgrades_needed_by_each_unit_type(api.data)
         try:
-            self._enemy = api.enemy
+            _ = api.enemy
         except NoEnemyError:
             return
         self._assume_the_upgrades_shown()
-        api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._infer_as_the_turn_starts)
+        api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._infer_from_the_observation)
+        api.on(GameEndEvent, priority=EventPriority.HIGHEST)(self._infer_from_the_observation)
 
-    def _infer_as_the_turn_starts(self, event: TurnStartEvent) -> None:
+    def _infer_from_the_observation(self, event: TurnStartEvent | GameEndEvent) -> None:
         self._assume_the_upgrades_shown()
 
     def _assume_the_upgrades_shown(self) -> None:
         """Assume the enemy has the upgrades the last observation shows."""
         api = self._api
-        self._enemy.assume_upgrades(*_enemy_upgrades_shown(api.units, api.effects, self._upgrades_needed_by_type))
+        api.enemy.assume_upgrades(*_enemy_upgrades_shown(api.units, api.effects, self._upgrades_needed_by_type))
 
 
 def _enemy_upgrades_shown(
@@ -171,27 +173,13 @@ def _owner_upgrades_shown_by_effect(effect: Effect) -> frozenset[UpgradeId]:
 
 
 def _upgrades_needed_by_each_unit_type(game_data: GameData) -> Mapping[UnitTypeId, frozenset[UpgradeId]]:
-    """The upgrades a unit of each type of `game_data` cannot exist without, for each type that needs any: those every
-    type that makes it by its creation ability needs for that, as a zergling needs Burrow to burrow, and those of
-    `_UNIT_TYPE_EVIDENCE`."""
+    """The upgrades a unit of each type of `game_data` cannot exist without, for each type that needs any: those its
+    `tech_requirements` name, as a zergling needs Burrow to burrow, and those of `_UNIT_TYPE_EVIDENCE`."""
     needed_by_type: dict[UnitTypeId, frozenset[UpgradeId]] = {}
-    for unit_type in game_data.units:
-        needed = _upgrades_needed_to_make(unit_type, game_data)
+    for unit_type, row in game_data.units.items():
+        needed = row.tech_requirements.upgrades
         if (only := _UNIT_TYPE_EVIDENCE.get(unit_type)) is not None:
             needed |= {only}
         if needed:
             needed_by_type[unit_type] = needed
     return MappingProxyType(needed_by_type)
-
-
-def _upgrades_needed_to_make(unit_type: UnitTypeId, game_data: GameData) -> frozenset[UpgradeId]:
-    """The upgrades every type that makes `unit_type` by its creation ability needs for that, in `game_data`."""
-    if (ability := game_data.units[unit_type].creation_ability) is None:
-        return _NO_UPGRADES
-    needs = [
-        requirements.upgrades
-        for maker, product in game_data.abilities[ability].products.items()
-        if product is unit_type
-        and (requirements := game_data.units[maker].ability_requirements.get(ability)) is not None
-    ]
-    return frozenset.intersection(*needs) if needs else _NO_UPGRADES
