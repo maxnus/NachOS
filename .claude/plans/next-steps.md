@@ -736,6 +736,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   every type's and group's frozenset of `UnitTypeId`s, for a type with no unit to test, as a structure about to be
   built, over `includes` taking a bare type id too. It was `_type_ids`; nine of AvocaDOS's sets of ids hold exactly a
   group's types (#184).
+- **No `Unit.is_type(group)`** (the owner, review of #202, over adding it for reading more naturally): a type guard on
+  a method narrows its first argument, never the object it is called on (checked with pyright), so `unit.is_type(...)`
+  could not narrow `unit` as `UnitType.X.includes(unit)` does, and would be a second spelling of it.
 - **A unit's type stays a type parameter, and a read only some types have is typed for them** (the owner, 2026-10-29,
   after weighing a class per type, `isinstance(unit, GasBuilding)`, against slice 4's `Unit[UnitType.Refinery]`). A
   class per type would bring `isinstance` and `match`, and members missing where they do not apply. It would also
