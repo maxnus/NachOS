@@ -89,6 +89,13 @@ def _scv_carrying_vespene(at: tuple[float, float], *orders: raw_pb2.UnitOrder) -
     )
 
 
+def _build_order() -> raw_pb2.UnitOrder:
+    """A supply depot's build, at (30.0, 34.0)."""
+    order = raw_pb2.UnitOrder(ability_id=RawAbilityId.TerranBuild_SupplyDepot)
+    order.target_world_space_pos.x, order.target_world_space_pos.y = 30.0, 34.0
+    return order
+
+
 def _gather_order(field: int = _MINED_FIELD) -> raw_pb2.UnitOrder:
     return raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV, target_unit_tag=field)
 
@@ -226,19 +233,41 @@ class TestSendingAtOnce:
             [],
         ]
 
-    def test_nothing_is_sent_to_a_worker_out_of_reach_of_orders(self) -> None:
-        """The SCV goes unlisted, as inside a refinery, and is handed over then."""
+    @pytest.mark.parametrize(
+        ("first_turn", "second_turn"),
+        [
+            ([_reported_scv((28.0, 30.0))], [_reported_scv((28.0, 30.0), _build_order())]),
+            (
+                [make_unit(_HANDED_SCV, UnitTypeId.DRONE, at=(25.0, 30.0), build_progress=1.0)],
+                [
+                    make_unit(
+                        _HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True
+                    )
+                ],
+            ),
+            ([_reported_scv((25.0, 30.0))], []),
+        ],
+        ids=["building", "burrowed", "out of reach of orders, as inside a refinery"],
+    )
+    def test_mine_takes_no_worker_it_cannot_send(
+        self, first_turn: list[raw_pb2.Unit], second_turn: list[raw_pb2.Unit]
+    ) -> None:
+        """The worker, kept from the first turn, is handed over in the second: `mine` returns `None`, holds nothing and
+        sends nothing."""
+        handed: list[tuple[bool, bool]] = []
 
-        def hand_over_once_unlisted(api: Api[SpeedMining]) -> None:
-            scv = _own_unit_of_tag(api, _HANDED_SCV)
+        def hand_over_in_the_second_turn(api: Api[SpeedMining]) -> None:
+            worker = _own_unit_of_tag(api, _HANDED_SCV)
 
             @api.on(TurnEvent, priority=EventPriority.HIGH)
             def hand_over(event: TurnEvent) -> None:
                 if event.time.steps == 1:
-                    api.extensions.mine(scv, _unit_of_tag(api, _MINED_FIELD))
+                    refused = api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD)) is None
+                    handed.append((refused, worker in api.extensions.miners))
 
-        turns = [[*_pylon_main(), _reported_scv((25.0, 30.0))], _pylon_main()]
-        assert _orders_sent(*turns, assigned=(), started=hand_over_once_unlisted) == [[], []]
+        turns = [[*_pylon_main(), *first_turn], [*_pylon_main(), *second_turn]]
+        assert _orders_sent(*turns, assigned=(), started=hand_over_in_the_second_turn) == [[], []]
+        assert handed == [(True, False)]
 
     @pytest.mark.parametrize(
         "carrying",
@@ -265,11 +294,13 @@ class TestSendingAtOnce:
 
 class TestWhatIsLeftAlone:
     def test_a_worker_doing_anything_else_until_it_is_idle(self) -> None:
-        """Handed over while it builds, it is sent nothing until it is idle."""
-        building = raw_pb2.UnitOrder(ability_id=RawAbilityId.TerranBuild_SupplyDepot)
-        building.target_world_space_pos.x, building.target_world_space_pos.y = 30.0, 34.0
-        turns = [[*_pylon_main(), _reported_scv((28.0, 30.0), building)], [*_pylon_main(), _reported_scv((30.0, 33.0))]]
-        assert _orders_sent(*turns) == [[], [(AbilityId.GATHER, _MINED_FIELD, False)]]
+        """Sent to build by the bot after it was handed over, it is sent nothing until it is idle."""
+        turns = [
+            [*_pylon_main(), _reported_scv((28.0, 30.0), _gather_order())],
+            [*_pylon_main(), _reported_scv((28.0, 30.0), _build_order())],
+            [*_pylon_main(), _reported_scv((30.0, 33.0))],
+        ]
+        assert _orders_sent(*turns) == [[], [], [(AbilityId.GATHER, _MINED_FIELD, False)]]
 
     def test_a_worker_given_an_order_this_turn_or_sent_one_that_may_not_show_yet(self) -> None:
         def order_away(api: Api[SpeedMining]) -> None:
@@ -287,8 +318,15 @@ class TestWhatIsLeftAlone:
         ]
 
     def test_a_burrowed_drone(self) -> None:
-        drone = make_unit(_HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True)
-        assert _orders_sent([*_pylon_main(), drone]) == [[]]
+        """Handed over idle, it is sent to gather, and burrowed in the next turn, it is sent nothing."""
+        drone = make_unit(_HANDED_SCV, UnitTypeId.DRONE, at=(25.0, 30.0), build_progress=1.0)
+        burrowed = make_unit(
+            _HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True
+        )
+        assert _orders_sent([*_pylon_main(), drone], [*_pylon_main(), burrowed]) == [
+            [(AbilityId.GATHER, _MINED_FIELD, False)],
+            [],
+        ]
 
     @pytest.mark.parametrize(
         "collecting",

@@ -79,9 +79,9 @@ class SpeedMining:
 
     Which worker mines which field stays the bot's: `mine` hands one over, two at a field at most, at a field of an
     expansion with a finished townhall of this player's at its center, which it picks among the fields it is given or
-    among all, and sends it there at once unless it is mining minerals already or building; `release` takes one back,
-    and `miners` and `miners_at` read them. On each `TurnEvent`, at `EventPriority.LOW`, speed mining orders each worker
-    it holds:
+    among all, and sends it there at once unless it is mining minerals already, but takes none it cannot send, building,
+    burrowed or out of reach of orders; `release` takes one back, and `miners` and `miners_at` read them. On each
+    `TurnEvent`, at `EventPriority.LOW`, speed mining orders each worker it holds:
 
     - A worker idle, gathering minerals, returning minerals, or on speed mining's own move, is kept mining its field:
       one gathering at another field, as the game sends a worker whose field is taken, or on its way to a field it was
@@ -156,7 +156,8 @@ class SpeedMining:
         fields: Unit[UnitType.AnyMineralField] | Iterable[Unit[UnitType.AnyMineralField]] | None = None,
     ) -> Unit[UnitType.AnyMineralField] | None:
         """Have `worker` mine a field until it is released, or let go as the class's docstring says, and return the
-        field, or `None` where there is no room. A worker mining another field moves to this one.
+        field, or `None` where there is no room or `worker` cannot be sent there now. A worker mining another field
+        moves to this one.
 
         Speed mining picks the field among those of the expansions with a finished townhall of this player's at their
         center, and only among `fields`, one or several, if given: at the expansion nearest `worker` with a field fewer
@@ -167,10 +168,9 @@ class SpeedMining:
         Handed over, `worker` is sent to the field at once: a gather at the field, behind a return of any cargo it
         carries, minerals or vespene. So a worker pulled into a fight, or collecting vespene, mines from this turn.
         Nothing is sent to a worker mining minerals already, which speed mining keeps at the field from the next turn,
-        nor again to one sent there lately, whose orders may not show it yet. Nor is anything sent to one building or
-        burrowed, which comes to the field once it is idle or mining again, nor to one out of reach of orders
-        (`OwnUnit.is_orderable`): one inside a refinery comes out with vespene and goes on collecting it until it is
-        handed over again.
+        nor again to one sent there lately, whose orders may not show it yet. A worker building, burrowed, or out of
+        reach of orders (`OwnUnit.is_orderable`), as inside a refinery or a transport, cannot be sent: `mine` returns
+        `None` for it and leaves it as it was, to be handed over once it can be.
 
         Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one of `fields` that is
         not a mineral field.
@@ -186,34 +186,36 @@ class SpeedMining:
                     raise ValueError(f"speed mining mines mineral fields, not {field!r}")
             only_fields = frozenset(given)
         field = self._nearest_field_with_room(worker, only_fields)
-        if field is not None:
-            self._field_by_worker[worker] = field
-            self._send_to_mine(worker, field)
+        if field is None or not self._send_to_mine(worker, field):
+            return None
+        self._field_by_worker[worker] = field
         return field
 
     def release(self, worker: OwnUnit[UnitType.Worker]) -> None:
         """Stop ordering `worker`, leaving its orders as they are. Nothing happens for a worker not handed over."""
         self._field_by_worker.pop(worker, None)
 
-    def _send_to_mine(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> None:
-        """Send `worker`, just handed over at `field`, there at once, as `mine` says."""
+    def _send_to_mine(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> bool:
+        """Send `worker`, being handed over at `field`, there at once, as `mine` says, and return whether it could be:
+        not while it builds, is burrowed or is out of reach of orders."""
         if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
-            return
+            return False
         current_order = worker.current_order
         if current_order is not None and self._is_mining(worker, current_order):
-            return
+            return True
         order_book = self._api.orders
         if any(
             order.ability is AbilityId.GATHER and order.target is field
             for order in order_book.issued_to(worker, include_sent=True)
         ):
-            return
+            return True
         if worker.is_carrying_resource:
             self._hand_in_then_gather(worker, field)
         else:
             order_book.issue(worker, AbilityId.GATHER, target=field)
+        return True
 
-    def _hand_in_then_gather(self, worker: OwnUnit[UnitType.Worker], field: Unit[Any]) -> None:
+    def _hand_in_then_gather(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> None:
         """Have `worker` hand in its cargo and then gather at `field`: a return with the gather queued behind it, which
         waits for the cargo to be handed in, so that a worker carrying vespene does not go back to its geyser (in
         game)."""
@@ -248,11 +250,13 @@ class SpeedMining:
     def _order_the_miners(self, _: TurnEvent) -> None:
         """Order each worker held, field by field, as the class's docstring says, once the workers of the fields no
         longer mined are let go: they count among the units in a move's way."""
-        workers_by_field: dict[Unit[Any], list[OwnUnit[UnitType.Worker]]] = {}
+        workers_by_field: dict[Unit[UnitType.AnyMineralField], list[OwnUnit[UnitType.Worker]]] = {}
         for worker, field in self._field_by_worker.items():
             workers_by_field.setdefault(field, []).append(worker)
         townhall_by_center: dict[Point, Unit[Any] | None] = {}
-        mined_fields: list[tuple[Unit[Any], list[OwnUnit[UnitType.Worker]], _TripEndPoints, Unit[Any]]] = []
+        mined_fields: list[
+            tuple[Unit[UnitType.AnyMineralField], list[OwnUnit[UnitType.Worker]], _TripEndPoints, Unit[Any]]
+        ] = []
         for field, workers in workers_by_field.items():
             speed_mined = None if field.is_dead else self._speed_mined_trip_end_points(field, townhall_by_center)
             if speed_mined is None:
@@ -346,7 +350,7 @@ class SpeedMining:
         return True
 
     def _speed_mined_trip_end_points(
-        self, field: Unit[Any], townhall_by_center: dict[Point, Unit[Any] | None]
+        self, field: Unit[UnitType.AnyMineralField], townhall_by_center: dict[Point, Unit[Any] | None]
     ) -> tuple[_TripEndPoints, Unit[Any]] | None:
         """The end points of the trips to `field` from the first expansion holding it with a finished townhall of this
         player's at its center, with that townhall, or `None`. Each expansion's townhall is read once a turn, kept in
@@ -373,7 +377,7 @@ class SpeedMining:
             and unit not in field_by_worker
         )
 
-    def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[Any]) -> None:
+    def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> None:
         """Keep `worker` mining `field` with a plain gather, or returning its cargo with the gather queued behind."""
         current_order = worker.current_order
         if worker.is_carrying_resource:
@@ -385,7 +389,7 @@ class SpeedMining:
     def _speed_mine(
         self,
         worker: OwnUnit[UnitType.Worker],
-        field: Unit[Any],
+        field: Unit[UnitType.AnyMineralField],
         townhall: Unit[Any],
         trip_end: Point,
         units_near_the_trip_end: Callable[[Point], Units[Unit[Any]]],
@@ -429,7 +433,7 @@ class _TripEndPoints:
 
     __slots__ = ("expansion", "gather_point", "return_point")
 
-    def __init__(self, expansion: Expansion, field: Unit[Any]) -> None:
+    def __init__(self, expansion: Expansion, field: Unit[UnitType.AnyMineralField]) -> None:
         center = expansion.center
         gather_point = self._gather_point(field, expansion.mineral_fields, center)
         self.expansion = expansion
@@ -439,7 +443,9 @@ class _TripEndPoints:
         """Where the move of a trip back to the townhall ends."""
 
     @staticmethod
-    def _gather_point(field: Unit[Any], fields: Units[Unit[Any]], townhall_center: Point) -> Point:
+    def _gather_point(
+        field: Unit[UnitType.AnyMineralField], fields: Units[Unit[UnitType.AnyMineralField]], townhall_center: Point
+    ) -> Point:
         """Where the move of a trip to `field` ends: 1.325 from it toward the townhall, or, where that is nearer another
         of `fields`, where circles of 1.325 around the two cross, the crossing nearer the townhall, for the last such
         field. AvocaDOS's rule: it leaves a point for a field behind two others in the gap between them."""
@@ -455,9 +461,11 @@ class _TripEndPoints:
         return gather_point
 
 
-def _trip_end_points_of_each_field(expansions: Iterable[Expansion]) -> dict[Unit[Any], tuple[_TripEndPoints, ...]]:
+def _trip_end_points_of_each_field(
+    expansions: Iterable[Expansion],
+) -> dict[Unit[UnitType.AnyMineralField], tuple[_TripEndPoints, ...]]:
     """The end points of the trips to each field of `expansions`, from each expansion holding it, in their order."""
-    trip_end_points_by_field: dict[Unit[Any], list[_TripEndPoints]] = {}
+    trip_end_points_by_field: dict[Unit[UnitType.AnyMineralField], list[_TripEndPoints]] = {}
     for expansion in expansions:
         for field in expansion.mineral_fields:
             trip_end_points_by_field.setdefault(field, []).append(_TripEndPoints(expansion, field))
@@ -498,7 +506,7 @@ def _is_any_in_the_way(units: Iterable[Unit[Any]], start: Point, end: Point) -> 
     return any(unit.position.distance_to_segment(start, end) < clearance + unit.radius for unit in units)
 
 
-def _is_gathering_at(order: UnitOrder | None, field: Unit[Any]) -> bool:
+def _is_gathering_at(order: UnitOrder | None, field: Unit[UnitType.AnyMineralField]) -> bool:
     """Whether `order` is a gather at `field`."""
     return order is not None and order.ability is AbilityId.GATHER and order.known_target is field
 

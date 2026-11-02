@@ -977,9 +977,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     already; a gather queued behind a return given waits for the cargo, and queued behind the return a worker shows of
     itself, it takes its place (in game). A worker returning vespene no longer counts as mining, which held it while it
     went back to its geyser, and speed mining's own return to a worker it holds queues the gather behind too, so one
-    idle with vespene comes to its field. Nothing is sent again to a worker sent the gather lately. A worker handed
-    over inside a refinery is sent nothing and goes on collecting vespene until handed over again, which a bot only
-    does with a unit it kept from an earlier observation. Built in #203.
+    idle with vespene comes to its field. Nothing is sent again to a worker sent the gather lately. A worker `mine`
+    cannot send, building, burrowed or out of reach of orders, it does not take: it returns `None` and leaves the
+    worker as it was, as for no room, and the bot hands it over once it can be sent (the owner, review of #203, over
+    holding it unsent, which left a worker building a refinery, or inside one, on vespene for good while counted at
+    its field; over sending held workers off vespene, remembering the hand-over, and documenting it). Built in #203.
   - Two findings of AvocaDOS's smoke round on #203 went into it (the owner, 2026-11-02):
     - An orbital's morph let its base's workers go: in the step before it finishes, the game reports the new orbital at
       build progress 0.998. A townhall only a morph makes, an orbital, a planetary fortress, a lair or a hive, now

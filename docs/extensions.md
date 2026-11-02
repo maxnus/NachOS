@@ -109,9 +109,11 @@ class ThreatMap:
   orders as they are, once its townhall is gone, dead or lifted off: long-distance mining is the bot's to do. A field
   takes two workers at most: with three, speed mining mined less than plain gathers. Where there is no room, `mine`
   returns `None` and leaves the worker as it was.
-  `mine` sends the worker to its field at once, its cargo handed in first, unless it is mining minerals already or
-  building, so a worker pulled into a fight or collecting vespene mines from that turn. A worker held that the bot
-  later sends to build is left alone until it is idle or mining again, and then goes back to its field;
+  `mine` sends the worker to its field at once, its cargo handed in first, unless it is mining minerals already, so a
+  worker pulled into a fight or collecting vespene mines from that turn. A worker it cannot send, building, burrowed or
+  inside a refinery, it does not take: `mine` returns `None`, and the bot hands it over once it can be sent. A worker
+  held that the bot later sends to build is left alone until it is idle or mining again, and then goes back to its
+  field;
   `release(worker)` takes one back, and `miners` and `miners_at(field)` read which worker mines which field. A worker
   on a move, unlike one on a gather or a return, can be stopped by other units, so no move is given while a unit stands
   in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to mining, unless speed mining
