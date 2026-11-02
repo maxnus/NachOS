@@ -240,6 +240,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     open, and nothing the API reports sets those plates apart: recorded under "Not understood yet" and left.
 - **The demo bot** (#125, the owner, 2026-10-15), M4's exit gate and the library's example for other developers:
   - It beats `Computer` at `MEDIUM` in all 21 games of the pool's 7 maps against each of the 3 races.
+  - It speed mines since #202 (2026-11-02), handing speed mining every free SCV; the 21 games were not played again
+    with it. An SCV with no field free waits idle where it was trained, which may stop speed mining's move on nearby
+    trips (the owner, review of #202, over walking it out of the way or a plain third gather).
   - It plays Terran, placing through `api.placement`, with no power, which `free_for` does not know yet.
   - It is one file, `examples/demo_bot.py`, run by `run_from_command_line`, so the match workflow can play it.
     `examples/run_game.py` stays the bot that does nothing.
