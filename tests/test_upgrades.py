@@ -445,6 +445,15 @@ class TestWhatAUnitReads:
         enemy.forget_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_2)
         assert enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1}
 
+    def test_assuming_only_what_is_held_keeps_the_same_set(self, first_corpus_tables: GameData) -> None:
+        """`BASIC` assumes what the enemy's units show on every step, which is almost always nothing new."""
+        enemy = make_enemy(first_corpus_tables)
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_2)
+        held = enemy.upgrades
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+        enemy.assume_upgrades()
+        assert enemy.upgrades is held
+
     def test_an_upgrade_the_tables_leave_out_is_assumed_alone(self) -> None:
         enemy = make_enemy(make_tables())
         enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_2)

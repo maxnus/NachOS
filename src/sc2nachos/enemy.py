@@ -67,8 +67,8 @@ class Enemy:
         cls, info: sc2api_pb2.ResponseGameInfo, player_id: int, *, game_data: GameData, ladder_id: str | None = None
     ) -> Self | None:
         """The one player of the game `info` describes, observers aside, who is not `player_id`, or `None` if there is
-        not one, with `ladder_id`, the ladder's id for it, if the game is a ladder's, and `game_data`, the game's data.
-        Its race is the one the game gives, else the one it asked for unless that is Random."""
+        not one, with `ladder_id`, the ladder's id for it, if the game is a ladder's. Its race is the one the game
+        gives, else the one it asked for unless that is Random."""
         others = [
             entry
             for entry in info.player_info
@@ -135,8 +135,8 @@ class Enemy:
         visible unit, and what only an upgrade can cause, such as a burrowed zergling or a stimmed marine.
         `UpgradeReader` reads both, and NachOS adds them here as far as the `Api` was told to with `UpgradeInference`.
         Every enemy unit, in sight or not, counts what is held here. Anything else, such as Grooved Spines or Metabolic
-        Boost, the bot adds with `assume_upgrades` when it works it out. It never holds an upgrade without those it
-        needs researched first, as level 2 of a line needs level 1.
+        Boost, the bot adds with `assume_upgrades` when it works it out. It never holds an upgrade without those the
+        game's tables say it needs researched first, as level 2 of a line needs level 1.
         """
         return self._upgrades
 
