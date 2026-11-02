@@ -92,7 +92,7 @@ class _Game:
     """A tracker and an order book on a drawn map, fed one observation at a time as `Api.play` feeds them."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, make_enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
@@ -670,7 +670,7 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_
         elif response.HasField("observation"):
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
-            tracker = _Tracker(data, make_enemy())
+            tracker = _Tracker(data, make_enemy(data))
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
             return GameMap._from_game(info, observation), tracker, data, observation
     raise AssertionError(f"{path.name} holds no observation")

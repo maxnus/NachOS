@@ -10,6 +10,7 @@ from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
+    from sc2nachos.gamedata import GameData
     from sc2nachos.ids import UpgradeId
 
 
@@ -30,13 +31,22 @@ class UpgradeInference(ReadableIntEnum):
 
 @final
 class Enemy:
-    """The other player, and what NachOS has learned or been told about it."""
+    """The other player, and what NachOS has learned or been told about it. `game_data` says which upgrades each upgrade
+    needs researched first."""
 
-    __slots__ = ("_id", "_ladder_id", "_name", "_race", "_requested_race", "_upgrades")
+    __slots__ = ("_game_data", "_id", "_ladder_id", "_name", "_race", "_requested_race", "_upgrades")
 
     def __init__(
-        self, *, player_id: int, requested_race: Race, name: str | None, race: Race | None, ladder_id: str | None
+        self,
+        *,
+        player_id: int,
+        requested_race: Race,
+        name: str | None,
+        race: Race | None,
+        ladder_id: str | None,
+        game_data: GameData,
     ) -> None:
+        self._game_data = game_data
         self._id = player_id
         self._requested_race = requested_race
         self._name = name
@@ -54,11 +64,11 @@ class Enemy:
 
     @classmethod
     def _from_game(
-        cls, info: sc2api_pb2.ResponseGameInfo, player_id: int, *, ladder_id: str | None = None
+        cls, info: sc2api_pb2.ResponseGameInfo, player_id: int, *, game_data: GameData, ladder_id: str | None = None
     ) -> Self | None:
         """The one player of the game `info` describes, observers aside, who is not `player_id`, or `None` if there is
-        not one, with `ladder_id`, the ladder's id for it, if the game is a ladder's. Its race is the one the game
-        gives, else the one it asked for unless that is Random."""
+        not one, with `ladder_id`, the ladder's id for it, if the game is a ladder's, and `game_data`, the game's data.
+        Its race is the one the game gives, else the one it asked for unless that is Random."""
         others = [
             entry
             for entry in info.player_info
@@ -77,6 +87,7 @@ class Enemy:
             name=entry.player_name or None,
             race=race,
             ladder_id=ladder_id,
+            game_data=game_data,
         )
 
     @property
@@ -124,17 +135,30 @@ class Enemy:
         visible unit, and what only an upgrade can cause, such as a burrowed zergling or a stimmed marine.
         `UpgradeReader` reads both, and NachOS adds them here as far as the `Api` was told to with `UpgradeInference`.
         Every enemy unit, in sight or not, counts what is held here. Anything else, such as Grooved Spines or Metabolic
-        Boost, the bot adds with `assume_upgrades` when it works it out.
+        Boost, the bot adds with `assume_upgrades` when it works it out. It never holds an upgrade without those it
+        needs researched first, as level 2 of a line needs level 1.
         """
         return self._upgrades
 
     def assume_upgrades(self, *upgrades: UpgradeId) -> None:
-        """Assume the enemy has `upgrades` from now on."""
-        self._upgrades |= frozenset(upgrades)
+        """Assume the enemy has `upgrades` from now on, and every upgrade each needs researched first: level 2 of a
+        line brings level 1."""
+        if new := frozenset(upgrades) - self._upgrades:
+            self._upgrades = self._upgrades.union(*map(self._with_the_upgrades_it_needs, new))
 
     def forget_upgrades(self, *upgrades: UpgradeId) -> None:
-        """Assume the enemy no longer has `upgrades`.
+        """Assume the enemy no longer has `upgrades`, nor any upgrade that needs one of them researched first: level 1
+        of a line takes levels 2 and 3 with it.
 
         If NachOS infers upgrades, an enemy unit that shows one again puts it back.
         """
-        self._upgrades -= frozenset(upgrades)
+        forgotten = frozenset(upgrades)
+        self._upgrades = frozenset(
+            held for held in self._upgrades if self._with_the_upgrades_it_needs(held).isdisjoint(forgotten)
+        )
+
+    def _with_the_upgrades_it_needs(self, upgrade: UpgradeId) -> frozenset[UpgradeId]:
+        """`upgrade`, every upgrade it needs researched first, and those they need in turn."""
+        if (row := self._game_data.upgrades.get(upgrade)) is None:
+            return frozenset({upgrade})
+        return frozenset({upgrade}).union(*map(self._with_the_upgrades_it_needs, row.tech_requirements.upgrades))
