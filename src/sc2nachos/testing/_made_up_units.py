@@ -22,8 +22,16 @@ class MadeUpUnits:
     """
 
     def __init__(self, game_data: GameData | None = None) -> None:
-        enemy = Enemy(player_id=ENEMY_PLAYER_ID, requested_race=Race.RANDOM, name=None, race=None, ladder_id=None)
-        self._tracker = _Tracker(load_game_data() if game_data is None else game_data, enemy)
+        game_data = load_game_data() if game_data is None else game_data
+        enemy = Enemy(
+            player_id=ENEMY_PLAYER_ID,
+            requested_race=Race.RANDOM,
+            name=None,
+            race=None,
+            ladder_id=None,
+            game_data=game_data,
+        )
+        self._tracker = _Tracker(game_data, enemy)
         self._step: int | None = None
 
     @property

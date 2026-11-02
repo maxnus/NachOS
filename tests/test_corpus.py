@@ -146,7 +146,8 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), make_enemy())
+    tables = _tables(recording)
+    tracker = _Tracker(tables, make_enemy(tables))
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(recorded_observations(recording)):
         step = observation.observation.game_loop
@@ -293,7 +294,8 @@ _STATE_READS = sorted(
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), make_enemy())
+    tables = _tables(recording)
+    tracker = _Tracker(tables, make_enemy(tables))
     game_map = _map(recording)
     for observation in recorded_observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)

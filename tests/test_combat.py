@@ -19,7 +19,7 @@ _BEAM_ON = [BuffId.ORACLE_PULSAR_BEAM]
 
 def _units_observed(tables: GameData, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = ()) -> list[Unit[Any]]:
     """`units` as one observation shows them, this player having `upgrades`."""
-    tracker = _Tracker(tables, make_enemy())
+    tracker = _Tracker(tables, make_enemy(tables))
     tracker.update(make_observation(0, units=units, upgrades=upgrades).observation.raw_data, 0)
     by_tag = {unit.tag: unit for unit in tracker.unit_tracker.present}
     return [by_tag[unit.tag] for unit in units]

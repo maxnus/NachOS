@@ -30,7 +30,7 @@ from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import Effect
 from sc2nachos.units import Alliance, Unit, UpgradeReader, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import RealGame, load_tool, make_enemy, make_observation, make_unit, require_enemy
+from support import RealGame, load_tool, make_enemy, make_observation, make_tables, make_unit, require_enemy
 
 _REPOSITORY_ROOT = Path(__file__).parents[1]
 _CORPUS_GAMES = sorted((_REPOSITORY_ROOT / "tests" / "corpus").glob("*.sc2rec"))
@@ -362,7 +362,7 @@ class TestWhatTheTablesSay:
 
 
 def _tracker_against_the_computer(tables: GameData) -> _Tracker:
-    return _Tracker(tables, make_enemy())
+    return _Tracker(tables, make_enemy(tables))
 
 
 def _units_observed(
@@ -417,6 +417,45 @@ class TestWhatAUnitReads:
         assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
         require_enemy(tracker.enemy).forget_upgrades(UpgradeId.ZERGLING_SPEED)
         assert zergling.speed == base
+
+    def test_assuming_a_level_assumes_the_levels_below_it(self, first_corpus_tables: GameData) -> None:
+        tracker = _tracker_against_the_computer(first_corpus_tables)
+        enemy = require_enemy(tracker.enemy)
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_3, UpgradeId.PROTOSS_SHIELDS_2)
+        assert enemy.upgrades == {
+            UpgradeId.TERRAN_INFANTRY_WEAPONS_1,
+            UpgradeId.TERRAN_INFANTRY_WEAPONS_2,
+            UpgradeId.TERRAN_INFANTRY_WEAPONS_3,
+            UpgradeId.PROTOSS_SHIELDS_1,
+            UpgradeId.PROTOSS_SHIELDS_2,
+        }
+        marine = make_unit(1, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+        zealot = make_unit(2, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, visibility=Visibility.INVISIBLE)
+        never_seen = _units_observed(tracker, marine, zealot)
+        assert never_seen[0].weapons[0].damage == first_corpus_tables.units[UnitTypeId.MARINE].weapons[0].damage + 3
+        assert never_seen[1].shield_armor == 2
+
+    def test_forgetting_a_level_forgets_the_levels_above_it_and_nothing_else(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        enemy = make_enemy(first_corpus_tables)
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_3, UpgradeId.TERRAN_INFANTRY_ARMOR_1)
+        enemy.forget_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_2)
+        assert enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.TERRAN_INFANTRY_ARMOR_1}
+
+    def test_assuming_only_what_is_held_keeps_the_same_set(self, first_corpus_tables: GameData) -> None:
+        """`BASIC` assumes what the enemy's units show on every step, which is almost always nothing new."""
+        enemy = make_enemy(first_corpus_tables)
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_2)
+        held = enemy.upgrades
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
+        enemy.assume_upgrades()
+        assert enemy.upgrades is held
+
+    def test_an_upgrade_the_tables_leave_out_is_assumed_alone(self) -> None:
+        enemy = make_enemy(make_tables())
+        enemy.assume_upgrades(UpgradeId.TERRAN_INFANTRY_WEAPONS_2)
+        assert enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_2}
 
     def test_a_neutral_unit_reads_with_no_upgrade(self, first_corpus_tables: GameData) -> None:
         tracker = _tracker_against_the_computer(first_corpus_tables)

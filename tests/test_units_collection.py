@@ -55,7 +55,7 @@ def _assorted_own_units(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
 def _units_of_every_alliance() -> Units[Unit[Any]]:
     """A unit of every alliance, plus a hidden and a remembered enemy."""
     # From the game's own reports, as `UnitReport` refuses an ally's unit.
-    tracker = _Tracker(_TABLES, make_enemy())
+    tracker = _Tracker(_TABLES, make_enemy(_TABLES))
     reports = [
         make_unit(1, alliance=Alliance.OWN),
         make_unit(2, alliance=Alliance.ENEMY),

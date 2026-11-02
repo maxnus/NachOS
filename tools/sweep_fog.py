@@ -63,7 +63,8 @@ class _BayInTheFog:
         game_info = client.game_info()
         observation = client.observation()
         game_map = GameMap._from_game(game_info, observation)
-        self.tracker = _Tracker(GameData(client.game_data()), Enemy._from_game(game_info, sandbox.player))
+        game_data = GameData(client.game_data())
+        self.tracker = _Tracker(game_data, Enemy._from_game(game_info, sandbox.player, game_data=game_data))
         self.enemy_player = 2 if sandbox.player == 1 else 1
         open_ground = OpenGround(game_map, observation.observation.raw_data.units)
         self.bay_site = open_ground.claim(game_map.playable_area.center, half=2)
