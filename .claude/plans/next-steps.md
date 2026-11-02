@@ -948,24 +948,33 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Speed mining without a hand-over, of every worker on a plain gather at a mineral field or a return, was weighed and
     dropped (the owner, review of #202, over building it, which I had recommended): workers would not stay on their
     fields, and a bot's own gathers could undo it by accident. `mine` and `release` stay the one way in and out.
-  - To build after #202 (the owner, review of #202): `mine(worker, fields)` takes a field, a collection of fields or
-    `None`, and picks among the fields given by the rules for `None`. A field given may be at a base with no finished
-    townhall of this player's, and is then mined plainly.
-  - To build after #202 (the owner, review of #202): once a base stops having a finished townhall of this player's at
-    its center, the townhall dead or lifted, speed mining releases the workers it holds at that base's fields, and what
-    they do next is the bot's (over reassigning them through `mine(worker)`, and over releasing on a death alone).
-    Workers at the fields of a base that never had one stay. Today they stay held and mine plainly.
-  - Open: whether `mine` with no field may pick one at a base with no townhall as a last resort, behind an option (the
-    owner's idea). My recommendation is no, since a bot writes `mine(worker) or mine(worker, far_fields)` and picks the
-    far fields itself, safe ones among them.
+  - To build after #202 (the owner, review of #202): speed mining supports no long-distance mining. A worker is held
+    only at a field of a base with a finished townhall of this player's at its center, so the rules become:
+    - `mine(worker, fields)` takes a field, a collection of fields or `None`, and picks only among the fields given at
+      such bases, by the rules for `None`. A field at a base without one gets `None`, as a full field does; `mine`
+      raises `ValueError` only for a unit that is not a worker or a field that is not minerals.
+    - Each turn, speed mining releases every worker it holds at a field whose base has no such townhall any more, dead
+      or lifted, and what the worker does next is the bot's. Since `mine` takes no other field, nothing has to track
+      which bases changed. With no townhall left, every worker is released.
+    - Plain mining at a base without a townhall goes. Speed mining still mines a trip plainly while a unit stands in
+      the way, and sends a worker the game moved back to its own field.
+    - A base still being built is not ready, so `mine` returns `None` there until the townhall finishes; a lifted
+      townhall's workers are handed over again once it lands. A worker released keeps its last orders.
+    - To check in game: an orbital or a planetary fortress morph must not read as the townhall gone.
+
+    Over: named fields at a base without a townhall mined plainly, which the owner first chose; releasing on the
+    townhall's death or lift only, and keeping workers at a base that never had one; reassigning them through
+    `mine(worker)`; a last-resort far pick for `mine` with no field, behind an option; and releasing every worker once
+    no townhall is left as a rule of its own. The owner found those rules growing complicated.
 
 ## Next
 
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
   as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
   extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
-- **Speed mining, in NachOS**: the demo bot speed mining (#202), then `mine(worker, fields)` and the release of a base's
-  workers once its townhall is gone (above), in a pull request of their own.
+- **Speed mining, in NachOS**: the demo bot speed mining (#202), then, in a pull request of their own, `mine(worker,
+  fields)` and speed mining only at bases with a finished townhall of this player's, releasing the workers of one whose
+  townhall is gone (above).
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:
