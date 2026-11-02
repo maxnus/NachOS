@@ -969,15 +969,25 @@ Keep this file current: when a step is done, say so here in the same pull reques
     townhall's death or lift only, and keeping workers at a base that never had one; reassigning them through
     `mine(worker)`; a last-resort far pick for `mine` with no field, behind an option; and releasing every worker once
     no townhall is left as a rule of its own. The owner found those rules growing complicated.
+  - `mine` sends the worker to its field at once (the owner, 2026-11-02, planning AvocaDOS's move onto speed mining,
+    reversing #201's call that `mine` sends no worker by itself): a gather at the field, behind a return of any cargo,
+    unless the worker mines minerals already, builds, is burrowed or cannot be ordered. Chosen over each bot sending
+    the order itself on a hand-over, as AvocaDOS would have had to for workers an army or a repair hands back, which
+    walked on to their order's end before mining. The return is forced, since a worker returning vespene shows one
+    already; a gather queued behind a return given waits for the cargo, and queued behind the return a worker shows of
+    itself, it takes its place (in game). A worker returning vespene no longer counts as mining, which held it while it
+    went back to its geyser. Built in #203.
 
 ## Next
 
-- **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
-  as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
-  extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
-- **Speed mining, in NachOS** (#202): the demo bot speed mining, and speed mining only at bases with a finished
-  townhall of this player's (above). To run in game before it merges: the demo bot's integration test and its 21 games,
-  and an orbital or planetary fortress morph keeping its base's workers.
+- **Extensions** (above), a pull request at a time: `UnitDict` (#200), the extension mechanism with speed mining as
+  its first extension (#201), speed mining only at bases with a townhall of this player's (#202), and `mine` sending
+  the worker (#203); then AvocaDOS moves its mining onto the extension (its `RoleManager` is on `UnitDict` since
+  AvocaDOS #75), and its `docs/plans/nachOS-plan.md` records #199 to #203. Planned with the owner (2026-11-02): an
+  AvocaDOS expansion keeps no map of its miners and reads speed mining's, a worker speed mining lets go is found by its
+  mining role and handed out again, and speed mining picks each field among the base's.
+- #202's checks in game, not run before it merged: the demo bot's integration test and its 21 games, and an orbital or
+  planetary fortress morph keeping its base's workers, which AvocaDOS's smoke games, morphing orbitals, will show.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

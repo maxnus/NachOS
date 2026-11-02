@@ -12,7 +12,7 @@ from sc2nachos.events import EventPriority, GameStartEvent, TurnEvent
 from sc2nachos.extensions.speed_mining import SpeedMining
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
-from sc2nachos.ids.raw import RawAbilityId
+from sc2nachos.ids.raw import RawAbilityId, RawBuffId
 from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race
 from sc2nachos.units import Alliance, OwnUnit, Unit
@@ -78,6 +78,14 @@ def _reported_scv(
     buffs = [BuffId.CARRYING_MINERALS] if carrying else []
     return make_unit(
         tag, UnitTypeId.SCV, at=at, build_progress=1.0, orders=orders, buff_ids=buffs, radius=0.375, **fields
+    )
+
+
+def _scv_carrying_vespene(at: tuple[float, float], *orders: raw_pb2.UnitOrder) -> raw_pb2.Unit:
+    """This player's SCV at `at`, carrying out `orders`, carrying vespene, with a worker's radius."""
+    vespene = [RawBuffId.CarryHarvestableVespeneGeyserGas]
+    return make_unit(
+        _HANDED_SCV, UnitTypeId.SCV, at=at, build_progress=1.0, orders=orders, buff_ids=vespene, radius=0.375
     )
 
 
@@ -185,8 +193,40 @@ class TestATrip:
         assert _orders_sent([*_pylon_main(), on_its_way]) == [[(AbilityId.GATHER, _MINED_FIELD, False)]]
 
 
+class TestSendingAtOnce:
+    """`mine` sends a worker to its field in the turn it is handed over, unless it mines minerals already."""
+
+    def test_a_worker_on_another_order_is_sent_to_gather_once(self) -> None:
+        """The next turn's orders may not show the gather yet; nothing goes out again."""
+        moving = [*_pylon_main(), _reported_scv((20.0, 30.0), _move_order(Point((10.0, 40.0))))]
+        assert _orders_sent(moving, moving) == [[(AbilityId.GATHER, _MINED_FIELD, False)], []]
+
+    @pytest.mark.parametrize(
+        "carrying",
+        [
+            _reported_scv((20.0, 30.0), _move_order(Point((10.0, 40.0))), carrying=True),
+            _scv_carrying_vespene((20.0, 30.0), raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Return_SCV)),
+        ],
+        ids=["minerals, on a move", "vespene, on its way back"],
+    )
+    def test_a_worker_with_cargo_returns_it_with_the_gather_queued_behind(self, carrying: raw_pb2.Unit) -> None:
+        """The return goes out to a worker returning vespene too, which shows a return already, aimed at nothing as the
+        game may report it."""
+        assert _orders_sent([*_pylon_main(), carrying]) == [
+            [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _MINED_FIELD, True)]
+        ]
+
+    def test_nothing_is_sent_to_a_worker_mine_finds_no_room_for(self) -> None:
+        def hand_over_at_a_base_being_built(api: Api[SpeedMining]) -> None:
+            api.extensions.mine(_own_unit_of_tag(api, _HANDED_SCV), _unit_of_tag(api, _MINED_FIELD))
+
+        units = [*_pylon_main(command_center_progress=0.5), _reported_scv((25.0, 30.0))]
+        assert _orders_sent(units, assigned=(), started=hand_over_at_a_base_being_built) == [[]]
+
+
 class TestWhatIsLeftAlone:
     def test_a_worker_doing_anything_else_until_it_is_idle(self) -> None:
+        """Handed over while it builds, it is sent nothing until it is idle."""
         building = raw_pb2.UnitOrder(ability_id=RawAbilityId.TerranBuild_SupplyDepot)
         building.target_world_space_pos.x, building.target_world_space_pos.y = 30.0, 34.0
         turns = [[*_pylon_main(), _reported_scv((28.0, 30.0), building)], [*_pylon_main(), _reported_scv((30.0, 33.0))]]
@@ -211,12 +251,21 @@ class TestWhatIsLeftAlone:
         drone = make_unit(_HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True)
         assert _orders_sent([*_pylon_main(), drone]) == [[]]
 
+    def test_a_worker_returning_vespene(self) -> None:
+        """Sent to collect vespene after it was handed over: returning minerals there, it would be given the move."""
+        mining = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())]
+        returning_vespene = [*_pylon_main(), _scv_carrying_vespene((29.125, 24.5), _return_order())]
+        assert _orders_sent(mining, returning_vespene) == [[], []]
+
     def test_a_released_worker(self) -> None:
+        """It gathers at another field, where speed mining would send it back to its own."""
+
         def release(api: Api[SpeedMining]) -> None:
             worker = _own_unit_of_tag(api, _HANDED_SCV)
             api.extensions.release(worker)
 
-        assert _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0))], started=release) == [[]]
+        elsewhere = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order(_OTHER_FIELD))]
+        assert _orders_sent(elsewhere, started=release) == [[]]
 
     def test_a_worker_whose_field_is_mined_out_is_let_go(self) -> None:
         held: list[int] = []
@@ -401,10 +450,12 @@ class TestAttacking:
         ]
 
     def test_a_bots_own_attack_is_left_alone(self) -> None:
+        """Given after the worker was handed over, which sends a worker on an attack to its field."""
         attack = raw_pb2.UnitOrder(ability_id=RawAbilityId.attack_Attack, target_unit_tag=30)
+        mining = _reported_scv((26.0, 30.0), _gather_order(), facing=0.0, weapon_cooldown=20.0)
         attacking = _reported_scv((26.0, 30.0), attack, facing=0.0, weapon_cooldown=20.0)
         zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
-        assert _orders_sent([*_pylon_main(), attacking, zergling]) == [[]]
+        assert _orders_sent([*_pylon_main(), mining, zergling], [*_pylon_main(), attacking, zergling]) == [[], []]
 
 
 class TestHandingOver:
