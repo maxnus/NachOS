@@ -118,10 +118,9 @@ class ThreatMap:
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
   unit of the bot's slowed by Concussive Shells or matrixed, and an enemy storm. It adds what it reads with
-  `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed count it. It reads the
-  observation the game started on as it is built, each later one on `TurnStartEvent`, and the one the game ended on,
-  which gets no turn, on `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of the bot's. It has no
-  options and nothing to call:
+  `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed count it. It reads each
+  turn's observation on `TurnStartEvent`, and the one the game ended on, which gets no turn, on `GameEndEvent`, both
+  at `EventPriority.HIGHEST`, before any handler of the bot's. It has no options and nothing to call:
 
   ```python
   class Extensions:

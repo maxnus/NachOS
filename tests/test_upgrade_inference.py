@@ -9,7 +9,7 @@ import pytest
 from s2clientprotocol import common_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NoEnemyError
-from sc2nachos.events import EventPriority, GameEndEvent, GameStartEvent, TurnStartEvent
+from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference import UpgradeInference
 from sc2nachos.gamedata import GameData
 from sc2nachos.geometry import Point
@@ -181,14 +181,14 @@ class TestWhenAGameLearnsIt:
         api = _api_after_playing((_BURROWED_ZERGLING, marine), with_inference=False)
         assert api.enemy.upgrades == {UpgradeId.TERRAN_INFANTRY_WEAPONS_1}
 
-    def test_what_the_first_observation_shows_is_known_as_the_game_starts(self) -> None:
-        known_at_start: list[frozenset[UpgradeId]] = []
+    def test_what_the_first_observation_shows_is_known_on_the_first_turn(self) -> None:
+        known_each_turn: list[frozenset[UpgradeId]] = []
 
         def watch(api: Api[Any]) -> None:
-            api.on(GameStartEvent)(lambda _: known_at_start.append(api.enemy.upgrades))
+            api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(lambda _: known_each_turn.append(api.enemy.upgrades))
 
         _api_after_playing((_BURROWED_ZERGLING,), started=watch)
-        assert known_at_start == [{UpgradeId.BURROW}]
+        assert known_each_turn == [{UpgradeId.BURROW}]
 
     def test_what_a_turn_shows_is_known_to_the_bots_first_handler_of_it(self) -> None:
         known_each_turn: list[frozenset[UpgradeId]] = []

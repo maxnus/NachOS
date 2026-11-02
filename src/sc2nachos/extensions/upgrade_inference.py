@@ -71,9 +71,9 @@ class UpgradeInference:
     api = Api(extensions=Extensions)
     ```
 
-    It reads the observation the game started on as it is built, each later one on its `TurnStartEvent`, and the one
-    the game ended on, which gets no turn, on `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of
-    the bot's, so every handler sees what it read:
+    It reads each turn's observation on its `TurnStartEvent`, and the one the game ended on, which gets no turn, on
+    `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of the bot's, so every handler sees what it
+    read:
 
     - An enemy unit of a type nothing makes without an upgrade, in sight or remembered: a burrowed unit shows Burrow,
       but a lurker, a widow mine or a creep tumor, which burrow without it, and a warp gate shows Warp Gate.
@@ -94,13 +94,12 @@ class UpgradeInference:
     __slots__ = ("_api",)
 
     def __init__(self, api: Api[object]) -> None:
-        """Upgrade inference for the enemy of `api`'s game, from the observation the game started on."""
+        """Upgrade inference for the enemy of `api`'s game, from its first turn."""
         self._api = api
         try:
             _ = api.enemy
         except NoEnemyError:
             return
-        self._assume_the_upgrades_shown()
         api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
         api.on(GameEndEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
 
