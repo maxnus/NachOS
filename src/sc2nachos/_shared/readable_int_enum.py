@@ -3,7 +3,7 @@
 from enum import IntEnum
 from typing import Self, cast
 
-from sc2nachos._errors import NachOSError
+from sc2nachos._shared.errors import NachOSError
 
 
 class UnknownValueError(NachOSError, ValueError):

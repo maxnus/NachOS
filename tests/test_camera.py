@@ -14,9 +14,9 @@ from sc2nachos.events import TurnEvent
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, Recording, Status, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.testing import MadeUpUnits, UnitReport
 from support import (
     FakeTransport,

@@ -11,7 +11,7 @@ import typing
 from collections.abc import Callable, Iterator
 
 import sc2nachos
-from sc2nachos import enemy, match
+from sc2nachos import match
 
 # A name with a leading underscore, other than an attribute in a dotted path.
 _PRIVATE_NAME = re.compile(r"(?<![\w.])_[A-Za-z]\w*")
@@ -38,7 +38,7 @@ def test_what_starts_a_game_is_exported_from_the_top_level() -> None:
     assert sc2nachos.Difficulty is match.Difficulty
     assert sc2nachos.AIBuild is match.AIBuild
     assert sc2nachos.Result is match.Result
-    assert sc2nachos.UpgradeInference is enemy.UpgradeInference
+    assert sc2nachos.UpgradeInference is match.UpgradeInference
     assert set(sc2nachos.__all__) >= {"Api", "run_local", "run_ladder", "Race", "Computer", "Difficulty"}
 
 

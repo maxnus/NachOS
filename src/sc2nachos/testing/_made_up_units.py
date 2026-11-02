@@ -5,9 +5,8 @@ from typing import Any
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.enemy import Enemy
 from sc2nachos.gamedata import GameData
-from sc2nachos.match import Race
+from sc2nachos.match import Enemy, Race
 from sc2nachos.testing._shipped_game_data import load_game_data
 from sc2nachos.testing._unit_report import ENEMY_PLAYER_ID, UnitReport
 from sc2nachos.units import Unit, Units

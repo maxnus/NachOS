@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId

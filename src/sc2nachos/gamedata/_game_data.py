@@ -7,7 +7,6 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
@@ -22,6 +21,7 @@ from sc2nachos.gamedata._techtree import (
 from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
 from sc2nachos.gamedata._upgrade_data import UpgradeData
+from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId
 
 if TYPE_CHECKING:

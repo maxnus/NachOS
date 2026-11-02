@@ -16,9 +16,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
-from sc2nachos.launch import GameProcess, Installation, MapFile, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, GamePorts, PortPair, WebSocketTransport
+from sc2nachos.run import GameProcess, Installation, MapFile, free_port
 
 MAP = "PylonAIE_v4"
 

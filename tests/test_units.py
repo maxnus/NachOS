@@ -9,15 +9,15 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, GameTime, NachOSError
-from sc2nachos.constants import STEPS_PER_SECOND
 from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamedata._repair_steps import REPAIR_STEPS_EXCEPTIONS
+from sc2nachos.gametime import STEPS_PER_SECOND
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, Status, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.units import (
     Alliance,
     CloakState,

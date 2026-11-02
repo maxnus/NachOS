@@ -39,8 +39,8 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.ids.raw import RawEffectId, RawUnitTypeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
+from sc2nachos.run import Installation
 
 _OPEN_GROUND_HALF_WIDTH = 6
 # A unit first listed this near the site after the set-off is the trial's, and followed wherever it goes.

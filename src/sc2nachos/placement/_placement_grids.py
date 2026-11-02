@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Self, final
 
-from sc2nachos._checks import check_game_time
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import CreepRequirement
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
 from sc2nachos.geometry import Grid, Point, Rectangle
 from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.placement._build_sites import _BuildSites, _placement_key, _standing_centers

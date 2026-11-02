@@ -18,9 +18,9 @@ from sc2nachos.gamedata._techtree import (
 )
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.units import Unit
 from support import TOOLS, RealGame, load_tool
 

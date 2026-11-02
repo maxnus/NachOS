@@ -1,6 +1,6 @@
 """Errors raised when reading a unit the game has no answer for."""
 
-from sc2nachos._errors import NachOSError
+from sc2nachos._shared.errors import NachOSError
 
 
 class NotReportedError(NachOSError, LookupError):

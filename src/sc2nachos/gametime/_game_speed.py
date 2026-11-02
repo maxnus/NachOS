@@ -1,4 +1,4 @@
-"""Constants of the game itself."""
+"""The game's speeds, in steps."""
 
 # Steps in one second at the game's Normal speed. The game gives some times, such as a weapon's cooldown, in Normal
 # seconds.
@@ -10,8 +10,3 @@ STEPS_PER_SECOND = 22.4
 SECONDS_PER_STEP = 1 / STEPS_PER_SECOND
 # Converts a speed the game gives per Normal second to per Faster second, the speed games are played at.
 FASTER_PER_NORMAL_SPEED = STEPS_PER_SECOND / STEPS_PER_NORMAL_SECOND
-
-
-# The game truncates a point it is given to this fraction of a tile: a move to x = 157.123456 is carried out and
-# reported at 157.123291 (in game).
-POINT_PRECISION = 1 / 4096

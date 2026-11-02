@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import ClassVar, overload
 
-from sc2nachos._rounding import rounded_half_up
-from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_NORMAL_SECOND
+from sc2nachos._shared.rounding import rounded_half_up
+from sc2nachos.gametime._game_speed import SECONDS_PER_STEP, STEPS_PER_NORMAL_SECOND
 
 # 22.4 steps a second as whole numbers, 112 steps in 5 seconds. Multiplying by the one and dividing by the other is
 # exact up to the division, which rounds once, so a whole number of steps comes out whole; multiplying by the stored
@@ -231,3 +231,9 @@ GameTime.INFINITE = GameTime(steps=math.inf)
 # call. `numbers.Real` catches numpy scalars, which subclass neither `int` nor `float`; it comes last, being the
 # slowest.
 _SCALAR_TYPES = (int, float, numbers.Real)
+
+
+def check_game_time(value: object, argument_name: str) -> None:
+    """Raise `TypeError` unless `value`, given as `argument_name`, is a `GameTime`."""
+    if not isinstance(value, GameTime):
+        raise TypeError(f"{argument_name} is a GameTime, not {value!r}")

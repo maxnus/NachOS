@@ -7,7 +7,7 @@ from typing import ClassVar, final
 
 from loguru import logger
 
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race
 
 

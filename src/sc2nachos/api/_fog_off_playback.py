@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import common_pb2
 
-    from sc2nachos.enemy import Enemy
     from sc2nachos.gamedata import GameData
+    from sc2nachos.match import Enemy
 
 _VISIBLE_DISPLAY = raw_pb2.DisplayType.Visible
 _HIDDEN_DISPLAY = raw_pb2.DisplayType.Hidden

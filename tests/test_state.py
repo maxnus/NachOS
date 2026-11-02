@@ -14,9 +14,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import AbilityId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawEffectId, RawUpgradeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, ProtocolError, Status, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import (
     AutocastToggle,
     CameraMove,

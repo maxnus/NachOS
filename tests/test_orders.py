@@ -18,10 +18,10 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
 from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
 from sc2nachos.units import Alliance, OwnUnit, UnitType
 from sc2nachos.units._tracking import _Tracker

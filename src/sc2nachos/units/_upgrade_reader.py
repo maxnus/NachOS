@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from sc2nachos.gamedata import UpgradeType
 from sc2nachos.ids import BuffId, EffectId, UnitTypeId, UpgradeId
-from sc2nachos.units import Alliance, Visibility
+from sc2nachos.units._values import Alliance, Visibility
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

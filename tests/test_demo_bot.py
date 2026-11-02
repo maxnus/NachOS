@@ -7,7 +7,7 @@ from types import ModuleType
 import pytest
 
 from sc2nachos import Api, Computer, Difficulty, GameTime, Race, Result, run_local
-from sc2nachos.launch import MapFile, MapNotFoundError
+from sc2nachos.run import MapFile, MapNotFoundError
 
 _DEMO_BOT = Path(__file__).parent.parent / "examples" / "demo_bot.py"
 

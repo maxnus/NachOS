@@ -6,10 +6,9 @@ from s2clientprotocol import error_pb2, sc2api_pb2
 from sc2nachos import Api, GameTime, NotPlayingError
 from sc2nachos.events import AnyChatEvent, TurnEvent
 from sc2nachos.ids import AbilityId
-from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
 from sc2nachos.protocol import Client, Status
-from sc2nachos.run import run_local
+from sc2nachos.run import MapFile, MapNotFoundError, run_local
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
 _BROADCAST = sc2api_pb2.ActionChat.Broadcast

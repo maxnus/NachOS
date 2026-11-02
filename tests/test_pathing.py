@@ -12,10 +12,10 @@ from s2clientprotocol import data_pb2, query_pb2, sc2api_pb2
 from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.pathing import Pathing
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.testing import MadeUpUnits, UnitReport
 from sc2nachos.units import Alliance, Unit, Units, Visibility
 from support import (

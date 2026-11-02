@@ -5,7 +5,7 @@ from enum import nonmember
 from types import MappingProxyType
 from typing import Self, cast
 
-from sc2nachos._enum import ReadableIntEnum, UnknownValueError
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum, UnknownValueError
 from sc2nachos.ids import raw
 
 

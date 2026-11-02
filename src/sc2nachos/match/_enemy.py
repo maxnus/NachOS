@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.match import Race
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
+from sc2nachos.match._match import Race
 
 if TYPE_CHECKING:
     from sc2nachos.ids import UpgradeId

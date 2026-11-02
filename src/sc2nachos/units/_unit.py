@@ -7,11 +7,10 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
 from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
+from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race

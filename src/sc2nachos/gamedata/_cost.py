@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gametime import GameTime
 
 
 @final

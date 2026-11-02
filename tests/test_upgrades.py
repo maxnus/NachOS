@@ -10,8 +10,6 @@ import pytest
 from s2clientprotocol import common_pb2, debug_pb2, raw_pb2
 
 from sc2nachos import Api
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.enemy import UpgradeInference
 from sc2nachos.gamedata import (
     Attribute,
     GameData,
@@ -22,16 +20,16 @@ from sc2nachos.gamedata import (
     Weapon,
     WeaponUpgrade,
 )
+from sc2nachos.gametime import FASTER_PER_NORMAL_SPEED
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawBuffId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
-from sc2nachos.match import Computer, Difficulty, Participant, Race
+from sc2nachos.match import Computer, Difficulty, Participant, Race, UpgradeInference
 from sc2nachos.protocol import Client, PlaybackTransport, Recording, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import Effect
-from sc2nachos.units import Alliance, Unit, Visibility
+from sc2nachos.units import Alliance, Unit, UpgradeReader, Visibility
 from sc2nachos.units._tracking import _Tracker
-from sc2nachos.upgrade_reader import UpgradeReader
 from support import RealGame, load_tool, make_enemy, make_observation, make_unit, require_enemy
 
 _REPOSITORY_ROOT = Path(__file__).parents[1]

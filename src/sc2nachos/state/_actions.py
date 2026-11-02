@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Self, final
 
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.state._action_result import ActionResult

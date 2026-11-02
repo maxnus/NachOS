@@ -14,10 +14,9 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos import GameTime
-from sc2nachos._game import _chat_event_types_by_player, _Game
+from sc2nachos.api._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     EnemyUnitCloakChangedEvent,
@@ -60,11 +59,10 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.match import Race, Result
+from sc2nachos.match import Enemy, Player, Race, Result, UpgradeInference
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
-from sc2nachos.player import Player
 from sc2nachos.protocol import Client, Exchange, Recording, RecordingTransport, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility

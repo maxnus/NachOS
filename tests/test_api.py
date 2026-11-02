@@ -31,7 +31,6 @@ from sc2nachos.events import (
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
-from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import (
     Client,
@@ -42,6 +41,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
+from sc2nachos.run import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.state import ActionResult, Research
 from sc2nachos.units import Alliance, UnitType
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
@@ -908,7 +908,7 @@ class TestRunningOnALadder:
         def refuse_to_open(*_: object) -> None:
             raise PermissionError("the file cannot be opened")
 
-        monkeypatch.setattr("sc2nachos.run.RecordingTransport", refuse_to_open)
+        monkeypatch.setattr("sc2nachos.run._runners.RecordingTransport", refuse_to_open)
         with pytest.raises(PermissionError):
             run_ladder(Api(), race=Race.TERRAN, host="127.0.0.1", port=8000, record_to=tmp_path / "game.sc2rec")
         assert transport.closed

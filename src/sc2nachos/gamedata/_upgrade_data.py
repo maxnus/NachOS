@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
-from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.game_time import GameTime
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._tech_requirements import TechRequirements
+from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:

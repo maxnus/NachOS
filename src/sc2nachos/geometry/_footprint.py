@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, cast, final
 
 import numpy
 
-from sc2nachos._checks import is_whole_number
-from sc2nachos._rounding import rounded_half_up
+from sc2nachos._shared.checks import is_whole_number
+from sc2nachos._shared.rounding import rounded_half_up
 from sc2nachos.geometry._point import Point
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
 

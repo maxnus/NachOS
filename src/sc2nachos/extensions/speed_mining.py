@@ -9,10 +9,9 @@ from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
-from sc2nachos.constants import POINT_PRECISION
 from sc2nachos.events import EventPriority, TurnEvent
-from sc2nachos.game_time import GameTime
-from sc2nachos.geometry import Circle, Point
+from sc2nachos.gametime import GameTime
+from sc2nachos.geometry import POINT_PRECISION, Circle, Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.units import OwnUnit, Unit, UnitDict, Units, UnitType
 

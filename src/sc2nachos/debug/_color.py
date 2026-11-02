@@ -4,7 +4,7 @@ from enum import Enum
 
 from s2clientprotocol import debug_pb2
 
-from sc2nachos._checks import is_whole_number
+from sc2nachos._shared.checks import is_whole_number
 
 type _Rgb = tuple[int, int, int]
 

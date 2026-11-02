@@ -12,7 +12,7 @@ import pytest
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api, run_recording
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.debug import DebugText
 from sc2nachos.events import (
     AnyUnitDiedEvent,
