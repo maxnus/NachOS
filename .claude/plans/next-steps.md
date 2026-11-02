@@ -240,6 +240,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     open, and nothing the API reports sets those plates apart: recorded under "Not understood yet" and left.
 - **The demo bot** (#125, the owner, 2026-10-15), M4's exit gate and the library's example for other developers:
   - It beats `Computer` at `MEDIUM` in all 21 games of the pool's 7 maps against each of the 3 races.
+  - It speed mines since #202 (2026-11-02), handing speed mining every free SCV; the 21 games were not played again
+    with it. An SCV with no field free waits idle where it was trained, which may stop speed mining's move on nearby
+    trips (the owner, review of #202, over walking it out of the way or a plain third gather).
   - It plays Terran, placing through `api.placement`, with no power, which `free_for` does not know yet.
   - It is one file, `examples/demo_bot.py`, run by `run_from_command_line`, so the match workflow can play it.
     `examples/run_game.py` stays the bot that does nothing.
@@ -733,6 +736,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   every type's and group's frozenset of `UnitTypeId`s, for a type with no unit to test, as a structure about to be
   built, over `includes` taking a bare type id too. It was `_type_ids`; nine of AvocaDOS's sets of ids hold exactly a
   group's types (#184).
+- **No `Unit.is_type(group)`** (the owner, review of #202, over adding it for reading more naturally): a type guard on
+  a method narrows its first argument, never the object it is called on (checked with pyright), so `unit.is_type(...)`
+  could not narrow `unit` as `UnitType.X.includes(unit)` does, and would be a second spelling of it.
 - **A unit's type stays a type parameter, and a read only some types have is typed for them** (the owner, 2026-10-29,
   after weighing a class per type, `isinstance(unit, GasBuilding)`, against slice 4's `Unit[UnitType.Refinery]`). A
   class per type would bring `isinstance` and `match`, and members missing where they do not apply. It would also
@@ -939,12 +945,39 @@ Keep this file current: when a step is done, say so here in the same pull reques
     12.1 and 12.9 with 20 enemies among 183 units). `mine(worker)` with no field picks one (the owner's choice): among
     expansions with a finished townhall of this player's, the one nearest the worker with a field of fewer than two
     miners, the nearer half of its fields first, then the nearest to the worker; it returns the field.
+  - The owner's review of #202: where there is no room, at a field the bot names or with none to pick, `mine` returns
+    `None` and leaves the worker as it was (over a bool, which drops the picked field, and over raising, which the demo
+    bot had to catch). It raises `ValueError` only for a unit that is not a worker or a field that is not minerals.
+  - Speed mining without a hand-over, of every worker on a plain gather at a mineral field or a return, was weighed and
+    dropped (the owner, review of #202, over building it, which I had recommended): workers would not stay on their
+    fields, and a bot's own gathers could undo it by accident. `mine` and `release` stay the one way in and out.
+  - Built in #202 (the owner, review of #202, over a pull request after it): speed mining supports no long-distance
+    mining. A worker is held only at a field of a base with a finished townhall of this player's at its center:
+    - `mine(worker, fields)` takes a field, a collection of fields or `None`, and picks only among the fields given at
+      such bases, by the rules for `None`. A field at a base without one gets `None`, as a full field does; `mine`
+      raises `ValueError` only for a unit that is not a worker or a field that is not minerals.
+    - Each turn, speed mining releases every worker it holds at a field whose base has no such townhall any more, dead
+      or lifted, and what the worker does next is the bot's. Since `mine` takes no other field, nothing has to track
+      which bases changed. With no townhall left, every worker is released.
+    - Plain mining at a base without a townhall goes. Speed mining still mines a trip plainly while a unit stands in
+      the way, and sends a worker the game moved back to its own field.
+    - A base still being built is not ready, so `mine` returns `None` there until the townhall finishes; a lifted
+      townhall's workers are handed over again once it lands. A worker released keeps its last orders.
+    - To check in game: an orbital or a planetary fortress morph must not read as the townhall gone.
+
+    Over: named fields at a base without a townhall mined plainly, which the owner first chose; releasing on the
+    townhall's death or lift only, and keeping workers at a base that never had one; reassigning them through
+    `mine(worker)`; a last-resort far pick for `mine` with no field, behind an option; and releasing every worker once
+    no townhall is left as a rule of its own. The owner found those rules growing complicated.
 
 ## Next
 
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
   as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
   extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
+- **Speed mining, in NachOS** (#202): the demo bot speed mining, and speed mining only at bases with a finished
+  townhall of this player's (above). To run in game before it merges: the demo bot's integration test and its 21 games,
+  and an orbital or planetary fortress morph keeping its base's workers.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

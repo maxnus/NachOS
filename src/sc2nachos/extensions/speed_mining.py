@@ -67,8 +67,9 @@ class SpeedMining:
     api = Api(extensions=Extensions)
     ```
 
-    Which worker mines which field stays the bot's: `mine` hands one over, two at a field at most, at a field it picks
-    unless given one, `release` takes it back, and `miners` and `miners_at` read them. On each `TurnEvent`, at
+    Which worker mines which field stays the bot's: `mine` hands one over, two at a field at most, at a field of an
+    expansion with a finished townhall of this player's at its center, which it picks among the fields it is given or
+    among all; `release` takes one back, and `miners` and `miners_at` read them. On each `TurnEvent`, at
     `EventPriority.LOW`, speed mining orders each worker it holds:
 
     - A worker idle, gathering minerals, returning cargo, or on speed mining's own move, is kept mining its field: one
@@ -85,14 +86,14 @@ class SpeedMining:
       (`Unit.has_in_range`), and no more than a step's turn away (`Unit.time_to_face`); the one with least life, among
       several. It goes back to mining once it has fired.
     - Cargo goes back to the townhall standing at the center of the field's expansion: one of this player's, finished.
-      Where there is none, the worker mines with plain gathers and returns. A field two expansions share counts as the
-      first's, by `Api.expansions`, that has such a townhall.
+      A field two expansions share counts as the first's, by `Api.expansions`, that has such a townhall.
     - A worker doing anything else, building, attacking on the bot's order or collecting vespene among them, is left
       alone until it is idle or mining minerals again, and so is a burrowed drone, and one given an order this turn,
       or sent one lately that may not show yet, as `OrderBook.issued_to` reads with `include_sent`. So a miner sent to
       build comes back to its field by itself, and one handed over while it collects vespene stays there until it is
       ordered to gather minerals.
-    - A worker is let go once it or its field is dead.
+    - A worker is let go, its orders left as they are, once it or its field is dead, and once no expansion holding its
+      field has such a townhall any more, as when the townhall dies or lifts off.
 
     Raises `NotPlayingError` if built before the game starts.
     """
@@ -112,10 +113,10 @@ class SpeedMining:
         can hit if `attack_enemies`."""
         self._api = api
         self._attack_enemies = attack_enemies
-        self._field_by_worker: UnitDict[OwnUnit[Any], Unit[UnitType.AnyMineralField]] = UnitDict()
+        self._field_by_worker: UnitDict[OwnUnit[UnitType.Worker], Unit[UnitType.AnyMineralField]] = UnitDict()
         self._miners = MappingProxyType(self._field_by_worker)
         # The workers speed mining has given an attack, with its target, until they have fired.
-        self._target_by_attacker: UnitDict[OwnUnit[Any], Unit[Any]] = UnitDict()
+        self._target_by_attacker: UnitDict[OwnUnit[UnitType.Worker], Unit[Any]] = UnitDict()
         self._trip_end_points_by_field = _trip_end_points_of_each_field(api.expansions)
         # Where the move of any trip ends, so a move toward a field a worker was handed before reads as speed mining's.
         self._every_trip_end_point = frozenset(
@@ -127,48 +128,56 @@ class SpeedMining:
         api.on(TurnEvent, priority=EventPriority.LOW)(self._order_the_miners)
 
     @property
-    def miners(self) -> Mapping[OwnUnit[Any], Unit[UnitType.AnyMineralField]]:
+    def miners(self) -> Mapping[OwnUnit[UnitType.Worker], Unit[UnitType.AnyMineralField]]:
         """Each worker speed mining holds, with the field it mines: a read-only view, so a worker handed over or let go
         shows at once. A dead worker is never among them."""
         return self._miners
 
-    def miners_at(self, field: Unit[UnitType.AnyMineralField]) -> tuple[OwnUnit[Any], ...]:
+    def miners_at(self, field: Unit[UnitType.AnyMineralField]) -> tuple[OwnUnit[UnitType.Worker], ...]:
         """The workers speed mining holds at `field`, in the order they were handed over."""
         return tuple(worker for worker, mined in self._field_by_worker.items() if mined is field)
 
     def mine(
-        self, worker: OwnUnit[Any], field: Unit[UnitType.AnyMineralField] | None = None
-    ) -> Unit[UnitType.AnyMineralField]:
-        """Have `worker` mine `field` until it is released, or either is dead, and return the field. A worker mining
-        another field moves to this one.
+        self,
+        worker: OwnUnit[UnitType.Worker],
+        fields: Unit[UnitType.AnyMineralField] | Iterable[Unit[UnitType.AnyMineralField]] | None = None,
+    ) -> Unit[UnitType.AnyMineralField] | None:
+        """Have `worker` mine a field until it is released, or let go as the class's docstring says, and return the
+        field, or `None` where there is no room. A worker mining another field moves to this one.
 
-        With no `field`, speed mining picks one, among the expansions with a finished townhall of this player's at their
-        center: at the one nearest `worker` with a field fewer than two other workers mine, a field of the nearer half
-        of its fields before one of the farther half, and then the one nearest `worker`.
+        Speed mining picks the field among those of the expansions with a finished townhall of this player's at their
+        center, and only among `fields`, one or several, if given: at the expansion nearest `worker` with a field fewer
+        than two other workers mine, a field of the nearer half of the expansion's fields before one of the farther
+        half, and then the one nearest `worker`. Where there is none, as for a field of an expansion without such a
+        townhall, `mine` returns `None` and leaves `worker` as it was, mining the field it had, if any.
 
-        Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, for one that is not a mineral
-        field, and for a field two other workers mine already: three at a field mine less speed mined than plain. With
-        no `field`, it raises `ValueError` where those expansions have no field with room.
+        Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one of `fields` that is
+        not a mineral field.
         """
         if not UnitType.Worker.includes(worker):
             raise ValueError(f"speed mining orders workers, not {worker!r}")
-        if field is None:
-            field = self._nearest_field_with_room(worker)
-        elif not UnitType.AnyMineralField.includes(field):
-            raise ValueError(f"speed mining mines mineral fields, not {field!r}")
-        elif sum(miner is not worker for miner in self.miners_at(field)) >= _MOST_MINERS_AT_A_FIELD:
-            raise ValueError(
-                f"speed mining mines a field with {_MOST_MINERS_AT_A_FIELD} workers at most, and {field!r} has as many"
-            )
-        self._field_by_worker[worker] = field
+        if fields is None:
+            only_fields = None
+        else:
+            given = (fields,) if isinstance(fields, Unit) else tuple(fields)
+            for field in given:
+                if not UnitType.AnyMineralField.includes(field):
+                    raise ValueError(f"speed mining mines mineral fields, not {field!r}")
+            only_fields = frozenset(given)
+        field = self._nearest_field_with_room(worker, only_fields)
+        if field is not None:
+            self._field_by_worker[worker] = field
         return field
 
-    def release(self, worker: OwnUnit[Any]) -> None:
+    def release(self, worker: OwnUnit[UnitType.Worker]) -> None:
         """Stop ordering `worker`, leaving its orders as they are. Nothing happens for a worker not handed over."""
         self._field_by_worker.pop(worker, None)
 
-    def _nearest_field_with_room(self, worker: OwnUnit[Any]) -> Unit[UnitType.AnyMineralField]:
-        """The field `mine` picks for `worker` given none, as it says. Raises `ValueError` where there is none."""
+    def _nearest_field_with_room(
+        self, worker: OwnUnit[UnitType.Worker], only_fields: frozenset[Unit[UnitType.AnyMineralField]] | None
+    ) -> Unit[UnitType.AnyMineralField] | None:
+        """The field `mine` picks for `worker`, among `only_fields` unless `None`, as it says, or `None` where there is
+        none."""
         miner_counts = Counter(field for miner, field in self._field_by_worker.items() if miner is not worker)
         expansions = sorted(self._api.expansions, key=lambda expansion: worker.distance_to(expansion.center))
         for expansion in expansions:
@@ -179,25 +188,23 @@ class SpeedMining:
             with_room = [
                 (index >= nearer_half, worker.distance_to(field), field)
                 for index, field in enumerate(fields)
-                if miner_counts[field] < _MOST_MINERS_AT_A_FIELD
+                if miner_counts[field] < _MOST_MINERS_AT_A_FIELD and (only_fields is None or field in only_fields)
             ]
             if with_room:
                 return min(with_room, key=lambda candidate: candidate[:2])[2]
-        raise ValueError(
-            f"speed mining has no field for {worker!r}: no expansion with a finished townhall of this player's has a "
-            f"field fewer than {_MOST_MINERS_AT_A_FIELD} workers mine"
-        )
+        return None
 
     def _order_the_miners(self, _: TurnEvent) -> None:
         """Order each worker held, field by field, as the class's docstring says."""
-        workers_by_field: dict[Unit[Any], list[OwnUnit[Any]]] = {}
+        workers_by_field: dict[Unit[Any], list[OwnUnit[UnitType.Worker]]] = {}
         for worker, field in self._field_by_worker.items():
             workers_by_field.setdefault(field, []).append(worker)
         townhall_by_center: dict[Point, Unit[Any] | None] = {}
         units_in_the_way: Units[Unit[Any]] | None = None
         enemies_to_attack: Units[Unit[Any]] | None = None
         for field, workers in workers_by_field.items():
-            if field.is_dead:
+            speed_mined = None if field.is_dead else self._speed_mined_trip_end_points(field, townhall_by_center)
+            if speed_mined is None:
                 for worker in workers:
                     del self._field_by_worker[worker]
                 continue
@@ -210,10 +217,6 @@ class SpeedMining:
                     continue
             else:
                 miners = free_workers
-            if (speed_mined := self._speed_mined_trip_end_points(field, townhall_by_center)) is None:
-                for worker in miners:
-                    self._mine_plainly(worker, field)
-                continue
             trip_end_points, townhall = speed_mined
             if units_in_the_way is None:
                 units_in_the_way = self._units_in_the_way_of_a_move()
@@ -225,7 +228,7 @@ class SpeedMining:
                 else:
                     self._speed_mine(worker, field, townhall, trip_end_points.gather_point, near_the_gather_point)
 
-    def _is_left_alone(self, worker: OwnUnit[Any]) -> bool:
+    def _is_left_alone(self, worker: OwnUnit[UnitType.Worker]) -> bool:
         """Whether speed mining leaves `worker` alone this turn: not orderable, burrowed, given an order lately, or
         doing anything but mining or attacking on speed mining's order."""
         if not worker.is_orderable or worker.is_burrowed or self._api.orders.issued_to(worker, include_sent=True):
@@ -233,7 +236,7 @@ class SpeedMining:
         current_order = worker.current_order
         return current_order is not None and not self._is_mining(worker, current_order)
 
-    def _is_mining(self, worker: OwnUnit[Any], order: UnitOrder) -> bool:
+    def _is_mining(self, worker: OwnUnit[UnitType.Worker], order: UnitOrder) -> bool:
         """Whether `order`, the current one of `worker`, is mining or speed mining's: a gather of a mineral field, a
         return of cargo, a move to where one of speed mining's moves ends, or speed mining's attack."""
         match order.ability:
@@ -250,7 +253,7 @@ class SpeedMining:
             case _:
                 return False
 
-    def _attacks(self, worker: OwnUnit[Any], enemies: Units[Unit[Any]]) -> bool:
+    def _attacks(self, worker: OwnUnit[UnitType.Worker], enemies: Units[Unit[Any]]) -> bool:
         """Whether `worker` attacks this turn: it is on speed mining's attack and has yet to fire, or it is given one on
         the weakest of `enemies` it can hit as it stands. Speed mining forgets an attack once the worker has fired."""
         ready = worker.weapon_cooldown <= _MOST_COOLDOWN_TO_ATTACK
@@ -302,7 +305,7 @@ class SpeedMining:
             and unit not in field_by_worker
         )
 
-    def _mine_plainly(self, worker: OwnUnit[Any], field: Unit[Any]) -> None:
+    def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[Any]) -> None:
         """Keep `worker` mining `field` with a plain gather, or returning its cargo."""
         order_book = self._api.orders
         current_order = worker.current_order
@@ -314,7 +317,7 @@ class SpeedMining:
 
     def _speed_mine(
         self,
-        worker: OwnUnit[Any],
+        worker: OwnUnit[UnitType.Worker],
         field: Unit[Any],
         townhall: Unit[Any],
         trip_end: Point,
@@ -400,7 +403,7 @@ def _finished_own_townhall_at_center(expansion: Expansion) -> Unit[Any] | None:
     return townhall
 
 
-def _can_attack(worker: OwnUnit[Any], enemy: Unit[Any]) -> bool:
+def _can_attack(worker: OwnUnit[UnitType.Worker], enemy: Unit[Any]) -> bool:
     """Whether `worker` can hit `enemy` as it stands: in range, and no more than a step's turn away."""
     if not worker.has_in_range(enemy):
         return False
