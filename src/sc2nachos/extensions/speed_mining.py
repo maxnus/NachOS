@@ -148,8 +148,8 @@ class SpeedMining:
         Speed mining picks the field among those of the expansions with a finished townhall of this player's at their
         center, and only among `fields`, one or several, if given: at the expansion nearest `worker` with a field fewer
         than two other workers mine, a field of the nearer half of the expansion's fields before one of the farther
-        half, and then the one nearest `worker`. Where there is none, a field at an expansion without such a townhall
-        included, `mine` returns `None` and leaves `worker` as it was, mining the field it had, if any.
+        half, and then the one nearest `worker`. Where there is none, as for a field of an expansion without such a
+        townhall, `mine` returns `None` and leaves `worker` as it was, mining the field it had, if any.
 
         Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one of `fields` that is
         not a mineral field.
