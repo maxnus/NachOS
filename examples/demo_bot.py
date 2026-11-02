@@ -1,5 +1,5 @@
-"""A Terran bot written with NachOS alone: it trains SCVs, builds supply depots, barracks and command centers, and
-attacks with marines.
+"""A Terran bot written with NachOS alone: it trains SCVs, which speed mine, builds supply depots, barracks and command
+centers, and attacks with marines.
 
     uv run python examples/demo_bot.py --ComputerRace ZERG --ComputerDifficulty MEDIUM --Map PylonAIE_v4
 
@@ -8,16 +8,26 @@ It takes the options of `run_from_command_line`, so the match workflow can play 
 
 from __future__ import annotations
 
+import contextlib
 import math
 from typing import TYPE_CHECKING, Any
 
 from sc2nachos import AbilityId, Api, GameTime, OwnUnit, Race, UnitType, UnitTypeId, run_from_command_line
 from sc2nachos.events import EventPriority, OwnConstructionFinishedEvent, TurnEvent
+from sc2nachos.extensions.speed_mining import SpeedMining
 
 if TYPE_CHECKING:
-    from sc2nachos import Expansion, Point, Unit, Units
+    from sc2nachos import Expansion, Point, Units
 
-api = Api()
+
+class Extensions:
+    """The demo bot's extensions."""
+
+    def __init__(self, api: Api) -> None:
+        self.speed_mining = SpeedMining(api)
+
+
+api = Api(extensions=Extensions)
 
 MAX_TOWNHALLS = 4
 MAX_WORKERS = 66
@@ -32,8 +42,7 @@ DEFEND_WITHIN = 15.0
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what the orders NachOS holds and this turn's orders will cost
-    once they go out."""
+    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
 
     def __init__(self) -> None:
         pending_cost = api.orders.pending_cost
@@ -80,77 +89,27 @@ def train_workers(budget: Budget) -> None:
             count += 1
 
 
-# At a low priority, so it runs after `macro`, whose builders `issued_to` then shows.
+# At a low priority, so it runs after `macro`, whose builders `_free_scvs` then leaves out.
 @api.on(TurnEvent, min_interval=GameTime(steps=8), priority=EventPriority.LOW)
-def send_idle_workers_to_mine(event: TurnEvent) -> None:
-    """Send each idle SCV that has not been ordered this turn to mine at the townhall with the most room."""
-    for scv in api.units.own.workers.idle:
-        if api.orders.issued_to(scv, include_sent=True):
-            continue
-        field = _mineral_field_with_room(scv.position)
-        if field is not None:
-            api.orders.issue(scv, AbilityId.GATHER, target=field)
-
-
-@api.on(TurnEvent, min_interval=GameTime(steps=64), priority=EventPriority.LOW)
-def balance_workers(event: TurnEvent) -> None:
-    """Move SCVs from a townhall with more than it needs to one with room."""
-    for townhall in api.units.own.townhalls.complete:
-        extra = townhall.assigned_harvesters - townhall.ideal_harvesters
-        if extra <= 0:
-            continue
-        miners = _free_scvs().within(10, of=townhall)
-        for scv in miners.closest_n_to(extra, townhall.position):
-            field = _mineral_field_with_room(scv.position)
-            if field is not None and field.distance_to(townhall) > 10:
-                api.orders.issue(scv, AbilityId.GATHER, target=field)
-
-
-def _mineral_field_with_room(near: Point) -> Unit[UnitType.AnyMineralField] | None:
-    """The mineral field nearest `near` at the townhall nearest it that needs more SCVs, or at the nearest one at
-    all."""
-    bases = api.units.own.townhalls.complete
-    if not bases:
-        return None
-    with_room = bases.filter(lambda townhall: townhall.assigned_harvesters < townhall.ideal_harvesters)
-    base = (with_room or bases).closest_to(near)
-    expansion = next((expansion for expansion in api.expansions if expansion.townhall is base), None)
-    if expansion is None:
-        return None
-    fields = expansion.mineral_fields.filter(lambda field: not field.is_dead)
-    return fields.closest_to(near) if fields else None
-
-
-@api.on(OwnConstructionFinishedEvent.only(UnitType.Townhall))
-def rally_new_workers(event: OwnConstructionFinishedEvent) -> None:
-    """Have a finished townhall send the SCVs it trains to its nearest mineral field."""
-    field = _mineral_field_with_room(event.unit.position)
-    if field is not None:
-        api.orders.issue(event.unit, AbilityId.RALLY_WORKERS, target=field)
-
-
-@api.on(TurnEvent, once=True)
-def rally_first_workers(event: TurnEvent) -> None:
-    """Have the first townhall send the SCVs it trains to its nearest mineral field."""
-    for townhall in api.units.own.townhalls:
-        field = _mineral_field_with_room(townhall.position)
-        if field is not None:
-            api.orders.issue(townhall, AbilityId.RALLY_WORKERS, target=field)
+def hand_scvs_to_speed_mining(event: TurnEvent) -> None:
+    """Hand each free SCV that speed mining does not hold over to it, which picks the SCV's field: at the base nearest
+    it with a field fewer than two SCVs mine. An SCV with no such field waits, to build or for the next base."""
+    speed_mining = api.extensions.speed_mining
+    for scv in _free_scvs():
+        if scv not in speed_mining.miners:
+            with contextlib.suppress(ValueError):
+                speed_mining.mine(scv)
 
 
 # --- Building
 
 
-def _is_scv_free(scv: OwnUnit[Any]) -> bool:
-    """Whether `scv` is mining or idle: not on its way to build or building, and given nothing lately."""
-    if scv.construction is not None or api.orders.issued_to(scv, include_sent=True):
-        return False
-    return all(order.ability in (AbilityId.GATHER, AbilityId.RETURN) for order in scv.orders)
-
-
 def _free_scvs() -> Units[OwnUnit[Any]]:
-    """The SCVs mining or idle."""
-    return api.units.own.workers.filter(_is_scv_free)
+    """The SCVs free to build: neither building nor on their way to build, and given nothing lately. Besides building,
+    this bot's SCVs only mine."""
+    return api.units.own.workers.filter(
+        lambda scv: not scv.is_constructing and not api.orders.issued_to(scv, include_sent=True)
+    )
 
 
 def _build(ability: AbilityId, site: Point) -> bool:
@@ -274,8 +233,7 @@ class Army:
         are left."""
         marines = api.units.own.of_type(UnitType.Marine)
         self._remember_what_is_seen()
-        near_bases = api.units.enemy.within(DEFEND_WITHIN, of=api.units.own.townhalls)
-        threats = near_bases.filter(lambda enemy: not enemy.is_structure)
+        threats = api.units.enemy.non_structures.within(DEFEND_WITHIN, of=api.units.own.townhalls)
         if len(marines) >= ATTACK_WITH:
             self.attacking = True
         elif len(marines) < RETREAT_BELOW:
@@ -287,7 +245,7 @@ class Army:
             api.orders.issue(marines, AbilityId.ATTACK, target=self._attack_target(marines))
         else:
             defense_location = self._defense_location()
-            idle = marines.filter(lambda marine: marine.is_idle and marine.distance_to(defense_location) > 4)
+            idle = marines.idle.beyond(4, of=defense_location)
             if idle:
                 api.orders.issue(idle, AbilityId.ATTACK, target=defense_location)
 
