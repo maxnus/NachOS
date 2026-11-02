@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.ids import UnitTypeId, UpgradeId
-from sc2nachos.units._upgrade_reader import UpgradeReader
+from sc2nachos.units._tracking._upgrade_level_reader import _UpgradeLevelReader
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData, UnitTypeData
@@ -24,13 +24,13 @@ class _UpgradeTracker:
     applied: this player's own for its units, `Enemy.upgrades` for the enemy's, and none for anyone else's or in a
     game with no other player."""
 
-    __slots__ = ("_enemy", "_game_data", "_own", "_reader", "_rows")
+    __slots__ = ("_enemy", "_game_data", "_level_reader", "_own", "_rows")
 
     def __init__(self, game_data: GameData, enemy: Enemy | None) -> None:
         self._game_data = game_data
         self._enemy = enemy
         self._own: frozenset[UpgradeId] = frozenset()
-        self._reader = UpgradeReader(game_data)
+        self._level_reader = _UpgradeLevelReader(game_data)
         # One upgraded row per unit type and set of upgrades held. A bot reads a type's weapons for every unit every
         # step, and a game holds only a few distinct sets of upgrades, so rebuilding them on every read would waste
         # most of the work.
@@ -42,9 +42,9 @@ class _UpgradeTracker:
         return self._own
 
     @property
-    def reader(self) -> UpgradeReader:
-        """Which upgrades each unit type's reported levels stand for."""
-        return self._reader
+    def level_reader(self) -> _UpgradeLevelReader:
+        """Which upgrades the levels the enemy's units report stand for."""
+        return self._level_reader
 
     def update(self, player: raw_pb2.PlayerRaw) -> list[UpgradeId]:
         """Take in this player's upgrades and return the new ones, in order of id.
@@ -88,7 +88,7 @@ class _UpgradeTracker:
         if unit.is_visible:
             return unit._latest_report.shield_upgrade_level
         upgrades = self._of(unit)
-        levels = sum(1 for upgrade in self._reader.shields_of(unit.type_id) if upgrade in upgrades)
+        levels = sum(1 for upgrade in self._level_reader.shields_of(unit.type_id) if upgrade in upgrades)
         if (report := unit._latest_visible_report) is None:
             return levels
         return max(levels, report.shield_upgrade_level)

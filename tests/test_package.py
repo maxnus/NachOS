@@ -38,7 +38,6 @@ def test_what_starts_a_game_is_exported_from_the_top_level() -> None:
     assert sc2nachos.Difficulty is match.Difficulty
     assert sc2nachos.AIBuild is match.AIBuild
     assert sc2nachos.Result is match.Result
-    assert sc2nachos.UpgradeInference is match.UpgradeInference
     assert set(sc2nachos.__all__) >= {"Api", "run_local", "run_ladder", "Race", "Computer", "Difficulty"}
 
 

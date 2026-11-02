@@ -6,7 +6,6 @@ from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_dict import UnitDict
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._units import Units
-from sc2nachos.units._upgrade_reader import UpgradeReader
 from sc2nachos.units._values import (
     Alliance,
     CloakState,
@@ -33,7 +32,6 @@ __all__ = [
     "UnitOrder",
     "Units",
     "UnknownTagError",
-    "UpgradeReader",
     "Visibility",
     "VitalType",
 ]

@@ -68,7 +68,7 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 - **Testing**: `sc2nachos.testing` makes units for a bot's unit tests
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/testing.md)).
 - **Extensions**: features a bot opts into, NachOS's or anyone's, which the api builds once the game starts and holds
-  as `api.extensions`. NachOS's first is speed mining
+  as `api.extensions`. NachOS's own are speed mining and upgrade inference
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md)).
 
 ## Design

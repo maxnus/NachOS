@@ -416,11 +416,10 @@ it.
   and the unit's line: a marine at attack level 2 puts the first two Terran Infantry Weapons into
   `api.enemy.upgrades`, and every enemy marauder then counts them, in the fog as much as in sight. An ultralisk's
   armor is left out, since 2 could be two levels or Chitinous Plating. Anything the game never reports, such as
-  Metabolic Boost, a bot adds with `api.enemy.assume_upgrades` and takes back with `forget_upgrades`; with
-  `Api(enemy_upgrade_inference=UpgradeInference.NONE)` NachOS adds nothing itself. With
-  `UpgradeInference.INTERMEDIATE` it also reads what only an upgrade brings about: an enemy warp gate or burrowed
-  unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a unit of yours slowed by concussive
-  shells or matrixed, and an enemy storm. python-sc2 leaves all of this to the bot, per call.
+  Metabolic Boost, a bot adds with `api.enemy.assume_upgrades` and takes back with `forget_upgrades`. The extension
+  `UpgradeInference` also reads what only an upgrade brings about: an enemy warp gate or burrowed unit, a stimmed,
+  charging, lunging or cloaked enemy, a marine at 55 health, a unit of yours slowed by concussive shells or matrixed,
+  and an enemy storm ([extensions](../extensions.md#nachoss-own)). python-sc2 leaves all of this to the bot, per call.
 - **`unit.armor` is what a unit in sight reports, so it is exact.** For a unit out of sight it is what the enemy is
   known to have.
 - **`unit.shield_armor` is the shields level its owner has**, which python-sc2 writes as

@@ -172,15 +172,15 @@ def _private_names_imported(source: str, package: str) -> list[tuple[str, str]]:
     ]
 
 
-def _private_attributes_off_self(path: Path) -> list[str]:
-    """Each attribute `path` reads with a leading underscore on anything but `self`, dunders aside."""
+def _private_attributes_not_off_self_or_cls(path: Path) -> list[str]:
+    """Each attribute `path` reads with a leading underscore on anything but `self` or `cls`, dunders aside."""
     return [
         node.attr
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Attribute)
         and node.attr.startswith("_")
         and not node.attr.startswith("__")
-        and not (isinstance(node.value, ast.Name) and node.value.id == "self")
+        and not (isinstance(node.value, ast.Name) and node.value.id in ("self", "cls"))
     ]
 
 
@@ -188,7 +188,14 @@ def _private_attributes_off_self(path: Path) -> list[str]:
 def test_an_extension_uses_only_what_nachos_makes_public(path: Path) -> None:
     """So it could move to a package of its own unchanged."""
     assert _private_names_imported(path.read_text(encoding="utf-8"), _package_of(path)) == []
-    assert _private_attributes_off_self(path) == []
+    assert _private_attributes_not_off_self_or_cls(path) == []
+
+
+def test_a_private_attribute_counts_unless_read_off_self_or_cls(tmp_path: Path) -> None:
+    """`cls` reads the extension's own class, as `self` reads its instance."""
+    source = tmp_path / "extension.py"
+    source.write_text("self._held\ncls._shown\napi._game\nUpgradeInference._shown\nself.__slots__\n", encoding="utf-8")
+    assert _private_attributes_not_off_self_or_cls(source) == ["_game", "_shown"]
 
 
 def test_a_relative_import_counts_by_the_module_it_names() -> None:

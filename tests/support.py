@@ -59,7 +59,7 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.match import Enemy, Player, Race, Result, UpgradeInference
+from sc2nachos.match import Enemy, Player, Race, Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
@@ -417,7 +417,6 @@ def played(
     observation: sc2api_pb2.ResponseObservation,
     events: _EventBus,
     *,
-    infer: UpgradeInference = UpgradeInference.NONE,
     player: Player = PLAYER,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
@@ -436,7 +435,6 @@ def played(
             game_data=tracker.game_data,
             player=player,
             enemy=tracker.enemy,
-            enemy_upgrade_inference=infer,
             tracker=tracker,
             orders=order_book,
             observation=observation,
@@ -505,9 +503,8 @@ class RealGame:
     def _observe(self) -> _State:
         response = self.client.observation()
         self.step = response.observation.game_loop
-        basic = UpgradeInference.BASIC
         self.game = played(
-            self.game, self.client, self.map, self.tracker, response, self.events, infer=basic, player=self.own_player
+            self.game, self.client, self.map, self.tracker, response, self.events, player=self.own_player
         )
         return self.game.state
 

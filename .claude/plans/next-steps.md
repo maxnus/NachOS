@@ -970,11 +970,51 @@ Keep this file current: when a step is done, say so here in the same pull reques
     townhall's death or lift only, and keeping workers at a base that never had one; reassigning them through
     `mine(worker)`; a last-resort far pick for `mine` with no field, behind an option; and releasing every worker once
     no townhall is left as a rule of its own. The owner found those rules growing complicated.
+  - `mine` sends the worker to its field at once (the owner, 2026-11-02, planning AvocaDOS's move onto speed mining,
+    reversing #201's call that `mine` sends no worker by itself): a gather at the field, behind a return of any cargo,
+    unless the worker mines minerals already, builds, is burrowed or cannot be ordered. Chosen over each bot sending
+    the order itself on a hand-over, as AvocaDOS would have had to for workers an army or a repair hands back, which
+    walked on to their order's end before mining. The return is forced, since a worker returning vespene shows one
+    already; a gather queued behind a return given waits for the cargo, and queued behind the return a worker shows of
+    itself, it takes its place (in game). A worker returning vespene no longer counts as mining, which held it while it
+    went back to its geyser, and speed mining's own return to a worker it holds queues the gather behind too, so one
+    idle with vespene comes to its field. Nothing is sent again to a worker sent the gather lately. A worker `mine`
+    cannot send, building, burrowed or out of reach of orders, it does not take: it returns `None` and leaves the
+    worker as it was, as for no room, and the bot hands it over once it can be sent (the owner, review of #203, over
+    holding it unsent, which left a worker building a refinery, or inside one, on vespene for good while counted at
+    its field; over sending held workers off vespene, remembering the hand-over, and documenting it). Built in #203.
+  - Two findings of AvocaDOS's smoke round on #203 went into it (the owner, 2026-11-02):
+    - An orbital's morph let its base's workers go: in the step before it finishes, the game reports the new orbital at
+      build progress 0.998. A townhall only a morph makes, an orbital, a planetary fortress, a lair or a hive, now
+      counts as finished as it reads. This answers #202's check in game, which the round's orbitals showed.
+    - Speed mining cost 0.82 ms a step at the median in AvocaDOS's games, where AvocaDOS's own loop cost 0.09, over
+      half of it working out the units near each trip's end for every field each turn. They are now worked out only
+      for a worker on the move or near enough to be given it, once a trip end a turn, and an attack's full check runs
+      only on an enemy within a worker's reach. The workers of a field no longer mined are let go before anything
+      else in the turn, so a worker let go counts among the units in a move's way; before, that hung on the order the
+      fields came in. Played back through AvocaDOS, the orders were the same order for order but for that.
 - **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
   with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
   every one that needs it. In the tables only a level needs another upgrade, the one below it. `Enemy` takes the
   game's data for this.
+- **Upgrade inference is an extension** (the owner, 2026-11-02, one question at a time):
+  - NachOS always reads the attack, armor and shield levels the enemy's units report into `api.enemy.upgrades`: without
+    them an enemy in sight read its armor right and its weapons wrong. `UpgradeInference` the setting and
+    `Api(enemy_upgrade_inference=...)` go, and `NONE` with them, which nothing used.
+  - What only an upgrade can cause, `INTERMEDIATE` before, is the extension
+    `sc2nachos.extensions.upgrade_inference.UpgradeInference` (the owner's name, over `EnemyUpgradeInference`,
+    `UpgradeScouting` and `UpgradeEvidence`). It reads each turn's observation on `TurnStartEvent`, and the one the
+    game ended on on `GameEndEvent`, both at `HIGHEST`, before any handler of the bot's, and adds what it reads with
+    `assume_upgrades`; not the first observation as it is built too, which only a `GameStartEvent` handler would see
+    first and which shows no enemy at the start of a game (the owner, review of #206). What a unit type needs is its
+    `tech_requirements`, plus the warp gate's hand entry.
+  - The level reading left in the core is private, `_UpgradeLevelReader` beside the upgrade tracker, over keeping
+    `sc2nachos.upgrade_reader` public.
+  - The owner's review of #206: the extension's reading is classmethods of it, over module functions, and the
+    public-names test lets an extension read its own private names through `cls` as through `self`; what a unit's
+    type needs is read off `unit.type_data`, over a map built up front (2 us more a turn for 100 enemy units,
+    against 68 us for the whole read); and the demo bot builds it beside speed mining.
 - **The package layout** (the owner, 2026-11-02): only `__init__.py`, and `__about__.py`, which hatch reads the version
   from, stand at the top of `src/sc2nachos`. Everything else is in a package, most named for the `Api` attribute whose
   type it holds, so that a bot finds the type of `api.x` in the package of that name (over keeping `api.py` and `run.py`
@@ -982,12 +1022,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - `api` holds `Api` and its errors, with the private `_Game` and the fog-off playback. `run` holds the runners, their
     command line, and what `launch` held, finding StarCraft II and starting it (the owner, over `launch` as a package of
     its own).
-  - `match` holds the players of a match: `Race`, `Result`, the computer's settings, `Player`, and `Enemy` with
-    `UpgradeInference`. A match's slot, `Participant | Computer`, is a `PlayerSetup`, as the protocol names it, since
-    `Player` is this player.
+  - `match` holds the players of a match: `Race`, `Result`, the computer's settings, `Player` and `Enemy`. A match's
+    slot, `Participant | Computer`, is a `PlayerSetup`, as the protocol names it, since `Player` is this player.
   - `gametime` holds `GameTime`, the game's speeds `constants` held, and `TimeSeries`, which `util` held alone (the
     owner, over keeping `util`). `POINT_PRECISION` went to `geometry`.
-  - `UpgradeReader` went to `units`, not `match`: it reads units and the game's tables, which both import `match`.
   - The private helpers every package shares, the base error, the enums' base, argument checks and rounding, are in
     `_shared`, which imports nothing else of NachOS; so `check_game_time` is beside `GameTime`.
   - `camera`, `pathing` and `placement` stay packages of their own (above), `protocol` stays the transport's own layer,
@@ -995,12 +1033,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Next
 
-- **Extensions** (above), a pull request at a time: `UnitDict` (#200), then the extension mechanism with speed mining
-  as its first extension (#201); then AvocaDOS moves its `RoleManager` onto `UnitDict` and its mining onto the
-  extension, and its `docs/plans/nachOS-plan.md` records #199 to #201.
-- **Speed mining, in NachOS** (#202): the demo bot speed mining, and speed mining only at bases with a finished
-  townhall of this player's (above). To run in game before it merges: the demo bot's integration test and its 21 games,
-  and an orbital or planetary fortress morph keeping its base's workers.
+- **Extensions** (above), a pull request at a time: `UnitDict` (#200), the extension mechanism with speed mining as
+  its first extension (#201), speed mining only at bases with a townhall of this player's (#202), and `mine` sending
+  the worker (#203); then AvocaDOS moves its mining onto the extension (its `RoleManager` is on `UnitDict` since
+  AvocaDOS #75), and its `docs/plans/nachOS-plan.md` records #199 to #203. Planned with the owner (2026-11-02): an
+  AvocaDOS expansion keeps no map of its miners and reads speed mining's, a worker speed mining lets go is found by its
+  mining role and handed out again, and speed mining picks each field among the base's.
+- #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
+  an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:

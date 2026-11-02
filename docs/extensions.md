@@ -105,12 +105,32 @@ class ThreatMap:
 
   Given no field, `mine` picks one at the base nearest the worker, its nearer fields first, and given one field or
   several, `mine(worker, expansion.mineral_fields)` say, it picks among them alike. It mines only at a base with a
-  finished townhall of this player's, and lets a base's workers go, their orders as they are, once its townhall is
-  gone, dead or lifted off: long-distance mining is the bot's to do. A field takes two workers at most: with three,
-  speed mining mined less than plain gathers. Where there is no room, `mine` returns `None` and leaves the worker as
-  it was.
-  A worker the bot sends to build is left alone until it is idle or mining again, and then goes back to its field;
+  finished townhall of this player's, an orbital finishing its morph among them, and lets a base's workers go, their
+  orders as they are, once its townhall is gone, dead or lifted off: long-distance mining is the bot's to do. A field
+  takes two workers at most: with three, speed mining mined less than plain gathers. Where there is no room, `mine`
+  returns `None` and leaves the worker as it was.
+  `mine` sends the worker to its field at once, its cargo handed in first, unless it is mining minerals already, so a
+  worker pulled into a fight or collecting vespene mines from that turn. A worker it cannot send, building, burrowed or
+  inside a refinery, it does not take: `mine` returns `None`, and the bot hands it over once it can be sent. A worker
+  held that the bot later sends to build is left alone until it is idle or mining again, and then goes back to its
+  field;
   `release(worker)` takes one back, and `miners` and `miners_at(field)` read which worker mines which field. A worker
   on a move, unlike one on a gather or a return, can be stopped by other units, so no move is given while a unit stands
   in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to mining, unless speed mining
   is built with `attack_enemies=False`. The API reference says the rest.
+- **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
+  what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
+  itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
+  unit of the bot's slowed by Concussive Shells or matrixed, and an enemy storm. It adds what it reads with
+  `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed count it. It reads each
+  turn's observation on `TurnStartEvent`, and the one the game ended on, which gets no turn, on `GameEndEvent`, both
+  at `EventPriority.HIGHEST`, before any handler of the bot's. It has no options and nothing to call:
+
+  ```python
+  class Extensions:
+      def __init__(self, api: Api) -> None:
+          self.upgrade_inference = UpgradeInference(api)
+  ```
+
+  It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
+  `Unit.buffs` does.
