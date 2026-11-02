@@ -92,7 +92,8 @@ def train_workers(budget: Budget) -> None:
 @api.on(TurnEvent, min_interval=GameTime(steps=8), priority=EventPriority.LOW)
 def hand_scvs_to_speed_mining(event: TurnEvent) -> None:
     """Hand each free SCV that speed mining does not hold over to it, which picks the SCV's field: at the base nearest
-    it with a field fewer than two SCVs mine. An SCV with no such field waits, to build or for the next base."""
+    it with a field fewer than two SCVs mine. An SCV with no such field keeps on as it is, to build or for the next
+    base: idle, or gathering where speed mining let it go, its base's command center gone."""
     speed_mining = api.extensions.speed_mining
     for scv in _free_scvs():
         if scv not in speed_mining.miners:
