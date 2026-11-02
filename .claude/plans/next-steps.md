@@ -974,6 +974,23 @@ Keep this file current: when a step is done, say so here in the same pull reques
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
   every one that needs it. In the tables only a level needs another upgrade, the one below it. `Enemy` takes the
   game's data for this.
+- **Upgrade inference is an extension** (the owner, 2026-11-02, one question at a time):
+  - NachOS always reads the attack, armor and shield levels the enemy's units report into `api.enemy.upgrades`: without
+    them an enemy in sight read its armor right and its weapons wrong. `UpgradeInference` the setting and
+    `Api(enemy_upgrade_inference=...)` go, and `NONE` with them, which nothing used.
+  - What only an upgrade can cause, `INTERMEDIATE` before, is the extension
+    `sc2nachos.extensions.upgrade_inference.UpgradeInference` (the owner's name, over `EnemyUpgradeInference`,
+    `UpgradeScouting` and `UpgradeEvidence`). It reads each turn's observation on `TurnStartEvent`, and the one the
+    game ended on on `GameEndEvent`, both at `HIGHEST`, before any handler of the bot's, and adds what it reads with
+    `assume_upgrades`; not the first observation as it is built too, which only a `GameStartEvent` handler would see
+    first and which shows no enemy at the start of a game (the owner, review of #206). What a unit type needs is its
+    `tech_requirements`, plus the warp gate's hand entry.
+  - The level reading left in the core is private, `_UpgradeLevelReader` beside the upgrade tracker, over keeping
+    `sc2nachos.upgrade_reader` public.
+  - The owner's review of #206: the extension's reading is classmethods of it, over module functions, and the
+    public-names test lets an extension read its own private names through `cls` as through `self`; what a unit's
+    type needs is read off `unit.type_data`, over a map built up front (2 us more a turn for 100 enemy units,
+    against 68 us for the whole read); and the demo bot builds it beside speed mining.
 
 ## Next
 
