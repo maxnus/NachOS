@@ -114,3 +114,19 @@ class ThreatMap:
   on a move, unlike one on a gather or a return, can be stopped by other units, so no move is given while a unit stands
   in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to mining, unless speed mining
   is built with `attack_enemies=False`. The API reference says the rest.
+- **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
+  what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
+  itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
+  unit of the bot's slowed by Concussive Shells or matrixed, and an enemy storm. It adds what it reads with
+  `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed count it. It reads the
+  observation the game started on as it is built, and each later one on `TurnStartEvent` at `EventPriority.HIGHEST`,
+  before any handler of the bot's. It has no options and nothing to call:
+
+  ```python
+  class Extensions:
+      def __init__(self, api: Api) -> None:
+          self.upgrade_inference = UpgradeInference(api)
+  ```
+
+  It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
+  `Unit.buffs` does.

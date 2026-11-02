@@ -11,7 +11,7 @@ from sc2nachos._errors import NachOSError
 from sc2nachos._game import _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy, UpgradeInference
+from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     Event,
     EventFilter,
@@ -82,7 +82,6 @@ class Api[E]:
         self: "Api[None]",
         *,
         extensions: None = None,
-        enemy_upgrade_inference: UpgradeInference = ...,
         time_handlers: bool = ...,
     ) -> None: ...
 
@@ -91,7 +90,6 @@ class Api[E]:
         self,
         *,
         extensions: Callable[["Api[E]"], E],
-        enemy_upgrade_inference: UpgradeInference = ...,
         time_handlers: bool = ...,
     ) -> None: ...
 
@@ -99,19 +97,16 @@ class Api[E]:
         self,
         *,
         extensions: Callable[[Any], object] | None = None,
-        enemy_upgrade_inference: UpgradeInference = UpgradeInference.BASIC,
         time_handlers: bool = False,
     ) -> None:
-        """Build the bot's extensions with `extensions` once the game starts, as `Api.extensions` says; infer as much of
-        `api.enemy.upgrades` as `enemy_upgrade_inference` says; and time every handler call, read as
-        `handler_timings`, if `time_handlers`. This connects to nothing.
+        """Build the bot's extensions with `extensions` once the game starts, as `Api.extensions` says, and time every
+        handler call, read as `handler_timings`, if `time_handlers`. This connects to nothing.
 
         `extensions` builds what `Api.extensions` reads, the bot's own object holding its extensions, from this api:
         its class, whose constructor takes the api and builds each extension.
         """
         self._extensions_builder = extensions
         self._extensions: object = _NOT_BUILT
-        self._enemy_upgrade_inference = enemy_upgrade_inference
         self._events = _EventBus(time_handlers=time_handlers)
         # Everything that comes with the game, from the moment it starts.
         self._game: _Game | None = None
@@ -384,8 +379,8 @@ class Api[E]:
         """The other player, and what is known of it. Raises `NoEnemyError` in a game with no other player, such as a
         mini-game.
 
-        `api.enemy.upgrades` holds the upgrades the bot added with `assume_upgrades` and those enemy units have shown,
-        which NachOS reads as far as `enemy_upgrade_inference` says. Everything an upgrade changes on an enemy unit,
+        `api.enemy.upgrades` holds the upgrade levels enemy units have shown and those the bot or an extension added
+        with `assume_upgrades`, as `Enemy.upgrades` says. Everything an upgrade changes on an enemy unit,
         `Unit.weapons` and `Unit.speed` among them, counts them.
         """
         if (enemy := self._current_game().enemy) is None:
@@ -494,9 +489,7 @@ class Api[E]:
         replay_path = None if save_replay_to is None else Path(save_replay_to)
         if replay_path is not None:
             check_file_to_write(replay_path, "save the replay into")
-        game = _Game.start(
-            client, enemy_upgrade_inference=self._enemy_upgrade_inference, enemy_ladder_id=enemy_ladder_id
-        )
+        game = _Game.start(client, enemy_ladder_id=enemy_ladder_id)
         self._game = game
         if self._extensions_builder is None:
             self._extensions = None

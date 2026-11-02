@@ -13,7 +13,7 @@ from s2clientprotocol import sc2api_pb2
 from sc2nachos._fog_off_playback import _FogOffPlayback
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy, UpgradeInference
+from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
     AnyChatEvent,
@@ -102,7 +102,6 @@ class _Game:
     game_data: Final[GameData]
     player: Final[Player]
     enemy: Final[Enemy | None]
-    enemy_upgrade_inference: Final[UpgradeInference]
     tracker: Final[_Tracker]
     orders: Final[OrderBook]
     observation: sc2api_pb2.ResponseObservation
@@ -134,7 +133,7 @@ class _Game:
     result: Result | None = None
 
     @classmethod
-    def start(cls, client: Client, *, enemy_upgrade_inference: UpgradeInference, enemy_ladder_id: str | None) -> Self:
+    def start(cls, client: Client, *, enemy_ladder_id: str | None) -> Self:
         """Start the game `client` has joined: fetch its map and pre-upgrade tables once, observe it, and find its
         expansions. `enemy_ladder_id` is the ladder's id for the enemy, in a ladder game."""
         info, data = client.game_info(), client.game_data()
@@ -163,7 +162,6 @@ class _Game:
             game_data=game_data,
             player=Player._from_game(info, player_id),
             enemy=enemy,
-            enemy_upgrade_inference=enemy_upgrade_inference,
             tracker=tracker,
             orders=order_book,
             observation=observation,
@@ -202,13 +200,13 @@ class _Game:
         self._take_in(observation, step_observed)
 
     def _take_in(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
-        """Read `observation`: its units, the enemy upgrades they show if inference is on, and the rest it reports."""
+        """Read `observation`: its units, the enemy upgrade levels they show, and the rest it reports."""
         self.tracker.update(observation.observation.raw_data, step)
         self._read(observation, step)
 
     def _read(self, observation: sc2api_pb2.ResponseObservation, step: int) -> None:
-        """Read `observation`, whose units the tracker has taken in: the enemy upgrades they show if inference is on,
-        and the rest it reports."""
+        """Read `observation`, whose units the tracker has taken in: the enemy upgrade levels they show, and the rest
+        it reports."""
         self.observation = observation
         self.step = step
         self.time = GameTime(steps=step)
@@ -225,16 +223,12 @@ class _Game:
             self._read_enemy(self.enemy, changes.enemy_units_first_seen)
 
     def _read_enemy(self, enemy: Enemy, first_seen: Sequence[Unit[Any]]) -> None:
-        """Read into `enemy` its race, if not known yet, from the units `first_seen`, and the upgrades its units show
-        if inference is on."""
+        """Read into `enemy` its race, if not known yet, from the units `first_seen`, and the upgrade levels its units
+        show."""
         if enemy.race is None:
             self._learn_enemy_race(enemy, first_seen)
-        units = self.tracker.unit_tracker.present
-        reader = self.tracker.upgrade_tracker.reader
-        if self.enemy_upgrade_inference >= UpgradeInference.BASIC:
-            enemy.assume_upgrades(*reader.read_basic_upgrades(units))
-        if self.enemy_upgrade_inference >= UpgradeInference.INTERMEDIATE:
-            enemy.assume_upgrades(*reader.read_intermediate_upgrades(units, self.state.effects))
+        level_reader = self.tracker.upgrade_tracker.level_reader
+        enemy.assume_upgrades(*level_reader.read_levels(self.tracker.unit_tracker.present))
 
     def _learn_enemy_race(self, enemy: Enemy, first_seen: Sequence[Unit[Any]]) -> None:
         """Take the race of the first of `first_seen` that has one as `enemy`'s."""

@@ -17,7 +17,7 @@ from sc2nachos import GameTime
 from sc2nachos._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy, UpgradeInference
+from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
     EnemyUnitCloakChangedEvent,
@@ -419,7 +419,6 @@ def played(
     observation: sc2api_pb2.ResponseObservation,
     events: _EventBus,
     *,
-    infer: UpgradeInference = UpgradeInference.NONE,
     player: Player = PLAYER,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
@@ -438,7 +437,6 @@ def played(
             game_data=tracker.game_data,
             player=player,
             enemy=tracker.enemy,
-            enemy_upgrade_inference=infer,
             tracker=tracker,
             orders=order_book,
             observation=observation,
@@ -507,9 +505,8 @@ class RealGame:
     def _observe(self) -> _State:
         response = self.client.observation()
         self.step = response.observation.game_loop
-        basic = UpgradeInference.BASIC
         self.game = played(
-            self.game, self.client, self.map, self.tracker, response, self.events, infer=basic, player=self.own_player
+            self.game, self.client, self.map, self.tracker, response, self.events, player=self.own_player
         )
         return self.game.state
 

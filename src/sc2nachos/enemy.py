@@ -1,4 +1,4 @@
-"""The enemy player: who it is, what is known of it, and how much of that NachOS infers."""
+"""The enemy player: who it is and what is known of it."""
 
 from __future__ import annotations
 
@@ -6,27 +6,11 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._enum import ReadableIntEnum
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
     from sc2nachos.ids import UpgradeId
-
-
-class UpgradeInference(ReadableIntEnum):
-    """How much of `Enemy.upgrades` NachOS infers. Each level includes the ones below it."""
-
-    NONE = 0
-    """Nothing. Only the bot changes the upgrades."""
-    BASIC = 1
-    """The attack, armor and shield levels visible enemy units report. `UpgradeReader.read_basic_upgrades` reads them
-    as levels of each unit type's own upgrade lines."""
-    INTERMEDIATE = 2
-    """Also what only an upgrade can cause, read by `UpgradeReader.read_intermediate_upgrades`: Burrow, Warp Gate,
-    Stimpack, Combat Shield, Concussive Shells, Charge, Psionic Storm, Neural Parasite, Interference Matrix,
-    Nanomuscular Swell, Cloaking Field and Personal Cloaking. This reads the buffs on every visible unit, so a buff
-    the curated ids leave out raises `UncuratedIdError`, which the lower levels never do."""
 
 
 @final
@@ -131,12 +115,14 @@ class Enemy:
     def upgrades(self) -> frozenset[UpgradeId]:
         """Every upgrade the enemy is known or assumed to have.
 
-        The game never reports an enemy upgrade outright. It reports the attack, armor and shield levels of each
-        visible unit, and what only an upgrade can cause, such as a burrowed zergling or a stimmed marine.
-        `UpgradeReader` reads both, and NachOS adds them here as far as the `Api` was told to with `UpgradeInference`.
-        Every enemy unit, in sight or not, counts what is held here. Anything else, such as Grooved Spines or Metabolic
-        Boost, the bot adds with `assume_upgrades` when it works it out. It never holds an upgrade without those the
-        game's tables say it needs researched first, as level 2 of a line needs level 1.
+        The game never reports an enemy upgrade outright. NachOS adds here the attack, armor and shield levels each
+        visible enemy unit reports, as levels of its type's own upgrade lines: a marine at attack level 2 shows the
+        first two Terran Infantry Weapons. What only an upgrade can cause, such as a burrowed zergling or a stimmed
+        marine, `sc2nachos.extensions.upgrade_inference.UpgradeInference` adds, if the bot builds it. Anything else,
+        such as Grooved Spines or Metabolic Boost, the bot adds with `assume_upgrades` when it works it out.
+
+        Every enemy unit, in sight or not, counts what is held here. It never holds an upgrade without those the game's
+        tables say it needs researched first, as level 2 of a line needs level 1.
         """
         return self._upgrades
 
@@ -150,7 +136,8 @@ class Enemy:
         """Assume the enemy no longer has `upgrades`, nor any upgrade that needs one of them researched first: level 1
         of a line takes levels 2 and 3 with it.
 
-        If NachOS infers upgrades, an enemy unit that shows one again puts it back.
+        An enemy unit that shows one of them again puts it back: a level it reports does, and so does what
+        `sc2nachos.extensions.upgrade_inference.UpgradeInference` reads, if the bot built it.
         """
         forgotten = frozenset(upgrades)
         self._upgrades = frozenset(

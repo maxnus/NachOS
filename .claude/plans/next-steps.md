@@ -974,6 +974,17 @@ Keep this file current: when a step is done, say so here in the same pull reques
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
   every one that needs it. In the tables only a level needs another upgrade, the one below it. `Enemy` takes the
   game's data for this.
+- **Upgrade inference is an extension** (the owner, 2026-11-02, one question at a time):
+  - NachOS always reads the attack, armor and shield levels the enemy's units report into `api.enemy.upgrades`: without
+    them an enemy in sight read its armor right and its weapons wrong. `UpgradeInference` the setting and
+    `Api(enemy_upgrade_inference=...)` go, and `NONE` with them, which nothing used.
+  - What only an upgrade can cause, `INTERMEDIATE` before, is the extension
+    `sc2nachos.extensions.upgrade_inference.UpgradeInference` (the owner's name, over `EnemyUpgradeInference`,
+    `UpgradeScouting` and `UpgradeEvidence`). It reads the observation the game started on as it is built and each
+    later one on `TurnStartEvent` at `HIGHEST`, before any handler of the bot's, and adds what it reads with
+    `assume_upgrades`.
+  - The level reading left in the core is private, `_UpgradeLevelReader` beside the upgrade tracker, over keeping
+    `sc2nachos.upgrade_reader` public.
 
 ## Next
 
