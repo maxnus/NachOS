@@ -10,10 +10,9 @@ from typing import Any, Final, Self, cast
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._fog_off_playback import _FogOffPlayback
+from sc2nachos.api._fog_off_playback import _FogOffPlayback
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     AlertEvent,
     AnyChatEvent,
@@ -63,16 +62,15 @@ from sc2nachos.events import (
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId, UpgradeId
-from sc2nachos.match import Race, Result
+from sc2nachos.match import Enemy, Player, Race, Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
-from sc2nachos.player import Player
 from sc2nachos.protocol import Client
 from sc2nachos.state import Alert, Research
 from sc2nachos.state._state import _State

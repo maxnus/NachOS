@@ -13,8 +13,8 @@ from sc2nachos.extensions.speed_mining import SpeedMining
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId
-from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race
+from sc2nachos.run import MapFile, MapNotFoundError
 from sc2nachos.units import Alliance, OwnUnit, Unit
 from support import ScriptedGame, make_game_info, make_observation, make_unit, shipped_game_data
 

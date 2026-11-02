@@ -1,4 +1,4 @@
-"""Everything a bot talks to."""
+"""The `Api`, and the errors it raises."""
 
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
@@ -6,12 +6,11 @@ from typing import Any, overload
 
 from loguru import logger
 
-from sc2nachos._checks import check_file_to_write, check_game_time
-from sc2nachos._errors import NachOSError
-from sc2nachos._game import _Game
+from sc2nachos._shared.checks import check_file_to_write
+from sc2nachos._shared.errors import NachOSError
+from sc2nachos.api._game import _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy
 from sc2nachos.events import (
     Event,
     EventFilter,
@@ -25,16 +24,16 @@ from sc2nachos.events import (
     TurnStartEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
-from sc2nachos.match import Result
+from sc2nachos.match import Enemy, Player, Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
-from sc2nachos.player import Player
 from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType

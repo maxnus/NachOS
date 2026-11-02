@@ -1,6 +1,6 @@
 """Errors between the library and the game."""
 
-from sc2nachos._errors import NachOSError
+from sc2nachos._shared.errors import NachOSError
 
 
 class ProtocolError(NachOSError):

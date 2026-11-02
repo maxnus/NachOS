@@ -12,8 +12,8 @@ from typing import Self
 
 from loguru import logger
 
-from sc2nachos._errors import NachOSError
-from sc2nachos.launch._installation import Installation
+from sc2nachos._shared.errors import NachOSError
+from sc2nachos.run._installation import Installation
 
 
 class GameLaunchError(NachOSError, OSError):

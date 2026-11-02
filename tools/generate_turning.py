@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sc2nachos.constants import STEPS_PER_NORMAL_SECOND
+from sc2nachos.gametime import STEPS_PER_NORMAL_SECOND
 from sc2nachos.ids import UnitTypeId
 
 REPO = Path(__file__).parents[1]

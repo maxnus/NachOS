@@ -46,8 +46,8 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
+from sc2nachos.run import Installation
 from sc2nachos.units._unit_type import UnitType
 
 REPO = Path(__file__).parents[1]

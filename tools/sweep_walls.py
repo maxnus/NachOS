@@ -35,10 +35,10 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
+from sc2nachos.run import Installation
 from sc2nachos.state._state import _State
 from sc2nachos.units._tracking import _Tracker
 

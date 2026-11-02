@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, final
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.units._errors import NotReportedError

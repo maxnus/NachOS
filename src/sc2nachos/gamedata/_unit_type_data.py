@@ -9,15 +9,14 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import data_pb2
 
-from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
-from sc2nachos.game_time import GameTime
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
+from sc2nachos.gametime import FASTER_PER_NORMAL_SPEED, GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 

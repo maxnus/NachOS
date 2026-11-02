@@ -8,8 +8,7 @@ from typing import TYPE_CHECKING, final, overload
 import numpy
 import scipy.ndimage
 
-from sc2nachos._checks import check_game_time
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime._game_time import GameTime, check_game_time
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

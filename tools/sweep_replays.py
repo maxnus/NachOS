@@ -69,9 +69,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_array
 from sc2nachos.geometry import Rectangle
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.launch import GameProcess, Installation
 from sc2nachos.protocol import ConnectionClosedError, Recording, WebSocketTransport
 from sc2nachos.protocol._client import _raw_interface
+from sc2nachos.run import GameProcess, Installation
 
 _DEMO_BOT = Path(__file__).parents[1] / "examples" / "demo_bot.py"
 _GAME_SECONDS = 300

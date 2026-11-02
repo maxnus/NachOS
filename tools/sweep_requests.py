@@ -75,9 +75,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUpgradeId
-from sc2nachos.launch import GameProcess, Installation, MapFile, free_port
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, ConnectionClosedError, GamePorts, PortPair, WebSocketTransport
+from sc2nachos.run import GameProcess, Installation, MapFile, free_port
 
 _OWN = raw_pb2.Alliance.Self
 _BROADCAST = sc2api_pb2.ActionChat.Channel.Broadcast

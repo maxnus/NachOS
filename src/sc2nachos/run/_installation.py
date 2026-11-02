@@ -9,7 +9,7 @@ from typing import Self
 
 from loguru import logger
 
-from sc2nachos._errors import NachOSError
+from sc2nachos._shared.errors import NachOSError
 
 # The oldest build that speaks the raw interface this library is built on.
 MINIMUM_BASE_BUILD = 55958

@@ -10,7 +10,6 @@ import pytest
 from s2clientprotocol import debug_pb2, raw_pb2
 
 from sc2nachos import Api
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.extensions.upgrade_inference import UpgradeInference
 from sc2nachos.gamedata import (
     Attribute,
@@ -22,10 +21,11 @@ from sc2nachos.gamedata import (
     Weapon,
     WeaponUpgrade,
 )
+from sc2nachos.gametime import FASTER_PER_NORMAL_SPEED
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, PlaybackTransport, Recording, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracking import _Tracker
 from support import RealGame, load_tool, make_enemy, make_observation, make_tables, make_unit, require_enemy

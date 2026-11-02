@@ -7,7 +7,8 @@ from typing import Any
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import GameTime, _game
+from sc2nachos import GameTime
+from sc2nachos.api import _game
 from sc2nachos.events import (
     AlertEvent,
     AnyAreaEvent,
@@ -65,9 +66,9 @@ from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area, Circle, Point, Rectangle, Tile, TileSet
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import Alert, CameraMove
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, Visibility, VitalType

@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import (
     Attribute,
     Cost,
@@ -31,6 +30,7 @@ from sc2nachos.gamedata._techtree import (
     UNIT_TYPE_COST_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
 )
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Footprint
 from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId

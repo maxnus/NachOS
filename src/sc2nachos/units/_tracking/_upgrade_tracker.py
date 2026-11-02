@@ -10,8 +10,8 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.units._tracking._upgrade_level_reader import _UpgradeLevelReader
 
 if TYPE_CHECKING:
-    from sc2nachos.enemy import Enemy
     from sc2nachos.gamedata import GameData, UnitTypeData
+    from sc2nachos.match import Enemy
     from sc2nachos.units._unit import Unit
 
 _OWN = raw_pb2.Alliance.Self

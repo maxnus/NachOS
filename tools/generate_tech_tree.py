@@ -18,7 +18,6 @@ from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
 
-from sc2nachos.constants import FASTER_PER_NORMAL_SPEED
 from sc2nachos.gamedata import Attribute, Tech, TechRequirements, UnitTypeUpgrade, UpgradeType, WeaponUpgrade
 from sc2nachos.gamedata._techtree import (
     MISNAMED_RESEARCH_ABILITIES,
@@ -29,6 +28,7 @@ from sc2nachos.gamedata._techtree import (
     TechTreeUnitType,
     TechTreeUpgrade,
 )
+from sc2nachos.gametime import FASTER_PER_NORMAL_SPEED
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
 from sc2nachos.units import UnitType

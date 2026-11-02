@@ -139,9 +139,9 @@ from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Grid, Point
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.protocol import ProtocolError
+from sc2nachos.run import Installation
 
 _OWN = raw_pb2.Alliance.Self
 _SNAPSHOT = raw_pb2.DisplayType.Snapshot

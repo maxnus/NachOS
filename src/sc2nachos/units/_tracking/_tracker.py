@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import raw_pb2
 
-    from sc2nachos.enemy import Enemy
     from sc2nachos.gamedata import GameData
+    from sc2nachos.match import Enemy
 
 
 @final

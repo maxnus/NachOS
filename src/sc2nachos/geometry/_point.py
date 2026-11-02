@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Self, Union, final
 
 import numpy
 
-from sc2nachos._rounding import rounded_half_up
+from sc2nachos._shared.rounding import rounded_half_up
 
 # Imported for the check in `not_a_point_error`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
@@ -19,6 +19,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from s2clientprotocol import common_pb2
+
+
+# The game truncates a point it is given to this fraction of a tile: a move to x = 157.123456 is carried out and
+# reported at 157.123291 (in game).
+POINT_PRECISION = 1 / 4096
 
 
 # Coordinates on the ground plane, with or without a height: anything that *is* a point.

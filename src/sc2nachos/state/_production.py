@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Attribute, OrderBehavior
+from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
 from sc2nachos.state._research import Research

@@ -1,10 +1,10 @@
-"""The players of a match, how the computer opponent plays, and how the match ended."""
+"""The race a player plays, a match's slots and how the computer opponent plays in one, and how the match ended."""
 
 from dataclasses import dataclass
 
 from s2clientprotocol import common_pb2, sc2api_pb2
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.ids import UnitTypeId
 
 
@@ -108,4 +108,4 @@ class Computer:
     name: str | None = None
 
 
-type Player = Participant | Computer
+type PlayerSetup = Participant | Computer

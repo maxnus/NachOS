@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.events._event_filter import EventFilter
     from sc2nachos.events._event_priority import EventPriority
-    from sc2nachos.game_time import GameTime
+    from sc2nachos.gametime import GameTime
 
 
 @final

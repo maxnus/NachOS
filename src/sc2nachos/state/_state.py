@@ -5,9 +5,9 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap._image_data import image_tiles
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.state._actions import Action, ActionFailure, read_action

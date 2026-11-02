@@ -9,8 +9,7 @@ from collections.abc import Callable
 import numpy
 import pytest
 
-from sc2nachos.constants import POINT_PRECISION
-from sc2nachos.geometry import Area, Circle, Direction, Point, Point3D, Rectangle, Tile, TileSet
+from sc2nachos.geometry import POINT_PRECISION, Area, Circle, Direction, Point, Point3D, Rectangle, Tile, TileSet
 
 
 class TestPoint2:

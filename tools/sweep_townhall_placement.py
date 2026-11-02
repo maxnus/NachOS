@@ -36,8 +36,8 @@ from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
+from sc2nachos.run import Installation
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._unit_type import UnitType
 

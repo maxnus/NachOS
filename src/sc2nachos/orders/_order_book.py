@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, final, overload
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Cost, OrderBehavior
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.orders._commands import create_unit_command_actions

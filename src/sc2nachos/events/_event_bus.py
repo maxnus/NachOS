@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, final
 
 from loguru import logger
 
-from sc2nachos._checks import check_game_time
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
 from sc2nachos.events._event_filter import EventFilter
@@ -22,7 +21,8 @@ from sc2nachos.events._event_subscriber import EventSubscriber
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timing import HandlerTiming
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

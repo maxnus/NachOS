@@ -19,8 +19,8 @@ from pathlib import Path
 from loguru import logger
 
 from sc2nachos import Api, run_local
-from sc2nachos.launch import MapFile
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race
+from sc2nachos.run import MapFile
 
 CORPUS = Path(__file__).parents[1] / "tests" / "corpus"
 REPO_MAPS = Path(__file__).parents[1] / "sc2maps" / "AIE"

@@ -10,9 +10,9 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import Final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._unit_type_data import Attribute, TargetDomain, UnitTypeData, Weapon
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
+from sc2nachos.gametime import GameTime
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 
 _NO_BONUS: Final[Mapping[Attribute, float]] = MappingProxyType({})

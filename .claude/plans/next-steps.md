@@ -803,11 +803,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   progress as one number (`api.researches`, #131), the repair rates (each one division of `total_repair_cost`), a
   forecast of when tech is there, and a getter beside `api.data.units[t]` (over `api.data[t]` and a getter per field).
 - **What M6's sweep for AvocaDOS-shaped code settled** (the owner, 2026-11-01, one question at a time):
-  - `sc2nachos.util` holds `TimeSeries` alone. `clip`, `lerp`, `remap`, `damp`, `s_curve` and `sticky_round` came from
-    AvocaDOS in M1 and nothing in NachOS called them, so they went back to AvocaDOS (AvocaDOS #71), and `logistic`,
-    which nothing used, is gone. Decided before the first release, which makes every public name a promise (over
-    moving `TimeSeries` too, over keeping all eight, and over deleting `logistic` alone). The rounding NachOS uses
-    itself, a tie up, is the private `_rounding.rounded_half_up`.
+  - `sc2nachos.util` held `TimeSeries` alone, and `sc2nachos.gametime` holds it now (the package layout, below).
+    `clip`, `lerp`, `remap`, `damp`, `s_curve` and `sticky_round` came from AvocaDOS in M1 and nothing in NachOS called
+    them, so they went back to AvocaDOS (AvocaDOS #71), and `logistic`, which nothing used, is gone. Decided before the
+    first release, which makes every public name a promise (over moving `TimeSeries` too, over keeping all eight, and
+    over deleting `logistic` alone). The rounding NachOS uses itself, a tie up, is the private
+    `_shared.rounding.rounded_half_up`.
   - A public way for a bot's tests to make units, planned with the owner before the first release. AvocaDOS's tests
     make them through the private `_Tracker`, as NachOS's own do through `tests/support.py` (over planning it after
     the release, and over leaving it). Planned as `sc2nachos.testing` (#196, below).
@@ -1014,6 +1015,21 @@ Keep this file current: when a step is done, say so here in the same pull reques
     public-names test lets an extension read its own private names through `cls` as through `self`; what a unit's
     type needs is read off `unit.type_data`, over a map built up front (2 us more a turn for 100 enemy units,
     against 68 us for the whole read); and the demo bot builds it beside speed mining.
+- **The package layout** (the owner, 2026-11-02): only `__init__.py`, and `__about__.py`, which hatch reads the version
+  from, stand at the top of `src/sc2nachos`. Everything else is in a package, most named for the `Api` attribute whose
+  type it holds, so that a bot finds the type of `api.x` in the package of that name (over keeping `api.py` and `run.py`
+  as files, and over nesting packages, which lengthens a bot's imports).
+  - `api` holds `Api` and its errors, with the private `_Game` and the fog-off playback. `run` holds the runners, their
+    command line, and what `launch` held, finding StarCraft II and starting it (the owner, over `launch` as a package of
+    its own).
+  - `match` holds the players of a match: `Race`, `Result`, the computer's settings, `Player` and `Enemy`. A match's
+    slot, `Participant | Computer`, is a `PlayerSetup`, as the protocol names it, since `Player` is this player.
+  - `gametime` holds `GameTime`, the game's speeds `constants` held, and `TimeSeries`, which `util` held alone (the
+    owner, over keeping `util`). `POINT_PRECISION` went to `geometry`.
+  - The private helpers every package shares, the base error, the enums' base, argument checks and rounding, are in
+    `_shared`, which imports nothing else of NachOS; so `check_game_time` is beside `GameTime`.
+  - `camera`, `pathing` and `placement` stay packages of their own (above), `protocol` stays the transport's own layer,
+    and `testing` and `extensions` stay apart as what a bot opts into.
 
 ## Next
 

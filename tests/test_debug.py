@@ -24,9 +24,8 @@ from sc2nachos.debug import (
 from sc2nachos.events import GameStartEvent, TurnEvent
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
-from sc2nachos.run import run_local
+from sc2nachos.run import MapFile, MapNotFoundError, run_local
 from sc2nachos.units import Alliance, Visibility
 from support import ScriptedGame, make_game_info, make_observation, make_unit
 

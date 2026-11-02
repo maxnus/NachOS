@@ -31,9 +31,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawUnitTypeId, RawUpgradeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.protocol import GameEndedError
+from sc2nachos.run import Installation
 
 # A trial counts buffs within this reach of the sandbox center, checked this many times, this many steps apart.
 _REACH = 14.0

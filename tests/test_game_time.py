@@ -5,7 +5,7 @@ import numpy
 import pytest
 
 from sc2nachos import GameTime
-from sc2nachos.constants import SECONDS_PER_STEP, STEPS_PER_SECOND
+from sc2nachos.gametime import SECONDS_PER_STEP, STEPS_PER_SECOND
 
 
 class TestConversions:

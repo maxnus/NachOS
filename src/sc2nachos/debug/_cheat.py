@@ -2,7 +2,7 @@
 
 from s2clientprotocol import debug_pb2
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 
 
 class Cheat(ReadableIntEnum):

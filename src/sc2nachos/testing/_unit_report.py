@@ -7,7 +7,7 @@ from dataclasses import KW_ONLY, dataclass
 
 from s2clientprotocol import common_pb2, raw_pb2
 
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import PointLike
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.units import Alliance, CloakState, Visibility

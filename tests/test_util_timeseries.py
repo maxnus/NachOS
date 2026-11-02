@@ -2,8 +2,7 @@ import numpy
 import pytest
 
 from sc2nachos import GameTime
-from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.util import TimeSeries
+from sc2nachos.gametime import STEPS_PER_SECOND, TimeSeries
 
 
 @pytest.fixture

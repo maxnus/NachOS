@@ -6,7 +6,7 @@ from typing import Any, Self
 
 from sc2nachos.events._event_filter import EventFilter
 from sc2nachos.events._event_meta import _EventMeta
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Area
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race, Result

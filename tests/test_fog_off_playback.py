@@ -3,7 +3,7 @@
 import pytest
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos._fog_off_playback import _FogOffPlayback, _raw_data_with_unseen_units_shown_visible
+from sc2nachos.api._fog_off_playback import _FogOffPlayback, _raw_data_with_unseen_units_shown_visible
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units import Alliance, UnknownTagError, Visibility
 from support import make_bytes, make_enemy, make_observation, make_tables, make_unit

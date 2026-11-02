@@ -8,11 +8,11 @@ The [README](https://github.com/maxnus/NachOS#readme) says how to get started an
 """
 
 from sc2nachos.__about__ import __version__
-from sc2nachos._errors import NachOSError
+from sc2nachos._shared.errors import NachOSError
 from sc2nachos.api import Api, FogOnError, NoEnemyError, NotPlayingError
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Cost, Resources
 from sc2nachos.gamemap import Expansion
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Circle, Footprint, Point, Rectangle
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race, Result

@@ -9,13 +9,12 @@ from pathlib import Path, PureWindowsPath
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._checks import check_file_to_write, check_game_time
-from sc2nachos._command_line_arguments import _CommandLineArguments
+from sc2nachos._shared.checks import check_file_to_write
 from sc2nachos.api import Api, NoEnemyError, NotPlayingError
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError
-from sc2nachos.match import Computer, Participant, Player, Race, Result
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
+from sc2nachos.match import Computer, Participant, PlayerSetup, Race, Result
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
@@ -27,6 +26,10 @@ from sc2nachos.protocol import (
     Transport,
     WebSocketTransport,
 )
+from sc2nachos.run._command_line_arguments import _CommandLineArguments
+from sc2nachos.run._game_process import GameProcess
+from sc2nachos.run._installation import Installation
+from sc2nachos.run._map_file import MapFile, MapNotFoundError
 
 
 def run_local(
@@ -63,7 +66,7 @@ def run_local(
     if isinstance(map_file, str):
         map_file = MapFile.find(map_file, installation=installation)
     # A participant tells the game a client will fill the slot; who fills it is settled at the join.
-    players: list[Player] = [Participant()] if opponent is None else [Participant(), opponent]
+    players: list[PlayerSetup] = [Participant()] if opponent is None else [Participant(), opponent]
     base_build = installation.build_to_launch()
     _check_tech_tree_build(base_build)
 

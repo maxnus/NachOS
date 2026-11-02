@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Resources
+from sc2nachos.gametime import GameTime
 
 if TYPE_CHECKING:
     from s2clientprotocol import score_pb2

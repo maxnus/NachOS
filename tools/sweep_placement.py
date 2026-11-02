@@ -51,11 +51,11 @@ from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Footprint, Point, Tile
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import GameEndedError
+from sc2nachos.run import Installation
 from sc2nachos.state._state import _State
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._unit_type import UnitType

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import data_pb2
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree._overrides import (

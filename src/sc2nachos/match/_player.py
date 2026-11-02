@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
-from sc2nachos.match import Race
+from sc2nachos.match._match import Race
 
 if TYPE_CHECKING:
     from s2clientprotocol import sc2api_pb2

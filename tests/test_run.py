@@ -9,7 +9,6 @@ import pytest
 from loguru import logger
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
-import sc2nachos.run
 from sc2nachos import (
     AbilityId,
     AIBuild,
@@ -27,7 +26,6 @@ from sc2nachos import (
     run_recording,
     run_replay,
 )
-from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.events import (
     AnyUnitEvent,
     EnemyUnitDiedEvent,
@@ -39,7 +37,6 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.launch import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
 from sc2nachos.protocol import (
     Client,
@@ -50,6 +47,8 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
+from sc2nachos.run import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError, _runners, free_port
+from sc2nachos.run._command_line_arguments import _CommandLineArguments
 from sc2nachos.state import UnitCommand
 from sc2nachos.units import NotReportedError, Unit, Units, Visibility
 from support import FakeTransport, make_response, recorded_observations, write_recording
@@ -71,7 +70,7 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         calls.update(map_file=map_file, api=api, opponent=opponent, **kwargs)
         return Result.VICTORY
 
-    monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
+    monkeypatch.setattr(_runners, "run_local", run_local)
     monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=754.3841)))
     monkeypatch.setattr(Api, "enemy", property(lambda self: SimpleNamespace(race=Race.ZERG)))
     return calls
@@ -86,7 +85,7 @@ def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         calls.update(api=api, **kwargs)
         return Result.DEFEAT
 
-    monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
+    monkeypatch.setattr(_runners, "run_ladder", run_ladder)
     monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=61.25)))
     monkeypatch.setattr(Api, "map", property(lambda self: SimpleNamespace(name="Pylon AIE")))
     monkeypatch.setattr(Api, "enemy", property(lambda self: SimpleNamespace(race=Race.PROTOSS)))
@@ -164,7 +163,7 @@ class TestTheLadderClosingTheConnection:
         def run_ladder(api: Api, **kwargs: Any) -> Result:
             raise ConnectionClosedError("the connection to the game closed")
 
-        monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
+        monkeypatch.setattr(_runners, "run_ladder", run_ladder)
 
     def test_ends_a_ladder_game_undecided_with_a_warning(
         self, ladder_played: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path, logged: list[str]
@@ -195,7 +194,7 @@ class TestTheLadderClosingTheConnection:
         def run_local(*args: Any, **kwargs: Any) -> Result:
             raise ConnectionClosedError("the connection to the game closed")
 
-        monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
+        monkeypatch.setattr(_runners, "run_local", run_local)
         with pytest.raises(ConnectionClosedError):
             run_from_command_line(Api(), [], race=Race.TERRAN)
 
@@ -652,20 +651,20 @@ class TestTheReplaysPlayer:
     @pytest.mark.parametrize("player_id", [1, 2])
     def test_either_player_of_a_game_against_the_computer_may_be_played_for(self, player_id: int) -> None:
         info = self._replay_info_of_players(sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Computer)
-        sc2nachos.run._check_replay_player(info, player_id)
+        _runners._check_replay_player(info, player_id)
 
     @pytest.mark.parametrize("player_id", [0, 3])
     def test_a_player_the_replay_does_not_list_is_refused(self, player_id: int) -> None:
         info = self._replay_info_of_players(sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Computer)
         with pytest.raises(ValueError, match=f"the replay's players are 1 and 2, and {player_id} is not one of them"):
-            sc2nachos.run._check_replay_player(info, player_id)
+            _runners._check_replay_player(info, player_id)
 
     def test_an_observer_is_not_one_of_its_players(self) -> None:
         info = self._replay_info_of_players(
             sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Observer
         )
         with pytest.raises(ValueError, match="the replay's players are 1 and 2, and 3 is not one of them"):
-            sc2nachos.run._check_replay_player(info, 3)
+            _runners._check_replay_player(info, 3)
 
 
 class _ClientStarted(Exception):
@@ -761,7 +760,7 @@ class TestTheReplaysBuild:
 
         monkeypatch.setattr(GameProcess, "launch", launch)
         monkeypatch.setattr(WebSocketTransport, "connect", connect)
-        monkeypatch.setattr(sc2nachos.run, "_connect", connect_to_play)
+        monkeypatch.setattr(_runners, "_connect", connect_to_play)
         with pytest.raises(raising):
             run_replay(replay, Api(), player_id=1, installation=Installation(tmp_path, "Linux"))
         return launched_builds, launched_clients
@@ -835,7 +834,7 @@ class TestTheReplaysMap:
 
         monkeypatch.setattr(GameProcess, "launch", lambda installation, **kwargs: _ClientLaunched())
         monkeypatch.setattr(WebSocketTransport, "connect", connect)
-        monkeypatch.setattr(sc2nachos.run, "_connect", lambda url, record_to: client)
+        monkeypatch.setattr(_runners, "_connect", lambda url, record_to: client)
         with pytest.raises(_ClientStarted):
             run_replay(replay, Api(), player_id=1, installation=Installation(tmp_path, "Linux"))
         (map_data,) = client.map_data_sent
