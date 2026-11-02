@@ -404,8 +404,8 @@ class TestHandingOver:
             )
 
         scvs = [_reported_scv((25.0, 30.0), _gather_order(), tag=tag) for tag in (_HANDED_SCV, 11, 12)]
-        two_at_the_field = [(_HANDED_SCV, _MINED_FIELD), (11, _MINED_FIELD), (12, _OTHER_FIELD)]
-        _orders_sent([*_pylon_main(), *scvs], assigned=two_at_the_field, started=hand_over_a_third)
+        two_at_the_field_and_one_elsewhere = [(_HANDED_SCV, _MINED_FIELD), (11, _MINED_FIELD), (12, _OTHER_FIELD)]
+        _orders_sent([*_pylon_main(), *scvs], assigned=two_at_the_field_and_one_elsewhere, started=hand_over_a_third)
         assert handed == [(None, _MINED_FIELD, _OTHER_FIELD)]
 
     def test_miners_reads_each_worker_held_with_its_field_and_no_dead_one(self) -> None:
