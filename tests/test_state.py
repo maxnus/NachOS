@@ -58,7 +58,7 @@ class _Game:
     """A game on an eight by eight map, taking in observations one at a time."""
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None, tables: GameData = _TABLES) -> None:
-        self.tracker = _Tracker(tables, make_enemy())
+        self.tracker = _Tracker(tables, make_enemy(tables))
         self.map = GameMap(game_info or make_game_info(), start_location=Point((0.5, 0.5)))
 
     def observe(self, step: int = 0, **fields: Any) -> _State:

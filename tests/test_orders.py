@@ -106,7 +106,7 @@ class _Game:
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.tracker = _Tracker(tables, make_enemy())
+        self.tracker = _Tracker(tables, make_enemy(tables))
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(tables)
 

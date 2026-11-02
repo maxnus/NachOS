@@ -100,7 +100,7 @@ class _Game:
     """A tracker fed one observation at a time, as `Api.play` feeds it."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, make_enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> list[Unit[Any]]:
         """Observe `units` at `step` and return the tracked unit for each, in the order given."""
@@ -1054,7 +1054,7 @@ class TestConstruction:
     def test_a_unit_whose_order_places_a_structure_is_constructing(self, first_corpus_tables: GameData) -> None:
         """Whether an ability places a structure is the game's tables' to say: an SCV's build on its way to the site, a
         barracks building its add-on and a queen planting a tumor, each by its own id, and not a gather."""
-        tracker = _Tracker(first_corpus_tables, make_enemy())
+        tracker = _Tracker(first_corpus_tables, make_enemy(first_corpus_tables))
         gather = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
         reactor = raw_pb2.UnitOrder(ability_id=RawAbilityId.Build_Reactor_Barracks)
         plant = raw_pb2.UnitOrder(
@@ -1476,7 +1476,7 @@ class TestWhatChanged:
         assert not game.tracker.unit_tracker._unfinished
 
     def test_upgrades_new_to_the_observation_come_in_the_order_of_their_ids(self) -> None:
-        tracker = _Tracker(_TABLES, make_enemy())
+        tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         held = [UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.STIMPACK]
         tracker.update(make_observation(0, upgrades=held).observation.raw_data, 0)
         assert tracker.last_changes.own_upgrades_finished == sorted(held)

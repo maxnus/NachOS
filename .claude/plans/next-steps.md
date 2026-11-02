@@ -969,6 +969,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
     townhall's death or lift only, and keeping workers at a base that never had one; reassigning them through
     `mine(worker)`; a last-resort far pick for `mine` with no field, behind an option; and releasing every worker once
     no townhall is left as a rule of its own. The owner found those rules growing complicated.
+- **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
+  with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
+  tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
+  every one that needs it. In the tables only a level needs another upgrade, the one below it. `Enemy` takes the
+  game's data for this.
 
 ## Next
 

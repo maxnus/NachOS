@@ -331,9 +331,11 @@ _AGAINST_THE_COMPUTER = (
 )
 
 
-def make_enemy() -> Enemy:
-    """The Zerg computer of `make_game_info`, as a game reads it."""
-    return Enemy(player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG, ladder_id=None)
+def make_enemy(game_data: GameData) -> Enemy:
+    """The Zerg computer of `make_game_info`, as a game of `game_data` reads it."""
+    return Enemy(
+        player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG, ladder_id=None, game_data=game_data
+    )
 
 
 def require_enemy(enemy: Enemy | None) -> Enemy:
@@ -496,8 +498,9 @@ class RealGame:
         info = client.game_info()
         self.map = GameMap._from_game(info, client.observation())
         self.own_player = Player._from_game(info, player)
-        self.enemy = Enemy._from_game(info, player)
-        self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
+        game_data = GameData(client.game_data())
+        self.enemy = Enemy._from_game(info, player, game_data=game_data)
+        self.tracker = _Tracker(game_data, self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()
 

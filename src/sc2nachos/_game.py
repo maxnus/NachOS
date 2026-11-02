@@ -143,7 +143,7 @@ class _Game:
         game_data = GameData(data)
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
-        enemy = Enemy._from_game(info, player_id, ladder_id=enemy_ladder_id)
+        enemy = Enemy._from_game(info, player_id, game_data=game_data, ladder_id=enemy_ladder_id)
         fog_off_playback = None
         if client.fog_disabled:
             fog_off_playback = _FogOffPlayback(game_data, enemy)
