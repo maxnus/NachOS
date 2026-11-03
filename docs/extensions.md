@@ -117,7 +117,16 @@ class ThreatMap:
   `release(worker)` takes one back, and `miners` and `miners_at(field)` read which worker mines which field. A worker
   on a move, unlike one on a gather or a return, can be stopped by other units, so no move is given while a unit stands
   in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to mining, unless speed mining
-  is built with `attack_enemies=False`. The API reference says the rest.
+  is built with `attack_enemies=False`.
+
+  `collect(worker)` hands a worker over to collect vespene instead, on plain gathers and returns, with no move: given no
+  gas building, it picks a finished one of this player's with vespene left at the base nearest the worker, and given
+  some, among them. A gas building takes three workers at most, at a base with a finished townhall of this player's,
+  and its workers are let go once it dies or runs dry, or its base's townhall is gone. As `mine` does, `collect` sends
+  the worker at once, takes none it cannot send, and leaves alone one the bot sends elsewhere; a collector attacks as
+  a miner does, and `collectors` and `collectors_at(gas_building)` read them. A worker is held at one field or gas building at a time:
+  `mine` moves a collector to minerals, and `collect` a miner to gas. How many collect stays the bot's, and `mine`
+  given no field never picks gas. The API reference says the rest.
 - **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
