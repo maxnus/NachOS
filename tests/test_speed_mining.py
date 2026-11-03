@@ -963,8 +963,8 @@ class TestHandingOverToCollect:
     def test_collect_returns_none_where_there_is_no_room_and_leaves_the_worker_as_it_was(
         self, units: list[raw_pb2.Unit]
     ) -> None:
-        """The worker mines `_MINED_FIELD`, at a base whose townhall may not be finished, and is still held there
-        unless it was let go."""
+        """The worker, gathering at `_MINED_FIELD`, is handed over to mine it first, which `mine` refuses at a base
+        without a finished townhall: whether speed mining holds it there or not, `collect` leaves that as it was."""
         handed: list[tuple[bool, bool, bool]] = []
 
         def hand_over_to_collect(api: Api[SpeedMining]) -> None:
@@ -978,6 +978,24 @@ class TestHandingOverToCollect:
 
         _orders_sent([*units, _reported_scv((25.0, 30.0), _gather_order())], started=hand_over_to_collect)
         assert handed == [(True, False, True)]
+
+    def test_collect_takes_no_worker_it_cannot_send(self) -> None:
+        """The worker, kept from the first turn, is out of reach of orders in the second, as inside a gas building:
+        `collect` returns `None`, holds nothing and sends nothing."""
+        handed: list[tuple[bool, bool]] = []
+
+        def hand_over_in_the_second_turn(api: Api[SpeedMining]) -> None:
+            worker = _own_unit_of_tag(api, _HANDED_SCV)
+
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def hand_over(event: TurnEvent) -> None:
+                if event.time.steps == 1:
+                    refused = api.extensions.collect(worker, _unit_of_tag(api, _REFINERY)) is None
+                    handed.append((refused, worker in api.extensions.collectors))
+
+        turns = [[*_pylon_main(), _refinery(), _reported_scv((30.0, 26.5))], [*_pylon_main(), _refinery()]]
+        assert _orders_sent(*turns, assigned=(), started=hand_over_in_the_second_turn) == [[], []]
+        assert handed == [(True, False)]
 
     @pytest.mark.parametrize(
         ("collectors_at_the_nearer", "picked"),
