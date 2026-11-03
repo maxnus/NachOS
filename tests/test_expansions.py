@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from s2clientprotocol import data_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import common_pb2, data_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, Race, Result
 from sc2nachos.events import GameStartEvent
@@ -20,7 +20,7 @@ from sc2nachos.gamemap import (
     StartLocation,
 )
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
-from sc2nachos.geometry import Point, Tile
+from sc2nachos.geometry import Point, Tile, TileSet
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.protocol import Client, Recording, Status
 from sc2nachos.units import Alliance, NotReportedError, Unit, Units, UnitType, Visibility
@@ -29,6 +29,7 @@ from sc2nachos.units._tracking._unit_tracker import _UnitTracker
 from support import (
     PLAYER_ID,
     FakeTransport,
+    make_bytes,
     make_enemy,
     make_game_info,
     make_observation,
@@ -108,8 +109,10 @@ class _MapAtStart:
         *,
         start: tuple[float, float],
         opponent_starts: tuple[tuple[float, float], ...] = (),
+        heights: common_pb2.ImageData | None = None,
     ) -> None:
-        self.map = GameMap(make_game_info(*rows, start_locations=opponent_starts), start_location=Point(start))
+        info = make_game_info(*rows, start_locations=opponent_starts, heights=heights)
+        self.map = GameMap(info, start_location=Point(start))
         self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
@@ -422,6 +425,21 @@ class TestAStartLocation:
         assert len(far_side.main_area) == 30 * 60
         assert Tile(50, 59) in far_side.main_area
 
+    def test_its_main_area_ends_at_its_main_ramp_and_where_the_ground_leaves_its_level(self) -> None:
+        """High ground 20 tiles wide and 30 high at height 10, a ramp 4 wide down east of it to ground at height 8,
+        which also lies north of it with nothing between: each tile's corners in bytes, 207 high and 191 low."""
+        rows = ["#" * 40 if y >= 30 else "#" * 20 + "~" * 4 + "#" * 16 for y in reversed(range(40))]
+        ramp_corners = [207] * 21 + [203, 199, 195] + [191] * 17
+        heights = make_bytes(*([191] * 41 if y >= 30 else ramp_corners for y in reversed(range(41))))
+        neutral_units = _NeutralUnits()
+        neutral_units.base(_START)
+        map_at_start = _MapAtStart(rows, neutral_units, start=_START, heights=heights)
+        (start,) = map_at_start.expansions()
+        assert isinstance(start, StartLocation)
+        assert map_at_start.map.ramps == (start.main_ramp,)
+        assert start.main_ramp.tiles == TileSet(Tile(x, y) for x in range(20, 24) for y in range(30))
+        assert start.main_area == TileSet(Tile(x, y) for x in range(20) for y in range(30))
+
 
 def _game_at_the_start(
     neutral_units: _NeutralUnits, *, opponent_starts: tuple[tuple[float, float], ...]
@@ -488,6 +506,13 @@ class TestWhereEachPlayerStarted:
         assert read["expansions"] == ()
         assert isinstance(read["player"], NoStartLocationError)
         assert isinstance(read["enemy"], NoStartLocationError)
+        assert "no expansion stands where the enemy started" in str(read["enemy"])
+
+    def test_on_a_map_with_no_other_start_where_the_enemy_started_raises(self) -> None:
+        read = _game_at_the_start(self._bases(), opponent_starts=())
+        assert isinstance(read["player"], StartLocation)
+        assert isinstance(read["enemy"], NoStartLocationError)
+        assert "no start location but this player's" in str(read["enemy"])
 
 
 def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:

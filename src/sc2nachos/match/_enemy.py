@@ -129,7 +129,7 @@ class Enemy:
 
         Raises `NotReportedError` on a map with more than two start locations, since the game does not say which the
         enemy took, and NachOS does not scout for it. Raises `NoStartLocationError` where no expansion stands at its
-        start, as on a mini-game's map.
+        start, as on a mini-game's map, or where the map has no start location but this player's.
         """
         if len(self._start_locations) == 1 and (start_location := self._start_locations[0]) is not None:
             return start_location
@@ -142,6 +142,8 @@ class Enemy:
                 f"the map has {len(self._start_locations)} start locations but this player's, and the game does not "
                 "say which the enemy took"
             )
+        if not self._start_locations:
+            raise NoStartLocationError("the map has no start location but this player's")
         raise NoStartLocationError("no expansion stands where the enemy started")
 
     def _learn_start_locations(self, start_locations: tuple[StartLocation | None, ...]) -> None:
