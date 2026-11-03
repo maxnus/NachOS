@@ -196,13 +196,13 @@ neither a slot nor a mineral within the same step
 
 ## Walling a ramp
 
-`api.map.main_ramp` is the ramp out of this player's main, and `api.map.main_ramp_of(start)` the ramp out of the main
-at any start location, such as `api.map.opponent_start_locations[0]`. `api.placement.terran_wall(ramp)` and
-`protoss_wall(ramp)` say where structures close such a ramp at its top, near and far going by its main's start:
+`api.player.start_location.main_ramp` is the ramp out of this player's main, and `api.enemy.start_location.main_ramp`
+the ramp out of the enemy's. `main_ramp` raises `NoMainRampError` for a main no ramp leads out of, which no map of the
+pool has. `api.placement.terran_wall(ramp)` and `protoss_wall(ramp)` say where structures close such a ramp at its
+top, near and far going by its main's start:
 
 ```python
-main_ramp = api.map.main_ramp
-terran_wall = None if main_ramp is None else api.placement.terran_wall(main_ramp)
+terran_wall = api.placement.terran_wall(api.player.start_location.main_ramp)
 if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=terran_wall.near_depot):
     api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=terran_wall.near_depot)
 ```

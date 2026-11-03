@@ -2,22 +2,31 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Self, final
+from typing import TYPE_CHECKING, cast, final
 
 import numpy
+import scipy.ndimage
 from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components
 
+from sc2nachos.gamedata._footprints import FOOTPRINTS
+from sc2nachos.gamemap._errors import NoMainRampError, NoNaturalError
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
-from sc2nachos.geometry import Grid, Point
+from sc2nachos.gamemap._ramp import _HALF_A_LEVEL
+from sc2nachos.geometry import Point, TileSet
+from sc2nachos.ids import UnitTypeId
 from sc2nachos.units import Units
 from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from numpy import ndarray
 
     from sc2nachos.gamemap._game_map import GameMap
+    from sc2nachos.gamemap._ramp import Ramp
     from sc2nachos.units import Unit
     from sc2nachos.units._tracking._unit_tracker import _UnitTracker
 
@@ -29,17 +38,16 @@ _MIN_MINERAL_FIELDS_PER_EXPANSION = 6
 _MAX_MINERAL_FIELDS_PER_EXPANSION = 10
 # A base's own geysers stand 7.0 to 9.22 from its townhall, a far-side geyser 13.0 (corpus).
 _MAX_GEYSER_DISTANCE_FROM_TOWNHALL = 11.0
-_TOWNHALL_SIZE = 5
 
 
-@final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Expansion:
     """A place to build a townhall, with the mineral fields and geysers it mines.
 
     Each group of resources lying within 6 of one another, through any chain of them, is an expansion if it has 6 to
     10 mineral fields; fewer fields are a blocker to mine out, more a wall. Where a group's fields can be mined from
-    either side, with a geyser on each, each side is an expansion of its own, and the two share the fields.
+    either side, with a geyser on each, each side is an expansion of its own, and the two share the fields. Where a
+    player starts the game, it is a `StartLocation`.
     """
 
     center: Point
@@ -50,8 +58,6 @@ class Expansion:
     they pass in and out of sight."""
     geysers: Units[Unit[UnitType.AnyVespeneGeyser]]
     """Its geysers, nearest `center` first, the same units all game."""
-    is_start_location: bool
-    """Whether a player starts the game here: this player or an opponent."""
     pathing_distance_from_start: float
     """The pathing distance from this player's start to `center`, over the ground as the game began: `inf` where no
     path reaches."""
@@ -67,12 +73,12 @@ class Expansion:
                 return townhall
         return None
 
-    @classmethod
-    def _find_all(cls, game_map: GameMap, unit_tracker: _UnitTracker) -> tuple[Self, ...]:
+    @staticmethod
+    def _find_all(game_map: GameMap, unit_tracker: _UnitTracker) -> tuple[Expansion, ...]:
         """The expansions of `game_map` with the neutral units `unit_tracker` holds on it at the start, by pathing
-        distance from this player's start, nearest first. Those no path reaches come last, sorted by increasing
-        straight-line distance from this player's start. Each finds its townhall among the units `unit_tracker` holds
-        then.
+        distance from this player's start, nearest first, each start location a `StartLocation`. Those no path reaches
+        come last, sorted by increasing straight-line distance from this player's start. Each finds its townhall among
+        the units `unit_tracker` holds then.
 
         The mineral fields and geysers make the expansions; every other neutral unit blocks the ground under it.
         """
@@ -84,23 +90,121 @@ class Expansion:
             game_map.placement, mineral_fields=mineral_fields, geysers=geysers, blockers=blockers
         )
         start = game_map.start_location
-        pathing_distance = _pathing_distance_from_start(game_map.pathing, start)
-        start_locations = {start, *game_map.opponent_start_locations}
+        pathing_distance = game_map._walking_distances_from(start)
+        start_locations = set(game_map.all_start_locations)
         expansions = [
-            cls(
+            Expansion(
                 center=center,
                 mineral_fields=base_fields.sorted_by_distance_to(center),
                 geysers=center_geysers.sorted_by_distance_to(center),
-                is_start_location=center in start_locations,
                 pathing_distance_from_start=pathing_distance[center],
                 _unit_tracker=unit_tracker,
             )
             for base_fields, base_geysers in _resources_of_each_base(mineral_fields, geysers)
             for center, center_geysers in _townhall_centers_of_base(expansion_locations, base_fields, base_geysers)
         ]
-        return tuple(
-            sorted(expansions, key=lambda exp: (exp.pathing_distance_from_start, start.distance_to(exp.center)))
+        no_ones_start = [expansion for expansion in expansions if expansion.center not in start_locations]
+        found = [
+            expansion
+            if expansion.center not in start_locations
+            else StartLocation._from_expansion(expansion, game_map, naturals=no_ones_start)
+            for expansion in expansions
+        ]
+        return tuple(sorted(found, key=lambda exp: (exp.pathing_distance_from_start, start.distance_to(exp.center))))
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StartLocation(Expansion):
+    """An expansion a player starts the game at, with the ground of its main, the ramp out of it and its natural.
+
+    It is found once, as the game begins, and none of it changes.
+    """
+
+    main_area: TileSet
+    """The ground of the main: every tile within half a level of the height at `center`, walkable as the game began,
+    joined side by side to `center` without crossing a ramp. The ground under its townhall, mineral fields and geysers
+    counts at every start, though the game's pathing grid blocks only this player's (in game)."""
+    _main_ramp: Ramp | None = field(repr=False, compare=False)
+    _natural: Expansion | None = field(repr=False, compare=False)
+
+    @property
+    def main_ramp(self) -> Ramp:
+        """The ramp out of the main: of the ramps whose top is at the main's level, within half a level of the height
+        at `center`'s tile, the one whose center is the shortest walk from `center`, and of two as short, the first in
+        tile order. The walk is over the pathing grid as the game began, with the ground the start's townhall covers
+        opened. Raises `NoMainRampError` where no such ramp can be walked to."""
+        if self._main_ramp is None:
+            raise NoMainRampError(f"no ramp out of the main at {self.center} can be walked to")
+        return self._main_ramp
+
+    @property
+    def natural(self) -> Expansion:
+        """The expansion nearest `center` by pathing distance where no player starts, over the ground as the game
+        began with the ground the start's townhall covers opened, and of two as near, the nearer in a straight line.
+        Raises `NoNaturalError` where no such expansion can be walked to, as on a map drawn for a test."""
+        if self._natural is None:
+            raise NoNaturalError(f"no expansion where no player starts can be walked to from {self.center}")
+        return self._natural
+
+    @classmethod
+    def _from_expansion(
+        cls, expansion: Expansion, game_map: GameMap, *, naturals: Iterable[Expansion]
+    ) -> StartLocation:
+        """The start location `expansion` of `game_map` is, its natural the nearest of `naturals` to walk to."""
+        center = expansion.center
+        walking_distances = game_map._walking_distances_from(center)
+        natural = min(
+            naturals,
+            key=lambda candidate: (walking_distances[candidate.center], center.distance_to(candidate.center)),
+            default=None,
         )
+        if natural is not None and walking_distances[natural.center] == math.inf:
+            natural = None
+        return cls(
+            center=center,
+            mineral_fields=expansion.mineral_fields,
+            geysers=expansion.geysers,
+            pathing_distance_from_start=expansion.pathing_distance_from_start,
+            main_area=_ground_of_main(game_map, expansion),
+            _main_ramp=game_map._main_ramp_of(center),
+            _natural=natural,
+            _unit_tracker=expansion._unit_tracker,
+        )
+
+
+def _start_location_at(expansions: Iterable[Expansion], point: Point) -> StartLocation | None:
+    """The start location of `expansions` whose townhall goes at `point`, or `None` if there is none."""
+    return next(
+        (expansion for expansion in expansions if isinstance(expansion, StartLocation) and expansion.center == point),
+        None,
+    )
+
+
+def _opponent_start_locations(game_map: GameMap, expansions: Iterable[Expansion]) -> tuple[StartLocation | None, ...]:
+    """The start location of `expansions` at each of `game_map`'s start locations but this player's, in the map's
+    order: `None` for one no expansion's townhall goes at."""
+    return tuple(_start_location_at(expansions, start) for start in game_map.opponent_start_locations)
+
+
+def _ground_of_main(game_map: GameMap, start: Expansion) -> TileSet:
+    """The ground of the main at `start`, as `StartLocation.main_area` says: none if `center` itself is not on it, as
+    for a start on a ramp, which only a map drawn for a test has."""
+    walkable = game_map.pathing.copy()
+    # Every townhall's footprint is the command center's.
+    walkable.fill_footprint(FOOTPRINTS[UnitTypeId.COMMAND_CENTER], at=start.center, value=True)
+    for resource in (*start.mineral_fields, *start.geysers):
+        if (footprint := resource.footprint) is not None:
+            walkable.fill_footprint(footprint, at=resource.position, value=True)
+    for ramp in game_map.ramps:
+        walkable[ramp.tiles] = False
+    at_its_level = numpy.abs(game_map.height.values - game_map.height[start.center]) < _HALF_A_LEVEL
+    # `label` is unannotated, and pyright reads the return type off an early-return branch of its body.
+    patches, _ = cast("tuple[ndarray, int]", scipy.ndimage.label(walkable.values & at_its_level))
+    patch_at_start = patches[walkable.index_of(start.center)]
+    if not patch_at_start:
+        return TileSet(())
+    return TileSet._from_mask(walkable.origin, patches == patch_at_start)
 
 
 def _resources_of_each_base(
@@ -160,15 +264,3 @@ def _townhall_centers_of_base(
         else:
             far_side_centers.append((far_side_center, Units([geyser])))
     return [(center, Units(near_geysers)), *far_side_centers]
-
-
-def _pathing_distance_from_start(pathing: Grid[bool], start: Point) -> Grid[float]:
-    """The pathing distance from `start` to each tile of `pathing`, where this player's first townhall stands and
-    blocks the ground under it."""
-    walkable = numpy.array(pathing.values)
-    x, y = pathing.index_of(start)
-    townhall_half_width = _TOWNHALL_SIZE // 2
-    footprint_xs = slice(max(x - townhall_half_width, 0), x + townhall_half_width + 1)
-    footprint_ys = slice(max(y - townhall_half_width, 0), y + townhall_half_width + 1)
-    walkable[footprint_xs, footprint_ys] = True
-    return Grid(walkable, origin=pathing.origin).cheapest_paths_from(start).distances

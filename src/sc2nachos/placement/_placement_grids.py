@@ -242,10 +242,11 @@ class PlacementGrids:
         return footprint.center_in_tile(candidates.argmin())
 
     def terran_wall(self, main_ramp: Ramp) -> TerranWall | None:
-        """Where a Terran wall closes `main_ramp`, the ramp out of a start location's main as `GameMap.main_ramp_of`
-        finds it, at its top, as `TerranWall` says, near and far going by that start: `None` if the ramp is not of the
-        shape every main ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether a structure may
-        stand at a site now is for `is_free` to say. Raises `ValueError` for a ramp out of no start location's main."""
+        """Where a Terran wall closes `main_ramp`, the ramp out of a start location's main, its
+        `StartLocation.main_ramp`, at its top, as `TerranWall` says, near and far going by that start: `None` if the
+        ramp is not of the shape every main ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether
+        a structure may stand at a site now is for `is_free` to say. Raises `ValueError` for a ramp out of no start
+        location's main."""
         return TerranWall._from_ramp(main_ramp, start=self._start_of_main_ramp(main_ramp))
 
     def protoss_wall(self, main_ramp: Ramp) -> ProtossWall | None:
@@ -258,7 +259,7 @@ class PlacementGrids:
         """The start location whose main `main_ramp` leaves; raises `ValueError` for a ramp out of no start location's
         main."""
         for start_location in self._game_map.all_start_locations:
-            if self._game_map.main_ramp_of(start_location) == main_ramp:
+            if self._game_map._main_ramp_of(start_location) == main_ramp:
                 return start_location
         raise ValueError(f"the ramp at {main_ramp.top.center} leads out of no start location's main")
 

@@ -1,5 +1,6 @@
 """Fakes and builders shared by the tests that run the library without a game."""
 
+import dataclasses
 import importlib.util
 import lzma
 from collections import deque
@@ -57,6 +58,7 @@ from sc2nachos.events import (
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gamemap._expansion import _opponent_start_locations, _start_location_at
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Enemy, Player, Race, Result
@@ -428,12 +430,15 @@ def played(
         present_units = tracker.unit_tracker.present
         order_book = OrderBook(tracker.game_data)
         state = _State(observation, tracker, game_map)
+        expansions = Expansion._find_all(game_map, tracker.unit_tracker)
+        if tracker.enemy is not None:
+            tracker.enemy._learn_start_locations(_opponent_start_locations(game_map, expansions))
         game = _Game(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, tracker.unit_tracker),
+            expansions=expansions,
             game_data=tracker.game_data,
-            player=player,
+            player=dataclasses.replace(player, _start_location=_start_location_at(expansions, game_map.start_location)),
             enemy=tracker.enemy,
             tracker=tracker,
             orders=order_book,
@@ -493,7 +498,7 @@ class RealGame:
         self.events = events or _EventBus()
         info = client.game_info()
         self.map = GameMap._from_game(info, client.observation())
-        self.own_player = Player._from_game(info, player)
+        self.own_player = Player._from_game(info, player, start_location=None)
         game_data = GameData(client.game_data())
         self.enemy = Enemy._from_game(info, player, game_data=game_data)
         self.tracker = _Tracker(game_data, self.enemy)

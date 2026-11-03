@@ -3,21 +3,39 @@
 import math
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from s2clientprotocol import data_pb2, raw_pb2, sc2api_pb2
 
+from sc2nachos import Api, Race, Result
+from sc2nachos.events import GameStartEvent
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gamemap import (
+    Expansion,
+    GameMap,
+    NoMainRampError,
+    NoNaturalError,
+    NoStartLocationError,
+    StartLocation,
+)
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.protocol import Recording
-from sc2nachos.units import Alliance, Unit, Units, UnitType, Visibility
+from sc2nachos.protocol import Client, Recording, Status
+from sc2nachos.units import Alliance, NotReportedError, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._tracking._unit_tracker import _UnitTracker
-from support import make_enemy, make_game_info, make_observation, make_tables, make_unit
+from support import (
+    PLAYER_ID,
+    FakeTransport,
+    make_enemy,
+    make_game_info,
+    make_observation,
+    make_response,
+    make_tables,
+    make_unit,
+)
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -83,8 +101,15 @@ class _NeutralUnits:
 class _MapAtStart:
     """A drawn map with neutral units on it, read as a game reads it at the start."""
 
-    def __init__(self, rows: Sequence[str], neutral_units: _NeutralUnits, *, start: tuple[float, float]) -> None:
-        self.map = GameMap(make_game_info(*rows), start_location=Point(start))
+    def __init__(
+        self,
+        rows: Sequence[str],
+        neutral_units: _NeutralUnits,
+        *,
+        start: tuple[float, float],
+        opponent_starts: tuple[tuple[float, float], ...] = (),
+    ) -> None:
+        self.map = GameMap(make_game_info(*rows, start_locations=opponent_starts), start_location=Point(start))
         self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
@@ -220,7 +245,7 @@ class TestWhatIsAnExpansion:
         map_at_start = _MapAtStart(_map_rows(48, 48), neutral_units, start=(24.5, 24.5))
         (expansion,) = map_at_start.expansions()
         assert expansion.center == Point((24.5, 24.5))
-        assert expansion.is_start_location
+        assert isinstance(expansion, StartLocation)
         assert expansion.pathing_distance_from_start == 0.0
         assert {unit.tag for unit in expansion.mineral_fields} == set(range(1, 9))
         assert {unit.tag for unit in expansion.geysers} == {9, 10}
@@ -334,6 +359,137 @@ class TestTheOrder:
         assert expansions[-1].pathing_distance_from_start == math.inf
 
 
+# The three bases of `TestTheOrder`: the start, one past the end of the wall, and one behind it, nearer in a line.
+_START = (10.5, 15.5)
+_PAST_THE_WALL = (10.5, 50.5)
+_BEHIND_THE_WALL = (38.5, 15.5)
+
+
+class TestAStartLocation:
+    _ROWS = TestTheOrder._ROWS
+
+    def _expansions(self, *, opponent_starts: tuple[tuple[float, float], ...]) -> tuple[Expansion, ...]:
+        neutral_units = _NeutralUnits()
+        for at in (_START, _PAST_THE_WALL, _BEHIND_THE_WALL):
+            neutral_units.base(at)
+        map_at_start = _MapAtStart(self._ROWS, neutral_units, start=_START, opponent_starts=opponent_starts)
+        return map_at_start.expansions()
+
+    def test_every_start_is_a_start_location_and_no_other_expansion_is(self) -> None:
+        expansions = self._expansions(opponent_starts=(_BEHIND_THE_WALL,))
+        assert _centers(expansions) == [_START, _PAST_THE_WALL, _BEHIND_THE_WALL]
+        assert [type(expansion) for expansion in expansions] == [StartLocation, Expansion, StartLocation]
+
+    def test_its_natural_is_the_nearest_expansion_to_walk_to_not_the_nearest_in_a_line(self) -> None:
+        start, past_the_wall, _ = self._expansions(opponent_starts=())
+        assert isinstance(start, StartLocation)
+        assert start.natural is past_the_wall
+
+    def test_its_natural_is_never_where_a_player_starts(self) -> None:
+        start, opponent_start, behind_the_wall = self._expansions(opponent_starts=(_PAST_THE_WALL,))
+        assert isinstance(start, StartLocation) and isinstance(opponent_start, StartLocation)
+        assert start.natural is opponent_start.natural is behind_the_wall
+
+    def test_with_no_other_expansion_to_walk_to_its_natural_raises(self) -> None:
+        neutral_units = _NeutralUnits()
+        neutral_units.base(_START)
+        neutral_units.base((64.5, 30.5))
+        start, beyond_the_far_wall = _MapAtStart(self._ROWS, neutral_units, start=_START).expansions()
+        assert beyond_the_far_wall.pathing_distance_from_start == math.inf
+        assert isinstance(start, StartLocation)
+        with pytest.raises(NoNaturalError, match="no expansion where no player starts can be walked to"):
+            _ = start.natural
+
+    def test_with_no_ramp_out_of_its_main_its_main_ramp_raises(self) -> None:
+        (start, *_) = self._expansions(opponent_starts=())
+        assert isinstance(start, StartLocation)
+        with pytest.raises(NoMainRampError, match="no ramp out of the main"):
+            _ = start.main_ramp
+
+    def test_its_main_area_is_the_ground_joined_to_it_at_its_level(self) -> None:
+        """A wall two tiles wide at x = 48 and 49 parts the map's 80 columns of 60 tiles."""
+        neutral_units = _NeutralUnits()
+        neutral_units.base(_START)
+        neutral_units.base((64.5, 30.5))
+        rows = _map_rows(80, 60, lambda x, y: x in (48, 49))
+        this_side, far_side = _MapAtStart(
+            rows, neutral_units, start=_START, opponent_starts=((64.5, 30.5),)
+        ).expansions()
+        assert isinstance(this_side, StartLocation) and isinstance(far_side, StartLocation)
+        assert len(this_side.main_area) == 48 * 60
+        assert Tile.at(this_side.center) in this_side.main_area
+        assert Tile(47, 0) in this_side.main_area and Tile(48, 0) not in this_side.main_area
+        assert len(far_side.main_area) == 30 * 60
+        assert Tile(50, 59) in far_side.main_area
+
+
+def _game_at_the_start(
+    neutral_units: _NeutralUnits, *, opponent_starts: tuple[tuple[float, float], ...]
+) -> dict[str, object]:
+    """What the api reads of the starts as a game begins, this player's townhall at `_START` on `TestTheOrder`'s map
+    with `neutral_units` on it: each read's value, or the error it raised."""
+    townhall = make_unit(100, UnitTypeId.COMMAND_CENTER, at=_START)
+    units = [*neutral_units.units, townhall]
+    observations = (make_observation(0, units=units), make_observation(16, (PLAYER_ID, Result.VICTORY), units=units))
+    transport = FakeTransport(
+        make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=PLAYER_ID)),
+        make_response(game_info=make_game_info(*TestTheOrder._ROWS, start_locations=opponent_starts)),
+        make_response(data=sc2api_pb2.ResponseData()),
+        make_response(observation=observations[0]),
+        make_response(step=sc2api_pb2.ResponseStep()),
+        make_response(Status.ENDED, observation=observations[1]),
+    )
+    client = Client(transport)
+    client.join_game(Race.TERRAN)
+    api = Api()
+    read: dict[str, object] = {}
+
+    @api.on(GameStartEvent)
+    def take_the_starts(_: GameStartEvent) -> None:
+        read["expansions"] = api.expansions
+        read["map start"] = api.map.start_location
+        for name, reader in (
+            ("player", lambda: api.player.start_location),
+            ("enemy", lambda: api.enemy.start_location),
+        ):
+            try:
+                read[name] = reader()
+            except (NotReportedError, NoStartLocationError) as error:
+                read[name] = error
+
+    api.play(client)
+    return read
+
+
+class TestWhereEachPlayerStarted:
+    def _bases(self) -> _NeutralUnits:
+        neutral_units = _NeutralUnits()
+        for at in (_START, _PAST_THE_WALL, _BEHIND_THE_WALL):
+            neutral_units.base(at)
+        return neutral_units
+
+    def test_this_player_started_where_its_townhall_stood_and_the_enemy_at_the_other_start(self) -> None:
+        read = _game_at_the_start(self._bases(), opponent_starts=(_BEHIND_THE_WALL,))
+        start, past_the_wall, behind_the_wall = cast("tuple[Expansion, ...]", read["expansions"])
+        assert isinstance(start, StartLocation)
+        assert read["player"] is start
+        assert start.center == read["map start"]
+        assert read["enemy"] is behind_the_wall
+        assert start.natural is past_the_wall
+
+    def test_on_a_map_of_more_than_two_starts_where_the_enemy_started_is_not_reported(self) -> None:
+        read = _game_at_the_start(self._bases(), opponent_starts=(_PAST_THE_WALL, _BEHIND_THE_WALL))
+        assert isinstance(read["player"], StartLocation)
+        assert isinstance(read["enemy"], NotReportedError)
+        assert "2 start locations but this player's" in str(read["enemy"])
+
+    def test_where_no_expansion_stands_at_a_start_reading_it_raises(self) -> None:
+        read = _game_at_the_start(_NeutralUnits(), opponent_starts=(_BEHIND_THE_WALL,))
+        assert read["expansions"] == ()
+        assert isinstance(read["player"], NoStartLocationError)
+        assert isinstance(read["enemy"], NoStartLocationError)
+
+
 def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:
     """The map of a recorded game, and the units of its first observation."""
     info: sc2api_pb2.ResponseGameInfo | None = None
@@ -366,6 +522,30 @@ _COUNTS = {
 }
 
 
+# Each start location's natural, by map, both below their mains' ramps (corpus).
+_NATURALS = {
+    "IncorporealAIE_v4": {(32.5, 139.5): (59.5, 138.5), (123.5, 24.5): (96.5, 25.5)},
+    "LeyLinesAIE_v3": {(42.5, 40.5): (40.5, 69.5), (155.5, 133.5): (157.5, 104.5)},
+    "MagannathaAIE_v2": {(141.5, 38.5): (117.5, 28.5), (38.5, 141.5): (28.5, 117.5)},
+    "PersephoneAIE_v4": {(37.5, 34.5): (65.5, 30.5), (37.5, 145.5): (65.5, 149.5)},
+    "PylonAIE_v4": {(175.5, 76.5): (149.5, 74.5), (72.5, 171.5): (98.5, 173.5)},
+    "TorchesAIE_v4": {(124.5, 159.5): (95.5, 157.5), (124.5, 48.5): (95.5, 50.5)},
+    "UltraloveAIE_v2": {(42.5, 46.5): (68.5, 42.5), (141.5, 137.5): (115.5, 141.5)},
+}
+
+# How many tiles each main's ground covers, by map, this player's first: the two within a tile of each other, though
+# the game's pathing grid blocks the resources of this player's alone (corpus).
+_MAIN_AREA_SIZES = {
+    "IncorporealAIE_v4": (755, 755),
+    "LeyLinesAIE_v3": (770, 771),
+    "MagannathaAIE_v2": (744, 744),
+    "PersephoneAIE_v4": (774, 774),
+    "PylonAIE_v4": (794, 794),
+    "TorchesAIE_v4": (777, 777),
+    "UltraloveAIE_v2": (793, 793),
+}
+
+
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedMap:
     def test_this_player_starts_at_the_first_expansion_holding_the_fields_it_sees(self, path: Path) -> None:
@@ -378,9 +558,36 @@ class TestARecordedMap:
     def test_the_start_locations_are_the_expansions_marked_as_one(self, path: Path) -> None:
         game_map, unit_tracker = _recorded_map_and_units(path)
         expansions = Expansion._find_all(game_map, unit_tracker)
-        marked = {expansion.center for expansion in expansions if expansion.is_start_location}
+        marked = {expansion.center for expansion in expansions if isinstance(expansion, StartLocation)}
         assert marked == {game_map.start_location, *game_map.opponent_start_locations}
 
     def test_the_map_has_as_many_expansions_as_counted(self, path: Path) -> None:
         game_map, unit_tracker = _recorded_map_and_units(path)
         assert len(Expansion._find_all(game_map, unit_tracker)) == _COUNTS[path.stem.split("-")[0]]
+
+    def test_each_start_location_s_natural_is_the_expansion_below_its_main(self, path: Path) -> None:
+        game_map, unit_tracker = _recorded_map_and_units(path)
+        expansions = Expansion._find_all(game_map, unit_tracker)
+        starts = [expansion for expansion in expansions if isinstance(expansion, StartLocation)]
+        naturals = {
+            (start.center.x, start.center.y): (start.natural.center.x, start.natural.center.y) for start in starts
+        }
+        assert naturals == _NATURALS[path.stem.split("-")[0]]
+        assert starts[0].natural is expansions[1]
+
+    def test_each_main_area_holds_its_start_and_no_other_expansion_and_borders_its_main_ramp_alone(
+        self, path: Path
+    ) -> None:
+        game_map, unit_tracker = _recorded_map_and_units(path)
+        expansions = Expansion._find_all(game_map, unit_tracker)
+        starts = [expansion for expansion in expansions if isinstance(expansion, StartLocation)]
+        assert tuple(len(start.main_area) for start in starts) == _MAIN_AREA_SIZES[path.stem.split("-")[0]]
+        for start in starts:
+            main_area = start.main_area
+            assert [expansion for expansion in expansions if Tile.at(expansion.center) in main_area] == [start]
+            bordering = [
+                ramp
+                for ramp in game_map.ramps
+                if any(neighbor in main_area for tile in ramp.top for neighbor in tile.neighbors8)
+            ]
+            assert bordering == [start.main_ramp]

@@ -50,7 +50,8 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 - **The game's data**: `api.data`, every unit type, ability, upgrade and weapon from the game's tables, with the tech
   tree, the structures' footprints and what the tables leave out, measured in the game
   ([reference](https://maxnus.github.io/NachOS/sc2nachos/gamedata.html)).
-- **The map**: `api.map`'s heights, ramps and start locations, and `api.expansions`
+- **The map**: `api.map`'s heights, ramps and start locations, `api.expansions`, and each player's `start_location`
+  with its main's ramp, its ground and its natural
   ([reference](https://maxnus.github.io/NachOS/sc2nachos/gamemap.html)).
 - **Placement**: `api.placement`, where a structure may stand now, sites kept for builds to come, and the walls at a
   main's ramp ([reference](https://maxnus.github.io/NachOS/sc2nachos/placement.html)).

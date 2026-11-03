@@ -10,6 +10,7 @@ from sc2nachos.match._match import Race
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
+    from sc2nachos.gamemap import StartLocation
     from sc2nachos.ids import UpgradeId
 
 
@@ -18,7 +19,16 @@ class Enemy:
     """The other player, and what NachOS has learned or been told about it. `game_data` says which upgrades each upgrade
     needs researched first."""
 
-    __slots__ = ("_game_data", "_id", "_ladder_id", "_name", "_race", "_requested_race", "_upgrades")
+    __slots__ = (
+        "_game_data",
+        "_id",
+        "_ladder_id",
+        "_name",
+        "_race",
+        "_requested_race",
+        "_start_locations",
+        "_upgrades",
+    )
 
     def __init__(
         self,
@@ -38,6 +48,8 @@ class Enemy:
         self._ladder_id = ladder_id
         # Replaced whole on every change, since units read it as part of a key many times a step.
         self._upgrades: frozenset[UpgradeId] = frozenset()
+        # Where it may have started, the map's start locations but this player's: `None` for one no expansion stands at.
+        self._start_locations: tuple[StartLocation | None, ...] = ()
 
     def __repr__(self) -> str:
         race = None if self._race is None else self._race.name
@@ -110,6 +122,32 @@ class Enemy:
     def _learn_race(self, race: Race) -> None:
         """Take `race` as the race it plays."""
         self._race = race
+
+    @property
+    def start_location(self) -> StartLocation:
+        """Where it started: the one start location on the map but this player's.
+
+        Raises `NotReportedError` on a map with more than two start locations, since the game does not say which the
+        enemy took, and NachOS does not scout for it. Raises `NoStartLocationError` where no expansion stands at its
+        start, as on a mini-game's map.
+        """
+        if len(self._start_locations) == 1 and (start_location := self._start_locations[0]) is not None:
+            return start_location
+        # Imported here: the units' package, which the map's imports, imports this one.
+        from sc2nachos.gamemap._errors import NoStartLocationError
+        from sc2nachos.units._errors import NotReportedError
+
+        if len(self._start_locations) > 1:
+            raise NotReportedError(
+                f"the map has {len(self._start_locations)} start locations but this player's, and the game does not "
+                "say which the enemy took"
+            )
+        raise NoStartLocationError("no expansion stands where the enemy started")
+
+    def _learn_start_locations(self, start_locations: tuple[StartLocation | None, ...]) -> None:
+        """Take `start_locations`, one for each start location on the map but this player's, as where it may have
+        started: `None` for one no expansion stands at."""
+        self._start_locations = start_locations
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:

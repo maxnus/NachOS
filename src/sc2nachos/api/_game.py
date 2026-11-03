@@ -64,6 +64,7 @@ from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gamemap._expansion import _opponent_start_locations, _start_location_at
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Area
 from sc2nachos.ids import UnitTypeId, UpgradeId
@@ -153,12 +154,17 @@ class _Game:
         present_units = tracker.unit_tracker.present
         order_book = OrderBook(game_data)
         state = _State(observation, tracker, game_map)
+        expansions = Expansion._find_all(game_map, tracker.unit_tracker)
+        if enemy is not None:
+            enemy._learn_start_locations(_opponent_start_locations(game_map, expansions))
         game = cls(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, tracker.unit_tracker),
+            expansions=expansions,
             game_data=game_data,
-            player=Player._from_game(info, player_id),
+            player=Player._from_game(
+                info, player_id, start_location=_start_location_at(expansions, game_map.start_location)
+            ),
             enemy=enemy,
             tracker=tracker,
             orders=order_book,
