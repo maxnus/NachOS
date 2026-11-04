@@ -8,7 +8,7 @@ by itself.
 Keep this file current: when a step is done, say so here in the same pull request, and cut what no longer helps. A
 decision gets a line or two: what it rules out, and why where that is not plain. What was built is in the code and
 the docs, and who chose what over which alternative is in its issue or pull request. The decisions in full, as they
-stood before they were cut to that: `git show 582149c:.claude/plans/next-steps.md`.
+stood before they were cut to that, are `git show 582149c:.claude/plans/next-steps.md`, and they still stand.
 
 ## Where things stand
 
@@ -79,7 +79,7 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   as with the fog on, and the whole game is `api.all_units`, which raises `FogOnError` with the fog on, over marking
   the unseen in one list.
 
-### The package, its data and time
+### The package and its data
 
 - **Only `__init__.py` and `__about__.py` stand at the top of `src/sc2nachos`** (#205). Everything else is in a
   package, most named for the `Api` attribute whose type it holds, over nesting packages, and `_shared` imports
@@ -89,13 +89,13 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **A tile is a frozen dataclass, not a tuple** (#137): as a tuple it passed pyright as a point and indexed numpy as
   an array index. Nothing checks at run time that a point is a point: pyright catches a tile or a unit given as one,
   and only what cannot work otherwise, `in`, a grid's index and `Point`'s arithmetic, raises `not_a_point_error`.
-- **Not in NachOS**: `can_afford` (#46); an upgrade's progress as one number, which `api.researches` holds (#131); the
-  repair rates, each one division of `total_repair_cost`; a forecast of when tech is there; a getter beside
-  `api.data.units[t]`; `api.enemy.units`, which stays `api.units.enemy` (#121); and the numeric helpers `clip`,
-  `lerp`, `remap`, `damp`, `s_curve` and `sticky_round`, which went back to AvocaDOS (#194).
-- **The demo bot, `examples/demo_bot.py`, is the library's example** (#125), and beats `Computer` at `MEDIUM` in all
-  21 games of the pool's 7 maps against each of the 3 races. What it needs that NachOS lacks goes into NachOS first,
-  planned with the owner one gap at a time.
+- **Not in NachOS**: an upgrade's progress as one number, which `api.researches` holds (#131); the repair rates, each
+  one division of `total_repair_cost`; a forecast of when tech is there; a getter beside `api.data.units[t]`;
+  `api.enemy.units`, which stays `api.units.enemy` (#121); and the numeric helpers `clip`, `lerp`, `remap`, `damp`,
+  `s_curve` and `sticky_round`, which went back to AvocaDOS (#194).
+- **The demo bot, `examples/demo_bot.py`, is the library's example** (#125). It beat `Computer` at `MEDIUM` in all
+  21 games of the pool's 7 maps against each of the 3 races before #202 gave it speed mining, and has not played them
+  since (Next). What it needs that NachOS lacks goes into NachOS first, planned with the owner one gap at a time.
 
 ### The map
 
@@ -113,15 +113,16 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 
 ### Running, recordings and replays
 
-- **One `run_from_command_line`** plays a ladder game when given `--GamePort` and a local one otherwise. Its
-  arguments are named as the ladder names its own (`--RealTime`, `--ComputerRace`), and one it does not read is left
-  for the bot (#146). The runners are functions taking a built api, never methods of `Api` (#147).
+- **One `run_from_command_line`** plays a ladder game when given `--GamePort` and a local one otherwise. Its own
+  arguments, such as `--RealTime` and a local game's `--ComputerRace`, are named in the ladder's style, over
+  kebab-case and a `nachos` prefix, and one it does not read is left for the bot (#146). The runners are functions
+  taking a built api, never methods of `Api` (#147).
 - **NachOS declares numpy 2.0 or later** (#193), since the aiarena ladder's bot image carries numpy 2.0.2 on Python
   3.12, which its zip does not upgrade through pip.
 - **`PlaybackTransport` stays strict** (#154): `PermissivePlaybackTransport` is a sibling, never a keyword on it or a
   subclass, which would break the strict class's promise to raise.
-- **A replay played back names its player**, `player_id` 1 or 2, with no default (#160). An order, a drawing or a
-  camera move in one gets no special code: the game refuses it, and `play` raises.
+- **A replay played back names its player**, `player_id` 1 or 2, with no default (#160). An order, a chat, a drawing
+  or a camera move in one gets no special code: the game refuses it, and `play` raises.
 - **The corpus is NachOS's test data, never installed with the package**: a bot records its own games for its tests,
   and makes units through `sc2nachos.testing`, importing nothing of s2clientprotocol (#196).
 - **The API reference is pdoc's**, from the docstrings, over MkDocs, which links no name in plain backticks, and is
@@ -177,6 +178,18 @@ The issue, discussion or pull request named holds the reasons, and the alternati
     it, trading safety against how much evidence an assumption needs.
   - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
     Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
+
+### Kept as they are
+
+Code the owner chose to keep as it is, which a review could otherwise propose to change.
+
+- **A few nanoseconds are not worth a second code path or a duplicated check** (#175): "I don't think we need to
+  chase 20 ns".
+- **`UnitTypeData.build_time` is a stored field beside `_unrounded_build_time`** (#189), over a property derived from
+  it, which built a `GameTime` at every read.
+- **Speed mining's `_is_returning(order)` stays** (#208), over `OwnUnit.is_returning`, some 8 times slower.
+- **The fog-off view has no guard against `id_provider` giving an id a unit already holds**, since no path to it was
+  found, and copies each fog-off observation whole (#163).
 
 ## Next
 
@@ -296,12 +309,11 @@ be planned with the owner. Keeping the selections still waits on M5's exit gate.
   M4 deferred them (2026-10-18), since a type is offered at most 24 of the 312 abilities and pyright's completion
   would offer every unit all of them, and AvocaDOS's build orders hold ids. They would not make one id per action
   unnecessary, since ids also show in `unit.orders` and `unit.abilities`, and a callable target per unit is to
-  reconsider with them (review of #125). Building them is easy, one
-  `api.orders.issue` a method through the unit's tracker once it holds the order book, but their design needs the
-  owner: a small generic set with self types, so a barracks has no `gather`; methods on `Units` for a group, which
-  `issue` sends as one command; the "no second spelling" rule of `docs/maintaining/code-review.md`; and raising for a
-  unit no order book sends, in a finished game or a replay. AvocaDOS keeps its own wrappers, so it will not use them
-  soon.
+  reconsider with them (review of #125). Building them is easy, one `api.orders.issue` a method through the unit's
+  tracker once it holds the order book, but their design needs the owner: a small generic set with self types, so a
+  barracks has no `gather`; methods on `Units` for a group, which `issue` sends as one command; the "no second
+  spelling" rule of `docs/maintaining/code-review.md`; and raising for a unit no order book sends, in a finished game
+  or a replay. AvocaDOS keeps its own wrappers, so it will not use them soon.
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).
