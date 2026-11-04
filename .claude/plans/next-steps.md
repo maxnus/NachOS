@@ -1227,12 +1227,14 @@ Keep this file current: when a step is done, say so here in the same pull reques
   (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: buff 59,
   `ViperConsumeStructure`, worn by the hive a viper consumed, from step 14,132 and 15,245; ability 1662,
   `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by itself, which `OwnUnit.orders` raises on
-  for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42, each worn by one kind of collapsible tower from
-  step 0 and seen with the fog off only (17 of the 42): `CollapsibleRockTowerConjoinedSearch` by
-  `CollapsibleRockTower`, `CollapsibleRockTowerRampDiagonalConjoinedSearch` by `CollapsibleRockTowerDiagonal`,
+  for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42 (17 of the 42), each worn by every collapsible
+  tower of one kind, in the fog, in the first observation of a playback with the fog off, and never again, nor ever
+  in either player's own view: `CollapsibleRockTowerConjoinedSearch` by `CollapsibleRockTower`,
+  `CollapsibleRockTowerRampDiagonalConjoinedSearch` by `CollapsibleRockTowerDiagonal`,
   `CollapsibleTerranTowerConjoinedSearch` by `CollapsibleTerranTower` and
-  `CollapsibleTerranTowerRampDiagonalConjoinedSearch` by `CollapsibleTerranTowerDiagonal`. The 40 reported no unit
-  type the curated ids leave out.
+  `CollapsibleTerranTowerRampDiagonalConjoinedSearch` by `CollapsibleTerranTowerDiagonal` (4686890 and 4750796, on
+  MagannathaAIE, every 2 steps). `Api.all_units` shows that first report visible, so its towers' `buffs` raise in the
+  first turn. The 40 reported no unit type the curated ids leave out.
 
 ## 1. Waiting until something needs them
 
