@@ -27,8 +27,8 @@ and is what `pip install sc2nachos` installs until 0.1.0.
 ## Making one
 
 1. On the commit to release, normally `main`, run the tests that play a game, which no workflow runs by itself:
-   `uv run pytest -m integration` with the game installed, or the `sc2` workflow from the Actions tab with `-m` as
-   the script and `pytest -m integration` as the arguments.
+   `uv run pytest -m integration -n 8` with the game installed, eight games at once, or the `sc2` workflow from the
+   Actions tab with `-m` as the script and `pytest -m integration` as the arguments.
 2. Publish the release of that commit, with notes listing the pull requests merged since the last one:
    `gh release create v0.1.0 --target <commit> --generate-notes`, with `--prerelease` for a pre-release. Say in the
    notes what a bot has to change. Releases, Draft a new release, on GitHub does the same. Either makes a plain tag;
