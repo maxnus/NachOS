@@ -7,10 +7,5 @@ class NoMainRampError(NachOSError, LookupError):
     """No ramp out of the start location's main can be walked to."""
 
 
-class NoNaturalError(NachOSError, LookupError):
-    """No expansion where no player starts can be walked to from the start location."""
-
-
-class NoThirdError(NachOSError, LookupError):
-    """Fewer than two full bases where no player starts, beside the natural, can be walked to from the start
-    location's natural."""
+class NoExpansionError(NachOSError, LookupError):
+    """No expansion of the kind asked for, the natural or a third, can be walked to from the start location."""

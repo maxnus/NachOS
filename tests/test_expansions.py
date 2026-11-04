@@ -14,9 +14,8 @@ from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import (
     Expansion,
     GameMap,
+    NoExpansionError,
     NoMainRampError,
-    NoNaturalError,
-    NoThirdError,
     StartLocation,
 )
 from sc2nachos.gamemap._expansion import _ground_as_the_game_began, _walking_distances
@@ -402,7 +401,7 @@ class TestAStartLocation:
         start, beyond_the_far_wall = _MapAtStart(self._ROWS, neutral_units, start=_START).expansions()
         assert beyond_the_far_wall.pathing_distance_from_start == math.inf
         assert isinstance(start, StartLocation)
-        with pytest.raises(NoNaturalError, match="no expansion where no player starts can be walked to"):
+        with pytest.raises(NoExpansionError, match="no expansion where no player starts can be walked to"):
             _ = start.natural
 
     def test_with_no_ramp_out_of_its_main_its_main_ramp_raises(self) -> None:
@@ -480,9 +479,9 @@ class TestAStartLocation:
         start, past_the_wall, _ = self._expansions(opponent_starts=())
         assert isinstance(start, StartLocation)
         assert start.natural is past_the_wall
-        with pytest.raises(NoThirdError, match="fewer than two full bases"):
+        with pytest.raises(NoExpansionError, match="fewer than two full bases"):
             _ = start.line_third
-        with pytest.raises(NoThirdError, match="fewer than two full bases"):
+        with pytest.raises(NoExpansionError, match="fewer than two full bases"):
             _ = start.triangle_third
 
 

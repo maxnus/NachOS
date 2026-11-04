@@ -26,10 +26,11 @@
 
 - **Review every pull request you open** before calling it ready: read its whole diff on GitHub, for correctness,
   tests, docs and generated files, and report the findings to the owner, or say there are none.
-- **Walking through findings**: one `AskUserQuestion` per finding, with everything in the question text, since text
-  written before the question is not shown with it: file and line, the original snippet, the owner's comment if
-  there is one, and the verdict (confirmed, partly, not recommended; new in this PR or already there). Put proposed
-  code in the options' previews. Record each decision in a scratch file as you go, and apply them all only after
-  the walk-through.
+- **Walking through findings**: apply the ones you agree with as the comment asks, without asking (the owner, review of
+  #209), and ask only where a choice is open or you disagree. One `AskUserQuestion` per such finding, with everything in
+  the question text, since text written before the question is not shown with it: file and line, the original snippet,
+  the owner's comment if there is one, and the verdict (confirmed, partly, not recommended; new in this PR or already
+  there). Put proposed code in the options' previews. Record each decision in a scratch file as you go, and apply them
+  all only after the walk-through.
 - A local diff review with Plannotator, where it is installed: `plannotator review --git --base origin/main
   --diff-type since-base --json`, run in the background, since it waits for the owner.

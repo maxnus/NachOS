@@ -1075,8 +1075,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `GameMap` does). Either raises `NoStartLocationError` where no expansion stands at the start, as on a mini-game's
     map.
   - Its reads raise where there is none (over `None`, and over `natural` raising beside a `main_ramp` of
-    `Ramp | None`): `natural` raises `NoNaturalError`, and `main_ramp` `NoMainRampError`, reversing #156's
-    `Ramp | None`. `api.map.main_ramp` and `main_ramp_of` are private, so `StartLocation.main_ramp` is the one
+    `Ramp | None`): `natural` raises `NoExpansionError` (`NoNaturalError` until the second round of the review), and
+    `main_ramp` `NoMainRampError`, reversing #156's `Ramp | None`. `api.map.main_ramp` and `main_ramp_of` are private, so `StartLocation.main_ramp` is the one
     spelling; the walls still take a ramp.
   - `main_area` (over `main_ground` and `plateau`) is the main's ground: every tile within half a level of the
     start's height, walkable as the game began with the townhall's and the start's resources' footprints opened, and
@@ -1090,7 +1090,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
       thirds are the two full bases, 8 fields or more and 2 geysers, where no player starts but the natural, nearest
       the natural by walking; the line third is the one whose straight-line distance to the main is the larger against
       its distance to the playable area's nearest edge (the owner's rule, over an angle from the main's way to the
-      natural and over the two nearest in a straight line split by the edge alone). Each raises `NoThirdError` where
+      natural and over the two nearest in a straight line split by the edge alone). Each raises `NoExpansionError` where
       there are not two. On the corpus the ratios lie at least 3.4 times apart, and the thirds' walks within 1.42 times.
     - Every walk the expansions take at the start, `pathing_distance_from_start` (so `api.expansions`' order), the
       natural and the thirds, is over the ground as the game began with every mineral field and geyser on it, which the
@@ -1107,6 +1107,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
       `sc2nachos.units`, so that `Player` and `Enemy` import them at the top (over importing them where they raise).
     - The candidates are `candidates`, the finders `StartLocation._find_at` and `_find_at_opponent_starts`
       (classmethods), and `Enemy._learn_start_locations` stays, as `_learn_race` does.
+    - Second round: the natural and the thirds raise one `NoExpansionError`, and `NoMainRampError` stays apart (over one
+      error for all three, whose name would be vague; both subclass `LookupError`). The enemy's start is
+      `Enemy._start_location`, which `_learn_start_locations` sets through `assume_start_location` on a map of two
+      starts, so that the property only reads it, and `assume_start_location` tests `not in` the possible starts.
   - Staying in AvocaDOS: the order to take expansions in, and its scouting for the enemy's start.
 
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a

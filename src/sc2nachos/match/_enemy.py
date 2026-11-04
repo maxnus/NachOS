@@ -22,13 +22,13 @@ class Enemy:
     needs researched first."""
 
     __slots__ = (
-        "_assumed_start_location",
         "_game_data",
         "_id",
         "_ladder_id",
         "_name",
         "_race",
         "_requested_race",
+        "_start_location",
         "_start_locations",
         "_upgrades",
     )
@@ -53,8 +53,8 @@ class Enemy:
         self._upgrades: frozenset[UpgradeId] = frozenset()
         # Where it may have started, the map's start locations but this player's: `None` for one no expansion stands at.
         self._start_locations: tuple[StartLocation | None, ...] = ()
-        # Where the bot has said it started, if it has.
-        self._assumed_start_location: StartLocation | None = None
+        # Where it started: the other start on a map of two, else the one the bot named, if it has.
+        self._start_location: StartLocation | None = None
 
     def __repr__(self) -> str:
         race = None if self._race is None else self._race.name
@@ -130,18 +130,16 @@ class Enemy:
 
     @property
     def start_location(self) -> StartLocation:
-        """Where it started: the start location `assume_start_location` last named, or else the one start location on
-        the map but this player's.
+        """Where it started: on a map of two start locations the one but this player's, and on a map of more the one
+        `assume_start_location` last named.
 
         Raises `NotReportedError` on a map with more than two start locations until the bot names one with
         `assume_start_location`, since the game does not say which the enemy took, and NachOS does not scout for it.
         Raises `NoStartLocationError` where no expansion stands at its start, as on a mini-game's map, or where the map
         has no start location but this player's.
         """
-        if self._assumed_start_location is not None:
-            return self._assumed_start_location
-        if len(self._start_locations) == 1 and (start_location := self._start_locations[0]) is not None:
-            return start_location
+        if self._start_location is not None:
+            return self._start_location
         if len(self._start_locations) > 1:
             raise NotReportedError(
                 f"the map has {len(self._start_locations)} start locations but this player's, and the game does not "
@@ -155,14 +153,16 @@ class Enemy:
         """Assume the enemy started at `start_location` from now on, in place of any start assumed before, so that
         `start_location` reads it on a map with more than two start locations. Raises `ValueError` for one that is not
         among the map's start locations but this player's."""
-        if not any(start_location is possible for possible in self._start_locations):
+        if start_location not in self._start_locations:
             raise ValueError(f"{start_location.center} is not among the map's start locations but this player's")
-        self._assumed_start_location = start_location
+        self._start_location = start_location
 
     def _learn_start_locations(self, start_locations: tuple[StartLocation | None, ...]) -> None:
         """Take `start_locations`, one for each start location on the map but this player's, as where it may have
-        started: `None` for one no expansion stands at."""
+        started: `None` for one no expansion stands at. Where there is one, it started there."""
         self._start_locations = start_locations
+        if len(start_locations) == 1 and (start_location := start_locations[0]) is not None:
+            self.assume_start_location(start_location)
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:

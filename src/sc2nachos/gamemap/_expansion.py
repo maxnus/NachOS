@@ -12,7 +12,7 @@ from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components
 
 from sc2nachos.gamedata._footprints import FOOTPRINTS
-from sc2nachos.gamemap._errors import NoMainRampError, NoNaturalError, NoThirdError
+from sc2nachos.gamemap._errors import NoExpansionError, NoMainRampError
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.gamemap._ramp import _HALF_A_LEVEL
 from sc2nachos.geometry import Point, TileSet
@@ -192,10 +192,10 @@ class StartLocation(Expansion):
     @property
     def natural(self) -> Expansion:
         """The expansion nearest `center` by pathing distance where no player starts, and of two as near, the nearer in
-        a straight line. Raises `NoNaturalError` where no such expansion can be walked to, as on a map drawn for a
+        a straight line. Raises `NoExpansionError` where no such expansion can be walked to, as on a map drawn for a
         test."""
         if self._natural is None:
-            raise NoNaturalError(f"no expansion where no player starts can be walked to from {self.center}")
+            raise NoExpansionError(f"no expansion where no player starts can be walked to from {self.center}")
         return self._natural
 
     @property
@@ -203,17 +203,17 @@ class StartLocation(Expansion):
         """The third along the way from the main through the natural: of the two full bases nearest the natural by
         pathing distance where no player starts, the one whose straight-line distance to `center` is the larger against
         its straight-line distance to the playable area's nearest edge. A full base has 8 mineral fields or more and 2
-        geysers. Raises `NoThirdError` where fewer than two such bases can be walked to from the natural."""
+        geysers. Raises `NoExpansionError` where fewer than two such bases can be walked to from the natural."""
         if self._line_third is None:
-            raise NoThirdError(f"fewer than two full bases can be walked to from the natural of {self.center}")
+            raise NoExpansionError(f"fewer than two full bases can be walked to from the natural of {self.center}")
         return self._line_third
 
     @property
     def triangle_third(self) -> Expansion:
         """The third beside the main and the natural: of the two `line_third` is chosen from, the other. Raises
-        `NoThirdError` as `line_third` does."""
+        `NoExpansionError` as `line_third` does."""
         if self._triangle_third is None:
-            raise NoThirdError(f"fewer than two full bases can be walked to from the natural of {self.center}")
+            raise NoExpansionError(f"fewer than two full bases can be walked to from the natural of {self.center}")
         return self._triangle_third
 
     @classmethod
