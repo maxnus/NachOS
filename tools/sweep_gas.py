@@ -28,9 +28,11 @@ townhall's center::
 
     uv run python tools/sweep_gas.py
     uv run python tools/sweep_gas.py --collectors 1 2 --variants plain both gather --seeds 1 2 --out gas.json
+    uv run python tools/sweep_gas.py --collectors 2 --variants plain both --replays replays
 
-On GitHub, the `sc2` workflow runs it, `tools/sweep_gas.py` as the script and the arguments as given. The findings are
-written as JSON: the build, the settings, and each trial's.
+On GitHub, the `sc2` workflow runs it, `tools/sweep_gas.py` as the script and the arguments as given, and keeps what
+it writes in the repository's folder, `--replays` among it. The findings are written as JSON: the build, the settings,
+and each trial's, with when a collector was first seen mining, by a replay's clock.
 """
 
 import argparse
@@ -141,6 +143,8 @@ class _RefineryFindings:
     vespene_taken: int
     collectors_seen_mining: int
     """How many of its collectors were seen gathering at a mineral field over the time measured."""
+    first_seen_mining_at: float | None
+    """The game time, in seconds as a replay's clock shows it, at which one was first seen so."""
     trips: int
     """How many times a collector went into it."""
     mean_steps_inside: float | None
@@ -191,6 +195,7 @@ class _TrialGame:
         self._collected_at_the_start = (0.0, 0.0)
         self._trip_ends_by_refinery: dict[Unit[UnitType.GasBuilding], tuple[Point, Point]] = {}
         self._seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], set[int]] = {}
+        self._first_seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], GameTime] = {}
         self._trip_log_by_refinery: dict[Unit[UnitType.GasBuilding], _TripLog] = {}
         self._last_seen_at_by_collector: dict[int, Point] = {}
         self._inside_since_by_collector: dict[int, int] = {}
@@ -291,6 +296,7 @@ class _TrialGame:
             target = current_order.known_target
             if isinstance(target, Unit) and UnitType.AnyMineralField.includes(target):
                 self._seen_mining_by_refinery.setdefault(refinery, set()).add(scv.id)
+                self._first_seen_mining_by_refinery.setdefault(refinery, self.api.time)
 
     def _note_the_trips_into_the_refineries(self, *, record: bool) -> None:
         """Follow each collector going into its refinery and coming out, and if `record`, note where it was last seen
@@ -393,6 +399,9 @@ class _TrialGame:
                     collectors=len(api.extensions.workers_at(refinery)),
                     vespene_taken=self._vespene_left_at_the_start[refinery] - refinery.vespene_contents,
                     collectors_seen_mining=len(self._seen_mining_by_refinery.get(refinery, ())),
+                    first_seen_mining_at=(
+                        None if (first := self._first_seen_mining_by_refinery.get(refinery)) is None else first.seconds
+                    ),
                     trips=len(trip_log.entries),
                     mean_steps_inside=_mean(trip_log.steps_inside),
                     mean_steps_between_entries=_mean(trip_log.steps_between_entries),
@@ -434,9 +443,11 @@ def _mean_place(points: Sequence[Point], center: Point, toward: Point) -> tuple[
     return sum(distances) / len(distances), sum(angles) / len(angles)
 
 
-def _play(trial: _Trial, *, warm_up: GameTime, measured: GameTime) -> _TrialFindings:
-    """Play `trial`'s game and return what it recorded."""
+def _play(trial: _Trial, *, warm_up: GameTime, measured: GameTime, replays: Path | None) -> _TrialFindings:
+    """Play `trial`'s game and return what it recorded, saving its replay into the folder `replays` unless `None`,
+    named for the seed, the collectors a refinery and the variant."""
     game = _TrialGame(trial, warm_up=warm_up, measured=measured)
+    replay = None if replays is None else replays / f"{trial.seed}-{trial.collectors}-{trial.variant.name}.SC2Replay"
     run_local(
         MAP,
         game.api,
@@ -445,6 +456,7 @@ def _play(trial: _Trial, *, warm_up: GameTime, measured: GameTime) -> _TrialFind
         steps_per_turn=_STEPS_PER_TURN,
         time_limit=_SETUP_TIME + warm_up + measured,
         random_seed=trial.seed,
+        save_replay_to=replay,
     )
     if game.findings is None:
         raise RuntimeError(f"{trial} ended before the time measured did: the refineries were not finished in time")
@@ -457,7 +469,8 @@ def _summary(findings: _TrialFindings, measured: GameTime) -> str:
     per_minute = 60 / measured.seconds
     refineries = ", ".join(
         f"{refinery.vespene_taken * per_minute:.0f} at {refinery.distance_to_the_townhall:.2f} "
-        f"({refinery.collectors_seen_mining} seen mining, inside {_rounded(refinery.mean_steps_inside)}, "
+        f"({refinery.collectors_seen_mining} seen mining{_first_seen(refinery.first_seen_mining_at)}, "
+        f"inside {_rounded(refinery.mean_steps_inside)}, "
         f"cycle {_rounded(refinery.mean_steps_between_entries)})"
         for refinery in findings.refineries
     )
@@ -466,6 +479,11 @@ def _summary(findings: _TrialFindings, measured: GameTime) -> str:
         f"minerals {findings.minerals_collected:.0f}; moves {findings.moves_given}, "
         f"refused {findings.actions_refused}; enemies in sight {findings.most_enemies_in_sight}"
     )
+
+
+def _first_seen(seconds: float | None) -> str:
+    """When a collector was first seen mining, as a replay's clock shows it, after a space; empty for never."""
+    return "" if seconds is None else f" from {int(seconds) // 60}:{int(seconds) % 60:02d}"
 
 
 def _rounded(value: float | None) -> str:
@@ -485,6 +503,7 @@ def main(argv: Sequence[str]) -> None:
     parser.add_argument("--warm-up", type=float, default=20.0, help="game seconds from the hand-over to measuring")
     parser.add_argument("--measured", type=float, default=180.0, help="game seconds measured")
     parser.add_argument("--out", type=Path, default=Path("gas.json"), help="where to write the findings")
+    parser.add_argument("--replays", type=Path, help="a folder to save each trial's replay into")
     arguments = parser.parse_args(argv)
     if any(collectors not in (1, 2, 3) for collectors in arguments.collectors):
         raise SystemExit("a refinery takes one to three collectors")
@@ -496,9 +515,11 @@ def main(argv: Sequence[str]) -> None:
         for collectors in arguments.collectors
         for name in arguments.variants
     ]
+    if arguments.replays is not None:
+        arguments.replays.mkdir(parents=True, exist_ok=True)
     all_findings = []
     for trial in trials:
-        findings = _play(trial, warm_up=warm_up, measured=measured)
+        findings = _play(trial, warm_up=warm_up, measured=measured, replays=arguments.replays)
         logger.info(_summary(findings, measured))
         all_findings.append(findings)
     report = {
