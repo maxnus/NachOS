@@ -207,7 +207,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 ## Next
 
 - **Speed mining picks every resource, and releases the workers costing least** (the owner, 2026-11-04), so that a
-  bot holds only how many mine and how many collect, which stays its own; in 0.3.0, with #227. Planned, not built:
+  bot holds only how many mine and how many collect, which stays its own; in 0.3.0, with #227. Built in #229:
   - `collect`'s pick fills gas buildings to two at the expansion nearest the worker that has one under two, nearest
     its center first, before a third anywhere, where today it fills the nearest expansion to three first. A third
     then goes base by base: at the expansion nearest the worker with one under three, the farthest from its center
@@ -224,6 +224,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   - AvocaDOS then drops its caps a refinery (`max_collectors`) and keeps a number of collectors: it hands a worker
     to `collect`, naming no gas building, while it holds fewer, and calls `release_collectors` when it wants fewer
     (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto `api.vision` (#227).
+  - Then, in a pull request of its own after #229 and in 0.3.0 too: speed mining lets a worker go once the bot orders
+    it elsewhere, so that `miners` and `collectors` hold only workers at that work and a number kept is true (the
+    owner, review of #229, over ranking such workers first in the releases). It reverses #201, which leaves one alone
+    until it is idle, so a builder no longer comes back by itself; AvocaDOS releases its builders itself already. The
+    bot's orders are read off the order book: one given this turn or sent lately that is not speed mining's own, its
+    gather, return, moves, right-click on the townhall or attack. The game's redirect to another field and a worker
+    inside a gas building stay held; a drone the bot burrows is let go.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
