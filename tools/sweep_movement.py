@@ -26,7 +26,7 @@ import json
 import math
 import statistics
 import sys
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Self
@@ -45,8 +45,8 @@ from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Race
 from sc2nachos.run import Installation
 
-OUTPUT = Path("movement.json")
-RACES = {"terran": Race.TERRAN, "zerg": Race.ZERG, "protoss": Race.PROTOSS}
+DEFAULT_FINDINGS_PATH = Path("movement.json")
+RACES_BY_NAME = {"terran": Race.TERRAN, "zerg": Race.ZERG, "protoss": Race.PROTOSS}
 
 # The upgrades upgrade inference reads off a buff, whose types the sweep leaves out.
 _READ_OFF_BUFFS = frozenset({UpgradeId.CHARGE})
@@ -79,7 +79,6 @@ _CREEP_WAIT_STEPS = 6720
 # The steps a unit made by debug command is waited for, and those it is given to settle once made.
 _MAKING_STEPS = 16
 _SETTLING_STEPS = 8
-_REMOVAL_STEPS = 16
 # A trial watches a unit for as long as the course takes it at this share of the slower of its two row speeds, and
 # stops once it has stood still this many steps after moving, or come this close to the course's end.
 _WATCH_SPEED_SHARE = 0.5
@@ -318,7 +317,7 @@ class MovementSweep:
         row_speed = row.with_upgrades({upgrade}).speed if upgraded else row.speed
         if on_creep:
             course = self._creep_course(heading_degrees)
-            self._remove(unit.tag for unit in self._game.units() if unit.unit_type == UnitTypeId.LARVA)
+            self._game.remove(unit.tag for unit in self._game.units() if unit.unit_type == UnitTypeId.LARVA)
         elif self._flies(unit_type):
             course = Course.through(self._map.playable_area.center, heading_degrees, _FLYING_COURSE_HALF_LENGTH)
         else:
@@ -335,7 +334,7 @@ class MovementSweep:
             self._client.step(_SETTLING_STEPS)
             positions = self._watched_moving(mover.tag, course, min(row.speed, row_speed))
         finally:
-            self._remove(made_tags)
+            self._game.remove(made_tags)
         finding = MoveFinding(
             unit_type.name,
             upgrade.name,
@@ -351,8 +350,8 @@ class MovementSweep:
 
     def _watched_moving(self, tag: int, course: Course, slower_row_speed: float) -> list[Point]:
         """Order the unit `tag` to the end of `course` and return where it stood as ordered and after each step,
-        until it arrived, stood still after moving, or had taken twice as long as the course takes it at
-        `_WATCH_SPEED_SHARE` of `slower_row_speed`."""
+        until it arrived, stood still after moving, or had taken as long as the course takes it at `_WATCH_SPEED_SHARE`
+        of `slower_row_speed`."""
         positions = [_position_of(self._listed(tag))]
         self._game.order(RawAbilityId.Move_Move, tag, course.end)
         watch_steps = math.ceil(course.length / (slower_row_speed * _WATCH_SPEED_SHARE / STEPS_PER_SECOND))
@@ -373,7 +372,7 @@ class MovementSweep:
         """Whether a `unit_type` flies, as the game reports one made at the start of the first ground course."""
         if (flies := self._flying_by_type.get(unit_type)) is None:
             probe = self._make(unit_type, self._ground_courses[_HEADINGS_DEGREES[0]].start)
-            self._remove([probe.tag])
+            self._game.remove([probe.tag])
             flies = self._flying_by_type[unit_type] = probe.is_flying
         return flies
 
@@ -576,18 +575,6 @@ class MovementSweep:
             raise RuntimeError(f"unit {tag} is no longer listed")
         return unit
 
-    def _remove(self, tags: Iterable[int]) -> None:
-        """Kill the units `tags` and step until the game lists none of them."""
-        tags_to_remove = set(tags)
-        if not tags_to_remove:
-            return
-        self._game.kill(tags_to_remove)
-        for _ in range(_REMOVAL_STEPS):
-            self._client.step(1)
-            if not tags_to_remove & {unit.tag for unit in self._game.units()}:
-                return
-        logger.warning("{} units were not removed", len(tags_to_remove))
-
 
 def _clear_half_length(center: Point, heading_degrees: float, is_clear: Callable[[Point], bool]) -> float:
     """How far a line through `center` along `heading_degrees` runs either way, up to `_LONGEST_COURSE_HALF_LENGTH`,
@@ -639,7 +626,7 @@ def _measure_into(finding: MoveFinding, positions: Sequence[Point]) -> None:
             )
 
 
-def sweep(race: Race, installation: Installation) -> dict[str, object]:
+def sweep_race(race: Race, installation: Installation) -> dict[str, object]:
     """One game as `race`: every trial before the race's speed upgrades and after."""
     with playing(race, installation) as game:
         movement_sweep = MovementSweep(game, race)
@@ -658,13 +645,18 @@ def sweep(race: Race, installation: Installation) -> dict[str, object]:
 def main(argv: Sequence[str]) -> None:
     """Sweep the races named, or every race, and write the findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("races", nargs="*", help=f"which to play, of {', '.join(RACES)}; every one when none")
-    parser.add_argument("--out", type=Path, default=OUTPUT, help=f"where to write the findings; {OUTPUT} if not named")
+    parser.add_argument("races", nargs="*", help=f"which to play, of {', '.join(RACES_BY_NAME)}; every one when none")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=DEFAULT_FINDINGS_PATH,
+        help=f"where to write the findings; {DEFAULT_FINDINGS_PATH} if not named",
+    )
     arguments = parser.parse_args(argv)
-    if unknown_races := [name for name in arguments.races if name not in RACES]:
+    if unknown_races := [name for name in arguments.races if name not in RACES_BY_NAME]:
         raise SystemExit(f"No race is called {', '.join(unknown_races)}")
     installation = Installation.find()
-    findings = {name: sweep(RACES[name], installation) for name in arguments.races or RACES}
+    findings = {name: sweep_race(RACES_BY_NAME[name], installation) for name in arguments.races or RACES_BY_NAME}
     arguments.out.write_text(json.dumps(findings, indent=2) + "\n", encoding="utf-8")
     logger.info("Wrote the findings to {}", arguments.out)
 

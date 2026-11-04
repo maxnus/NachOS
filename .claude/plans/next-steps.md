@@ -1081,8 +1081,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     distance falls between the two, as `u`, 0 without and 1 with: within `x` of 1 is a fast vote, within `x` of 0 a slow
     one, anything else none (the owner: within a small tolerance of the expected upgraded speed, over faster than
     allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are closer
-    than the measured precision can tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds only off
-    it.
+    than the measured precision can tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds by only
+    3% (tool `sweep_movement`).
   - The votes of a slice are one observation for each upgrade, k fast of the n units that voted, with a beta-binomial
     likelihood whose spread says how often a whole group comes out fast without the upgrade: 20 of 20 is strong, 1 of
     20 counts against it (the owner: the number of units, their share and the number of observations all count, over
