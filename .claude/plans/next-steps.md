@@ -197,6 +197,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - **`UnitTypeData.build_time` is a stored field beside `_unrounded_build_time`** (#189), over a property derived from
   it, which built a `GameTime` at every read.
 - **Speed mining's `_is_returning(order)` stays** (#208), over `OwnUnit.is_returning`, some 8 times slower.
+- **Speed upgrades' cost a turn stays as measured** (the owner, step 4 of #226), 6.9 µs a turn over AvocaDOS's recorded
+  games, over reading creep a tile at a time without the map, some 11 µs on a Zerg turn, and over walking `api.units`
+  without building `api.units.enemy`, 1 or 2 µs: about a tenth of the rest of upgrade inference.
 - **The fog-off view has no guard against `id_provider` giving an id a unit already holds**, since no path to it was
   found, and copies each fog-off observation whole (#163).
 - **`playback` names a `ReplayPlayback`, and `game` a `GameProcess`** (the owner, #176, 2026-11-04), over
