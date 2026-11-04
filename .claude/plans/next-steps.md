@@ -1065,43 +1065,44 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
   loop and with few code paths:
-  - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own). Its
-    name is open; `from_movement` was proposed.
-  - The 10 upgrades the rows give a speed: Metabolic Boost, Glial Reconstitution, Centrifugal Hooks, Muscular
-    Augments, Anabolic Synthesis, Pneumatized Carapace (overlord, transport overlord and overseer), Hyperflight Rotors,
-    Gravitic Boosters, Gravitic Drive and Flux Vanes. Charge stays read off its buff. Tunneling Claws waits, with Blink
-    and Shadow Stride (proposed): a burrowed roach has two upgraded speeds, Tunneling Claws alone or with Glial
-    Reconstitution, which would need a second code path.
-  - Each enemy unit of those types keeps a window, where and when it began. It begins again when the unit is not
-    visible, is on another side than when first seen, has no `velocity` after a gap in the observations (a transport, a
-    nydus, out of sight), or wears an acceleration zone's buff.
+  - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own).
+  - The rows give 12 upgrades a speed. Charge stays read off its buff, and the other ten are read off movement:
+    Metabolic Boost, Glial Reconstitution, Centrifugal Hooks, Muscular Augments, Anabolic Synthesis, Pneumatized
+    Carapace (overlord, transport overlord and overseer), Hyperflight Rotors, Gravitic Boosters, Gravitic Drive and Flux
+    Vanes. Tunneling Claws, the twelfth, is open (below).
+  - Each enemy unit of the types those ten speed up keeps a window, where and when it began. It begins again when the
+    unit is not visible, is on another side than when first seen, has no `velocity` after a gap in the observations (a
+    transport, a nydus, out of sight), or wears an acceleration zone's buff. A burrowed roach and a unit known to be a
+    hallucination do not vote: a burrowed roach's unupgraded speed is 0, so one standing still would vote against Glial
+    Reconstitution, and a hallucination may not move at its owner's speed.
   - A window of about a second compares the distance covered with two predictions, without the upgrade and with it,
     each summed step by step at the speed for the ground the unit stood on: Zerg ground types count creep too (the
     owner, over measuring off creep only), from a table measured in game, since the rows hold no creep speed. Where the
     distance falls between the two, as `u`, 0 without and 1 with: within `x` of 1 is a fast vote, within `x` of 0 a slow
     one, anything else none (the owner: within a small tolerance of the expected upgraded speed, over faster than
-    allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are too
-    close for the measured precision to tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds only
-    off it.
+    allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are closer
+    than the measured precision can tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds only off
+    it.
   - The votes of a slice are one observation for each upgrade, k fast of the n units that voted, with a beta-binomial
     likelihood whose spread says how often a whole group comes out fast without the upgrade: 20 of 20 is strong, 1 of
     20 counts against it (the owner: the number of units, their share and the number of observations all count, over
-    each unit alone).
+    each unit alone). What a slice is, is open (below).
   - The score is the probability that the enemy has the upgrade, by Bayes' rule on each slice, in [0, 1] (the owner,
-    over a clamped sum). No vote counts before the earliest the upgrade could finish, its researcher's build time plus
-    its research time. After that it starts at a fixed `p0` and moves only with what is seen, `p0` being its floor too,
-    so evidence against it from before the upgrade finished leaves no debt (the owner, over a prior rising with game
-    time, a timing guess that is the bot's to make).
+    over a clamped sum). No vote counts before the earliest the upgrade could finish: its research time, plus its
+    researcher's build time where no player starts with a researcher, as every Zerg starts with a hatchery, which
+    researches Pneumatized Carapace. After that it starts at a fixed `p0` and moves only with what is seen, `p0` being
+    its floor too, so evidence against it from before the upgrade finished leaves no debt (the owner, over a prior
+    rising with game time, a timing guess that is the bot's to make).
   - It is assumed at 0.999 and forgotten at a lower threshold of its own, so it does not flip back and forth (the
-    owner, over assuming for good), forgetting only what speed assumed, never what the bot or other evidence did.
-  - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without the
-    upgrade ever reaches 0.999 in a game is at most `p0`'s odds over 0.999's, about 1 in 100,000 per upgrade from
-    `p0` = 1%, if the likelihoods are right; each climb off the floor adds about as much. `p0` trades this against how
-    much evidence an assumption needs, and the replays choose it.
+    owner, over assuming for good). It forgets only what speed assumed. The extension cannot see an upgrade the bot
+    assumes after speed did, so speed can forget that one: a limit to document.
+  - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without an
+    upgrade ever reaches 0.999 for it in a game is at most `p0`'s odds over 0.999's, about 1 in 100,000 from `p0` = 1%,
+    if the likelihoods are right; each climb off the floor adds about as much. The bounds of a race's speed upgrades
+    add up, Zerg's six among them, so for 0.1% a game `p0` stays under about 14%, and within that the replays choose
+    it, trading safety against how much evidence an assumption needs.
   - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
-    Beam, a hydralisk's lunge and the facing, and a window per type. One comes back only if the replays show the
-    checks miss it.
-
+    Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
 ## Next
 
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), the extension mechanism with speed mining as
@@ -1119,16 +1120,30 @@ Keep this file current: when a step is done, say so here in the same pull reques
   an orbital's morph, which let its base's workers go, is fixed there.
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
   1. `tools/sweep_movement.py`: each type's speed with and without its upgrade, the Zerg ground types on and off
-     creep, and how exactly a unit running straight keeps to it. It sets `x`, the window and the closest two
-     predictions may be, and its findings go in `docs/reference/game-behavior/units.md`.
+     creep, how exactly a unit running straight keeps to it, and whether a hallucination moves at its owner's speed.
+     It sets `x`, the window, and the smallest gap between the two predictions at which a window still votes; its
+     findings go in `docs/reference/game-behavior/units.md`.
   2. A replay tool playing each replay as the bot's player with the extension and as the enemy, whose own upgrades
      are the truth. It records every vote with whether the enemy had the upgrade then, fits the beta-binomial and
      `p0` on some of the replays, and checks on the rest that a probability reads true (of moments at 0.99, about 99%
-     had it), that fewer than 0.1% of games assume an upgrade the enemy lacks, and how late each real one is found.
-     AvocaDOS's games on AI Arena were proposed, since real bots throw grenades, force fields and drops.
-  3. The option, with tests for both bands and a window between them, a creep edge, the floor, a mistake forgotten
-     and an upgrade the bot assumed, which is never forgotten.
+     had it), how often a game assumes an upgrade the enemy lacks, and how late each real one is found. No false
+     assumption in n games bounds the rate below about 3/n (95%), so 0.1% a game needs about 3,000 games with none.
+  3. The option, with tests for both bands and a window between them, a creep edge, a gap in the observations, a side
+     change, an acceleration zone, the earliest finish, 20 of 20 fast against 1 of 20, the floor, a mistake forgotten
+     and an upgrade the bot assumed first, which is never forgotten. The extension's docstring, which says what it
+     reads stays, and `docs/extensions.md` say what speed may forget.
   4. Its cost a turn over the corpus and AvocaDOS's recorded games.
+
+  Open, to settle with the owner at the step that needs it (proposed, not decided):
+  - The option's name; `from_movement` was proposed.
+  - What a slice is: proposed, fixed ticks of a second on one clock for every unit, a unit voting in a tick it was
+    measurable through, so each unit keeps only its position at the last tick.
+  - One pair of beta-binomial parameters for every upgrade, which `u` makes comparable, unless the replays show they
+    differ; rare upgrades such as Gravitic Drive have too few votes to fit their own.
+  - Which replays: AvocaDOS's games on AI Arena were proposed, since real bots throw grenades, force fields and drops,
+    and how to reach 3,000 games.
+  - Tunneling Claws later, with Blink and Shadow Stride, since a burrowed roach has two upgraded speeds, Tunneling
+    Claws alone or with Glial Reconstitution, which would need a second code path.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:
