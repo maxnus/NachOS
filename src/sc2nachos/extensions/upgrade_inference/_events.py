@@ -33,7 +33,7 @@ class EnemyUpgradeForgottenEvent(AnyUpgradeEvent):
     """
 
 
-def assume_and_announce(api: Api[object], upgrades: Iterable[UpgradeId]) -> None:
+def assume_and_emit_events(api: Api[object], upgrades: Iterable[UpgradeId]) -> None:
     """Assume the enemy of `api`'s game has `upgrades`, with `Enemy.assume_upgrades`, and hand out an
     `EnemyUpgradeAssumedEvent` for each upgrade `Enemy.upgrades` gained, in id order."""
     enemy = api.enemy
@@ -43,7 +43,7 @@ def assume_and_announce(api: Api[object], upgrades: Iterable[UpgradeId]) -> None
         api.emit(EnemyUpgradeAssumedEvent(upgrade))
 
 
-def forget_and_announce(api: Api[object], upgrades: Iterable[UpgradeId]) -> None:
+def forget_and_emit_events(api: Api[object], upgrades: Iterable[UpgradeId]) -> None:
     """Forget that the enemy of `api`'s game has `upgrades`, with `Enemy.forget_upgrades`, and hand out an
     `EnemyUpgradeForgottenEvent` for each upgrade `Enemy.upgrades` lost, in id order."""
     enemy = api.enemy

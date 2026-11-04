@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Final, final
 
 from sc2nachos import NoEnemyError
 from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
-from sc2nachos.extensions.upgrade_inference._events import assume_and_announce
+from sc2nachos.extensions.upgrade_inference._events import assume_and_emit_events
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
     _DEFAULT_ASSUMED_AT,
     _DEFAULT_FLOOR,
@@ -166,7 +166,7 @@ class UpgradeInference:
     def _assume_the_upgrades_shown(self, *_: object) -> None:
         """Assume the enemy has the upgrades the last observation shows, handing out an event for each new one."""
         api = self._api
-        assume_and_announce(api, self._enemy_upgrades_shown(api.units, api.effects))
+        assume_and_emit_events(api, self._enemy_upgrades_shown(api.units, api.effects))
 
     @classmethod
     def _enemy_upgrades_shown(cls, units: Iterable[Unit[Any]], effects: Iterable[Effect]) -> frozenset[UpgradeId]:

@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Final, final
 
-from sc2nachos.extensions.upgrade_inference._events import assume_and_announce, forget_and_announce
+from sc2nachos.extensions.upgrade_inference._events import assume_and_emit_events, forget_and_emit_events
 from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindows, speed_upgrade_by_type
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 
@@ -144,7 +144,7 @@ class SpeedUpgradesFromMovement:
         self._log_odds_by_upgrade[upgrade] = log_odds
         if log_odds >= self._assumed_at_log_odds and upgrade not in self._api.enemy.upgrades:
             self._assumed_by_speed.add(upgrade)
-            assume_and_announce(self._api, (upgrade,))
+            assume_and_emit_events(self._api, (upgrade,))
 
     def _count_a_slice_against(self, upgrade: UpgradeId) -> None:
         """Lower `upgrade`'s score by a slice of only votes against it, no lower than the floor, and forget the upgrade
@@ -153,7 +153,7 @@ class SpeedUpgradesFromMovement:
         self._log_odds_by_upgrade[upgrade] = max(self._floor_log_odds, log_odds)
         if log_odds < self._forgotten_below_log_odds and upgrade in self._assumed_by_speed:
             self._assumed_by_speed.discard(upgrade)
-            forget_and_announce(self._api, (upgrade,))
+            forget_and_emit_events(self._api, (upgrade,))
 
 
 def _moved_steadily_at(window: MovementWindow, upgraded_share: float) -> bool:

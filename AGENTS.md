@@ -64,7 +64,8 @@ These are the non-negotiables. They exist because this library is published for 
   model, units, orders, events, geometry, pathfinding, map analysis, generic utilities. Not: strategy, build
   orders, combat micro, roles, economy management. `sc2nachos.extensions` may hold opt-in features outside that
   scope, as speed mining is; each is a module, or a package once it needs more than one, imports only public names
-  but its own, which a test checks, the core imports none, and a heavy dependency goes behind an optional install.
+  but its own, the core neither imports nor names any, docstrings included, which tests check, and a heavy dependency
+  goes behind an optional install.
 - **The protocol transport is injectable.** Everything above it must be testable with no game client running,
   against recorded observation fixtures.
 - **Performance matters.** This code sits in the bot's hot loop. Do not add abstraction layers that cost step time.
