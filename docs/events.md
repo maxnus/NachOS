@@ -107,13 +107,14 @@ out `TurnStartEvent`, then the events its observation reports, in the order of t
 
 - **A turn goes out priority first.** After `TurnStartEvent`, every handler of the highest priority is handed each
   event of the turn it selects, `TurnEvent` last, before any handler of the next priority is handed anything.
-  Priorities run from `EventPriority.HIGHEST` to `LOWEST`, with `MEDIUM` the default. Within one priority, the
+  A bot's priorities run from `EventPriority.HIGHEST` to `LOWEST`, with `MEDIUM` the default. Within one priority, the
   handlers of an event run in the order they subscribed, whichever class each subscribed to. So a handler at `HIGH`
   sees every death and sighting of a turn before any handler at `MEDIUM` acts on one, and a bot's `TurnEvent` handler
   runs after the turn's other events at its priority. An event a handler emits goes out at once, in its own handlers'
   priority order.
-- **An extension's handlers go first within their priority**: those subscribed while NachOS builds the extensions run
-  before the rest of their priority, wherever the bot's subscribed ([extensions](extensions.md)).
+- **An extension's handlers run before the bot's or after them**: those subscribed while NachOS builds the extensions
+  run at `EventPriority.BEFORE`, above `HIGHEST`, or `EventPriority.AFTER`, below `LOWEST`, and no others do
+  ([extensions](extensions.md)).
 - **An event's time is when NachOS learned of it.** What happened out of sight is reported when it is next seen:
   a morph in the fog, a structure that died there, energy a unit regenerated.
 - **The first turn reports the units the game starts with as created.** The last observation of a game gets no turn,

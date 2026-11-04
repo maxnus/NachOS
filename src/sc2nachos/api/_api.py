@@ -154,10 +154,11 @@ class Api[E]:
         event alone included, and so is a method already bound to its instance. Either stays subscribed until it is
         passed to `unsubscribe`, held strongly, so it runs whether or not anything else keeps it alive.
 
-        `priority` orders the handler among the event's handlers, highest first and then in subscription order, those an
-        extension subscribed while NachOS built the extensions first, as `Api.extensions` says; and among a turn's:
-        every handler of one priority is handed each event of the turn it selects, in the turn's order, before any
-        handler of the next. The handler runs on every event unless held back: `min_interval` waits until that long has
+        `priority` orders the handler among the event's handlers, highest first and then in subscription order; and
+        among a turn's: every handler of one priority is handed each event of the turn it selects, in the turn's order,
+        before any handler of the next. `EventPriority.BEFORE` and `EventPriority.AFTER` are for the handlers
+        subscribed while NachOS builds the extensions, and those take no other, as `Api.extensions` says: either misuse
+        raises `ValueError`. The handler runs on every event unless held back: `min_interval` waits until that long has
         passed since it last ran, `at_time` runs it once, on the first event at or after that time, and `once` on the
         first event. `min_interval` with either of the others, or not above zero, raises `ValueError`, and either of the
         two not a `GameTime`, `TypeError`. These count only the events selected, those emitted before the game included.
@@ -209,10 +210,12 @@ class Api[E]:
 
         NachOS builds it once, with this api, after reading the game's map, tables and first observation and before
         `GameStartEvent`, so `api.map`, `api.units` and the rest answer while it is built. Every handler subscribed
-        meanwhile goes before the handlers of its priority subscribed otherwise, in the order they subscribed: what an
-        extension works out on an event is up to date when the bot's handlers of its priority read it, and an order a
-        bot's handler gives a unit an extension also ordered goes out last, and stands. A handler an extension
-        subscribes later takes its place in subscription order like any other.
+        meanwhile runs at `EventPriority.BEFORE`, before every handler of the bot's of its event and of the turn's
+        events handed out with it, or at `EventPriority.AFTER`, after every one, in the order they subscribed; one
+        subscribed at another priority raises `ValueError`. So what an extension works out before the bot is up to date
+        when the bot's handlers read it, an order a bot's handler gives a unit an extension ordered before it goes out
+        last and stands, and an extension working after the bot sees every order the bot gave in the turn. A handler an
+        extension subscribes later is subscribed as the bot's are.
 
         Raises `NotPlayingError` before the game starts, and `RuntimeError` while the extensions are being built, or
         once building them raised.

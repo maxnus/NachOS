@@ -54,7 +54,7 @@ from typing import Any
 from loguru import logger
 
 from sc2nachos import Api, run_replay
-from sc2nachos.events import TurnStartEvent
+from sc2nachos.events import EventPriority, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindow, MovementWindows
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
     _DEFAULT_ASSUMED_AT,
@@ -118,7 +118,7 @@ class _Recorder:
         self.upgrade_steps: dict[str, int] = {}
         self.last_step = 0
         MovementWindows(api, window_steps=_WINDOW_STEPS, on_windows=self._keep_those_that_moved)
-        api.on(TurnStartEvent)(self._note_the_turn)
+        api.on(TurnStartEvent, priority=EventPriority.BEFORE)(self._note_the_turn)
 
     def _keep_those_that_moved(self, windows: Sequence[MovementWindow]) -> None:
         self.windows.extend(window for window in windows if window.distance > 0)

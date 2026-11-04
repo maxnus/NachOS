@@ -194,7 +194,7 @@ class MovementWindows:
     window, which may be shorter, as one that begins again does, and as long as the observations fall otherwise. The
     prediction of each observation's move takes the speed for the ground the unit stood on at the observation before.
 
-    It reads each turn's observation on `TurnStartEvent` at `EventPriority.HIGHEST`.
+    It reads each turn's observation on `TurnStartEvent` at `EventPriority.BEFORE`.
     """
 
     __slots__ = ("_api", "_on_windows", "_open", "_previous_step", "_speeds", "_window_steps")
@@ -209,7 +209,7 @@ class MovementWindows:
         self._speeds = self._speeds_by_type(api.data)
         self._open: dict[int, _OpenWindow] = {}
         self._previous_step = -1
-        api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._measure)
+        api.on(TurnStartEvent, priority=EventPriority.BEFORE)(self._measure)
 
     @staticmethod
     def _speeds_by_type(data: GameData) -> dict[UnitTypeId, _SpeedsOfAType]:
