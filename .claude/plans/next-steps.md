@@ -1090,11 +1090,26 @@ Keep this file current: when a step is done, say so here in the same pull reques
     on the line to the townhall's. A refinery's radius is 1.6875.
   - Two and three collectors: every run before 45a02a8 lost one collector to the minerals in each variant with the
     move back. The sweep caused that, as the owner saw in a replay: it gave that move to a collector handed over with
-    minerals, which dropped the gather `collect` had queued behind its return. Fixed in 45a02a8. Unspoiled at two: one
-    side alone gained 2 to 5%, and both sides slowed seed 2's nearer refinery by 12%, a round trip of 100 steps, with no
-    collector lost; not understood yet. Run 41856036606 measures two and three again after the fix, with replays.
-  - Next: read run 41856036606, then plan with the owner whether and how the move goes into `collect`, perhaps only at
-    one or two collectors a refinery. Do not put the findings into speed mining or its docs before that.
+    minerals, which dropped the gather `collect` had queued behind its return. Fixed in 45a02a8.
+  - Two collectors, after the fix (run 41856036606, no collector lost on either seed): one side alone gained 2 to 5%;
+    both sides lost 12% at the nearer refinery, a round trip of 100 steps, and gained 4.7% at the farther. Its
+    replays, played back here step by step, show why: both moves run along the line between the centers, and once
+    every round trip the collector leaving on its move meets the one arriving on its move head on, about 2.5 from the
+    refinery's center, where a worker on a gather or a return would pass through. At the nearer refinery the one
+    arriving is shoved back, nearly stops, and takes some 20 steps to get back to speed; at the farther both lose 2.
+  - Lanes (the owner, 2026-11-04): each collector on a lane of its own, parallel to that line, the lanes 0.25 to 2
+    apart (`lanes-<spacing>`). At two, 0.75 and 1 apart did best on both seeds: a round trip of 84 steps at the nearer
+    refinery, 4.3% over plain, and 5.8 to 7.1% at the farther, no collector slowed. Nearer together they still meet
+    (0.25 lost 8.7% on seed 2), and farther apart the detour costs (2 apart lost 2.2%). At one, a lane costs against
+    the line: 0.75 apart gained 6.5 to 9.5%, the line 9 to 13%.
+  - Three collectors: the refinery is full, each 32 steps inside and 1 to change over, a round trip of 99 steps, so
+    nothing gains, and every move lost up to 7% at the nearer refinery, on lanes too.
+  - Games played here on build 75689 give what the `sc2` workflow gives, to the vespene and the step: the lanes were
+    measured here first, and runs 41861977180 (two collectors) and 41861981124 (one and three) measure them there,
+    with replays.
+  - Next: plan with the owner whether and how the move goes into `collect`, perhaps by a gas building's count of
+    collectors: both moves on the line at one, on lanes 0.75 apart at two, none at three. Do not put the findings
+    into speed mining or its docs before that.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.
