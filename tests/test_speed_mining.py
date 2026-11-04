@@ -158,6 +158,7 @@ def _orders_sent(
     assigned: Iterable[tuple[int, int]] = ((_HANDED_SCV, _MINED_FIELD),),
     collected: Iterable[tuple[int, int]] = (),
     started: Callable[[Api[SpeedMining]], object] = lambda api: None,
+    after_each_turn: Callable[[Api[SpeedMining]], object] = lambda api: None,
     dead: Callable[[int], Sequence[int]] = lambda turn: (),
     attack_enemies: bool = True,
     map_width: int = 48,
@@ -165,11 +166,18 @@ def _orders_sent(
     """Play a turn on each of `turns`, the units each observation lists, speed mining each worker of `assigned` at its
     field and each of `collected` at its gas building, its workers attacking enemies if `attack_enemies`, and return
     what each turn ordered: each command's ability, its target, a point or a tag, and whether it was queued. `started`
-    runs as the game starts, after the workers are handed over, and `dead` gives the tags each observation reports
-    dead. The map is `map_width` wide and 48 high, of open ground."""
+    runs as the game starts, after the workers are handed over, `after_each_turn` after speed mining's turn, which comes
+    after the bot's handlers, and `dead` gives the tags each observation reports dead. The map is `map_width` wide and
+    48 high, of open ground."""
     observations = [make_observation(step, units=units, dead=dead(step)) for step, units in enumerate([*turns, ()])]
     game = ScriptedGame(observations, game_info=make_game_info(*["#" * map_width] * 48), data=shipped_game_data())
-    api = Api(extensions=lambda api: SpeedMining(api, attack_enemies=attack_enemies))
+
+    def build_the_extensions(api: Api[SpeedMining]) -> SpeedMining:
+        speed_mining = SpeedMining(api, attack_enemies=attack_enemies)
+        api.on(TurnEvent, priority=EventPriority.AFTER)(lambda event: after_each_turn(api))
+        return speed_mining
+
+    api = Api(extensions=build_the_extensions)
 
     @api.on(GameStartEvent)
     def hand_over(event: GameStartEvent) -> None:
@@ -332,32 +340,25 @@ class TestSendingAtOnce:
 
 
 def _workers_held_each_turn(held: list[list[int]]) -> Callable[[Api[SpeedMining]], object]:
-    """What `_orders_sent` runs as the game starts to append to `held` the tags of the workers speed mining holds,
-    miners and collectors, at the end of each turn."""
+    """What `_orders_sent` runs after each of speed mining's turns to append to `held` the tags of the workers it
+    holds, miners and collectors."""
 
     def read_the_workers_held(api: Api[SpeedMining]) -> None:
-        api.on(TurnEvent, priority=EventPriority.LOWEST)(
-            lambda event: held.append(sorted(worker.tag for worker in api.extensions.workers))
-        )
+        held.append(sorted(worker.tag for worker in api.extensions.workers))
 
     return read_the_workers_held
 
 
 def _ordered_by_the_bot(
-    give: Callable[[Api[SpeedMining], OwnUnit[Any]], object],
-    held: list[list[int]],
-    *,
-    priority: EventPriority = EventPriority.HIGH,
+    give: Callable[[Api[SpeedMining], OwnUnit[Any]], object], *, priority: EventPriority = EventPriority.HIGH
 ) -> Callable[[Api[SpeedMining]], object]:
     """What `_orders_sent` runs as the game starts to have the bot `give` `_HANDED_SCV` its orders in the first turn, in
-    a handler of `priority`, and append to `held` the tags of the workers speed mining holds at the end of each turn."""
+    a handler of `priority`."""
 
     def order_in_the_first_turn(api: Api[SpeedMining]) -> None:
         @api.on(TurnEvent, priority=priority, once=True)
         def order(event: TurnEvent) -> None:
             give(api, _own_unit_of_tag(api, _HANDED_SCV))
-
-        _workers_held_each_turn(held)(api)
 
     return order_in_the_first_turn
 
@@ -378,7 +379,7 @@ class TestWhatIsLeftAlone:
             [*_pylon_main(), _reported_scv((28.0, 30.0), repair)],
             [*_pylon_main(), _reported_scv((30.0, 33.0))],
         ]
-        assert _orders_sent(*turns, started=_workers_held_each_turn(held)) == [
+        assert _orders_sent(*turns, after_each_turn=_workers_held_each_turn(held)) == [
             [],
             [],
             [(AbilityId.GATHER, _MINED_FIELD, False)],
@@ -413,7 +414,7 @@ class TestWhatIsLeftAlone:
         """It is sent nothing in the next turn, whose orders may not show the order yet, and is kept."""
         held: list[list[int]] = []
         units = [*_pylon_main(), scv]
-        assert _orders_sent(units, units, started=_workers_held_each_turn(held)) == [given, []]
+        assert _orders_sent(units, units, after_each_turn=_workers_held_each_turn(held)) == [given, []]
         assert held == [[_HANDED_SCV]] * 2
 
     @pytest.mark.parametrize(
@@ -451,14 +452,14 @@ class TestWhatIsLeftAlone:
         held: list[int] = []
 
         def count_the_workers_held(api: Api[SpeedMining]) -> None:
-            api.on(TurnEvent, priority=EventPriority.LOWEST)(
-                lambda event: held.append(len(api.extensions._field_by_worker))
-            )
+            held.append(len(api.extensions._field_by_worker))
 
         idle = _reported_scv((25.0, 30.0))
         mined_out = [unit for unit in _pylon_main() if unit.tag != _MINED_FIELD]
         turns = [[*_pylon_main(), idle], [*mined_out, idle], [*mined_out, idle]]
-        sent = _orders_sent(*turns, started=count_the_workers_held, dead=lambda step: [_MINED_FIELD] * (step == 1))
+        sent = _orders_sent(
+            *turns, after_each_turn=count_the_workers_held, dead=lambda step: [_MINED_FIELD] * (step == 1)
+        )
         assert sent == [[(AbilityId.GATHER, _MINED_FIELD, False)], [], []]
         assert held == [1, 0, 0]
 
@@ -467,11 +468,11 @@ _BUILD_A_SUPPLY_DEPOT = (AbilityId.SCV_BUILD_SUPPLY_DEPOT, Point((30.0, 34.0)), 
 
 
 class TestLettingGoOfAWorkerTheBotOrders:
-    """A worker the bot orders is let go, its order standing: in that turn for an order given before speed mining's
-    turn, and in the next for one given after."""
+    """A worker the bot orders is let go in that turn, its order standing, at whatever priority the bot's handler runs:
+    speed mining's turn comes after them all."""
 
     @pytest.mark.parametrize(
-        "priority", [EventPriority.HIGH, EventPriority.LOW], ids=["before speed mining's turn", "after it"]
+        "priority", [EventPriority.HIGHEST, EventPriority.LOWEST], ids=["at the bot's highest", "at its lowest"]
     )
     @pytest.mark.parametrize(
         ("collecting", "give", "given"),
@@ -527,10 +528,11 @@ class TestLettingGoOfAWorkerTheBotOrders:
             idle,
             assigned=() if collecting else [(_HANDED_SCV, _MINED_FIELD)],
             collected=[(_HANDED_SCV, _REFINERY)] if collecting else (),
-            started=_ordered_by_the_bot(give, held, priority=priority),
+            started=_ordered_by_the_bot(give, priority=priority),
+            after_each_turn=_workers_held_each_turn(held),
         )
         assert sent == [[given], [], []]
-        assert held == ([[_HANDED_SCV], [], []] if priority is EventPriority.LOW else [[], [], []])
+        assert held == [[], [], []]
 
     def test_a_worker_the_bot_hands_over_again_after_ordering_it_is_kept(self) -> None:
         """The bot moves it away and then has it mine its field again, in one turn: the gather goes out in place of the
@@ -544,7 +546,12 @@ class TestLettingGoOfAWorkerTheBotOrders:
         held: list[list[int]] = []
         far = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())]
         near = [*_pylon_main(), _reported_scv((28.175, 24.5), _gather_order())]
-        sent = _orders_sent(far, near, started=_ordered_by_the_bot(move_away_then_mine, held))
+        sent = _orders_sent(
+            far,
+            near,
+            started=_ordered_by_the_bot(move_away_then_mine),
+            after_each_turn=_workers_held_each_turn(held),
+        )
         assert sent == [[], _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)]
         assert held == [[_HANDED_SCV]] * 2
 
@@ -560,7 +567,8 @@ class TestLettingGoOfAWorkerTheBotOrders:
             [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())],
             elsewhere,
             elsewhere,
-            started=_ordered_by_the_bot(gather_at_the_other_field, held),
+            started=_ordered_by_the_bot(gather_at_the_other_field),
+            after_each_turn=_workers_held_each_turn(held),
         )
         assert sent == [[(AbilityId.GATHER, _OTHER_FIELD, False)], [], [(AbilityId.GATHER, _MINED_FIELD, False)]]
         assert held == [[_HANDED_SCV]] * 3
@@ -575,7 +583,12 @@ class TestLettingGoOfAWorkerTheBotOrders:
             api.orders.issue(worker, AbilityId.ATTACK, target=_unit_of_tag(api, 30))
 
         units = [*_pylon_main(), mining, zergling]
-        sent = _orders_sent(units, units, started=_ordered_by_the_bot(attack_the_zergling, held))
+        sent = _orders_sent(
+            units,
+            units,
+            started=_ordered_by_the_bot(attack_the_zergling),
+            after_each_turn=_workers_held_each_turn(held),
+        )
         assert sent == [[(AbilityId.ATTACK, 30, False)], []]
         assert held == [[], []]
 
@@ -601,9 +614,9 @@ class TestLettingGoOfAWorkerTheBotOrders:
                     api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD))
                     api.orders.issue(worker, AbilityId.ATTACK, target=_unit_of_tag(api, 30))
 
-            _workers_held_each_turn(held)(api)
-
-        sent = _orders_sent(*turns, started=stop_then_hand_over_and_attack)
+        sent = _orders_sent(
+            *turns, started=stop_then_hand_over_and_attack, after_each_turn=_workers_held_each_turn(held)
+        )
         assert sent == [
             [(AbilityId.ATTACK, 30, False)],
             [(AbilityId.STOP, None, False)],
@@ -618,7 +631,9 @@ class TestLettingGoOfAWorkerTheBotOrders:
         burrowed = make_unit(
             _HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True
         )
-        sent = _orders_sent([*_pylon_main(), drone], [*_pylon_main(), burrowed], started=_workers_held_each_turn(held))
+        sent = _orders_sent(
+            [*_pylon_main(), drone], [*_pylon_main(), burrowed], after_each_turn=_workers_held_each_turn(held)
+        )
         assert sent == [[(AbilityId.GATHER, _MINED_FIELD, False)], []]
         assert held == [[_HANDED_SCV], []]
 
@@ -639,7 +654,7 @@ class TestLettingGoOfABase:
         held: list[int] = []
 
         def count_the_workers_held(api: Api[SpeedMining]) -> None:
-            api.on(TurnEvent, priority=EventPriority.LOWEST)(lambda event: held.append(len(api.extensions.miners)))
+            held.append(len(api.extensions.miners))
 
         without_the_townhall = [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER] + townhall_gone
         turns = [
@@ -647,7 +662,7 @@ class TestLettingGoOfABase:
             [*without_the_townhall, _reported_scv((25.0, 30.0), carrying=True)],
         ]
         dead = (lambda step: [_COMMAND_CENTER] * (step == 1)) if not townhall_gone else (lambda step: ())
-        assert _orders_sent(*turns, started=count_the_workers_held, dead=dead) == [[], []]
+        assert _orders_sent(*turns, after_each_turn=count_the_workers_held, dead=dead) == [[], []]
         assert held == [1, 0]
 
     @pytest.mark.parametrize(
@@ -681,9 +696,7 @@ class TestLettingGoOfABase:
         kept: list[list[int]] = []
 
         def read_the_workers_held(api: Api[SpeedMining]) -> None:
-            api.on(TurnEvent, priority=EventPriority.LOWEST)(
-                lambda event: kept.append(sorted(worker.tag for worker in api.extensions.miners))
-            )
+            kept.append(sorted(worker.tag for worker in api.extensions.miners))
 
         second_base = _pylon_main(at=(56.5, 24.5), tags_from=200)
         main_without_its_townhall = [unit for unit in _pylon_main() if unit.tag != _COMMAND_CENTER]
@@ -692,7 +705,7 @@ class TestLettingGoOfABase:
         _orders_sent(
             *turns,
             assigned=[(_HANDED_SCV, _MINED_FIELD), (11, 202)],
-            started=read_the_workers_held,
+            after_each_turn=read_the_workers_held,
             dead=lambda step: [_COMMAND_CENTER] * (step == 1),
             map_width=80,
         )
@@ -1055,13 +1068,11 @@ class TestHandingOver:
 
 
 def _collectors_held_each_turn(held: list[list[int]]) -> Callable[[Api[SpeedMining]], object]:
-    """What `_orders_sent` runs as the game starts to append to `held` the tags of the collectors speed mining holds at
-    the end of each turn."""
+    """What `_orders_sent` runs after each of speed mining's turns to append to `held` the tags of the collectors it
+    holds."""
 
     def read_the_collectors_held(api: Api[SpeedMining]) -> None:
-        api.on(TurnEvent, priority=EventPriority.LOWEST)(
-            lambda event: held.append(sorted(worker.tag for worker in api.extensions.collectors))
-        )
+        held.append(sorted(worker.tag for worker in api.extensions.collectors))
 
     return read_the_collectors_held
 
@@ -1118,7 +1129,7 @@ class TestCollecting:
             out_with_vespene,
             assigned=(),
             collected=[(_HANDED_SCV, _REFINERY)],
-            started=_collectors_held_each_turn(held),
+            after_each_turn=_collectors_held_each_turn(held),
         )
         assert sent == [[], [], []]
         assert held == [[_HANDED_SCV]] * 3
@@ -1327,7 +1338,7 @@ class TestLettingGoOfACollector:
             *turns,
             assigned=(),
             collected=[(_HANDED_SCV, _REFINERY)],
-            started=_collectors_held_each_turn(held),
+            after_each_turn=_collectors_held_each_turn(held),
             dead=lambda step: [dead] if dead is not None and step == 1 else [],
         )
         assert sent == [[], []]

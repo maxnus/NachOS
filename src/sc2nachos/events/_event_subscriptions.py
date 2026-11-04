@@ -7,10 +7,14 @@ from collections.abc import Callable, Hashable, Iterator, Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
+from sc2nachos.events._event_priority import EventPriority
+
 if TYPE_CHECKING:
     from sc2nachos.events._event import Event
-    from sc2nachos.events._event_priority import EventPriority
     from sc2nachos.events._handler import _Handler
+
+# The priorities a handler subscribed while NachOS builds the extensions runs at, and no other handler.
+_EXTENSION_PRIORITIES = frozenset({EventPriority.BEFORE, EventPriority.AFTER})
 
 
 @final
@@ -47,7 +51,7 @@ class _EventSubscriptions:
         self._count = 0
         self._keyed = 0
         self.subscribing_extensions = False
-        """Whether NachOS is building the extensions, whose handlers go before the rest of their priority."""
+        """Whether NachOS is building the extensions, whose handlers alone run at `EventPriority.BEFORE` and `AFTER`."""
 
     def __iter__(self) -> Iterator[_Handler]:
         """Every handler subscribed."""
@@ -63,11 +67,20 @@ class _EventSubscriptions:
         """Whether any subscribed handler selects by key."""
         return self._keyed > 0
 
+    def check_priority(self, priority: EventPriority) -> None:
+        """Raise `ValueError` unless a handler subscribed now may run at `priority`: one of the extensions' while NachOS
+        builds the extensions, and one of the bot's otherwise."""
+        if self.subscribing_extensions:
+            if priority not in _EXTENSION_PRIORITIES:
+                raise ValueError(f"an extension's handler runs at BEFORE or AFTER, not {priority!s}")
+        elif priority in _EXTENSION_PRIORITIES:
+            raise ValueError(f"{priority!s} is for the handlers subscribed while NachOS builds the extensions")
+
     def add(self, handler: _Handler) -> None:
-        """Subscribe `handler`, after those of its priority already subscribed, but before those subscribed outside the
-        building of the extensions if it subscribes during it."""
+        """Subscribe `handler`, after those of its priority already subscribed. Raises `ValueError` for a priority it
+        may not run at, as `check_priority` says."""
+        self.check_priority(handler.priority)
         handler.order = self._count
-        handler.from_extensions = self.subscribing_extensions
         self._count += 1
         self._keyed += handler.selects.keys is not None
         event_type = handler.selects.event_type
@@ -155,10 +168,9 @@ class _EventSubscriptions:
 _NO_KEYS: frozenset[Hashable] = frozenset()
 
 
-def _run_order(handler: _Handler) -> tuple[int, bool, int]:
-    """Where `handler` runs among the handlers of an event: by priority, highest first; then those subscribed while
-    NachOS built the extensions; then in subscription order."""
-    return -handler.priority, not handler.from_extensions, handler.order
+def _run_order(handler: _Handler) -> tuple[int, int]:
+    """Where `handler` runs among the handlers of an event: by priority, highest first, then in subscription order."""
+    return -handler.priority, handler.order
 
 
 def _selects(handler: _Handler) -> bool:

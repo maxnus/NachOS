@@ -70,7 +70,8 @@ class SpeedMining:
     but takes none it cannot send, building, burrowed or out of reach of orders, and holds a worker at one field or gas
     building at a time. `release` takes one or several back, `release_miners` and `release_collectors` a number of
     them, those whose leaving costs the least, and `miners`, `collectors`, `workers` and `workers_at` read them. On
-    each `TurnEvent`, at `EventPriority.LOW`, speed mining orders each worker it holds:
+    each `TurnEvent`, at `EventPriority.AFTER`, after every handler of the bot's, speed mining orders each worker it
+    holds:
 
     - A miner idle, gathering minerals, returning minerals, or on speed mining's own move, is kept mining its field:
       one gathering at another field, as the game sends a worker whose field is taken, or on its way to a field it was
@@ -106,10 +107,9 @@ class SpeedMining:
       field, for a miner, or at a gas building, for a collector, a return, a move to where one of its trips ends, a
       right-click on a townhall of this player's, and its attack: a worker the bot sends to gather at another field is
       sent to its own, as one the game sends there is. A burrowed drone is let go too. So a miner the bot sends to
-      build does not come back to its field: the bot hands it over again. An order given before speed mining's own
-      `TurnEvent` handler, the first of that event's at `EventPriority.LOW`, lets the worker go in that turn, whether
-      or not the game takes it, and one given after it in the next, unless the game refused it, which leaves the
-      worker held. `miners` and `collectors` hold the worker until then.
+      build does not come back to its field: the bot hands it over again. Speed mining's turn comes after every
+      handler of the bot's, so an order the bot gives in a turn lets the worker go in that turn, whether or not the
+      game takes it, and `miners` and `collectors` hold the worker until then.
     - A worker given one of speed mining's orders lately is left alone for the turn. So is one on an order of another
       kind that no order lately explains, as an SCV repairing by autocast, until it is idle or back at its work.
     - A worker is let go alike once it or its field is dead, and once no expansion holding its field has such a
@@ -139,7 +139,7 @@ class SpeedMining:
         self._gas_building_by_worker: UnitDict[OwnUnit[UnitType.Worker], Unit[UnitType.GasBuilding]] = UnitDict()
         self._trip_end_points = TripEndPointBook(api.expansions)
         self._trips = WorkerTrips(api)
-        api.on(TurnEvent, priority=EventPriority.LOW)(self._order_the_workers)
+        api.on(TurnEvent, priority=EventPriority.AFTER)(self._order_the_workers)
 
     @property
     def miners(self) -> Mapping[OwnUnit[UnitType.Worker], Unit[UnitType.AnyMineralField]]:

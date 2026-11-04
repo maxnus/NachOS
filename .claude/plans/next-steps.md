@@ -23,8 +23,10 @@ As of 2026-11-04:
 - **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
   64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it. Its notes say too that
   `SpeedMining.workers_at` (#229), `Order.units`, and `UnitCommand.units` and `AutocastToggle.units` hand out `Units`,
-  where they handed out tuples, which a `Units` never equals, and that speed mining lets go of a worker the bot orders
-  elsewhere (#231), which no longer comes back to its field by itself.
+  where they handed out tuples, which a `Units` never equals; that an extension's handlers take `EventPriority.BEFORE`
+  or `AFTER`, and only they (#232): AvocaDOS's turn clock, subscribed among its extensions at `HIGHEST`, moves to
+  `BEFORE`; and that speed mining lets go of a worker the bot orders elsewhere (#231), which no longer comes back to
+  its field by itself.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -144,8 +146,12 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 ### Extensions
 
 - **Extensions are the one place for opt-in features** (#201), named over plugins, which suggest changing existing
-  methods. A bot hands `Api(extensions=Extensions)` its own class, which builds each extension, and an extension's
-  handlers run before the bot's of the same priority.
+  methods. A bot hands `Api(extensions=Extensions)` its own class, which builds each extension.
+- **An extension's handlers run before every handler of the bot's or after every one** (the owner, 2026-11-04, #232),
+  at `EventPriority.BEFORE` or `AFTER`, which only a handler subscribed while NachOS builds the extensions takes and
+  which it must take; over reusing `HIGHEST` and `LOWEST`, where an extension's `TurnEvent` handler would still run
+  after a bot's handler of the turn's other events. Upgrade inference runs before the bot, and speed mining after it
+  (the owner, over before it), as #231 keeps it: it sees every order the bot gives in the turn before ordering any.
 - **Speed mining takes workers only through `mine`, `collect` and `release`** (#202, #208), and only at a base with a
   finished townhall of this player's at the expansion's center: no long-distance mining, and no taking over a bot's
   plain gathers by itself, which the bot's own gathers could undo.
@@ -236,10 +242,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   elsewhere, reversing #201 (the owner, review of #229, over keeping such workers and ranking them first in the
   releases), so that a number kept is true. The releases put one the bot has ordered first too, with those let go
   that turn, so that a bot ordering a worker and releasing one in the same turn loses one. Speed mining tells its own
-  orders from the bot's by their kind, and a refused order still lets the worker go if given before speed mining's
-  turn, documented (the owner, review of #231, over marking its orders through `Order.data`, and over reading the
-  refusals). What is left is AvocaDOS's: it drops its caps a refinery (`max_collectors`) and keeps a number
-  of collectors, handing a worker to `collect`, naming no gas building, while it holds fewer, and calling
+  orders from the bot's by their kind (the owner, review of #231, over marking its orders through `Order.data`). Run
+  after the bot (#232), it reads every order the bot gives in a turn in that turn, so one the game refuses lets the
+  worker go too, which the owner chose to document over reading the refusals. What is left is AvocaDOS's: it drops
+  its caps a refinery (`max_collectors`) and keeps a number of collectors, handing a worker to `collect`, naming no
+  gas building, while it holds fewer, and calling
   `release_collectors` when it wants fewer (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto
   `api.vision` (#227), and releases its builders itself already.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222

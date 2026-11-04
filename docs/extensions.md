@@ -45,12 +45,23 @@ def defend(event: TurnEvent) -> None:
 
 ## Where their handlers run
 
-An extension subscribes its handlers in its constructor, with `api.on`. **A handler subscribed while NachOS builds the
-extensions runs before the handlers of its priority subscribed otherwise**, in the order they subscribed; priorities
-still come first ([events](events.md#when-events-come)). So what an extension works out on a `TurnEvent` is up to
-date when the bot's `TurnEvent` handlers of its priority read it, and an order the bot gives a unit an extension also
-ordered goes out last and stands, as a unit takes the last order it is given in a turn ([orders](orders.md)). A
-handler an extension subscribes later, on `GameStartEvent` say, takes its place in subscription order like any other.
+An extension subscribes its handlers in its constructor, with `api.on`, **at `EventPriority.BEFORE` or
+`EventPriority.AFTER`**, which only a handler subscribed while NachOS builds the extensions takes, and which it must
+take: any other priority raises `ValueError`, and so does one of these for any other handler. Events go out priority
+first ([events](events.md#when-events-come)), so a handler before the bot runs ahead of every handler of the bot's of
+the events handed out with its own, and one after the bot behind them all, in the order they subscribed. Those are a
+turn's events but `TurnStartEvent`, which goes out alone, before the rest, as an event a handler emits goes out alone,
+at once: an extension reading each observation before any handler of the bot's does so on `TurnStartEvent`.
+
+- **Before the bot**, an extension works out what the bot's handlers read, as upgrade inference does on
+  `TurnStartEvent`. An order the bot then gives a unit the extension ordered goes out last and stands, as a unit takes
+  the last order it is given in a turn ([orders](orders.md)).
+- **After the bot**, an extension acts on what the bot did in the turn, as speed mining does, seeing every order the
+  bot gave. Its own orders go out last, so it leaves alone a unit the bot ordered in the turn, as `api.orders.issued_to`
+  reads.
+
+A handler an extension subscribes later, on `GameStartEvent` say, is subscribed as the bot's are, at a priority of the
+bot's.
 
 ## Writing one
 
@@ -72,7 +83,7 @@ class ThreatMap:
         self._api = api
         self._decay = decay
         self._last_seen: UnitDict[Unit[Any], GameTime] = UnitDict()
-        api.on(TurnEvent, priority=EventPriority.HIGH)(self._update)
+        api.on(TurnEvent, priority=EventPriority.BEFORE)(self._update)
 
     def damage_at(self, point: PointLike) -> float: ...
 
@@ -149,7 +160,7 @@ class ThreatMap:
   unit of the bot's slowed by Concussive Shells or matrixed, an enemy storm, and the speed upgrades enemy units move
   at. It adds what it reads with `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed
   count it. It reads each turn's observation on `TurnStartEvent`, and the one the game ended on, which gets no turn,
-  on `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of the bot's. It has nothing to call, and
+  on `GameEndEvent`, both at `EventPriority.BEFORE`, before any handler of the bot's. It has nothing to call, and
   options for its speed upgrades alone:
 
   ```python
