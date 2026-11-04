@@ -795,7 +795,7 @@ def _recorded_mains(path: Path) -> list[_RecordedMain]:
     game_map, _, placement_grids = _grids_at_the_start(path)
     recorded_mains = []
     for start_location in game_map.all_start_locations:
-        main_ramp = game_map.main_ramp_of(start_location)
+        main_ramp = game_map._main_ramp_of(start_location)
         assert main_ramp is not None
         recorded_mains.append(_RecordedMain(game_map, placement_grids, start_location, main_ramp))
     return recorded_mains
@@ -895,8 +895,8 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
     game_map, _, placement_grids = _grids_at_the_start(
         next(path for path in CORPUS if path.stem.startswith("PylonAIE"))
     )
-    east_ramp = game_map.main_ramp_of(Point((175.5, 76.5)))
-    west_ramp = game_map.main_ramp_of(Point((72.5, 171.5)))
+    east_ramp = game_map._main_ramp_of(Point((175.5, 76.5)))
+    west_ramp = game_map._main_ramp_of(Point((72.5, 171.5)))
     assert east_ramp is not None and west_ramp is not None
     assert placement_grids.terran_wall(east_ramp) == TerranWall(
         near_depot=Point((163, 82)),
@@ -932,7 +932,7 @@ def test_a_ramp_out_of_no_main_has_no_wall_to_ask_for() -> None:
     game_map, _, placement_grids = _grids_at_the_start(
         next(path for path in CORPUS if path.stem.startswith("PylonAIE"))
     )
-    main_ramps = {game_map.main_ramp_of(start_location) for start_location in game_map.all_start_locations}
+    main_ramps = {game_map._main_ramp_of(start_location) for start_location in game_map.all_start_locations}
     other_ramp = next(ramp for ramp in game_map.ramps if ramp not in main_ramps)
     with pytest.raises(ValueError, match="no start location's main"):
         placement_grids.terran_wall(other_ramp)

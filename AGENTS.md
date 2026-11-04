@@ -8,7 +8,7 @@
 
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. The README's "Documentation" lists this repo's docs, and `docs/maintaining/`
-holds how to curate the game's ids, the code style and what reviews keep finding.
+holds how to curate the game's ids, the code style, what reviews keep finding and how to make a release.
 
 ## Keep this file small
 
@@ -62,8 +62,8 @@ These are the non-negotiables. They exist because this library is published for 
 - **Scope:** anything useful to any bot maker, if it is (or can be made) acceptable quality — protocol, state, data
   model, units, orders, events, geometry, pathfinding, map analysis, generic utilities. Not: strategy, build
   orders, combat micro, roles, economy management. `sc2nachos.extensions` may hold opt-in features outside that
-  scope, as speed mining is; each imports only public names, which a test checks, the core imports none, and a heavy
-  dependency goes behind an optional install.
+  scope, as speed mining is; each is a module, or a package once it needs more than one, imports only public names
+  but its own, which a test checks, the core imports none, and a heavy dependency goes behind an optional install.
 - **The protocol transport is injectable.** Everything above it must be testable with no game client running,
   against recorded observation fixtures.
 - **Performance matters.** This code sits in the bot's hot loop. Do not add abstraction layers that cost step time.

@@ -13,6 +13,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   storm buff on its own units too (#34; tested).
 - A liberation zone is drawn for 2 s before it fires, and a time warp slows nothing for its first 1.79 s; each phase
   has its own pending effect id (#5).
+- A time warp slows a unit in it to 0.6 of its speed: zerglings with Metabolic Boost wearing `MOTHERSHIP_TIME_WARP`
+  ran 3.94 a second, against their 6.58, at every step of 11 at a time (tool `replay_movement`, AI Arena's 2026
+  Season 1 replay 4704095 played back as player 2, build 75689).
 - Since 4.12.0 Microbial Shroud needs no research: an infestor with no upgrades is offered it and casts it (#23).
 - A unit under attack that cannot fight back drifts away unless it holds position (tool `sweep_alerts`).
 
@@ -135,11 +138,50 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   a sentry's at 19 or 20 steps, an oracle's at 18, a void ray's at 10 or 11 and an ultralisk's at 20 or 21, against
   their usual 4 to 8, at a target at any angle, and at another in the second run (tool `sweep_turning`, build 75689).
 
+## What the enemy sees of an attack
+
+Seen with a marauder, a roach, a hydralisk and a stalker, each firing a missile at an enemy's units, standing, walking
+up to a target, stutter-stepping, holding as a target walked by and chasing one, in two runs of 305 shots (tool
+`sweep_combat`, `enemy-view`, build 75689).
+
+- **The enemy is shown an attacker where its owner is, facing as it does, and nothing of its attack.** In every one of
+  8,352 steps it was listed to the enemy, it stood at the same position with the same facing in both views, and showed
+  the enemy no weapon cooldown, order or engaged target. Nothing it showed the enemy changed in the step it fired, at
+  all 231 shots fired standing at a target that stood, other than a marauder's first in a trial, whose facing changed
+  in that step, and once its `is_active`. At a walking target, its facing changed in the shot's step only as it
+  followed the target.
+- **An attacker faces the target it is set upon at every step the target is in its reach, and so names it.** Given no
+  other order, it faced the target's center to within 0.1° as it fired, between shots and while its missile flew, and
+  followed a target walking by step by step, until it left its reach. It faced its target to within 0.1° at every shot
+  but one, a marauder's first in a trial, 6.1° off, as a marauder can fire before its turn ends (above). Of the enemy's
+  units in its reach, the one whose center the attacker faced to within 0.2° was the one it was engaged with at all
+  5,521 such steps, and never another; it faced none at 1,646 steps, turning or chasing a target out of reach, and none
+  while it was engaged with none. Units behind one another, seen from the attacker, were not tried. An attacker sent off
+  once it has fired turns away as any unit sent off does ([turning](units.md#turning)), while its missile flies on. A
+  marauder that fired as its target walked out of its reach showed its owner engaged with none in the shot's step, in
+  each run.
+- **A first shot comes a set number of steps after the attacker faces its target, and its missile lands a set number
+  after that.** A roach, a hydralisk and a stalker faced their target 3 steps before their first shot at it, at times 2,
+  whether they walked up to it, held as it walked into their reach or caught up with it, and where they walked up or
+  caught up, were first shown standing 2 steps before it, at times 3: the steps their cooldown reads 0 before a shot
+  (above). A marauder fired in the step its
+  facing reached the target, and walking up to one, in the step it arrived, moving in it or stopping in it. Chasing, a
+  roach and a stalker stood 8 steps after a shot before they set off again, and a hydralisk and a marauder 9; after a
+  first shot at a target still well within its reach, a marauder stood 16 and 17 steps and a stalker once 17, until the
+  target had walked out of it. Later shots came as the cooldown and its delay give them (above): a marauder's 23 to 26
+  steps apart, a roach's 31 to 34, a hydralisk's 12 to 15 and a stalker's 29 to 32.
+- **A missile at a target standing lands a set number of steps after the shot, by its attacker and the distance
+  between their centers, whether the attacker stands, turns away or moves off once it has fired**, unlike a move ordered
+  the step before (above). Over 242 shots: a marauder's 4 steps after at 3.4, 5 at 5.3 and 7 at 6.6 to 7.6; a roach's 3
+  at 2.5, 5 at 3.9 and 6 at 5.2 to 5.5; a hydralisk's 2 at 3.0, 3 at 4.6 and 4 at 5.9 to 6.6; and a stalker's 4 at 3.4,
+  6 at 5.3, 7 at 7.0 to 7.2 and 8 at 7.4 to 7.6. A walking target took it a step sooner or later. So the step a target
+  loses health gives the step of the shot, and the next shot is due within the 3 steps of the delay.
+
 ## Buffs
 
-- A melee game puts 45 buffs on units, 5 of them for carrying resources: minerals under one buff for every race and
-  another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
-  `sweep_buffs`, #24).
+- The buff sweep saw a melee game put 45 buffs on units, 5 of them for carrying resources: minerals under one buff for
+  every race and another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
+  `sweep_buffs`, #24). It missed a parasitic bomb's two (below).
 - Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 13 of the corpus's 16,760
   buff changes are those (corpus, #37).
 - A worker carries gas from a rich geyser under no buff at all. On PylonAIE a worker of each race, mining its race's
@@ -161,6 +203,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   behind the first, and nothing shows it (#24). The hatchery's `buff_duration_remain` counts it down a step at a
   time, against a `buff_duration_max` of 640 (tool `sweep_orders`, build 75689).
 - A fungal growth showed the step after the cast and was gone 64 steps later (#37; tested).
+- A parasitic bomb's target wears `ParasiticBomb`, and the unit the bomb leaves behind
+  ([units](units.md#what-an-observation-lists)) `ParasiticBombUnitKU` and `ParasiticBombSecondaryUnitSearch`. Tool
+  `sweep_buffs` never saw the last two: it watches 128 steps after an order, and a bomb on a target that lives leaves
+  its dummy only after 175 steps, for 2. No other unit wears any of the three: the 7 enemy air units seen within 3.5 of
+  a bomb's target or its dummy, void rays, an observer and medivacs, 5 of them losing health or shields there, wore no
+  buff at all (AI Arena matches 4805282 and 4846375, every step, fog off, 2026-11-04, build 75689).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what

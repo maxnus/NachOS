@@ -40,10 +40,20 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   disappears (#25; tested).
 - An undetected cloaked enemy is listed, as `CLOAKED` and `INVISIBLE`. An undetected burrowed enemy zergling is not
   listed at all (#37; tested), but an enemy's burrowed widow mine can be (below).
-- Force fields and reaper grenades are listed as units, not effects; a parasitic bomb adds no unit. Lurker spines are
-  one effect with several positions along a line (#12, #25). A force field is neutral, owner 16, in both players'
-  views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to the other (tool `sweep_timed_life`,
-  build 75689).
+- Force fields and reaper grenades are listed as units, not effects, and so is a parasitic bomb once it leaves its
+  target (below). Lurker spines are one effect with several positions along a line (#12, #25). A force field is
+  neutral, owner 16, in both players' views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to
+  the other (tool `sweep_timed_life`, build 75689).
+- A parasitic bomb is its target's buff, `ParasiticBomb`, and no effect. As it leaves the target, the game lists a
+  `ParasiticBombDummy` at the target's last position, the viper's player's unit. When the target dies, the dummy is
+  listed from the observation that reports the death to 161 steps after the buff was first listed, however early the
+  target died: 9 of 9 bombs, on void rays, a raven and a medivac, their dummies listed for 8 to 143 steps. On two void
+  rays that lived, the buff stayed 175 steps, and a dummy was then listed for 2. The dummy never moves, reads 1 health
+  of 1, a radius of 0.5, no orders and no timed life, to its own player too, and wears `ParasiticBombUnitKU` and
+  `ParasiticBombSecondaryUnitSearch`; it is reported dead the step after its last listing. The enemy sees it only where
+  it has sight, as any unit: one player saw 7 of the 9 left in its game. Seen in AI Arena matches 4805282 (Protoss
+  against Zerg, on PylonAIE) and 4846375 (Zerg against Terran, on PersephoneAIE), each bomb a single cast, played back
+  every step as each player and with the fog off (2026-11-04, with a probe, build 75689).
 - Map-owned units are owner 16 (stated). An enemy structure built out of sight is not listed (tested).
 
 ## What is reported of a unit
@@ -52,7 +62,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   field's contents, a hidden unit's owner. An undetected enemy listed `INVISIBLE` reports its position and cloak, and no
   health, owner, build progress, buffs, facing or energy (#25; corpus).
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
-  player's own units (#25; corpus).
+  player's own units (#25; corpus); an enemy's attacker shows its position and facing as its owner is shown them
+  ([what the enemy sees of an attack](damage-and-buffs.md#what-the-enemy-sees-of-an-attack)).
 - `buff_duration_remain` and `buff_duration_max` give a unit with a timed life the steps it has left only for this
   player's own: a MULE's counted down from 1441 and from 1443 in two games, against a maximum of 1440, and six
   broodlings' in each of two games from between 128 and 132, against 128, each a step at a time to 0 at its last
@@ -160,6 +171,28 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **The facing the game reports never changes for a colossus, a disruptor, an immortal, a mothership, a purification
   nova and an uprooted spine or spore crawler**, ordered to move at any angle, though each sets off as the rest do (tool
   `sweep_turning`, build 75689).
+
+## Moving
+
+- **A unit ordered along a straight line moves at its row's speed once it is up to speed, a unit on the ground from the
+  first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for the 12
+  types a speed upgrade changes, with the upgrade and without: every step of a ground unit's run, and every window of
+  11, 22 or 44 steps, came within 0.0001 a second of the row's speed, an upgraded ultralisk's from its third step; a
+  flying unit's windows within 0.15% of it, though a single step of an overlord, an overseer or an observer fell up to
+  1.6% short. A banshee gained 0.0127 a step every step until it reached its speed, 14 steps without Hyperflight Rotors
+  and 19 with; an overlord took 10 steps, 28 with Pneumatized Carapace, and a transport overlord 14 and 32. Along 45
+  degrees every type read up to 0.6% slower, an overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299
+  for 4.1344 (tool `sweep_movement`, build 75689).
+- **Creep makes a Zerg ground unit 1.3 times as fast, to within 0.1%, but for what Muscular Augments and Anabolic
+  Synthesis add**: a zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a
+  roach, a hydralisk and an ultralisk alike without their speed upgrades, and a baneling and a roach with them. Muscular
+  Augments and Anabolic Synthesis add less on creep ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries'
+  creep had stopped spreading, on a course every step of which ended on creep at least 3.3 from ground without it, and
+  off creep with none within 8 of any step; a course laid as soon as creep covered it, 1.5 inside its edge, gave the
+  same speeds (tool `sweep_movement`, build 75689).
+- **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
+  and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
+  `sweep_movement`, build 75689).
 
 ## Units coming, changing and going
 

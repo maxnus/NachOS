@@ -2,6 +2,7 @@
 and how the match ended."""
 
 from sc2nachos.match._enemy import Enemy
+from sc2nachos.match._errors import NoStartLocationError
 from sc2nachos.match._match import AIBuild, Computer, Difficulty, Participant, PlayerSetup, Race, Result
 from sc2nachos.match._player import Player
 
@@ -10,6 +11,7 @@ __all__ = [
     "Computer",
     "Difficulty",
     "Enemy",
+    "NoStartLocationError",
     "Participant",
     "Player",
     "PlayerSetup",

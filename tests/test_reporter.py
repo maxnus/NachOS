@@ -66,6 +66,7 @@ from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Area, Circle, Point, Rectangle, Tile, TileSet
 from sc2nachos.ids import AbilityId, BuffId, UncuratedIdError, UnitTypeId, UpgradeId
+from sc2nachos.ids.raw import RawBuffId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
@@ -583,6 +584,10 @@ class TestBuffs:
         assert self._changes(_worn(unit_type=UnitTypeId.SIEGE_TANK), sieged) == [
             ("OwnUnitGainedBuffEvent", BuffId.RAVEN_INTERFERENCE_MATRIX)
         ]
+
+    def test_a_buff_a_units_buffs_leave_out_is_neither_gained_nor_lost(self) -> None:
+        left_out = RawBuffId.ParasiticBombUnitKU
+        assert not self._changes(_worn(), _worn(buff_ids=[left_out]), _worn())
 
     def test_a_buff_the_curated_ids_leave_out_raises(self) -> None:
         uncurated = 236

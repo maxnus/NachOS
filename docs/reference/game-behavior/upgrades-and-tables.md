@@ -9,9 +9,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   range, armor and speed, each added on. Every level adds the same amount to a type, but different types get
   different amounts: a marauder gets +1 and +1 against armored (tool `sweep_upgrades`, #30).
 - The rows leave out attack speed (Adrenal Glands, Resonating Glaives), shield armor and what abilities and buffs do,
-  and do not change for shields levels, Combat Shield, Stim or Concussive Shells. They count Anabolic Synthesis whether
-  the unit is on creep or not, though in play it speeds an ultralisk only off creep (stated) (tool `sweep_upgrades`,
-  #30).
+  and do not change for shields levels, Combat Shield, Stim or Concussive Shells (tool `sweep_upgrades`, #30). They hold
+  no creep speed, and count Muscular Augments and Anabolic Synthesis the same on creep and off, though both add less
+  on it: an ultralisk ran 4.13 a second off creep and 4.87 with Anabolic Synthesis, 5.37 and 5.53 on it, and a
+  hydralisk 3.15 and 4.13 with Muscular Augments off creep, 4.09 and 4.83 on it (tool `sweep_movement`, build 75689).
 - The void ray, carrier, sentry, battlecruiser and oracle have no weapon in the rows, yet the first three take
   attack levels (tool `sweep_upgrades`, #30).
 - A type's armor plus the armor its units report from upgrades is the upgraded row's armor. Armor levels add 1

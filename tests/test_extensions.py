@@ -162,12 +162,22 @@ def _modules_imported_by(source: str, package: str) -> list[tuple[str, str]]:
     return imported
 
 
-def _private_names_imported(source: str, package: str) -> list[tuple[str, str]]:
-    """Each module of NachOS `source` imports from, or name it imports, that starts with an underscore."""
+def _extension_of(path: Path) -> str:
+    """The dotted name of the extension the module at `path` under `_EXTENSIONS_SOURCE` belongs to: the module itself,
+    or the package it is in."""
+    first_part = path.relative_to(_EXTENSIONS_SOURCE).parts[0]
+    return f"sc2nachos.extensions.{first_part.removesuffix('.py')}"
+
+
+def _private_names_imported(source: str, package: str, *, extension: str) -> list[tuple[str, str]]:
+    """Each module of NachOS `source` imports from, or name it imports, that starts with an underscore, but those of
+    `extension`, the extension `source` belongs to."""
     return [
         (module, name)
         for module, name in _modules_imported_by(source, package)
         if module.split(".")[0] == "sc2nachos"
+        and module != extension
+        and not module.startswith(f"{extension}.")
         and (any(part.startswith("_") for part in module.split(".")) or name.startswith("_"))
     ]
 
@@ -184,10 +194,15 @@ def _private_attributes_not_off_self_or_cls(path: Path) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("path", sorted(_EXTENSIONS_SOURCE.glob("*.py")), ids=lambda path: path.name)
+@pytest.mark.parametrize(
+    "path",
+    sorted(_EXTENSIONS_SOURCE.rglob("*.py")),
+    ids=lambda path: path.relative_to(_EXTENSIONS_SOURCE).as_posix(),
+)
 def test_an_extension_uses_only_what_nachos_makes_public(path: Path) -> None:
     """So it could move to a package of its own unchanged."""
-    assert _private_names_imported(path.read_text(encoding="utf-8"), _package_of(path)) == []
+    source = path.read_text(encoding="utf-8")
+    assert _private_names_imported(source, _package_of(path), extension=_extension_of(path)) == []
     assert _private_attributes_not_off_self_or_cls(path) == []
 
 
@@ -202,10 +217,22 @@ def test_a_relative_import_counts_by_the_module_it_names() -> None:
     source = (
         "from .. import _shared\nfrom ..api import _game\nfrom ..api._game import _Game\nfrom . import speed_mining\n"
     )
-    assert _private_names_imported(source, "sc2nachos.extensions") == [
+    assert _private_names_imported(source, "sc2nachos.extensions", extension="sc2nachos.extensions.speed_mining") == [
         ("sc2nachos", "_shared"),
         ("sc2nachos.api", "_game"),
         ("sc2nachos.api._game", "_Game"),
+    ]
+
+
+def test_an_extension_package_may_import_its_own_private_modules() -> None:
+    source = (
+        "from . import _movement_windows\n"
+        "from sc2nachos.extensions.upgrade_inference._upgrade_inference import UpgradeInference\n"
+        "from sc2nachos.extensions.speed_mining import _SpeedMined\n"
+    )
+    package = "sc2nachos.extensions.upgrade_inference"
+    assert _private_names_imported(source, package, extension=package) == [
+        ("sc2nachos.extensions.speed_mining", "_SpeedMined")
     ]
 
 

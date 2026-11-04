@@ -10,6 +10,8 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+# Written by hatch-vcs from the git tag.
+src/sc2nachos/__about__.py
 
 .venv/
 .pytest_cache/

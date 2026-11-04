@@ -6,10 +6,13 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import sc2api_pb2
 
+from sc2nachos._shared.errors import NotReportedError
+from sc2nachos.match._errors import NoStartLocationError
 from sc2nachos.match._match import Race
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData
+    from sc2nachos.gamemap import StartLocation
     from sc2nachos.ids import UpgradeId
 
 
@@ -18,7 +21,17 @@ class Enemy:
     """The other player, and what NachOS has learned or been told about it. `game_data` says which upgrades each upgrade
     needs researched first."""
 
-    __slots__ = ("_game_data", "_id", "_ladder_id", "_name", "_race", "_requested_race", "_upgrades")
+    __slots__ = (
+        "_game_data",
+        "_id",
+        "_ladder_id",
+        "_name",
+        "_race",
+        "_requested_race",
+        "_start_location",
+        "_start_locations",
+        "_upgrades",
+    )
 
     def __init__(
         self,
@@ -38,6 +51,10 @@ class Enemy:
         self._ladder_id = ladder_id
         # Replaced whole on every change, since units read it as part of a key many times a step.
         self._upgrades: frozenset[UpgradeId] = frozenset()
+        # Where it may have started, the map's start locations but this player's: `None` for one no expansion stands at.
+        self._start_locations: tuple[StartLocation | None, ...] = ()
+        # Where it started: the other start on a map of two, else the one the bot named, if it has.
+        self._start_location: StartLocation | None = None
 
     def __repr__(self) -> str:
         race = None if self._race is None else self._race.name
@@ -110,6 +127,42 @@ class Enemy:
     def _learn_race(self, race: Race) -> None:
         """Take `race` as the race it plays."""
         self._race = race
+
+    @property
+    def start_location(self) -> StartLocation:
+        """Where it started: on a map of two start locations the one but this player's, and on a map of more the one
+        `assume_start_location` last named.
+
+        Raises `NotReportedError` on a map with more than two start locations until the bot names one with
+        `assume_start_location`, since the game does not say which the enemy took, and NachOS does not scout for it.
+        Raises `NoStartLocationError` where no expansion stands at its start, as on a mini-game's map, or where the map
+        has no start location but this player's.
+        """
+        if self._start_location is not None:
+            return self._start_location
+        if len(self._start_locations) > 1:
+            raise NotReportedError(
+                f"the map has {len(self._start_locations)} start locations but this player's, and the game does not "
+                "say which the enemy took: assume_start_location names one"
+            )
+        if not self._start_locations:
+            raise NoStartLocationError("the map has no start location but this player's")
+        raise NoStartLocationError("no expansion stands where the enemy started")
+
+    def assume_start_location(self, start_location: StartLocation) -> None:
+        """Assume the enemy started at `start_location` from now on, in place of any start assumed before, so that
+        `start_location` reads it on a map with more than two start locations. Raises `ValueError` for one that is not
+        among the map's start locations but this player's."""
+        if start_location not in self._start_locations:
+            raise ValueError(f"{start_location.center} is not among the map's start locations but this player's")
+        self._start_location = start_location
+
+    def _learn_start_locations(self, start_locations: tuple[StartLocation | None, ...]) -> None:
+        """Take `start_locations`, one for each start location on the map but this player's, as where it may have
+        started: `None` for one no expansion stands at. Where there is one, it started there."""
+        self._start_locations = start_locations
+        if len(start_locations) == 1 and (start_location := start_locations[0]) is not None:
+            self.assume_start_location(start_location)
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:

@@ -127,7 +127,7 @@ def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
     )
     mains = []
     for start_location in game_map.all_start_locations:
-        main_ramp = game_map.main_ramp_of(start_location)
+        main_ramp = game_map._main_ramp_of(start_location)
         if main_ramp is None:
             raise RuntimeError(f"the main at {start_location} has no ramp")
         terran_wall = placement_grids.terran_wall(main_ramp)

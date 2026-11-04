@@ -151,7 +151,7 @@ def build_supply(budget: Budget) -> None:
 
 def _depot_anchor() -> Point:
     """8 tiles from the main's townhall on the side away from its minerals, out of the miners' way."""
-    main = api.expansions[0]
+    main = api.player.start_location
     return main.center.towards(main.mineral_fields.center, -8)
 
 
@@ -203,7 +203,8 @@ def build_barracks(budget: Budget) -> None:
     townhalls = len(api.units.own.townhalls)
     if count >= min(BARRACKS_PER_TOWNHALL * townhalls, MAX_BARRACKS) or (count >= 1 and townhalls < 2):
         return
-    anchor = api.expansions[0].center.towards(api.expansions[1].center, 9)
+    start = api.player.start_location
+    anchor = start.center.towards(start.natural.center, 9)
     site = api.placement.nearest_free(UnitTypeId.BARRACKS, near=anchor, max_distance=math.inf, margin=1)
     if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_BARRACKS):
         _build(AbilityId.SCV_BUILD_BARRACKS, site)
