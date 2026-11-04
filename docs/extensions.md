@@ -87,8 +87,8 @@ class ThreatMap:
   one.
 - **Keep a value for each unit in a `UnitDict`**, which forgets a unit once it is dead, as speed mining keeps each
   worker's field.
-- **Never order a unit the bot has not handed over.** Speed mining orders only the workers the bot gives it, and leaves
-  alone one the bot ordered that turn.
+- **Never order a unit the bot has not handed over.** Speed mining orders only the workers the bot gives it, and lets
+  one go once the bot orders it.
 
 ## NachOS's own
 
@@ -114,9 +114,9 @@ class ThreatMap:
   `mine` sends the worker to its field at once, its cargo handed in first, unless it is mining minerals already, so a
   worker pulled into a fight or collecting vespene mines from that turn. A worker it cannot send, building, burrowed or
   inside a refinery, it does not take: `mine` returns `None`, and the bot hands it over once it can be sent. A worker
-  held that the bot later sends to build is left alone until it is idle or mining again, and then goes back to its
-  field; `release(workers)` takes one or several back, and `miners` and `workers_at(field)` read which worker mines
-  which field. A worker on a move, unlike one on a gather or a return, can be stopped by other units, so no move is
+  held that the bot orders elsewhere, to build say, or a drone it burrows, is let go, its orders as they are, and the
+  bot hands it over again once it is done; `release(workers)` takes one or several back, and `miners` and
+  `workers_at(field)` read which worker mines which field. A worker on a move, unlike one on a gather or a return, can be stopped by other units, so no move is
   given while a unit stands in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to
   mining, unless speed mining is built with `attack_enemies=False`.
 
@@ -131,16 +131,16 @@ class ThreatMap:
   any, and then a third at the base nearest the worker, farthest first, which is where a third adds the most. A gas
   building takes three workers at most, at a base with a finished townhall of this player's, and its workers are let
   go once it dies or runs dry, or its base's townhall is gone. As `mine` does, `collect` sends the worker at once,
-  takes none it cannot send, and leaves alone one the bot sends elsewhere; a collector attacks as a miner does, and
+  takes none it cannot send, and lets go of one the bot orders elsewhere; a collector attacks as a miner does, and
   `collectors` and `workers_at(gas_building)` read them, and `workers` every worker held, miners and collectors. A
   worker is held at one field or gas building at a time: `mine` moves a collector to minerals, and `collect` a miner
   to gas. How many collect stays the bot's, and `mine` given no field never picks gas.
 
   So a bot can keep a number of collectors without naming a gas building: it hands a worker to `collect(worker)`
   while it holds fewer, and calls `release_collectors(count)` when it wants fewer, which releases that many, those
-  whose leaving costs the least vespene, and returns them for the bot to hand out again. A third leaves first, at the
-  gas building nearest its townhall first, where it adds the least, and then the others, farthest first, the reverse
-  of how `collect` fills them. `release_miners(count)` does the same for miners, those at the farther half of a
+  whose leaving costs the least vespene, and returns them for the bot to hand out again. One the bot has ordered
+  elsewhere in the turn leaves first, then a third, at the gas building nearest its townhall first, where it adds the
+  least, and then the others, farthest first, the reverse of how `collect` fills them. `release_miners(count)` does the same for miners, those at the farther half of a
   base's fields first, the reverse of how `mine` picks. The API reference says the rest.
 - **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`

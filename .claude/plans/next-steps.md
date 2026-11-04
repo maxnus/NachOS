@@ -23,7 +23,8 @@ As of 2026-11-04:
 - **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
   64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it. Its notes say too that
   `SpeedMining.workers_at` (#229), `Order.units`, and `UnitCommand.units` and `AutocastToggle.units` hand out `Units`,
-  where they handed out tuples, which a `Units` never equals.
+  where they handed out tuples, which a `Units` never equals, and that speed mining lets go of a worker the bot orders
+  elsewhere (#231), which no longer comes back to its field by itself.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -230,30 +231,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 ## Next
 
 - **Speed mining picks every resource, and releases the workers costing least** (the owner, 2026-11-04), so that a
-  bot holds only how many mine and how many collect, which stays its own; in 0.3.0, with #227. Built in #229:
-  - `collect`'s pick fills gas buildings to two at the expansion nearest the worker that has one under two, nearest
-    its center first, before a third anywhere, where today it fills the nearest expansion to three first. A third
-    then goes base by base: at the expansion nearest the worker with one under three, the farthest from its center
-    (the owner, over the farthest from its townhall at any base, which collects 28 more in three minutes a third).
-  - `release_collectors(count)` and `release_miners(count)` release `count` of the workers speed mining holds,
-    those whose leaving costs the least, and return them (the owner, over a count to keep and over a read the bot
-    passes to `release`). Collectors: thirds first, a gas building's nearest its expansion's center before the
-    farther's, then a gas building's farthest from its center first, the reverse of the fill. Miners: at a field of
-    an expansion's farther half before one of its nearer half, the reverse of `mine`'s pick. Among as costly, the one
-    handed over last, most likely yet to collect; across expansions by these alone, as no worker gives a nearest. A
-    count below zero raises `ValueError`, and one beyond those held releases them all.
-  - Measured per three minutes, one to three collectors at Pylon's main's two refineries (`tools/sweep_gas.py`, build
-    75689): each adds 204, 200 and 88 at the nearer, 7.6 from the townhall, and 188, 186 and 116 at the farther, 8.1.
-  - AvocaDOS then drops its caps a refinery (`max_collectors`) and keeps a number of collectors: it hands a worker
-    to `collect`, naming no gas building, while it holds fewer, and calls `release_collectors` when it wants fewer
-    (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto `api.vision` (#227).
-  - Then, in a pull request of its own after #229 and in 0.3.0 too: speed mining lets a worker go once the bot orders
-    it elsewhere, so that `miners` and `collectors` hold only workers at that work and a number kept is true (the
-    owner, review of #229, over ranking such workers first in the releases). It reverses #201, which leaves one alone
-    until it is idle, so a builder no longer comes back by itself; AvocaDOS releases its builders itself already. The
-    bot's orders are read off the order book: one given this turn or sent lately that is not speed mining's own, its
-    gather, return, moves, right-click on the townhall or attack. The game's redirect to another field and a worker
-    inside a gas building stay held; a drone the bot burrows is let go.
+  bot holds only how many mine and how many collect, which stays its own; in 0.3.0. Built in #229, the picks and
+  `release_collectors(count)` and `release_miners(count)`, and in #231, which lets a worker go once the bot orders it
+  elsewhere, reversing #201 (the owner, review of #229, over ranking such workers first in the releases), so that a
+  number kept is true. What is left is AvocaDOS's: it drops its caps a refinery (`max_collectors`) and keeps a number
+  of collectors, handing a worker to `collect`, naming no gas building, while it holds fewer, and calling
+  `release_collectors` when it wants fewer (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto
+  `api.vision` (#227), and releases its builders itself already.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
