@@ -21,6 +21,7 @@ what it takes. Before measuring anything in game, look here: a sweep may already
 | Find what the game's pathing grid shows as a game goes on, what each structure blocks for walking, and what the pathing query does from inside one | `uv run python tools/sweep_pathing.py timeline`, `footprints` or `inside` | yes |
 | Measure how long one SCV takes to repair each Terran mechanical type, and what it costs | `uv run python tools/sweep_repair.py`, then `uv run python tools/generate_repair_steps.py` | yes |
 | Measure how each unit type turns, and whether it turns to fire | `uv run python tools/sweep_turning.py`, then `uv run python tools/generate_turning.py` | yes |
+| Measure how fast each unit type a speed upgrade changes moves, with the upgrade and without, on creep and off, and as a hallucination | `uv run python tools/sweep_movement.py`, or with `terran`, `zerg` or `protoss` | yes |
 | Find where a townhall may stand around resources, and check the expansions by it | `uv run python tools/sweep_townhall_placement.py` | yes |
 | Look at the ramps on a map | `uv run python tools/show_ramps.py` | yes |
 | Check that the walls `api.placement` gives close each main's ramp of the pool | `uv run python tools/sweep_walls.py`, or with the maps to check | yes |
