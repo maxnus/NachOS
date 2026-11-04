@@ -1073,10 +1073,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
   mining role and handed out again, and speed mining picks each field among the base's.
 - **Measuring speed-mined gas** (the owner, 2026-11-03), after #208: `tools/sweep_gas.py`, run through the `sc2`
   workflow, since no game runs in a cloud session, collecting plainly against with a move at the end of each trip, at
-  one, two and three workers a geyser, the gather move ending at each inset given short of touching the refinery. The
-  move goes into `collect` in a pull request of its own only where it collects more, and `_is_mining` and
-  `_is_collecting` then become one check (the owner, review of #208). Then AvocaDOS can hand its collectors to speed
-  mining, dropping its own `Expansion._collect_vespene`.
+  one, two and three workers a geyser, with variants of the move on each side of the trip. The move goes into `collect`
+  in a pull request of its own only where it collects more, and `_is_mining` and `_is_collecting` then become one check
+  (the owner, review of #208). Then AvocaDOS can hand its collectors to speed mining, dropping its own
+  `Expansion._collect_vespene`.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.
