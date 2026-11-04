@@ -164,7 +164,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A parasitic bomb's target wears `ParasiticBomb`, and the unit the bomb leaves behind
   ([units](units.md#what-an-observation-lists)) `ParasiticBombUnitKU` and `ParasiticBombSecondaryUnitSearch`. Tool
   `sweep_buffs` never saw the last two: it watches 128 steps after an order, and a bomb on a target that lives leaves
-  its dummy only after 175 steps, for 2 (AI Arena matches 4805282 and 4846375, 2026-11-04, build 75689).
+  its dummy only after 175 steps, for 2. No other unit wears any of the three: the 7 enemy air units seen within 3.5 of
+  a bomb's target or its dummy, void rays, an observer and medivacs, 5 of them losing health or shields there, wore no
+  buff at all (AI Arena matches 4805282 and 4846375, every step, fog off, 2026-11-04, build 75689).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what
