@@ -177,9 +177,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   - It is assumed at 0.99 and forgotten below 0.5, so it does not flip back and forth (the owner, over assuming for
     good), from a floor `p0` of 1% (the owner, planning step 3: "1% and 99% may be nice, symmetric defaults, but of
     course the data should decide", which they did in #224, over 0.999, which takes two fast slices). One fast slice
-    assumes, at 99.6%, and one slice of only slow votes after that one forgets, at 2%. It forgets only what speed assumed.
-    The extension cannot see an upgrade the bot assumes after speed did, so speed can forget that one: a limit to
-    document.
+    assumes, at 99.6%, and one slice of only slow votes after that one forgets, at 2%. It forgets only what speed
+    assumed. The extension cannot see an upgrade the bot assumes after speed did, so speed can forget that one: a limit
+    to document.
   - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without an
     upgrade ever reaches 0.99 for it in a game is at most `p0`'s odds over 0.99's, about 1 in 10,000 from 1%, if the
     likelihoods are right; each climb off the floor adds about as much, and Zerg's six upgrades add up to about 0.06%.
