@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Final, final
 
 from sc2nachos import NoEnemyError
 from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
+from sc2nachos.extensions.upgrade_inference._events import assume_and_emit_events
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
     _DEFAULT_ASSUMED_AT,
     _DEFAULT_FLOOR,
@@ -113,6 +114,10 @@ class UpgradeInference:
     `Enemy.forget_upgrades` takes one back until it is shown again, a speed upgrade by 22 steps with a vote for it. In a
     game with no other player it reads nothing.
 
+    Each upgrade it adds to `Enemy.upgrades` comes as an `EnemyUpgradeAssumedEvent`, and each speed upgrade it forgets
+    as an `EnemyUpgradeForgottenEvent`, both `AnyUpgradeEvent`s, which `only` selects by the upgrade. Each comes at
+    once, as it reads, so before any of the bot's handlers of `TurnStartEvent` or `GameEndEvent`.
+
     The three thresholds set how much evidence a speed upgrade needs, not what 22 steps of votes weigh, which the
     rule's errors on the replays fix: from 0.1% assuming at 99.9%, two of 22 steps with a vote for it assume it. If the
     weights are right, the chance that an enemy without an upgrade ever has its score reach where it is assumed is at
@@ -159,9 +164,9 @@ class UpgradeInference:
             )
 
     def _assume_the_upgrades_shown(self, *_: object) -> None:
-        """Assume the enemy has the upgrades the last observation shows."""
+        """Assume the enemy has the upgrades the last observation shows, handing out an event for each new one."""
         api = self._api
-        api.enemy.assume_upgrades(*self._enemy_upgrades_shown(api.units, api.effects))
+        assume_and_emit_events(api, self._enemy_upgrades_shown(api.units, api.effects))
 
     @classmethod
     def _enemy_upgrades_shown(cls, units: Iterable[Unit[Any]], effects: Iterable[Effect]) -> frozenset[UpgradeId]:

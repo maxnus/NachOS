@@ -9,8 +9,8 @@ import pytest
 from s2clientprotocol import common_pb2, debug_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, NoEnemyError
-from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
-from sc2nachos.extensions.upgrade_inference import UpgradeInference
+from sc2nachos.events import AnyUpgradeEvent, EventPriority, GameEndEvent, GameStartEvent, TurnEvent, TurnStartEvent
+from sc2nachos.extensions.upgrade_inference import EnemyUpgradeAssumedEvent, UpgradeInference
 from sc2nachos.gamedata import GameData
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, BuffId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
@@ -220,6 +220,89 @@ class TestWhenAGameLearnsIt:
         api = _api_after_playing((_BURROWED_ZERGLING,), game_info=make_game_info(players=[alone]))
         with pytest.raises(NoEnemyError):
             _ = api.enemy
+
+
+_WARP_GATE = make_unit(2, UnitTypeId.WARP_GATE, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG)
+_STIMMED_MARINE = make_unit(3, alliance=Alliance.ENEMY, buff_ids=[BuffId.MARINE_STIMMED])
+
+
+def _upgrade_events_handed_out(
+    *observed: tuple[raw_pb2.Unit, ...],
+    ended_on: tuple[raw_pb2.Unit, ...] = (),
+    started: Callable[[Api[Any]], object] = lambda _: None,
+) -> list[tuple[type[AnyUpgradeEvent], UpgradeId, float]]:
+    """Each `AnyUpgradeEvent` a bot's handler of it is handed, by its type, its upgrade and its step, in the game
+    `_api_after_playing` plays on `observed` and `ended_on`. `started` runs before the game starts."""
+    handed_out: list[tuple[type[AnyUpgradeEvent], UpgradeId, float]] = []
+
+    def watch(api: Api[Any]) -> None:
+        api.on(AnyUpgradeEvent)(lambda event: handed_out.append((type(event), event.upgrade, event.time.steps)))
+        started(api)
+
+    _api_after_playing(*observed, ended_on=ended_on, started=watch)
+    return handed_out
+
+
+class TestTheEventsItHandsOut:
+    def test_an_upgrade_shown_comes_as_assumed_on_the_turn_it_is_first_shown_and_not_again(self) -> None:
+        handed_out = _upgrade_events_handed_out((), (_BURROWED_ZERGLING,), (_BURROWED_ZERGLING,))
+        assert handed_out == [(EnemyUpgradeAssumedEvent, UpgradeId.BURROW, 1)]
+
+    def test_several_shown_at_once_come_in_id_order(self) -> None:
+        handed_out = _upgrade_events_handed_out((_WARP_GATE, _BURROWED_ZERGLING, _STIMMED_MARINE))
+        assert [upgrade for _, upgrade, _ in handed_out] == [UpgradeId.STIMPACK, UpgradeId.BURROW, UpgradeId.WARP_GATE]
+
+    def test_neither_a_level_nachos_reads_nor_an_upgrade_the_bot_assumed_first_comes_as_assumed(self) -> None:
+        marine = make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=1)
+
+        def assume_burrow(api: Api[Any]) -> None:
+            api.on(GameStartEvent)(lambda _: api.enemy.assume_upgrades(UpgradeId.BURROW))
+
+        assert _upgrade_events_handed_out((_BURROWED_ZERGLING, marine), started=assume_burrow) == []
+
+    def test_one_the_bot_forgot_comes_again_once_shown_again(self) -> None:
+        def forget_burrow(api: Api[Any]) -> None:
+            api.on(TurnEvent)(lambda _: api.enemy.forget_upgrades(UpgradeId.BURROW))
+
+        handed_out = _upgrade_events_handed_out((_BURROWED_ZERGLING,), (_BURROWED_ZERGLING,), started=forget_burrow)
+        assert handed_out == [
+            (EnemyUpgradeAssumedEvent, UpgradeId.BURROW, 0),
+            (EnemyUpgradeAssumedEvent, UpgradeId.BURROW, 1),
+        ]
+
+    def test_it_comes_before_the_bots_first_handler_of_the_turn(self) -> None:
+        handed_out: list[type[object]] = []
+
+        def watch(api: Api[Any]) -> None:
+            api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(lambda event: handed_out.append(type(event)))
+            api.on(EnemyUpgradeAssumedEvent, priority=EventPriority.LOWEST)(
+                lambda event: handed_out.append(type(event))
+            )
+
+        _api_after_playing((_BURROWED_ZERGLING,), started=watch)
+        assert handed_out == [EnemyUpgradeAssumedEvent, TurnStartEvent]
+
+    def test_what_only_the_observation_the_game_ended_on_shows_comes_before_the_bots_handlers_of_its_end(
+        self,
+    ) -> None:
+        handed_out: list[type[object]] = []
+
+        def watch(api: Api[Any]) -> None:
+            api.on(GameEndEvent, priority=EventPriority.HIGHEST)(lambda event: handed_out.append(type(event)))
+            api.on(EnemyUpgradeAssumedEvent)(lambda event: handed_out.append(type(event)))
+
+        _api_after_playing((), ended_on=(_BURROWED_ZERGLING,), started=watch)
+        assert handed_out == [EnemyUpgradeAssumedEvent, GameEndEvent]
+
+    def test_only_selects_by_the_upgrade(self) -> None:
+        handed_out: list[UpgradeId] = []
+
+        def watch(api: Api[Any]) -> None:
+            selected = EnemyUpgradeAssumedEvent.only(UpgradeId.WARP_GATE)
+            api.on(selected)(lambda event: handed_out.append(event.upgrade))
+
+        _api_after_playing((_WARP_GATE, _BURROWED_ZERGLING), started=watch)
+        assert handed_out == [UpgradeId.WARP_GATE]
 
 
 @contextmanager

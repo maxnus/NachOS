@@ -2,6 +2,8 @@
 extensions may import."""
 
 import ast
+import importlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -308,3 +310,26 @@ def test_nachos_imports_no_extension() -> None:
         )
     ]
     assert importing == []
+
+
+def _names_of_nachos_extensions() -> set[str]:
+    """The name of each extension of NachOS's own, and every name each makes public."""
+    names: set[str] = set()
+    for path in _EXTENSIONS_SOURCE.iterdir():
+        if path.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"sc2nachos.extensions.{path.stem}")
+        names |= {path.stem, *module.__all__}
+    return names
+
+
+def test_nachos_names_no_extension() -> None:
+    """Not even in a docstring: the core says what an extension may do, never which one does it."""
+    extension_name = re.compile(r"\b(" + "|".join(sorted(_names_of_nachos_extensions())) + r")\b")
+    core = [path for path in _NACHOS_SOURCE.rglob("*.py") if _EXTENSIONS_SOURCE not in path.parents]
+    naming = [
+        f"{path.relative_to(_NACHOS_SOURCE).as_posix()}: {found.group()}"
+        for path in core
+        for found in extension_name.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert naming == []

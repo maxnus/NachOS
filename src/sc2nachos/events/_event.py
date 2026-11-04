@@ -171,8 +171,9 @@ class OwnWarpInFinishedEvent(AnyUnitEvent):
 
 
 class AnyUpgradeEvent(Event):
-    """Something happened to one of this player's upgrades. `only` selects by the upgrade. NachOS never hands one out
-    itself."""
+    """Something happened to one upgrade. `only` selects by the upgrade. NachOS never hands one out itself: this
+    player's researches come as `OwnUpgradeStartedEvent`, `OwnUpgradeStoppedEvent` and `OwnUpgradeFinishedEvent`, and
+    an extension may hand out its own."""
 
     upgrade: UpgradeId
 

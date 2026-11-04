@@ -182,5 +182,21 @@ class ThreatMap:
   from one that stopped and started again. It measures every visible enemy unit of the types those upgrades speed up,
   every turn.
 
+  It hands out an `EnemyUpgradeAssumedEvent` for each upgrade it adds to `api.enemy.upgrades`, and an
+  `EnemyUpgradeForgottenEvent` for each speed upgrade it forgets, both `AnyUpgradeEvent`s, which `only` selects by the
+  upgrade:
+
+  ```python
+  from sc2nachos.extensions.upgrade_inference import EnemyUpgradeAssumedEvent
+
+
+  @api.on(EnemyUpgradeAssumedEvent.only(UpgradeId.ZERGLING_SPEED))
+  def expect_fast_zerglings(event: EnemyUpgradeAssumedEvent) -> None: ...
+  ```
+
+  Neither comes for what the bot assumes or forgets itself, nor for a level NachOS reads off the enemy's units. Each
+  comes at once, as it reads, so before any of the bot's handlers of `TurnStartEvent`, or of `GameEndEvent` for the
+  observation the game ended on.
+
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.

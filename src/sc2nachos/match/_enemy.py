@@ -170,10 +170,8 @@ class Enemy:
 
         The game never reports an enemy upgrade outright. NachOS adds here the attack, armor and shield levels each
         visible enemy unit reports, as levels of its type's own upgrade lines: a marine at attack level 2 shows the
-        first two Terran Infantry Weapons. What only an upgrade can cause, such as a burrowed zergling or a stimmed
-        marine, and the speed upgrades enemy units move at, such as Metabolic Boost,
-        `sc2nachos.extensions.upgrade_inference.UpgradeInference` adds, if the bot builds it. Anything else, such as
-        Grooved Spines, the bot adds with `assume_upgrades` when it works it out.
+        first two Terran Infantry Weapons. Anything else, such as Burrow off a burrowed zergling or Metabolic Boost off
+        how fast zerglings move, the bot or an extension adds with `assume_upgrades`.
 
         Every enemy unit, in sight or not, counts what is held here. It never holds an upgrade without those the game's
         tables say it needs researched first, as level 2 of a line needs level 1.
@@ -190,8 +188,7 @@ class Enemy:
         """Assume the enemy no longer has `upgrades`, nor any upgrade that needs one of them researched first: level 1
         of a line takes levels 2 and 3 with it.
 
-        An enemy unit that shows one of them again puts it back: a level it reports does, and so does what
-        `sc2nachos.extensions.upgrade_inference.UpgradeInference` reads, if the bot built it.
+        A level an enemy unit reports puts one back, and so may an extension that adds what it reads.
         """
         forgotten = frozenset(upgrades)
         self._upgrades = frozenset(
