@@ -62,6 +62,7 @@ class Vision:
         Raises `ProtocolError` if this observation reported no vision, as `in_sight` does.
         """
         if (handed_out := self._handed_out) is None:
+            # A copy, so a grid handed out in an earlier turn keeps its values.
             handed_out = self._handed_out = self._stamped_steps().copy().as_readonly()
         return handed_out
 
