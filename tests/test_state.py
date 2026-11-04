@@ -30,7 +30,7 @@ from sc2nachos.state import (
     VitalScore,
 )
 from sc2nachos.state._state import _State
-from sc2nachos.units import Alliance, NotReportedError, Unit
+from sc2nachos.units import Alliance, NotReportedError, Unit, Units
 from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
@@ -483,9 +483,9 @@ class TestWhatHappened:
         ]
         state = game.observe(16, units=[make_unit(1), make_unit(2)], dead=(9,), actions=actions)
         assert state.actions == (
-            UnitCommand(GameTime(steps=15), AbilityId.MOVE, (marine, other), Point((5.0, 6.0)), queued=False),
-            UnitCommand(GameTime(steps=15), AbilityId.ATTACK, (marine,), enemy, queued=False),
-            UnitCommand(GameTime(steps=15), AbilityId.STOP, (other,), None, queued=True),
+            UnitCommand(GameTime(steps=15), AbilityId.MOVE, Units([marine, other]), Point((5.0, 6.0)), queued=False),
+            UnitCommand(GameTime(steps=15), AbilityId.ATTACK, Units([marine]), enemy, queued=False),
+            UnitCommand(GameTime(steps=15), AbilityId.STOP, Units([other]), None, queued=True),
         )
         assert enemy.is_dead
         assert [cast(UnitCommand, action).known_target for action in state.actions] == [Point((5.0, 6.0)), enemy, None]
@@ -499,7 +499,7 @@ class TestWhatHappened:
         gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
         (command,) = game.observe(16, units=[make_unit(1, UnitTypeId.SCV)], actions=[gather]).actions
         assert isinstance(command, UnitCommand)
-        assert (command.ability, command.units, command.known_target) == (AbilityId.GATHER, (scv,), None)
+        assert (command.ability, command.units, command.known_target) == (AbilityId.GATHER, Units([scv]), None)
         with pytest.raises(NotReportedError, match="this GATHER was aimed at by no tag it reports"):
             _ = command.target
 
@@ -514,8 +514,8 @@ class TestWhatHappened:
         ]
         state = game.observe(16, units=[make_unit(1, UnitTypeId.MEDIVAC)], actions=actions)
         assert [cast(UnitCommand | AutocastToggle, action).units for action in state.actions] == [
-            (medivac,),
-            (medivac,),
+            Units([medivac]),
+            Units([medivac]),
         ]
 
     def test_an_autocast_toggle_and_a_camera_move(self) -> None:
@@ -531,7 +531,7 @@ class TestWhatHappened:
         ]
         state = game.observe(16, units=[make_unit(1, UnitTypeId.MEDIVAC)], actions=actions)
         assert state.actions == (
-            AutocastToggle(GameTime(steps=3), AbilityId.MEDIVAC_HEAL, (medivac,)),
+            AutocastToggle(GameTime(steps=3), AbilityId.MEDIVAC_HEAL, Units([medivac])),
             CameraMove(GameTime(steps=2), Point((30.75, 139.0))),
         )
 

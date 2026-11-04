@@ -112,6 +112,32 @@ class TestSequence:
         assert _assorted_own_units(1)
 
 
+class TestEquality:
+    def test_collections_of_the_same_units_in_the_same_order_are_equal_and_hash_alike(self) -> None:
+        units = _assorted_own_units(3)
+        same = Units(list(units))
+        assert units == same
+        assert hash(units) == hash(same)
+        assert len({units, same}) == 1
+        assert units.own == units
+
+    def test_the_same_units_in_another_order_or_others_are_not_equal(self) -> None:
+        units = _assorted_own_units(3)
+        assert units != Units(reversed(units))
+        assert units != units[:2]
+        assert units != _assorted_own_units(4)[1:]
+
+    def test_a_collection_is_not_equal_to_a_tuple_or_a_list_of_its_units(self) -> None:
+        units = _assorted_own_units(2)
+        assert units != tuple(units)
+        assert tuple(units) != units
+        assert units != list(units)
+
+    def test_empty_collections_are_equal(self) -> None:
+        assert Units() == Units(())
+        assert hash(Units()) == hash(Units())
+
+
 class TestTyping:
     def test_a_collection_of_own_units_is_a_collection_of_units(self) -> None:
         """For the type checker, which reads this test: `Units` is covariant, so a collection of own units is passed

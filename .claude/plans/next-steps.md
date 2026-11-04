@@ -21,7 +21,9 @@ As of 2026-11-04:
 - **M6 is done**: AvocaDOS pins NachOS's releases from PyPI, 0.1.0 first (AvocaDOS #87, 2026-11-04), then 0.2.0,
   which speed collects (AvocaDOS #90). A release is made as `docs/maintaining/releasing.md` says.
 - **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
-  64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it.
+  64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it. Its notes say too that
+  `SpeedMining.workers_at` (#229), `Order.units`, and `UnitCommand.units` and `AutocastToggle.units` hand out `Units`,
+  where they handed out tuples, which a `Units` never equals.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -63,7 +65,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   unit's shield is no type error. No `Unit.is_type(group)`: a type guard cannot narrow the object a method is
   called on, so `UnitType.X.includes(unit)` stays the one spelling (#202).
 - **`Units` is immutable, with no operators** (#35, #182): `combined_with` and `without`, by NachOS id. Every handler
-  shares `api.units`, and its covariance and its id index need it unchanged.
+  shares `api.units`, and its covariance and its id index need it unchanged. It equals, and hashes as, another of the
+  same units in the same order, never a tuple or a list (the owner, 2026-11-04, over unordered), so `Order.units` and
+  the actions' `units` hold one.
 - **NachOS names only the categories the game draws**: no `army` and no `mobile` (#157). What counts as army is the
   bot's call, through the type groups, `of_type` and `excluding_type`.
 - **A unit type names what makes it, not what the tables alias it to** (#75): no `UnitTypeData.base_type`, the

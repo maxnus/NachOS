@@ -17,7 +17,7 @@ from sc2nachos.orders._order import Order
 from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionFailure, ActionResult
-from sc2nachos.units import OwnUnit, Unit
+from sc2nachos.units import OwnUnit, Unit, Units
 from sc2nachos.units._units import _unit_tuple
 
 if TYPE_CHECKING:
@@ -167,7 +167,7 @@ class OrderBook:
             _check_not_aimed_at_itself(ability, aimed, given)
         order = Order(
             ability,
-            given,
+            Units(given),
             aimed,
             queued=queued,
             data=data,

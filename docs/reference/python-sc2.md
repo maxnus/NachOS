@@ -442,7 +442,8 @@ it.
   `all_units`; NachOS has neither yet.
 - **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.
 - **A collection never changes.** python-sc2's `Units` is a list you can append to; NachOS's is a fixed sequence,
-  and every filter returns a new one.
+  and every filter returns a new one. It equals another `Units` of the same units in the same order, but never a
+  list, as python-sc2's does.
 - **Collections are combined with `Units.combined(a, b, ...)`**, or `a.combined_with(b)` for `b` one unit or several.
   Each keeps a unit where it first appears and knows it by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
 - **Your own data about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its class

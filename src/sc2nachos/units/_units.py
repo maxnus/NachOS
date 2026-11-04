@@ -32,7 +32,9 @@ class Units(Sequence[U]):
     """An immutable, ordered collection of units. Filters keep the order.
 
     Every filter returns a new collection. A query that picks the nearest unit, such as `closest_to`, raises
-    `ValueError` on an empty collection; `structure_at` answers `None` where no structure stands.
+    `ValueError` on an empty collection; `structure_at` answers `None` where no structure stands. Two collections are
+    equal, and hash alike, when they hold the same units in the same order; a collection is never equal to a tuple or a
+    list, as a tuple is never equal to a list.
     """
 
     __slots__ = ("_by_id", "_units")
@@ -84,6 +86,14 @@ class Units(Sequence[U]):
 
     def __contains__(self, unit: object) -> bool:
         return unit in self._units
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Units):
+            return NotImplemented
+        return self._units == other._units
+
+    def __hash__(self) -> int:
+        return hash(self._units)
 
     def __repr__(self) -> str:
         return f"Units({list(self._units)!r})"
