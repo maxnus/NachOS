@@ -1104,12 +1104,25 @@ Keep this file current: when a step is done, say so here in the same pull reques
     the line: 0.75 apart gained 6.5 to 9.5%, the line 9 to 13%.
   - Three collectors: the refinery is full, each 32 steps inside and 1 to change over, a round trip of 99 steps, so
     nothing gains, and every move lost up to 7% at the nearer refinery, on lanes too.
-  - Games played here on build 75689 give what the `sc2` workflow gives, to the vespene and the step: the lanes were
-    measured here first, and runs 41861977180 (two collectors) and 41861981124 (one and three) measure them there,
-    with replays.
-  - Next: plan with the owner whether and how the move goes into `collect`, perhaps by a gas building's count of
-    collectors: both moves on the line at one, on lanes 0.75 apart at two, none at three. Do not put the findings
-    into speed mining or its docs before that.
+  - Waypoints (the owner, 2026-11-04): the trip ends of `both`, each trip by way of a waypoint, the trip in's to the
+    left of the line between the centers and the trip back's to the right, 0.5 to 1.25 apart, 0.2 to 0.8 of the way
+    from the refinery's end to the townhall's (`waypoints-<spacing>-at-<along>`). Uneven at two: 0.75 apart at 0.2
+    and 1 apart at 0.4 did best, 5.4 to 7.6% at the nearer refinery and 7.0 to 8.2% at the farther, and 0.5 apart lost
+    up to 17%.
+  - Yielding (the owner, 2026-11-04): both moves on the line, but of a collector going in and one coming out, on their
+    moves or about to be given them, nearer each other than 1 to 3 and yet to pass, the one the variant names goes
+    back to its plain order, which passes through, until they have passed (`yield-in-<distance>`,
+    `yield-out-<distance>`). The one coming out yielding did best, at every distance alike: at two, round trips of
+    80 and 86 steps, a lone collector's on `both`, 9.8% and 9.3 to 9.4% over plain on both seeds, with a yield
+    almost every trip; at three, what plain gives, where `both` lost up to 4%. Traced, the one coming out keeps its
+    plain return through the one going in, and is given its move once past; the two overlap whenever it would be
+    given it, so the distance never mattered. The one going in yielding gained 8.7% and 5.8%, losing its move in.
+  - Games played here on build 75689 give what the `sc2` workflow gives, to the vespene and the step: the lanes,
+    waypoints and yielding were measured here, and runs 41861977180 (two collectors) and 41861981124 (one and three)
+    measure the lanes there, with replays.
+  - Next: plan with the owner whether and how the move goes into `collect`, perhaps both moves on the line, a
+    collector coming out given its move only once past every collector of its gas building going in on its move. Do
+    not put the findings into speed mining or its docs before that.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.

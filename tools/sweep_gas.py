@@ -23,6 +23,16 @@ as many as the trial says. A trial is a count of collectors a refinery, a seed, 
   they were handed over: half of `lane_spacing` to the left of that line, seen from the refinery, then as far to the
   right. A lane's moves end on the same two circles as those of `both`, around the refinery's center and the
   townhall's, at the lane's distance from the line.
+- The `waypoints` ones give both moves, as `both-early` does, from 3 away, each by way of a waypoint of its trip, with
+  the move to where `both`'s ends queued behind: on the trip to the refinery a waypoint half of `waypoint_spacing` to
+  the left of the line between the centers, seen from the refinery, and on the trip back one as far to the right, so
+  that one going in and one coming out pass side by side, both `waypoint_along` of the way from where the trip to the
+  refinery ends to where the trip back does. A collector already as near its trip's end as its waypoint is given
+  the move there alone.
+- The `yield` ones give both moves, as `both` does, but where a collector going in and one coming out, both on their
+  moves or about to be given them, are nearer each other than `yield_distance` and have yet to pass, the one the
+  variant names is put back on its plain gather, or its plain return with the gather queued behind, which passes
+  through, and given no move until they have passed.
 
 After a warm-up from the hand-over, it records over the time measured what each refinery's contents fell by, the
 minerals and vespene the score says were collected, the actions the game refused, the most enemy units in sight at
@@ -47,6 +57,7 @@ import math
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +72,7 @@ from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty
 from sc2nachos.run import Installation
-from sc2nachos.units import OwnUnit, Unit, UnitType
+from sc2nachos.units import OwnUnit, Unit, UnitOrder, UnitType
 
 # The distances from where a trip ends between which a collector on its gather or return is given the move, and how far
 # from a townhall's center the move of a trip back ends: speed mining's for its miners.
@@ -77,6 +88,13 @@ _STEPS_PER_TURN = 1
 _SETUP_TIME = GameTime(seconds=90)
 # The computer, which keeps the game going: on the ladder's maps a game alone ends at once, in a victory (in game).
 _OPPONENT = Computer(Race.ZERG, Difficulty.VERY_EASY)
+
+
+class _Yielder(StrEnum):
+    """Which of two collectors about to meet on their moves yields, in a `yield` variant."""
+
+    GOING_IN = "in"
+    COMING_OUT = "out"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -96,6 +114,17 @@ class _Variant:
     lane_spacing: float | None = None
     """How far apart, side to side, the lanes of a refinery's collectors are, as the module's docstring says; or `None`
     for every collector on the line between the centers."""
+    waypoint_spacing: float | None = None
+    """How far apart, side to side, the waypoints of the trip to the refinery and of the trip back are, as the module's
+    docstring says; or `None` for no waypoints."""
+    waypoint_along: float = 0.5
+    """Where both waypoints sit: the fraction of the way from where the trip to the refinery ends to where the trip back
+    does."""
+    yielder: _Yielder | None = None
+    """Which of a collector going in and one coming out about to meet on their moves is put back on its plain order,
+    as the module's docstring says; or `None` for neither."""
+    yield_distance: float = 0.0
+    """How near each other the two come before one of them yields."""
 
     @property
     def gives_moves(self) -> bool:
@@ -119,6 +148,29 @@ _VARIANTS = {
         *(
             _Variant(name=f"lanes-{lane_spacing}", gather_inset=0.0, return_move=True, lane_spacing=lane_spacing)
             for lane_spacing in (0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+        ),
+        *(
+            _Variant(
+                name=f"waypoints-{waypoint_spacing}-at-{waypoint_along}",
+                gather_inset=0.0,
+                return_move=True,
+                farthest=3.0,
+                waypoint_spacing=waypoint_spacing,
+                waypoint_along=waypoint_along,
+            )
+            for waypoint_spacing in (0.5, 0.75, 1.0, 1.25)
+            for waypoint_along in (0.2, 0.4, 0.6, 0.8)
+        ),
+        *(
+            _Variant(
+                name=f"yield-{yielder}-{yield_distance}",
+                gather_inset=0.0,
+                return_move=True,
+                yielder=yielder,
+                yield_distance=yield_distance,
+            )
+            for yielder in _Yielder
+            for yield_distance in (1.0, 1.5, 2.0, 3.0)
         ),
     )
 }
@@ -186,6 +238,8 @@ class _TrialFindings:
     vespene_collected: float = 0.0
     minerals_collected: float = 0.0
     moves_given: int = 0
+    yields_made: int = 0
+    """How many times a collector began to yield, put back on its plain order or given no move, in a `yield` trial."""
     actions_refused: int = 0
     most_enemies_in_sight: int = 0
 
@@ -209,6 +263,7 @@ class _TrialGame:
         self._collected_at_the_start = (0.0, 0.0)
         self._trip_ends_by_refinery: dict[Unit[UnitType.GasBuilding], tuple[Point, Point]] = {}
         self._trip_ends_by_collector: dict[int, tuple[Point, Point]] = {}
+        self._waypoints_by_refinery: dict[Unit[UnitType.GasBuilding], tuple[Point, Point]] = {}
         self._seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], set[int]] = {}
         self._first_seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], GameTime] = {}
         self._trip_log_by_refinery: dict[Unit[UnitType.GasBuilding], _TripLog] = {}
@@ -216,6 +271,8 @@ class _TrialGame:
         self._inside_since_by_collector: dict[int, int] = {}
         self._last_entry_by_collector: dict[int, int] = {}
         self._moves_given = 0
+        self._yields_made = 0
+        self._yielding_ids: set[int] = set()
         self._actions_refused = 0
         self._most_enemies_in_sight = 0
         self.api.on(GameStartEvent)(self._start_mining)
@@ -295,6 +352,7 @@ class _TrialGame:
             collected = api.score.collected
             self._collected_at_the_start = (collected.minerals, collected.vespene)
             self._moves_given = 0
+            self._yields_made = 0
             self._actions_refused = 0
             self._most_enemies_in_sight = 0
         elif self._measuring_from is not None and self.findings is None:
@@ -353,46 +411,133 @@ class _TrialGame:
                     raise RuntimeError(f"collect refused {scv!r} at {refinery!r}")
                 lane_offset = _lane_offset_of_collector(index, variant.lane_spacing)
                 self._trip_ends_by_collector[scv.id] = _trip_ends(main, refinery, gather_inset, lane_offset)
-            self._trip_ends_by_refinery[refinery] = _trip_ends(main, refinery, gather_inset, 0.0)
+            trip_ends = self._trip_ends_by_refinery[refinery] = _trip_ends(main, refinery, gather_inset, 0.0)
+            if variant.waypoint_spacing is not None:
+                self._waypoints_by_refinery[refinery] = _waypoints(
+                    main, refinery, trip_ends, spacing=variant.waypoint_spacing, along=variant.waypoint_along
+                )
         self._handed_over_at = self.api.time
 
     def _give_the_moves(self, main: Expansion) -> None:
-        """Give each collector on its gather at its refinery, or on its return of vespene, near where its trip ends, the
-        move there with what the variant queues behind, for the trips the variant gives a move. A collector returning
-        minerals, handed over with them, is left to its return and the gather `collect` queued behind it, which a move
-        would drop, sending the collector back to its field (`sc2` run 41849753359)."""
+        """Give the moves at each refinery, as `_give_the_moves_at` says, and count the collectors that begin to
+        yield."""
         townhall = main.townhall
         if townhall is None:
             return
-        variant = self._trial.variant
-        order_book = self.api.orders
+        collectors_by_refinery: dict[Unit[UnitType.GasBuilding], list[OwnUnit[UnitType.Worker]]] = {}
         for scv, refinery in self.api.extensions.collectors.items():
-            if not scv.is_orderable or order_book.issued_to(scv, include_sent=True):
+            collectors_by_refinery.setdefault(refinery, []).append(scv)
+        yielding_ids: set[int] = set()
+        for refinery, collectors in collectors_by_refinery.items():
+            yielding_ids |= self._give_the_moves_at(refinery, collectors, townhall)
+        self._yields_made += len(yielding_ids - self._yielding_ids)
+        self._yielding_ids = yielding_ids
+
+    def _give_the_moves_at(
+        self,
+        refinery: Unit[UnitType.GasBuilding],
+        collectors: Sequence[OwnUnit[UnitType.Worker]],
+        townhall: Unit[UnitType.Townhall],
+    ) -> set[int]:
+        """Give each of `refinery`'s `collectors` on its gather at it, or on its return of vespene, near where its trip
+        ends, the move there with what the variant queues behind, for the trips the variant gives a move, by way of the
+        trip's waypoint in a `waypoints` variant; and in a `yield` variant, put back on its plain order, or give no
+        move, each collector that yields. Returns the ids of those that yield. A collector returning minerals, handed
+        over with them, is left to its return and the gather `collect` queued behind it, which a move would drop,
+        sending the collector back to its field (`sc2` run 41849753359)."""
+        order_book = self.api.orders
+        yielding_ids: set[int] = set()
+        on_their_moves: list[OwnUnit[UnitType.Worker]] = []
+        route_by_collector: dict[OwnUnit[UnitType.Worker], list[tuple[AbilityId, Point | Unit[Any]]]] = {}
+        for scv in collectors:
+            if not scv.is_orderable:
+                continue
+            if issued := order_book.issued_to(scv, include_sent=True):
+                if any(order.ability is AbilityId.MOVE for order in issued):
+                    on_their_moves.append(scv)
                 continue
             current_order = scv.current_order
             if current_order is None:
                 continue
-            gather_point, return_point = self._trip_ends_by_collector[scv.id]
-            queued_behind: list[tuple[AbilityId, Unit[Any]]]
-            if (
-                variant.gather_inset is not None
-                and current_order.ability is AbilityId.GATHER
-                and current_order.known_target is refinery
-            ):
-                trip_end = gather_point
-                queued_behind = [(AbilityId.GATHER, refinery)]
-            elif variant.return_move and current_order.ability is AbilityId.RETURN and not scv.is_carrying_minerals:
-                trip_end = return_point
-                queued_behind = [(AbilityId.SMART, townhall)]
-                if variant.gather_after_return:
-                    queued_behind.append((AbilityId.GATHER, refinery))
-            else:
-                continue
-            if _NEAREST_DISTANCE_FOR_THE_MOVE < scv.distance_to(trip_end) < variant.farthest:
-                order_book.issue(scv, AbilityId.MOVE, target=trip_end, force=True)
-                for ability, target in queued_behind:
-                    order_book.issue(scv, ability, target=target, queued=True)
-                self._moves_given += 1
+            if current_order.ability is AbilityId.MOVE:
+                on_their_moves.append(scv)
+            elif (route := self._route_of_the_trip(scv, current_order, refinery, townhall)) is not None:
+                route_by_collector[scv] = route
+        if self._trial.variant.yielder is not None:
+            for scv in self._collectors_yielding(refinery, [*on_their_moves, *route_by_collector]):
+                yielding_ids.add(scv.id)
+                if route_by_collector.pop(scv, None) is None:
+                    self._put_back_on_the_plain_order(scv, refinery)
+        for scv, route in route_by_collector.items():
+            (first_ability, first_target), *queued_behind = route
+            order_book.issue(scv, first_ability, target=first_target, force=True)
+            for ability, target in queued_behind:
+                order_book.issue(scv, ability, target=target, queued=True)
+            self._moves_given += 1
+        return yielding_ids
+
+    def _route_of_the_trip(
+        self,
+        scv: OwnUnit[UnitType.Worker],
+        current_order: UnitOrder,
+        refinery: Unit[UnitType.GasBuilding],
+        townhall: Unit[UnitType.Townhall],
+    ) -> list[tuple[AbilityId, Point | Unit[Any]]] | None:
+        """The orders that give `scv`, on `current_order`, the move of its trip to `refinery` or back to `townhall`,
+        the first to go out at once and the others queued behind it, where the variant gives that trip a move and `scv`
+        is near enough the trip's end; else `None`. The move goes by way of the trip's waypoint while `scv` is farther
+        from the trip's end than the waypoint is."""
+        variant = self._trial.variant
+        gather_point, return_point = self._trip_ends_by_collector[scv.id]
+        waypoints = self._waypoints_by_refinery.get(refinery)
+        queued_behind: list[tuple[AbilityId, Point | Unit[Any]]]
+        if (
+            variant.gather_inset is not None
+            and current_order.ability is AbilityId.GATHER
+            and current_order.known_target is refinery
+        ):
+            trip_end = gather_point
+            waypoint = None if waypoints is None else waypoints[0]
+            queued_behind = [(AbilityId.GATHER, refinery)]
+        elif variant.return_move and current_order.ability is AbilityId.RETURN and not scv.is_carrying_minerals:
+            trip_end = return_point
+            waypoint = None if waypoints is None else waypoints[1]
+            queued_behind = [(AbilityId.SMART, townhall)]
+            if variant.gather_after_return:
+                queued_behind.append((AbilityId.GATHER, refinery))
+        else:
+            return None
+        distance_to_the_trip_end = scv.distance_to(trip_end)
+        if not _NEAREST_DISTANCE_FOR_THE_MOVE < distance_to_the_trip_end < variant.farthest:
+            return None
+        if waypoint is not None and distance_to_the_trip_end > waypoint.distance_to(trip_end):
+            return [(AbilityId.MOVE, waypoint), (AbilityId.MOVE, trip_end), *queued_behind]
+        return [(AbilityId.MOVE, trip_end), *queued_behind]
+
+    def _collectors_yielding(
+        self, refinery: Unit[UnitType.GasBuilding], collectors: Sequence[OwnUnit[UnitType.Worker]]
+    ) -> set[OwnUnit[UnitType.Worker]]:
+        """Those of `refinery`'s `collectors`, each on its move or about to be given one, that yield: of each one going
+        in and one coming out about to meet within the variant's yield distance, the one the variant names."""
+        variant = self._trial.variant
+        going_in = [scv for scv in collectors if not scv.is_carrying_resource]
+        coming_out = [scv for scv in collectors if scv.is_carrying_resource]
+        yielding: set[OwnUnit[UnitType.Worker]] = set()
+        for inbound in going_in:
+            for outbound in coming_out:
+                if _are_about_to_meet(inbound, outbound, refinery, within=variant.yield_distance):
+                    yielding.add(inbound if variant.yielder is _Yielder.GOING_IN else outbound)
+        return yielding
+
+    def _put_back_on_the_plain_order(self, scv: OwnUnit[UnitType.Worker], refinery: Unit[UnitType.GasBuilding]) -> None:
+        """Put `scv`, on its move or given one, back on its plain gather at `refinery`, or, carrying vespene, on its
+        plain return with the gather queued behind."""
+        order_book = self.api.orders
+        if scv.is_carrying_resource:
+            order_book.issue(scv, AbilityId.RETURN, force=True)
+            order_book.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+        else:
+            order_book.issue(scv, AbilityId.GATHER, target=refinery, force=True)
 
     def _read_the_findings(self, main: Expansion) -> _TrialFindings:
         """What the time measured gave, read at its end."""
@@ -406,6 +551,7 @@ class _TrialGame:
             vespene_collected=collected.vespene - start_vespene,
             minerals_collected=collected.minerals - start_minerals,
             moves_given=self._moves_given,
+            yields_made=self._yields_made,
             actions_refused=self._actions_refused,
             most_enemies_in_sight=self._most_enemies_in_sight,
         )
@@ -444,13 +590,51 @@ def _trip_ends(
     and on the circle 3.125 around the townhall's center."""
     center = main.center
     along = refinery.position.direction_vector(center)
-    to_the_left = Point((-along.y, along.x))
+    to_the_left = _to_the_left_of(along)
     gather_distance = refinery.radius + _WORKER_RADIUS - inset
     gather_point = (
         refinery.position + along * math.sqrt(gather_distance**2 - lane_offset**2) + to_the_left * lane_offset
     )
     return_point = center - along * math.sqrt(_RETURN_POINT_DISTANCE**2 - lane_offset**2) + to_the_left * lane_offset
     return gather_point, return_point
+
+
+def _waypoints(
+    main: Expansion,
+    refinery: Unit[UnitType.GasBuilding],
+    trip_ends: tuple[Point, Point],
+    *,
+    spacing: float,
+    along: float,
+) -> tuple[Point, Point]:
+    """The waypoints of the trip to `refinery` and of the trip back to the townhall at `main`'s center, whose moves end
+    at `trip_ends`, there and back: `along` of the way from the first end to the second, half of `spacing` to the left
+    of the line from the refinery's center to the townhall's, seen from the refinery, and as far to the right."""
+    gather_point, return_point = trip_ends
+    to_the_left = _to_the_left_of(refinery.position.direction_vector(main.center))
+    between = gather_point + (return_point - gather_point) * along
+    return between + to_the_left * (spacing / 2), between - to_the_left * (spacing / 2)
+
+
+def _to_the_left_of(direction: Point) -> Point:
+    """The unit vector a quarter turn counterclockwise from `direction`, a unit vector."""
+    return Point((-direction.y, direction.x))
+
+
+def _are_about_to_meet(
+    going_in: OwnUnit[UnitType.Worker],
+    coming_out: OwnUnit[UnitType.Worker],
+    refinery: Unit[UnitType.GasBuilding],
+    *,
+    within: float,
+) -> bool:
+    """Whether `going_in`, a collector on its way into `refinery`, and `coming_out`, one on its way out, are nearer each
+    other than `within` and have yet to pass: the one going in is the farther from the refinery's center, or the two
+    touch."""
+    distance_between = going_in.distance_to(coming_out)
+    if distance_between >= within:
+        return False
+    return distance_between < 2 * _WORKER_RADIUS or going_in.distance_to(refinery) > coming_out.distance_to(refinery)
 
 
 def _lane_offset_of_collector(index: int, lane_spacing: float | None) -> float:
@@ -515,7 +699,7 @@ def _summary(findings: _TrialFindings, measured: GameTime) -> str:
     )
     return (
         f"{trial.collectors} a geyser, seed {trial.seed}, {trial.variant.name}: vespene a minute {refineries}; "
-        f"minerals {findings.minerals_collected:.0f}; moves {findings.moves_given}, "
+        f"minerals {findings.minerals_collected:.0f}; moves {findings.moves_given}, yields {findings.yields_made}, "
         f"refused {findings.actions_refused}; enemies in sight {findings.most_enemies_in_sight}"
     )
 
