@@ -140,7 +140,8 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
   loop and with few code paths:
-  - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own).
+  - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own),
+    `include_speed_upgrades` (the owner, planning step 3, 2026-11-04, over `speed_from_movement` and `from_movement`).
   - The rows give 12 upgrades a speed. Charge stays read off its buff, and the other ten are read off movement:
     Metabolic Boost, Glial Reconstitution, Centrifugal Hooks, Muscular Augments, Anabolic Synthesis, Pneumatized
     Carapace (overlord, transport overlord and overseer), Hyperflight Rotors, Gravitic Boosters, Gravitic Drive and Flux
@@ -148,8 +149,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   - Each enemy unit of the types those ten speed up keeps a window, where and when it began. It begins again when the
     unit is not visible, is on another side than when first seen, has no `velocity` after a gap in the observations (a
     transport, a nydus, out of sight), or wears an acceleration zone's buff. A burrowed roach does not vote: its
-    unupgraded speed is 0, so one standing still would vote against Glial Reconstitution. Nor was a unit known to be a
-    hallucination to, as it might not move at its owner's speed; it does, so whether it votes is open (below).
+    unupgraded speed is 0, so one standing still would vote against Glial Reconstitution. A hallucination votes as the
+    unit it copies, since it moves at its owner's speed, upgrades included (the owner, planning step 3, over leaving it
+    out, which would only drop votes).
   - A window of about a second compares the distance covered with two predictions, without the upgrade and with it,
     each summed step by step at the speed for the ground the unit stood on: Zerg ground types count creep too (the
     owner, over measuring off creep only), from a table measured in game, since the rows hold no creep speed. Where the
@@ -158,24 +160,31 @@ The issue, discussion or pull request named holds the reasons, and the alternati
     allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are closer
     than the measured precision can tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds by only
     3% (tool `sweep_movement`).
-  - The votes of a slice are one observation for each upgrade, k fast of the n units that voted, with a beta-binomial
-    likelihood whose spread says how often a whole group comes out fast without the upgrade: 20 of 20 is strong, 1 of
-    20 counts against it (the owner: the number of units, their share and the number of observations all count, over
-    each unit alone). What a slice is, is open (below).
+  - A slice is the votes of one upgrade's units in one window's steps, on the one clock. One with a fast vote counts
+    for the upgrade, about 23,000 to 1, and one with only slow votes against it, about 11,000 to 1: by the rule of three
+    over every slice the replays gave (#224), none of the 69,452 from an enemy that lacked an upgrade had a fast vote,
+    and none of the 33,558 from one that had it only slow ones (the owner, planning step 3, over the beta-binomial
+    fitted in #224 and over counting a slice only where its votes agree). It reverses the number of units counting,
+    first decided as "20 of 20 is strong, 1 of 20 counts against it": the units of a slice move as one, the fit's
+    spread coming out at the most clustered tried, and a unit without the upgrade never moved steadily at its speed,
+    while one with it can keep pace with slower units, as the one wrong vote of #224 did beside two fast ones.
   - The score is the probability that the enemy has the upgrade, by Bayes' rule on each slice, in [0, 1] (the owner,
     over a clamped sum). No vote counts before the earliest the upgrade could finish: its research time, plus its
     researcher's build time where no player starts with a researcher, as every Zerg starts with a hatchery, which
     researches Pneumatized Carapace. After that it starts at a fixed `p0` and moves only with what is seen, `p0` being
     its floor too, so evidence against it from before the upgrade finished leaves no debt (the owner, over a prior
     rising with game time, a timing guess that is the bot's to make).
-  - It is assumed at 0.999 and forgotten at a lower threshold of its own, so it does not flip back and forth (the
-    owner, over assuming for good). It forgets only what speed assumed. The extension cannot see an upgrade the bot
-    assumes after speed did, so speed can forget that one: a limit to document.
+  - It is assumed at 0.99 and forgotten below 0.5, so it does not flip back and forth (the owner, over assuming for
+    good), from a floor `p0` of 1% (the owner, planning step 3: "1% and 99% may be nice, symmetric defaults, but of
+    course the data should decide", which they did in #224, over 0.999, which takes two fast slices). One fast slice
+    assumes, at 99.6%, and one slice of only slow votes after that one forgets, at 2%. It forgets only what speed assumed.
+    The extension cannot see an upgrade the bot assumes after speed did, so speed can forget that one: a limit to
+    document.
   - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without an
-    upgrade ever reaches 0.999 for it in a game is at most `p0`'s odds over 0.999's, about 1 in 100,000 from `p0` = 1%,
-    if the likelihoods are right; each climb off the floor adds about as much. The bounds of a race's speed upgrades
-    add up, Zerg's six among them, so for 0.1% a game `p0` stays under about 14%, and within that the replays choose
-    it, trading safety against how much evidence an assumption needs.
+    upgrade ever reaches 0.99 for it in a game is at most `p0`'s odds over 0.99's, about 1 in 10,000 from 1%, if the
+    likelihoods are right; each climb off the floor adds about as much, and Zerg's six upgrades add up to about 0.06%.
+    The weights are bounds from the rule of three, and the slices of one group follow one another, so what the
+    replays count a playback is the check: in #224, no wrong assumption in 433 playbacks, below 0.7%.
   - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
     Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
 
@@ -261,23 +270,21 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
        other 59, 29 had no unit seen moving after it finished and 30 none moving steadily at full speed. From 1% at
        99.9%, whose 99,000 to 1 takes two slices, 338, a median of 9.0 seconds, 90% within 83.
 
-     Proposed, to settle at step 3: a floor of 1% and assuming at 99%, the owner's symmetric defaults "but of course
-     the data should decide" (2026-11-04), which they support; forgetting below 0.5, which no playback reached
-     wrongly. Reaching 0.1% a playback would take some 2,700 games more, nearly five hours, 24 at once.
-  3. The option, with tests for both bands and a window between them, a creep edge, a gap in the observations, a side
-     change, an acceleration zone, the earliest finish, 20 of 20 fast against 1 of 20, the floor, a mistake forgotten
-     and an upgrade the bot assumed first, which is never forgotten. The extension's docstring, which says what it
-     reads stays, and `docs/extensions.md` say what speed may forget.
+     Settled when planning step 3 (above): a floor of 1%, assuming at 99% and forgetting below 0.5. Reaching 0.1% a
+     playback would take some 2,700 games more, nearly five hours, 24 at once.
+  3. The option, `UpgradeInference(api, include_speed_upgrades=True)`, by the rule above and the pilot's proposals:
+     windows of 22 steps, steady votes within 0.05 of the gap, none where the gap is under 10% of the speed, none
+     under a buff that changes speed (only Time Warp's slow measured), and none before the earliest finish, from
+     `api.data`. `MovementWindows` hands over the windows ending at an observation together, once a window's steps,
+     which are a slice; a private `_speed_upgrades.py` turns them into votes and the score, and assumes and forgets
+     through `api.enemy`, the numbers constants citing #224. Tests for both bands and a window between them, a creep
+     edge, a gap in the observations, a side change, a speed-changing buff, the earliest finish, one fast vote among
+     slow ones counting for the upgrade, the floor, a mistake forgotten and an upgrade the bot assumed first, which is
+     never forgotten. The extension's docstring, which says what it reads stays, and `docs/extensions.md` say what
+     speed may forget.
   4. Its cost a turn over the corpus and AvocaDOS's recorded games.
 
   Open, to settle with the owner at the step that needs it (proposed, not decided):
-  - The option's name; `from_movement` was proposed.
-  - Whether a hallucination votes: it moves at its owner's speed, upgrades included (tool `sweep_movement`), so leaving
-    it out only drops votes; proposed, it votes as the unit it copies.
-  - What a slice is: proposed, fixed ticks of a second on one clock for every unit, a unit voting in a tick it was
-    measurable through, so each unit keeps only its position at the last tick.
-  - One pair of beta-binomial parameters for every upgrade, which `u` makes comparable, unless the replays show they
-    differ; rare upgrades such as Gravitic Drive have too few votes to fit their own.
   - Tunneling Claws later, with Blink and Shadow Stride, since a burrowed roach has two upgraded speeds, Tunneling
     Claws alone or with Glial Reconstitution, which would need a second code path.
 - M6, in the order of section 3.
