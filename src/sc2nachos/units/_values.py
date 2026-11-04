@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any, Literal, Self, final
 
 from s2clientprotocol import raw_pb2
 
+from sc2nachos._shared.errors import NotReportedError
 from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.units._errors import NotReportedError
 
 if TYPE_CHECKING:
     from collections.abc import Callable

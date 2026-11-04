@@ -57,8 +57,7 @@ from sc2nachos.events import (
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import Expansion, GameMap
-from sc2nachos.gamemap._expansion import _opponent_start_locations, _start_location_at
+from sc2nachos.gamemap import Expansion, GameMap, StartLocation
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Enemy, Player, Race, Result
@@ -432,13 +431,15 @@ def played(
         state = _State(observation, tracker, game_map)
         expansions = Expansion._find_all(game_map, tracker.unit_tracker)
         if tracker.enemy is not None:
-            tracker.enemy._learn_start_locations(_opponent_start_locations(game_map, expansions))
+            tracker.enemy._learn_start_locations(StartLocation._find_at_opponent_starts(expansions, game_map))
         game = _Game(
             client=client,
             game_map=game_map,
             expansions=expansions,
             game_data=tracker.game_data,
-            player=dataclasses.replace(player, _start_location=_start_location_at(expansions, game_map.start_location)),
+            player=dataclasses.replace(
+                player, _start_location=StartLocation._find_at(expansions, game_map.start_location)
+            ),
             enemy=tracker.enemy,
             tracker=tracker,
             orders=order_book,

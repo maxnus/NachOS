@@ -16,12 +16,14 @@ from sc2nachos.gamemap import (
     GameMap,
     NoMainRampError,
     NoNaturalError,
-    NoStartLocationError,
+    NoThirdError,
     StartLocation,
 )
+from sc2nachos.gamemap._expansion import _ground_as_the_game_began, _walking_distances
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Point, Tile, TileSet
 from sc2nachos.ids import UnitTypeId
+from sc2nachos.match import NoStartLocationError
 from sc2nachos.protocol import Client, Recording, Status
 from sc2nachos.units import Alliance, NotReportedError, Unit, Units, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -439,13 +441,60 @@ class TestAStartLocation:
         assert map_at_start.map.ramps == (start.main_ramp,)
         assert start.main_ramp.tiles == TileSet(Tile(x, y) for x in range(20, 24) for y in range(30))
         assert start.main_area == TileSet(Tile(x, y) for x in range(20) for y in range(30))
+        assert start.plateau() == start.main_area
+
+    def test_its_plateau_reaches_as_far_and_as_high_as_asked(self) -> None:
+        """The map of the test above: the low ground lies 2 below the main, north of it and beyond the ramp."""
+        rows = ["#" * 40 if y >= 30 else "#" * 20 + "~" * 4 + "#" * 16 for y in reversed(range(40))]
+        ramp_corners = [207] * 21 + [203, 199, 195] + [191] * 17
+        heights = make_bytes(*([191] * 41 if y >= 30 else ramp_corners for y in reversed(range(41))))
+        neutral_units = _NeutralUnits()
+        neutral_units.base(_START)
+        (start,) = _MapAtStart(rows, neutral_units, start=_START, heights=heights).expansions()
+        assert isinstance(start, StartLocation)
+        near = start.plateau(max_distance=5.0)
+        assert near == TileSet(tile for tile in start.main_area if tile.center.distance_to(start.center) <= 5.0)
+        assert Tile(15, 15) in near and Tile(16, 15) not in near
+        low_ground_too = start.plateau(height_tolerance=2.5)
+        ramp = TileSet(Tile(x, y) for x in range(20, 24) for y in range(30))
+        assert len(low_ground_too) == 40 * 40 - len(ramp)
+        assert not set(low_ground_too) & set(ramp)
+
+    def test_its_thirds_are_the_two_full_bases_nearest_its_natural_split_by_how_far_out_along_the_edge(self) -> None:
+        """On open ground 100 by 60: the main in a corner, the natural and a base beyond it along the bottom edge, a
+        base north of the natural, and between them a base of 7 fields and 1 geyser, nearer the natural than the
+        northern one."""
+        neutral_units = _NeutralUnits()
+        for at in ((12.5, 12.5), (36.5, 12.5), (60.5, 12.5), (36.5, 42.5)):
+            neutral_units.base(at)
+        neutral_units.base((56.5, 30.5), _MAIN_FIELDS[:7], _MAIN_GEYSERS[:1])
+        expansions = _MapAtStart(_map_rows(100, 60), neutral_units, start=(12.5, 12.5)).expansions()
+        (start,) = (expansion for expansion in expansions if isinstance(expansion, StartLocation))
+        (reduced,) = (expansion for expansion in expansions if len(expansion.geysers) == 1)
+        assert start.natural.center == Point((36.5, 12.5))
+        assert start.natural.center.distance_to(reduced.center) < start.natural.center.distance_to(Point((36.5, 42.5)))
+        assert start.line_third.center == Point((60.5, 12.5))
+        assert start.triangle_third.center == Point((36.5, 42.5))
+
+    def test_with_fewer_than_two_full_bases_beside_the_natural_its_thirds_raise(self) -> None:
+        start, past_the_wall, _ = self._expansions(opponent_starts=())
+        assert isinstance(start, StartLocation)
+        assert start.natural is past_the_wall
+        with pytest.raises(NoThirdError, match="fewer than two full bases"):
+            _ = start.line_third
+        with pytest.raises(NoThirdError, match="fewer than two full bases"):
+            _ = start.triangle_third
 
 
 def _game_at_the_start(
-    neutral_units: _NeutralUnits, *, opponent_starts: tuple[tuple[float, float], ...]
+    neutral_units: _NeutralUnits,
+    *,
+    opponent_starts: tuple[tuple[float, float], ...],
+    assume: tuple[float, float] | None = None,
 ) -> dict[str, object]:
     """What the api reads of the starts as a game begins, this player's townhall at `_START` on `TestTheOrder`'s map
-    with `neutral_units` on it: each read's value, or the error it raised."""
+    with `neutral_units` on it, once the enemy is assumed to have started at `assume`, if given: each read's value, or
+    the error it raised."""
     townhall = make_unit(100, UnitTypeId.COMMAND_CENTER, at=_START)
     units = [*neutral_units.units, townhall]
     observations = (make_observation(0, units=units), make_observation(16, (PLAYER_ID, Result.VICTORY), units=units))
@@ -466,6 +515,13 @@ def _game_at_the_start(
     def take_the_starts(_: GameStartEvent) -> None:
         read["expansions"] = api.expansions
         read["map start"] = api.map.start_location
+        if assume is not None:
+            assumed = StartLocation._find_at(api.expansions, Point(assume))
+            assert assumed is not None
+            try:
+                api.enemy.assume_start_location(assumed)
+            except ValueError as error:
+                read["assume"] = error
         for name, reader in (
             ("player", lambda: api.player.start_location),
             ("enemy", lambda: api.enemy.start_location),
@@ -500,6 +556,21 @@ class TestWhereEachPlayerStarted:
         assert isinstance(read["player"], StartLocation)
         assert isinstance(read["enemy"], NotReportedError)
         assert "2 start locations but this player's" in str(read["enemy"])
+        assert "assume_start_location" in str(read["enemy"])
+
+    def test_a_start_assumed_is_where_the_enemy_started(self) -> None:
+        read = _game_at_the_start(
+            self._bases(), opponent_starts=(_PAST_THE_WALL, _BEHIND_THE_WALL), assume=_BEHIND_THE_WALL
+        )
+        assert isinstance(read["enemy"], StartLocation)
+        assert read["enemy"].center == Point(_BEHIND_THE_WALL)
+        assert "assume" not in read
+
+    def test_a_start_that_is_no_other_start_location_cannot_be_assumed(self) -> None:
+        read = _game_at_the_start(self._bases(), opponent_starts=(_PAST_THE_WALL, _BEHIND_THE_WALL), assume=_START)
+        assert isinstance(read["assume"], ValueError)
+        assert "not among the map's start locations but this player's" in str(read["assume"])
+        assert isinstance(read["enemy"], NotReportedError)
 
     def test_where_no_expansion_stands_at_a_start_reading_it_raises(self) -> None:
         read = _game_at_the_start(_NeutralUnits(), opponent_starts=(_BEHIND_THE_WALL,))
@@ -571,6 +642,18 @@ _MAIN_AREA_SIZES = {
 }
 
 
+# Each start location's line and triangle thirds, by map (corpus).
+_THIRDS = {
+    "IncorporealAIE_v4": {(32.5, 139.5): ((88.5, 138.5), (42.5, 115.5)), (123.5, 24.5): ((67.5, 25.5), (113.5, 48.5))},
+    "LeyLinesAIE_v3": {(42.5, 40.5): ((43.5, 96.5), (67.5, 55.5)), (155.5, 133.5): ((154.5, 77.5), (130.5, 118.5))},
+    "MagannathaAIE_v2": {(141.5, 38.5): ((86.5, 27.5), (120.5, 59.5)), (38.5, 141.5): ((27.5, 86.5), (59.5, 120.5))},
+    "PersephoneAIE_v4": {(37.5, 34.5): ((92.5, 28.5), (60.5, 56.5)), (37.5, 145.5): ((92.5, 151.5), (60.5, 123.5))},
+    "PylonAIE_v4": {(175.5, 76.5): ((119.5, 69.5), (154.5, 104.5)), (72.5, 171.5): ((128.5, 178.5), (93.5, 143.5))},
+    "TorchesAIE_v4": {(124.5, 159.5): ((62.5, 159.5), (90.5, 132.5)), (124.5, 48.5): ((62.5, 48.5), (90.5, 75.5))},
+    "UltraloveAIE_v2": {(42.5, 46.5): ((99.5, 38.5), (64.5, 70.5)), (141.5, 137.5): ((84.5, 145.5), (119.5, 113.5))},
+}
+
+
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 class TestARecordedMap:
     def test_this_player_starts_at_the_first_expansion_holding_the_fields_it_sees(self, path: Path) -> None:
@@ -616,3 +699,35 @@ class TestARecordedMap:
                 if any(neighbor in main_area for tile in ramp.top for neighbor in tile.neighbors8)
             ]
             assert bordering == [start.main_ramp]
+
+    def test_each_start_location_s_thirds_are_as_found_and_about_as_far_to_walk_from_the_natural(
+        self, path: Path
+    ) -> None:
+        """The two are within 1.42 times of each other to walk, LeyLines' the farthest apart."""
+        game_map, unit_tracker = _recorded_map_and_units(path)
+        expansions = Expansion._find_all(game_map, unit_tracker)
+        resources = unit_tracker.present.neutral.of_type(UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)
+        ground = _ground_as_the_game_began(game_map, resources)
+        thirds = {}
+        for start in (expansion for expansion in expansions if isinstance(expansion, StartLocation)):
+            line_third, triangle_third = start.line_third, start.triangle_third
+            thirds[start.center.x, start.center.y] = (
+                (line_third.center.x, line_third.center.y),
+                (triangle_third.center.x, triangle_third.center.y),
+            )
+            from_natural = _walking_distances(ground, start.natural.center)
+            walks = sorted((from_natural[line_third.center], from_natural[triangle_third.center]))
+            assert walks[1] / walks[0] < 1.45
+        assert thirds == _THIRDS[path.stem.split("-")[0]]
+
+
+def test_on_torches_the_bases_behind_mineral_walls_come_after_the_thirds() -> None:
+    """The game's pathing grid leaves out every mineral field but this player's own, so the bases above and below the
+    mains, walled off by fields, read 3rd and 5th nearest the main without them."""
+    game_map, unit_tracker = _recorded_map_and_units(next(path for path in CORPUS if path.stem.startswith("Torches")))
+    expansions = Expansion._find_all(game_map, unit_tracker)
+    assert _centers(expansions[:5]) == [(124.5, 159.5), (95.5, 157.5), (90.5, 132.5), (62.5, 159.5), (57.5, 110.5)]
+    walled_off = [
+        expansion for expansion in expansions if expansion.center in (Point((124.5, 131.5)), Point((125.5, 110.5)))
+    ]
+    assert all(expansion.pathing_distance_from_start > 100 for expansion in walled_off)

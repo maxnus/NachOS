@@ -3,13 +3,14 @@
 from sc2nachos._shared.errors import NachOSError
 
 
-class NoStartLocationError(NachOSError, LookupError):
-    """No expansion stands where the player started, as on a mini-game's map with no townhall."""
-
-
 class NoMainRampError(NachOSError, LookupError):
     """No ramp out of the start location's main can be walked to."""
 
 
 class NoNaturalError(NachOSError, LookupError):
     """No expansion where no player starts can be walked to from the start location."""
+
+
+class NoThirdError(NachOSError, LookupError):
+    """Fewer than two full bases where no player starts, beside the natural, can be walked to from the start
+    location's natural."""

@@ -45,7 +45,6 @@ class GameMap:
         "_placement",
         "_playable",
         "_ramps",
-        "_walking_distances_by_start_tile",
     )
 
     def __init__(self, info: sc2api_pb2.ResponseGameInfo, *, start_location: Point) -> None:
@@ -63,7 +62,6 @@ class GameMap:
         opponent_start_locations = (Point._from_proto(location) for location in start.start_locations)
         self._all_start_locations = (start_location, *opponent_start_locations)
         self._ramps = find_ramps(self._pathing, self._placement, self._height)
-        self._walking_distances_by_start_tile: dict[Tile, Grid[float]] = {}
         self._main_ramps_by_start_tile = {
             Tile.at(start): self._find_main_ramp(start) for start in self._all_start_locations
         }
@@ -154,25 +152,15 @@ class GameMap:
             raise ValueError(f"{start} is on no start location's tile: {self._all_start_locations}")
         return self._main_ramps_by_start_tile[start_tile]
 
-    def _walking_distances_from(self, start: Point) -> Grid[float]:
-        """The pathing distance from the start location `start` to every tile, `inf` where no path reaches, over the
-        pathing grid with the ground a townhall at `start` covers opened, since the start's own townhall closes it.
-        Worked out once for each start, and read-only."""
-        start_tile = Tile.at(start)
-        if (distances := self._walking_distances_by_start_tile.get(start_tile)) is None:
-            walkable_ground = self._pathing.copy()
-            # Every townhall's footprint is the command center's.
-            walkable_ground.fill_footprint(FOOTPRINTS[UnitTypeId.COMMAND_CENTER], at=start, value=True)
-            distances = walkable_ground.cheapest_paths_from(start).distances
-            self._walking_distances_by_start_tile[start_tile] = distances
-        return distances
-
     def _find_main_ramp(self, start: Point) -> Ramp | None:
         """The ramp out of the main at the start location `start`, as `StartLocation.main_ramp` finds it; `None` where
         none can be walked to, and for a start beyond the playable area, which only a map drawn for a test has."""
         if start not in self._playable:
             return None
-        walking_distances = self._walking_distances_from(start)
+        walkable_ground = self._pathing.copy()
+        # Every townhall's footprint is the command center's.
+        walkable_ground.fill_footprint(FOOTPRINTS[UnitTypeId.COMMAND_CENTER], at=start, value=True)
+        walking_distances = walkable_ground.cheapest_paths_from(start).distances
         start_level = self._height[start]
         at_its_level = [ramp for ramp in self._ramps if abs(self._height[min(ramp.top)] - start_level) < _HALF_A_LEVEL]
         nearest_ramp = min(at_its_level, key=lambda ramp: walking_distances[ramp.tiles.center], default=None)

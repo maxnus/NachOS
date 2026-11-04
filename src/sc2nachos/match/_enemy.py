@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import sc2api_pb2
 
+from sc2nachos._shared.errors import NotReportedError
+from sc2nachos.match._errors import NoStartLocationError
 from sc2nachos.match._match import Race
 
 if TYPE_CHECKING:
@@ -20,6 +22,7 @@ class Enemy:
     needs researched first."""
 
     __slots__ = (
+        "_assumed_start_location",
         "_game_data",
         "_id",
         "_ladder_id",
@@ -50,6 +53,8 @@ class Enemy:
         self._upgrades: frozenset[UpgradeId] = frozenset()
         # Where it may have started, the map's start locations but this player's: `None` for one no expansion stands at.
         self._start_locations: tuple[StartLocation | None, ...] = ()
+        # Where the bot has said it started, if it has.
+        self._assumed_start_location: StartLocation | None = None
 
     def __repr__(self) -> str:
         race = None if self._race is None else self._race.name
@@ -125,26 +130,34 @@ class Enemy:
 
     @property
     def start_location(self) -> StartLocation:
-        """Where it started: the one start location on the map but this player's.
+        """Where it started: the start location `assume_start_location` last named, or else the one start location on
+        the map but this player's.
 
-        Raises `NotReportedError` on a map with more than two start locations, since the game does not say which the
-        enemy took, and NachOS does not scout for it. Raises `NoStartLocationError` where no expansion stands at its
-        start, as on a mini-game's map, or where the map has no start location but this player's.
+        Raises `NotReportedError` on a map with more than two start locations until the bot names one with
+        `assume_start_location`, since the game does not say which the enemy took, and NachOS does not scout for it.
+        Raises `NoStartLocationError` where no expansion stands at its start, as on a mini-game's map, or where the map
+        has no start location but this player's.
         """
+        if self._assumed_start_location is not None:
+            return self._assumed_start_location
         if len(self._start_locations) == 1 and (start_location := self._start_locations[0]) is not None:
             return start_location
-        # Imported here: the units' package, which the map's imports, imports this one.
-        from sc2nachos.gamemap._errors import NoStartLocationError
-        from sc2nachos.units._errors import NotReportedError
-
         if len(self._start_locations) > 1:
             raise NotReportedError(
                 f"the map has {len(self._start_locations)} start locations but this player's, and the game does not "
-                "say which the enemy took"
+                "say which the enemy took: assume_start_location names one"
             )
         if not self._start_locations:
             raise NoStartLocationError("the map has no start location but this player's")
         raise NoStartLocationError("no expansion stands where the enemy started")
+
+    def assume_start_location(self, start_location: StartLocation) -> None:
+        """Assume the enemy started at `start_location` from now on, in place of any start assumed before, so that
+        `start_location` reads it on a map with more than two start locations. Raises `ValueError` for one that is not
+        among the map's start locations but this player's."""
+        if not any(start_location is possible for possible in self._start_locations):
+            raise ValueError(f"{start_location.center} is not among the map's start locations but this player's")
+        self._assumed_start_location = start_location
 
     def _learn_start_locations(self, start_locations: tuple[StartLocation | None, ...]) -> None:
         """Take `start_locations`, one for each start location on the map but this player's, as where it may have

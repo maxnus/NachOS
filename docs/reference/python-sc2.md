@@ -504,7 +504,7 @@ it.
 | `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.pathing.cheapest_paths_from(a).distances[b]` over the turn's grid, which leaves a structure `a` lies in as the game does |
 | `game_info.map_center` | `api.map.playable_area.center` |
 | `start_location` | `api.map.start_location`, or `api.player.start_location`, its `StartLocation` |
-| `enemy_start_locations` | `api.map.opponent_start_locations`, or `api.enemy.start_location`, its `StartLocation`, on a map of two starts |
+| `enemy_start_locations` | `api.map.opponent_start_locations`, or `api.enemy.start_location`, its `StartLocation`, on a map of two starts or once `api.enemy.assume_start_location` names one |
 | `game_info.map_ramps` | `api.map.ramps` |
 | `game_info.vision_blockers` | nothing; see below |
 | `ramp.points`, `ramp.upper`, `ramp.lower` | `ramp.tiles`, `ramp.top`, `ramp.bottom` |
@@ -515,7 +515,7 @@ it.
 | `ramp.barracks_can_fit_addon` | `wall.barracks_with_add_on == wall.barracks_in_wall` |
 | `ramp.protoss_wall_pylon`, `protoss_wall_buildings`, `protoss_wall_warpin` | `api.placement.protoss_wall(ramp)`'s `pylon`, `near_building` and `far_building`, and `gap` |
 | nothing | `ramp.orientation`, the `Direction` it climbs, and `ramp.width`; `api.map.all_start_locations` |
-| nothing | a `StartLocation`'s `natural`, the expansion nearest its main to walk to, and its `main_area`, the main's ground |
+| nothing | a `StartLocation`'s `natural`, `line_third` and `triangle_third`, and its `main_area`, the main's ground; any expansion's `plateau()` |
 | `expansion_locations_list` | `[expansion.center for expansion in api.expansions]` |
 | `expansion_locations_dict` | each expansion's `mineral_fields` and `geysers`, its units for the whole game |
 | `get_next_expansion()` | the first of `api.expansions` whose `townhall` is `None` |
@@ -558,7 +558,8 @@ it.
   the game takes no townhall: both of Magannatha's gold bases, on a Xel'Naga tower, and two of LeyLines' bases, a
   tile too close to their resources. NachOS finds each spot by the rule the game was measured to follow, with towers
   and debris in the way ([game behavior](game-behavior/map.md)). Each expansion says its pathing distance from this
-  player's start, `pathing_distance_from_start`, and one where a player starts is a `StartLocation`.
+  player's start, `pathing_distance_from_start`, walked around every mineral field and geyser, which the game's grid
+  leaves out but for this player's own, and one where a player starts is a `StartLocation`.
 - **Where a structure may stand is read, not asked.** python-sc2's `can_place` and `find_placement` ask the game each
   time. `api.placement` reads it from what NachOS knows, in three layers: `static`, the map's buildable ground less its
   geysers and collapsible towers; `dynamic`, true where no structure in sight or remembered in the fog stands, and no

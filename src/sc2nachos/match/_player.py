@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Self, final
 
+from sc2nachos.match._errors import NoStartLocationError
 from sc2nachos.match._match import Race
 
 if TYPE_CHECKING:
@@ -35,9 +36,6 @@ class Player:
         """Where it started: the expansion its first townhall stood on. Raises `NoStartLocationError` where it started
         on none, as on a mini-game's map with no townhall, where `GameMap.start_location` is the map's center."""
         if self._start_location is None:
-            # Imported here: the units' package, which the map's imports, imports this one.
-            from sc2nachos.gamemap._errors import NoStartLocationError
-
             raise NoStartLocationError("no expansion stands where this player started")
         return self._start_location
 

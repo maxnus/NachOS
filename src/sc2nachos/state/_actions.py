@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Self, final
 
+from sc2nachos._shared.errors import NotReportedError
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.state._action_result import ActionResult
-from sc2nachos.units._errors import NotReportedError
 from sc2nachos.units._values import _NotReported
 
 if TYPE_CHECKING:
