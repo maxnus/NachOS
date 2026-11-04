@@ -41,14 +41,14 @@ if TYPE_CHECKING:
 class UnitType:
     """Every type of unit, and every group of types, for the type checker. None is ever instantiated.
 
-    `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
-    its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the Terran and the Zerg townhalls, the mineral fields, the vespene geysers, the gas
-    buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and acceleration zones,
-    the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the spires, the overlords,
-    or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
-    a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
-    `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+    `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
+    `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
+    workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
+    geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
+    acceleration zones, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the
+    spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such as a supply
+    depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that
+    holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -238,6 +238,7 @@ ROLES = {
     "Townhall": "A townhall: a command center or what it becomes, lifted or not, a nexus, a hatchery, lair or hive.",
     "AnyTerranTownhall": "A command center or an orbital command, lifted or not, or a planetary fortress.",
     "AnyZergTownhall": "A Zerg townhall: a hatchery, a lair or a hive.",
+    "AnyResource": "What a worker gathers at: a mineral field or a gas building, never the geyser under it.",
     "AnyMineralField": "A mineral field of any kind: one the game's tables say holds minerals.",
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
@@ -260,6 +261,8 @@ ROLES = {
 }
 # The groups that hold every type of another group, by that other group.
 HOLDING_GROUPS = {
+    "AnyMineralField": "AnyResource",
+    "GasBuilding": "AnyResource",
     "AnyTechLab": "AnyAddOn",
     "AnyReactor": "AnyAddOn",
     "CollapsibleTower": "Destructible",

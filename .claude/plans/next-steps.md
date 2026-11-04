@@ -993,6 +993,38 @@ Keep this file current: when a step is done, say so here in the same pull reques
       only on an enemy within a worker's reach. The workers of a field no longer mined are let go before anything
       else in the turn, so a worker let go counts among the units in a move's way; before, that hung on the order the
       fields came in. Played back through AvocaDOS, the orders were the same order for order but for that.
+  - Speed mining collects vespene too (the owner, 2026-11-03, reversing #201's minerals only, one question at a time):
+    - `collect(worker, gas_buildings=None)` hands a worker over to collect, beside `mine` (over `mine` taking gas
+      buildings, which would have had every reader of `miners` tell the two apart); `collectors` and `collectors_at`
+      read them, `release` lets go of either, and a worker is held at one field or gas building at a time.
+    - Given none, `collect` picks as `mine` does (over the bot always naming one): a finished gas building of this
+      player's with vespene left, on a geyser of the expansion nearest the worker with a finished townhall of this
+      player's and one with fewer than three collectors, the nearest to the worker. `mine` given no field never picks
+      gas, so how many collect stays the bot's.
+    - A collector is kept on plain gathers and returns, attacks as a miner does, and is let go once its gas building
+      dies or runs dry, or its base's townhall is gone. A return a worker shows counts as cargo on a hand-over, and a
+      collector returning is left to it, since gas from a rich geyser wears no buff. Collectors, like miners, are in no
+      move's way. Built in #208.
+    - No move for gas until measured (the owner, over measuring first and over building both at once): a geyser's
+      third worker already waits on it (Liquipedia's 1.02, 2.05 and 2.72 gas a second for one, two and three, in
+      AvocaDOS's `COLLECTOR_RATES`), and ares-sc2's gas boost is off by default, only below three workers a geyser,
+      and marked "currently not working".
+    - The owner's review of #208, one question a thread:
+      - `workers` reads every worker held, miners and collectors, and one `workers_at(field_or_gas_building)` replaces
+        `miners_at` and `collectors_at` (the owner, over `workers` alone, which I had recommended, `workers_at` being
+        `miners_at` or `collectors_at` by its argument's type). `miners`, `collectors` and `workers` build their
+        read-only view per read: 57 ns against 22 for a stored one.
+      - `release` takes one worker or several, as `issue` takes its units; `mine` and `collect` stay one worker, since
+        each pick changes the next and the result per worker matters.
+      - `UnitType.AnyResource`, generated, holds the mineral fields and the gas buildings, what a worker gathers at (the
+        owner, over a private alias in the extension, which I had recommended since NachOS calls fields and geysers the
+        resources). Every townhall in speed mining is typed `UnitType.Townhall`.
+      - `mine` and `collect` share a check of what they are given, and one helper groups each kind's workers and lets
+        go of those whose field or gas building no longer qualifies (over a `UnitDict` taking a check of its own, which
+        would run on every read, `in` among them, and let go whenever something read).
+      - Kept: `is_its_work` (over `order_check`, which says nothing of what true means); `_is_returning` taking the
+        order its callers hold (81 ns, against 659 for `OwnUnit.is_returning` and 128 for a cached `current_order`);
+        and only a townhall at an expansion's center, as #202 settled.
 - **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
   with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
@@ -1039,6 +1071,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
   AvocaDOS #75), and its `docs/plans/nachOS-plan.md` records #199 to #203. Planned with the owner (2026-11-02): an
   AvocaDOS expansion keeps no map of its miners and reads speed mining's, a worker speed mining lets go is found by its
   mining role and handed out again, and speed mining picks each field among the base's.
+- **Measuring speed-mined gas** (the owner, 2026-11-03), after #208: a script run through the `sc2` workflow, since
+  no game runs in a cloud session, collecting plainly against with a move at the end of each trip, at one, two and
+  three workers a geyser. The move goes into `collect` in a pull request of its own only where it collects more, and
+  `_is_mining` and `_is_collecting` then become one check (the owner, review of #208). Then AvocaDOS can hand its
+  collectors to speed mining, dropping its own `Expansion._collect_vespene`.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.

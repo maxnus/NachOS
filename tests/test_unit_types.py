@@ -218,6 +218,7 @@ class TestUnitType:
         counts = [len(group.type_ids) for group in (UnitType.AnyMineralField, UnitType.AnyVespeneGeyser)]
         assert counts == [15, 6]
         assert UnitTypeId.REFINERY_RICH in UnitType.GasBuilding.type_ids
+        assert UnitType.AnyResource.type_ids == UnitType.AnyMineralField.type_ids | UnitType.GasBuilding.type_ids
 
     def test_an_add_on_is_a_tech_lab_or_a_reactor_plain_or_of_any_host(self) -> None:
         assert UnitType.AnyTechLab.type_ids == {
