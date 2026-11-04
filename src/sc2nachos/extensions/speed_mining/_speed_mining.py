@@ -21,12 +21,13 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.units import OwnUnit, Unit, UnitDict, Units, UnitType
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, MutableMapping
+    from collections.abc import Callable, Iterator, MutableMapping, Sequence
 
     from sc2nachos import Api
     from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.gamemap import Expansion
     from sc2nachos.geometry import Point
+    from sc2nachos.orders import Order
     from sc2nachos.units import UnitOrder
 
 # The most workers speed mining holds at one field: with three, it mined 19% less than plain gathers (in game).
@@ -100,14 +101,19 @@ class SpeedMining:
       An orbital, a planetary fortress, a lair and a hive count as finished, since only a morph makes them: an orbital
       reads unfinished in the step before its morph finishes. A field or a geyser two expansions share counts as the
       first's, by `Api.expansions`, that has such a townhall.
-    - A worker doing anything else is left alone until it is idle or back at its work: a miner building, attacking on
-      the bot's order or collecting vespene among them, and a collector mining minerals too. So is a burrowed drone,
-      and one given an order this turn, or sent one lately that may not show yet, as `OrderBook.issued_to` reads with
-      `include_sent`. So a miner sent to build comes back to its field by itself, and one the bot sends to collect
-      vespene stays there until it is released, or handed over again; a collector alike.
-    - A worker is let go, its orders left as they are, once it or its field is dead, and once no expansion holding its
-      field has such a townhall any more, as when the townhall dies or lifts off. A collector is let go alike once its
-      gas building is dead or has no vespene left, or no expansion holding its geyser has such a townhall.
+    - A worker is let go, its orders left as they are, once the bot orders it: once an order issued to it this turn
+      stands, no unqueued order coming after it, that is neither a return nor a gather at a mineral field, for a
+      miner, or at a gas building, for a collector, as `mine` and `collect` hand a worker over with. Speed mining's
+      turn comes after every handler of the bot's, so the worker is let go in the turn of the order, whether or not
+      the game takes it, and `miners` and `collectors` hold it until then. A worker the bot sends to gather at another
+      field is kept, and sent to its own, as one the game sends there is. So a miner the bot sends to build does not
+      come back to its field, nor a drone it burrows: the bot hands it over again.
+    - A worker given an order this turn, or sent one lately that may not show yet, as `OrderBook.issued_to` reads with
+      `include_sent`, is left alone for the turn, and one burrowed, or doing anything but its work, as an SCV
+      repairing by autocast, until it is unburrowed, idle or back at its work.
+    - A worker is let go alike once it or its field is dead, and once no expansion holding its field has such a
+      townhall any more, as when the townhall dies or lifts off. A collector is let go alike once its gas building is
+      dead or has no vespene left, or no expansion holding its geyser has such a townhall.
 
     Raises `NotPlayingError` if built before the game starts.
     """
@@ -184,9 +190,10 @@ class SpeedMining:
         Handed over, `worker` is sent to the field at once: a gather at the field, behind a return of any cargo it
         carries, minerals or vespene. So a worker pulled into a fight, or collecting vespene, mines from this turn.
         Nothing is sent to a worker mining minerals already, which speed mining keeps at the field from the next turn,
-        nor again to one sent there lately, whose orders may not show it yet. A worker building, burrowed, or out of
-        reach of orders (`OwnUnit.is_orderable`), as inside a refinery or a transport, cannot be sent: `mine` returns
-        `None` for it and leaves it as it was, to be handed over once it can be.
+        nor again to one sent there lately, whose orders may not show it yet, but one given another order this turn is
+        sent there. A worker building, burrowed, or out of reach of orders (`OwnUnit.is_orderable`), as inside a
+        refinery or a transport, cannot be sent: `mine` returns `None` for it and leaves it as it was, to be handed over
+        once it can be.
 
         Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one of `fields` that is
         not a mineral field.
@@ -220,8 +227,8 @@ class SpeedMining:
 
         Handed over, `worker` is sent to the gas building at once, as `mine` sends a worker to its field: a gather at
         it, behind a return of any cargo it carries. Nothing is sent to a worker collecting vespene already, nor again
-        to one sent there lately, and `collect` returns `None` for a worker building, burrowed, or out of reach of
-        orders, as inside a gas building, and leaves it as it was.
+        to one sent there lately, but to one given another order this turn, and `collect` returns `None` for a worker
+        building, burrowed, or out of reach of orders, as inside a gas building, and leaves it as it was.
 
         Raises `ValueError` for a unit that is not a worker, and for one of `gas_buildings` that is not a gas building.
         """
@@ -249,9 +256,9 @@ class SpeedMining:
     def release_miners(self, count: int) -> Units[OwnUnit[UnitType.Worker]]:
         """Release `count` of the miners speed mining holds, as `release` does, those whose leaving costs the least
         first, and return them in that order, or all of them where it holds fewer: the reverse of how `mine` picks a
-        field. One speed mining would let go this turn leaves first, then one at a field of the farther half of its
-        expansion's fields, then one of the nearer half; of those alike, the one handed over last, the likeliest to
-        have mined nothing yet.
+        field. One speed mining would let go this turn, as one the bot has ordered, leaves first, then one at a field of
+        the farther half of its expansion's fields, then one of the nearer half; of those alike, the one handed over
+        last, the likeliest to have mined nothing yet.
 
         Raises `ValueError` for a `count` below zero."""
         return self._release_the_first(self._miners_cheapest_to_release_first(), count)
@@ -259,10 +266,11 @@ class SpeedMining:
     def release_collectors(self, count: int) -> Units[OwnUnit[UnitType.Worker]]:
         """Release `count` of the collectors speed mining holds, as `release` does, those whose leaving costs the least
         vespene first, and return them in that order, or all of them where it holds fewer: the reverse of how
-        `collect` fills gas buildings. One speed mining would let go this turn leaves first, then a gas building's
-        third collector, at the gas building nearest its expansion's center first, where a third adds the least, and
-        then a gas building's others, at the one farthest from its expansion's center first; of those alike, the one
-        handed over last, the likeliest to have collected nothing yet.
+        `collect` fills gas buildings. One speed mining would let go this turn, as one the bot has ordered, leaves
+        first, then a gas building's third collector of those it keeps, at the gas building nearest its expansion's
+        center first, where a third adds the least, and then a gas building's others, at the one farthest from its
+        expansion's center first; of those alike, the one handed over last, the likeliest to have collected nothing
+        yet.
 
         Raises `ValueError` for a `count` below zero."""
         return self._release_the_first(self._collectors_cheapest_to_release_first(), count)
@@ -287,15 +295,16 @@ class SpeedMining:
             trip_to_it = self._trip_to_a_field(field, townhall_by_center)
             # 0 for one let go this turn, 1 at a field of the farther half, 2 of the nearer.
             if trip_to_it is None:
-                leaving_rank = 0
+                field_rank = 0
             else:
                 alive_fields = [
                     expansion_field
                     for expansion_field in trip_to_it[0].expansion.mineral_fields
                     if expansion_field.is_alive
                 ]
-                leaving_rank = 1 if _is_of_the_farther_half(alive_fields.index(field), len(alive_fields)) else 2
+                field_rank = 1 if _is_of_the_farther_half(alive_fields.index(field), len(alive_fields)) else 2
             for miner in miners:
+                leaving_rank = 0 if self._is_ordered_by_the_bot(miner, mining=True) else field_rank
                 cost_of_leaving[miner] = (leaving_rank, -handed_over_place[miner])
         return sorted(cost_of_leaving, key=cost_of_leaving.__getitem__)
 
@@ -307,12 +316,15 @@ class SpeedMining:
         for gas_building, collectors in _workers_by_resource(self._gas_building_by_worker).items():
             trip_to_it = self._trip_to_a_gas_building(gas_building, townhall_by_center)
             from_its_center = 0.0 if trip_to_it is None else gas_building.distance_to(trip_to_it[0].expansion.center)
-            for place_at_the_gas_building, collector in enumerate(collectors, start=1):
-                # 0 for one let go this turn, 1 for a third, the nearer its center first, 2 for the others, the
-                # farther first.
-                if trip_to_it is None:
-                    leaving_rank, distance_order = 0, 0.0
-                elif place_at_the_gas_building > _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD:
+            place_at_the_gas_building = 0
+            for collector in collectors:
+                # 0 for one let go this turn, 1 for a third of those kept, the nearer its center first, 2 for the
+                # others, the farther first.
+                if trip_to_it is None or self._is_ordered_by_the_bot(collector, mining=False):
+                    cost_of_leaving[collector] = (0, 0.0, -handed_over_place[collector])
+                    continue
+                place_at_the_gas_building += 1
+                if place_at_the_gas_building > _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD:
                     leaving_rank, distance_order = 1, from_its_center
                 else:
                     leaving_rank, distance_order = 2, -from_its_center
@@ -340,19 +352,21 @@ class SpeedMining:
         self, worker: OwnUnit[UnitType.Worker], resource: Unit[UnitType.AnyResource], *, mining: bool
     ) -> bool:
         """Send `worker`, being handed over at `resource`, a field to mine if `mining`, else a gas building to collect
-        from, there at once, as `mine` and `collect` say, unless its current order is its work already, and return
-        whether it could be: not while it builds, is burrowed or is out of reach of orders."""
+        from, there at once, as `mine` and `collect` say, unless it is at that work already, and return whether it
+        could be: not while it builds, is burrowed or is out of reach of orders. One the bot ordered elsewhere this turn
+        is not at that work, whatever its orders show."""
         if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
             return False
-        current_order = worker.current_order
-        if current_order is not None and self._is_its_work(worker, current_order, mining=mining):
-            return True
         order_book = self._api.orders
-        if any(
-            order.ability is AbilityId.GATHER and order.target is resource
-            for order in order_book.issued_to(worker, include_sent=True)
-        ):
-            return True
+        if not _has_a_standing_order_other_than_a_hand_overs(order_book.issued_to(worker), mining=mining):
+            current_order = worker.current_order
+            if current_order is not None and self._is_its_work(worker, current_order, mining=mining):
+                return True
+            if any(
+                order.ability is AbilityId.GATHER and order.target is resource
+                for order in order_book.issued_to(worker, include_sent=True)
+            ):
+                return True
         if carries_cargo(worker):
             self._trips.hand_in_then_gather(worker, resource)
         else:
@@ -423,7 +437,8 @@ class SpeedMining:
     def _order_the_workers(self, _: TurnEvent) -> None:
         """Order each worker held, as the class's docstring says: the miners field by field, then the collectors gas
         building by gas building, once the workers of the fields and gas buildings no longer mined or collected from
-        are let go, since they count among the units in a move's way."""
+        are let go, and those the bot ordered, since they count among the units in a move's way."""
+        self._let_go_of_the_workers_the_bot_ordered()
         townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None] = {}
         mined_fields = _still_worked(self._field_by_worker, self._trip_to_a_field, townhall_by_center)
         collected_gas_buildings = _still_worked(
@@ -474,6 +489,21 @@ class SpeedMining:
                 townhall,
                 units_near_the_trip_end,
             )
+
+    def _let_go_of_the_workers_the_bot_ordered(self) -> None:
+        """Let go of each worker held that the bot has ordered, as `_is_ordered_by_the_bot` says, of those the turn's
+        orders name."""
+        for worker in {unit for order in self._api.orders.pending for unit in order.units}:
+            if worker in self._field_by_worker and self._is_ordered_by_the_bot(worker, mining=True):
+                del self._field_by_worker[worker]
+            elif worker in self._gas_building_by_worker and self._is_ordered_by_the_bot(worker, mining=False):
+                del self._gas_building_by_worker[worker]
+
+    def _is_ordered_by_the_bot(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
+        """Whether the bot has ordered `worker`, a miner if `mining`, else a collector: an order issued to it this turn
+        stands that is not a hand-over's. Speed mining's turn comes after every handler of the bot's, so the turn's
+        orders are the bot's and the hand-overs'."""
+        return _has_a_standing_order_other_than_a_hand_overs(self._api.orders.issued_to(worker), mining=mining)
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
         """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not orderable,
@@ -544,6 +574,21 @@ def _workers_by_resource[R: Unit[Any]](
     for worker, resource in resource_by_worker.items():
         workers_by_resource.setdefault(resource, []).append(worker)
     return workers_by_resource
+
+
+def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[Order[Any]], *, mining: bool) -> bool:
+    """Whether one of `orders`, issued to a worker this turn, a miner if `mining`, else a collector, stands, no unqueued
+    order coming after it, and is not a hand-over's: a return, or a gather at a mineral field, for a miner, or at a gas
+    building, for a collector."""
+    if not orders:
+        return False
+    standing_from = max((place for place, order in enumerate(orders) if not order.queued), default=0)
+    gathered_at = UnitType.AnyMineralField if mining else UnitType.GasBuilding
+    return not all(
+        order.ability is AbilityId.RETURN
+        or (order.ability is AbilityId.GATHER and isinstance(order.target, Unit) and gathered_at.includes(order.target))
+        for order in orders[standing_from:]
+    )
 
 
 def _is_of_the_farther_half(place: int, field_count: int) -> bool:
