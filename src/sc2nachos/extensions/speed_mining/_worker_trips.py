@@ -7,14 +7,15 @@ from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.extensions.speed_mining._trip_end_points import WORKER_RADIUS
 from sc2nachos.ids import AbilityId
+from sc2nachos.units import Units, UnitType
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Container, Iterable
 
     from sc2nachos import Api
     from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.geometry import Point
-    from sc2nachos.units import OwnUnit, Unit, UnitOrder, Units, UnitType
+    from sc2nachos.units import OwnUnit, Unit, UnitOrder
 
 # The distances from the point a trip's move ends at between which a worker on a plain gather or return is given the
 # move: AvocaDOS's values.
@@ -23,6 +24,8 @@ _FARTHEST_DISTANCE_FOR_THE_MOVE = 2.0
 # How near the line of a worker's move a unit's circle may come before it stands in the way: a margin for units that
 # move while the move lasts, not tuned.
 _CLEARANCE_OF_THE_MOVE = 0.5
+# The types of units in no move's way, whoever owns them: structures, which a move paths around, and larvae.
+_TYPES_NEVER_IN_THE_WAY = UnitType.Structure.type_ids | UnitType.Larva.type_ids
 
 
 @final
@@ -39,25 +42,27 @@ class WorkerTrips:
 
     def speed_mine(
         self,
-        worker: OwnUnit[UnitType.Worker],
         field: Unit[UnitType.AnyMineralField],
+        miners_to_order: list[OwnUnit[UnitType.Worker]],
         townhall: Unit[UnitType.Townhall],
         trip_end_points: TripEndPoints,
         units_near_the_trip_end: Callable[[Point], Units[Unit[Any]]],
     ) -> None:
-        """Keep `worker` mining `field`, with `townhall` taking its cargo, on the trip back if it carries cargo, else on
-        the trip to `field`, as `_speed_trip` says."""
-        returning = worker.is_carrying_resource
-        trip_end = trip_end_points.return_point if returning else trip_end_points.gather_point
-        self._speed_trip(
-            worker,
-            field,
-            townhall,
-            trip_end,
-            units_near_the_trip_end,
-            returning=returning,
-            work_plainly=self._mine_plainly,
-        )
+        """Keep `miners_to_order`, of `field`'s miners, mining it, with `townhall` taking their cargo, each on the trip
+        back if it carries cargo, else on the trip to `field`, as `_speed_trip` says."""
+        mine_plainly = self._mine_plainly
+        for miner in miners_to_order:
+            returning = miner.is_carrying_resource
+            trip_end = trip_end_points.return_point if returning else trip_end_points.gather_point
+            self._speed_trip(
+                miner,
+                field,
+                townhall,
+                trip_end,
+                units_near_the_trip_end,
+                returning=returning,
+                work_plainly=mine_plainly,
+            )
 
     def speed_collect(
         self,
@@ -216,6 +221,25 @@ class WorkerTrips:
             return False
         replacing = [order for order in self._api.orders.issued_to(worker, include_sent=True) if not order.queued]
         return bool(replacing) and replacing[-1].ability is AbilityId.MOVE and replacing[-1].target == trip_end
+
+
+def units_in_the_way_of_a_move(
+    units: Iterable[Unit[Any]], miners: Container[Unit[Any]], collectors: Container[Unit[Any]]
+) -> Units[Unit[Any]]:
+    """Those of `units`, every unit in the game, that can stand in the way of a worker on a move, as `SpeedMining`'s
+    docstring counts them: neither structures, larvae, in the air, burrowed nor among the `miners` and `collectors`
+    speed mining holds. A worker on a gather or a return passes through units (in game), and one on a move does not
+    (stated)."""
+    return Units(
+        unit
+        for unit in units
+        if (unit.is_own or unit.is_enemy)
+        and unit.type_id not in _TYPES_NEVER_IN_THE_WAY
+        and not unit.is_flying
+        and not unit.is_burrowed
+        and unit not in miners
+        and unit not in collectors
+    )
 
 
 def units_within_reach_of(trip_end: Point, units: Units[Unit[Any]]) -> Units[Unit[Any]]:

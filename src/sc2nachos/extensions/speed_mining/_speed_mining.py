@@ -9,9 +9,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast, final
 
 from sc2nachos.events import EventPriority, TurnEvent
-from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPointBook, finished_own_townhall_at_center
+from sc2nachos.extensions.speed_mining._trip_end_point_book import TripEndPointBook, finished_own_townhall_at_center
 from sc2nachos.extensions.speed_mining._worker_attacks import WorkerAttacks
-from sc2nachos.extensions.speed_mining._worker_trips import WorkerTrips, carries_cargo, units_within_reach_of
+from sc2nachos.extensions.speed_mining._worker_trips import (
+    WorkerTrips,
+    carries_cargo,
+    units_in_the_way_of_a_move,
+    units_within_reach_of,
+)
 from sc2nachos.ids import AbilityId
 from sc2nachos.units import OwnUnit, Unit, UnitDict, Units, UnitType
 
@@ -23,8 +28,6 @@ if TYPE_CHECKING:
     from sc2nachos.geometry import Point
     from sc2nachos.units import UnitOrder
 
-# The types of units in no move's way, whoever owns them: structures, which a move paths around, and larvae.
-_TYPES_NEVER_IN_THE_WAY = UnitType.Structure.type_ids | UnitType.Larva.type_ids
 # The most workers speed mining holds at one field: with three, it mined 19% less than plain gathers (in game).
 _MOST_MINERS_AT_A_FIELD = 2
 # The most workers speed mining holds at one gas building: the ideal a refinery reports (corpus).
@@ -185,8 +188,7 @@ class SpeedMining:
         Raises `ValueError` for a unit that is not a worker, an SCV, a drone or a probe, and for one of `fields` that is
         not a mineral field.
         """
-        if not UnitType.Worker.includes(worker):
-            raise ValueError(f"speed mining orders workers, not {worker!r}")
+        _check_is_a_worker(worker)
         only_fields = _given(fields, UnitType.AnyMineralField, "speed mining mines mineral fields")
         field = self._nearest_field_with_room(worker, only_fields)
         if field is None or not self._send_to_gather_at(worker, field, mining=True):
@@ -218,8 +220,7 @@ class SpeedMining:
 
         Raises `ValueError` for a unit that is not a worker, and for one of `gas_buildings` that is not a gas building.
         """
-        if not UnitType.Worker.includes(worker):
-            raise ValueError(f"speed mining orders workers, not {worker!r}")
+        _check_is_a_worker(worker)
         only_gas_buildings = _given(gas_buildings, UnitType.GasBuilding, "speed mining collects from gas buildings")
         gas_building = self._gas_building_with_room_to_pick(worker, only_gas_buildings)
         if gas_building is None:
@@ -235,7 +236,7 @@ class SpeedMining:
     def release(self, workers: OwnUnit[UnitType.Worker] | Iterable[OwnUnit[UnitType.Worker]]) -> None:
         """Stop ordering `workers`, one or several, leaving their orders as they are. Nothing happens for a worker not
         handed over."""
-        for worker in (workers,) if isinstance(workers, Unit) else workers:
+        for worker in _tuple_of_units(workers):
             self._field_by_worker.pop(worker, None)
             self._gas_building_by_worker.pop(worker, None)
 
@@ -348,7 +349,9 @@ class SpeedMining:
             nonlocal units_in_the_way
             if (near := units_near_each_trip_end.get(trip_end)) is None:
                 if units_in_the_way is None:
-                    units_in_the_way = self._units_in_the_way_of_a_move()
+                    units_in_the_way = units_in_the_way_of_a_move(
+                        self._api.units, self._field_by_worker, self._gas_building_by_worker
+                    )
                 near = units_near_each_trip_end[trip_end] = units_within_reach_of(trip_end, units_in_the_way)
             return near
 
@@ -369,8 +372,9 @@ class SpeedMining:
 
         trips = self._trips
         for field, workers, (field_trip_end_points, townhall) in mined_fields:
-            for worker in workers_to_order(workers, mining=True):
-                trips.speed_mine(worker, field, townhall, field_trip_end_points, units_near_the_trip_end)
+            trips.speed_mine(
+                field, workers_to_order(workers, mining=True), townhall, field_trip_end_points, units_near_the_trip_end
+            )
         for gas_building, workers, (gas_trip_end_points, townhall) in collected_gas_buildings:
             trips.speed_collect(
                 gas_building,
@@ -409,22 +413,6 @@ class SpeedMining:
             case _:
                 return False
 
-    def _units_in_the_way_of_a_move(self) -> Units[Unit[Any]]:
-        """The units that can stand in the way of a worker on a move, as the class's docstring counts them. A worker on
-        a gather or a return passes through units (in game), and one on a move does not (stated)."""
-        field_by_worker = self._field_by_worker
-        gas_building_by_worker = self._gas_building_by_worker
-        return Units(
-            unit
-            for unit in self._api.units
-            if (unit.is_own or unit.is_enemy)
-            and unit.type_id not in _TYPES_NEVER_IN_THE_WAY
-            and not unit.is_flying
-            and not unit.is_burrowed
-            and unit not in field_by_worker
-            and unit not in gas_building_by_worker
-        )
-
 
 def _given[R: UnitType.AnyType](
     resources: Unit[R] | Iterable[Unit[R]] | None, group: type[R], refusal: str
@@ -433,7 +421,7 @@ def _given[R: UnitType.AnyType](
     of `group`."""
     if resources is None:
         return None
-    given = (resources,) if isinstance(resources, Unit) else tuple(resources)
+    given = _tuple_of_units(resources)
     for resource in given:
         if not group.includes(resource):
             raise ValueError(f"{refusal}, not {resource!r}")
@@ -463,3 +451,14 @@ def _counts_of_the_others[R: Unit[Any]](
 ) -> Counter[R]:
     """How many workers of `resource_by_worker` each resource has, `worker` left out."""
     return Counter(resource for other, resource in resource_by_worker.items() if other is not worker)
+
+
+def _check_is_a_worker(unit: Unit[Any]) -> None:
+    """Raise `ValueError` unless `unit` is a worker, an SCV, a drone or a probe."""
+    if not UnitType.Worker.includes(unit):
+        raise ValueError(f"speed mining orders workers, not {unit!r}")
+
+
+def _tuple_of_units[U: Unit[Any]](units: U | Iterable[U]) -> tuple[U, ...]:
+    """The units given, one unit or any number of them, as a tuple."""
+    return (units,) if isinstance(units, Unit) else tuple(units)
