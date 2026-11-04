@@ -5,6 +5,7 @@ import itertools
 from collections.abc import Callable, Sequence
 from typing import Any
 
+import pytest
 from s2clientprotocol import common_pb2, raw_pb2
 
 from sc2nachos import Api
@@ -75,12 +76,13 @@ def _upgrades_at_block_ends(
     first_step: int = _LATE_ENOUGH_STEP,
     steps_apart: int = 1,
     creep: common_pb2.ImageData = _NO_CREEP,
-    include_speed_upgrades: bool = True,
     started: Callable[[Api[Any]], object] = lambda _: None,
+    **upgrade_inference_options: Any,
 ) -> list[frozenset[UpgradeId]]:
     """The enemy's upgrades as the bot's handlers see them on the turn each block of 22 steps ends, the first
     observation in it, in a game of a turn on each of `observed`, `steps_apart` steps apart from `first_step`, with
-    creep where `creep` has it. `started` runs as the game starts, after upgrade inference is built."""
+    creep where `creep` has it, and upgrade inference built with `upgrade_inference_options`. `started` runs as the
+    game starts, after upgrade inference is built."""
     observations = [
         make_observation(first_step + index * steps_apart, units=units, creep=creep)
         for index, units in enumerate([*observed, ()])
@@ -88,7 +90,7 @@ def _upgrades_at_block_ends(
     upgrades_each_turn: list[tuple[int, frozenset[UpgradeId]]] = []
 
     def build_the_extensions(api: Api[Any]) -> UpgradeInference:
-        upgrade_inference = UpgradeInference(api, include_speed_upgrades=include_speed_upgrades)
+        upgrade_inference = UpgradeInference(api, **upgrade_inference_options)
         api.on(TurnStartEvent)(lambda _: upgrades_each_turn.append((api.step, api.enemy.upgrades)))
         started(api)
         return upgrade_inference
@@ -226,3 +228,48 @@ class TestTheScore:
     def test_without_include_speed_upgrades_it_reads_none(self) -> None:
         observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
         assert _upgrades_at_block_ends(observed, include_speed_upgrades=False) == [_NO_UPGRADES]
+
+
+class TestTheThresholds:
+    def test_from_0_1_percent_assuming_at_99_9_it_takes_two_blocks_of_votes_for(self) -> None:
+        """One block of votes for takes the score from 0.1% to 95.8%, two to all but 100%."""
+        observed = _unit_moving(*[_block_at(_BOOSTED_ZERGLING_STEP)] * 2)
+        upgrades = _upgrades_at_block_ends(observed, speed_upgrade_floor=0.001, assume_speed_upgrade_at=0.999)
+        assert upgrades == [_NO_UPGRADES, _METABOLIC_BOOST]
+
+    def test_a_higher_floor_assumes_on_less(self) -> None:
+        """One block of votes for takes the score from 5% to 99.9%, but from 1% to 99.6% only."""
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
+        assert _upgrades_at_block_ends(observed, speed_upgrade_floor=0.05, assume_speed_upgrade_at=0.999) == [
+            _METABOLIC_BOOST
+        ]
+        assert _upgrades_at_block_ends(observed, assume_speed_upgrade_at=0.999) == [_NO_UPGRADES]
+
+    def test_a_higher_threshold_of_forgetting_forgets_on_less(self) -> None:
+        """Two blocks of votes for and one against leave the score at 99.8%: forgotten below 99.9%, not below 50%."""
+        boosted, slower = _block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP)
+        observed = _unit_moving(boosted, boosted, slower)
+        upgrades = _upgrades_at_block_ends(observed, assume_speed_upgrade_at=0.9999, forget_speed_upgrade_below=0.999)
+        assert upgrades == [_NO_UPGRADES, _METABOLIC_BOOST, _NO_UPGRADES]
+
+    @pytest.mark.parametrize(
+        ("floor", "forgotten_below", "assumed_at"),
+        [
+            (0.0, 0.5, 0.99),
+            (-0.01, 0.5, 0.99),
+            (0.01, 0.5, 1.0),
+            (0.5, 0.5, 0.99),
+            (0.01, 0.99, 0.99),
+            (0.01, 0.9, 0.8),
+        ],
+    )
+    def test_thresholds_not_rising_from_0_to_1_raise(
+        self, floor: float, forgotten_below: float, assumed_at: float
+    ) -> None:
+        with pytest.raises(ValueError, match="must rise in that order between 0 and 1"):
+            UpgradeInference(
+                Api(),
+                speed_upgrade_floor=floor,
+                forget_speed_upgrade_below=forgotten_below,
+                assume_speed_upgrade_at=assumed_at,
+            )

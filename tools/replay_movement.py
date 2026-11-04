@@ -57,8 +57,9 @@ from sc2nachos import Api, run_replay
 from sc2nachos.events import TurnStartEvent
 from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindow, MovementWindows
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
-    _ASSUMED_AT_LOG_ODDS,
-    _FLOOR_LOG_ODDS,
+    _DEFAULT_ASSUMED_AT,
+    _DEFAULT_FLOOR,
+    _DEFAULT_FORGOTTEN_BELOW,
     _LEAST_GAP_AS_SHARE_OF_SPEED,
     _LOG_ODDS_OF_A_SLICE_AGAINST,
     _LOG_ODDS_OF_A_SLICE_FOR,
@@ -90,7 +91,7 @@ _SPEED_CHANGING_BUFF_NAMES = frozenset(buff.name for buff in _SPEED_CHANGING_BUF
 # The floors `check` runs the fitted beta-binomial's score from, each with the score at which it assumes an upgrade,
 # and where it forgets one, as upgrade inference does.
 _SCORE_SETTINGS = ((0.01, 0.99), (0.01, 0.999), (0.05, 0.999), (0.14, 0.999))
-_FORGOTTEN_BELOW = 0.5
+_FORGOTTEN_BELOW = _DEFAULT_FORGOTTEN_BELOW
 # The beta-binomial spreads `check` fits over, as the correlation of two votes of one slice, and the number of means,
 # spaced evenly in their logarithm from `_LEAST_MEAN` to 0.5.
 _SPREADS_FITTED_OVER = (0.0, 1e-4, 1e-3, 0.01, 0.03, 0.1, 0.3, 0.6, 0.9, 0.99)
@@ -820,10 +821,8 @@ def check_playbacks(out_directory: Path, fit_directories: Sequence[Path]) -> dic
     fit_replays = {_key_of_playback(path)[0] for path in fit_paths}
     paths = [path for path in sorted(out_directory.glob("*.json.gz")) if _key_of_playback(path)[0] not in fit_replays]
     headers = _headers_of(paths)
-    upgrade_inference_floor = _probability_of_log_odds(_FLOOR_LOG_ODDS)
-    upgrade_inference_assumed_at = _probability_of_log_odds(_ASSUMED_AT_LOG_ODDS)
     score_checks = [
-        _ScoreCheck("upgrade inference's", _SliceCountModel(), upgrade_inference_floor, upgrade_inference_assumed_at),
+        _ScoreCheck("upgrade inference's", _SliceCountModel(), _DEFAULT_FLOOR, _DEFAULT_ASSUMED_AT),
         *(_ScoreCheck("fitted", model, floor, assumed_at) for floor, assumed_at in _SCORE_SETTINGS),
     ]
     playbacks_checked = 0

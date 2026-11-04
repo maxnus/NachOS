@@ -55,11 +55,23 @@ _STARTING_TOWNHALLS: Final = frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.HA
 # (tool `replay_movement`, #224).
 _LOG_ODDS_OF_A_SLICE_FOR: Final = math.log(23_000)
 _LOG_ODDS_OF_A_SLICE_AGAINST: Final = math.log(11_000)
-# Where an upgrade's score starts and stays at the least, a probability of 1%; where it is assumed, 99%; and below
-# where speed forgets one it assumed, 50%.
-_FLOOR_LOG_ODDS: Final = _log_odds_of_probability(0.01)
-_ASSUMED_AT_LOG_ODDS: Final = _log_odds_of_probability(0.99)
-_FORGOTTEN_BELOW_LOG_ODDS: Final = _log_odds_of_probability(0.5)
+# By default, the probabilities the replays checked (#224): where an upgrade's score starts and stays at the least,
+# where speed assumes the upgrade, and below where it forgets one it assumed.
+_DEFAULT_FLOOR: Final = 0.01
+_DEFAULT_ASSUMED_AT: Final = 0.99
+_DEFAULT_FORGOTTEN_BELOW: Final = 0.5
+
+
+def check_the_thresholds(
+    *, floor_probability: float, assumed_at_probability: float, forgotten_below_probability: float
+) -> None:
+    """Raise `ValueError` unless `0 < floor_probability < forgotten_below_probability < assumed_at_probability < 1`: a
+    score can then climb from its floor to where it is assumed, and fall back below where it is forgotten."""
+    if not 0 < floor_probability < forgotten_below_probability < assumed_at_probability < 1:
+        raise ValueError(
+            "The speed upgrades' floor, where one is forgotten and where it is assumed must rise in that order between"
+            f" 0 and 1, not {floor_probability}, {forgotten_below_probability} and {assumed_at_probability}"
+        )
 
 
 @final
@@ -67,12 +79,31 @@ class SpeedUpgradesFromMovement:
     """The enemy's speed upgrades read off how fast its units move, assumed with `Enemy.assume_upgrades`, as
     `UpgradeInference`'s docstring says."""
 
-    __slots__ = ("_api", "_assumed_by_speed", "_earliest_finish_steps", "_log_odds_by_upgrade")
+    __slots__ = (
+        "_api",
+        "_assumed_at_log_odds",
+        "_assumed_by_speed",
+        "_earliest_finish_steps",
+        "_floor_log_odds",
+        "_forgotten_below_log_odds",
+        "_log_odds_by_upgrade",
+    )
 
-    def __init__(self, api: Api[object]) -> None:
+    def __init__(
+        self,
+        api: Api[object],
+        *,
+        floor_probability: float,
+        assumed_at_probability: float,
+        forgotten_below_probability: float,
+    ) -> None:
         """Read the speed upgrades of the enemy of `api`'s game, which must have started and have an enemy, from its
-        next turn."""
+        next turn, each score from `floor_probability`, assuming an upgrade at `assumed_at_probability` and forgetting
+        one below `forgotten_below_probability`, as `check_the_thresholds` allows them."""
         self._api = api
+        self._floor_log_odds = _log_odds_of_probability(floor_probability)
+        self._assumed_at_log_odds = _log_odds_of_probability(assumed_at_probability)
+        self._forgotten_below_log_odds = _log_odds_of_probability(forgotten_below_probability)
         self._earliest_finish_steps = _earliest_finish_steps(api.data)
         self._log_odds_by_upgrade: dict[UpgradeId, float] = {}
         self._assumed_by_speed: set[UpgradeId] = set()
@@ -108,19 +139,19 @@ class SpeedUpgradesFromMovement:
     def _count_a_slice_for(self, upgrade: UpgradeId) -> None:
         """Raise `upgrade`'s score by a slice with a vote for it, and assume the upgrade if the score reached the
         threshold and the enemy is not held to have it already: again after the bot forgot one speed assumed."""
-        log_odds = self._log_odds_by_upgrade.get(upgrade, _FLOOR_LOG_ODDS) + _LOG_ODDS_OF_A_SLICE_FOR
+        log_odds = self._log_odds_by_upgrade.get(upgrade, self._floor_log_odds) + _LOG_ODDS_OF_A_SLICE_FOR
         self._log_odds_by_upgrade[upgrade] = log_odds
         enemy = self._api.enemy
-        if log_odds >= _ASSUMED_AT_LOG_ODDS and upgrade not in enemy.upgrades:
+        if log_odds >= self._assumed_at_log_odds and upgrade not in enemy.upgrades:
             enemy.assume_upgrades(upgrade)
             self._assumed_by_speed.add(upgrade)
 
     def _count_a_slice_against(self, upgrade: UpgradeId) -> None:
         """Lower `upgrade`'s score by a slice of only votes against it, no lower than the floor, and forget the upgrade
         if the score fell below where it is forgotten and speed assumed it."""
-        log_odds = self._log_odds_by_upgrade.get(upgrade, _FLOOR_LOG_ODDS) - _LOG_ODDS_OF_A_SLICE_AGAINST
-        self._log_odds_by_upgrade[upgrade] = max(_FLOOR_LOG_ODDS, log_odds)
-        if log_odds < _FORGOTTEN_BELOW_LOG_ODDS and upgrade in self._assumed_by_speed:
+        log_odds = self._log_odds_by_upgrade.get(upgrade, self._floor_log_odds) - _LOG_ODDS_OF_A_SLICE_AGAINST
+        self._log_odds_by_upgrade[upgrade] = max(self._floor_log_odds, log_odds)
+        if log_odds < self._forgotten_below_log_odds and upgrade in self._assumed_by_speed:
             self._api.enemy.forget_upgrades(upgrade)
             self._assumed_by_speed.discard(upgrade)
 
