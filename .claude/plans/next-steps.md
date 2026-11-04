@@ -16,11 +16,15 @@ As of 2026-11-04:
 
 - **M4 is done** but for slice 7, typed order methods on `OwnUnit`, which is deferred (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
-  on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, M5), is open.
-- **M6 is under way** (section 3): what is left is the owner's setup for releasing, the first release, and AvocaDOS
-  pinned to it.
+  on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
+  open.
+- **M6 is done**: AvocaDOS pins NachOS's releases from PyPI, 0.1.0 first (AvocaDOS #87, 2026-11-04), then 0.2.0,
+  which speed collects (AvocaDOS #90). A release is made as `docs/maintaining/releasing.md` says.
+- **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
+  64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
-  `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR. It has no
+  `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
+  `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
   python-sc2 left (AvocaDOS #68), its game map searches run on `Grid` (AvocaDOS #70), and its expansions and start
   locations (AvocaDOS #84) and speed mining (AvocaDOS #76, #85) are NachOS's.
 
@@ -139,7 +143,14 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   handlers run before the bot's of the same priority.
 - **Speed mining takes workers only through `mine`, `collect` and `release`** (#202, #208), and only at a base with a
   finished townhall of this player's at the expansion's center: no long-distance mining, and no taking over a bot's
-  plain gathers by itself, which the bot's own gathers could undo. Gas got its moves once measured (Next).
+  plain gathers by itself, which the bot's own gathers could undo.
+- **Speed collecting** (#222) gives a collector both moves on the line between the centers, its trip read off its
+  order, since rich gas shows no cargo. One coming out stays on its plain return until past every collector of its gas
+  building going in on its move, and is taken off a move it was sent lately (the owner, review of #222): lanes,
+  waypoints, the one going in yielding, and moves by the count of collectors were each measured to collect less. Given
+  several gas buildings or none, `collect` fills a base's to two nearest its townhall first, then to three farthest
+  first. The rule holds for every race, measured with SCVs only.
+- **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
 - **Speed upgrades read off how fast enemy units move**, built in #226 (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
@@ -214,30 +225,34 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- **Speed collecting** (the owner, 2026-11-03 and 2026-11-04), after #208, in #222 with `tools/sweep_gas.py`, its
-  evidence, since both edit this plan. The move went into `collect` only where it was measured to collect more; the
-  findings are in `docs/reference/game-behavior/abilities-and-orders.md`. AvocaDOS's collectors are speed mining's
-  since AvocaDOS #85, so it collects so once it takes the release. Decided, as recommended:
-  - Both moves on the line between the centers, a collector's trip read off its order, since rich gas shows no cargo,
-    and one coming out kept on its plain return until past every collector of its gas building going in on its move,
-    and taken off a move it was sent lately too (the owner, review of #222): over lanes, waypoints, the one going in
-    yielding, and moves by the count of collectors, each measured to collect less. `_is_mining` and `_is_collecting`
-    are one check (the owner, review of #208).
-  - Given no gas building, `collect` fills a base's to two nearest its townhall first, then to three farthest first,
-    over the one nearest the worker.
-  - The rule holds for every race, measured with SCVs only.
-  - Not in it, a follow-up: two miners of a field may meet head on the same way, both on their moves (unmeasured).
-  - Speed mining is a package (the owner, 2026-11-04, in a pull request of its own after #222), behavior-neutral, as
-    upgrade inference became one, a class to a file. `__init__.py` re-exports `SpeedMining`; `_speed_mining.py` holds
-    it, who is held where, `mine`, `collect`, `release`, the picks and the turn's loop; `_worker_trips.py`
-    `WorkerTrips`, each worker's trip a turn, the move, the yield, the plain orders and what stands in a move's way;
-    `_trip_end_points.py` `TripEndPoints`; `_trip_end_point_book.py` `TripEndPointBook`, every field's and gas
-    building's trip ends and the townhall taking the cargo; and `_worker_attacks.py` `WorkerAttacks`. Names one of its
-    modules takes from another have no underscore, as in upgrade inference. The two picks share the expansions to look
-    at and the count of the others, the two trip-end lookups the first expansion with a finished townhall, and `mine`
-    and `collect` the worker check beside `_send_to_gather_at`; moving the worker between the two maps stays in each,
-    since sharing it would need a helper of five arguments. NachOS has nothing more to reuse: its one-or-several helper
-    is private, `Units.within` adds no radius, and `OwnUnit.is_returning` stays out (#208).
+- **Speed mining picks every resource, and releases the workers costing least** (the owner, 2026-11-04), so that a
+  bot holds only how many mine and how many collect, which stays its own; in 0.3.0, with #227. Built in #229:
+  - `collect`'s pick fills gas buildings to two at the expansion nearest the worker that has one under two, nearest
+    its center first, before a third anywhere, where today it fills the nearest expansion to three first. A third
+    then goes base by base: at the expansion nearest the worker with one under three, the farthest from its center
+    (the owner, over the farthest from its townhall at any base, which collects 28 more in three minutes a third).
+  - `release_collectors(count)` and `release_miners(count)` release `count` of the workers speed mining holds,
+    those whose leaving costs the least, and return them (the owner, over a count to keep and over a read the bot
+    passes to `release`). Collectors: thirds first, a gas building's nearest its expansion's center before the
+    farther's, then a gas building's farthest from its center first, the reverse of the fill. Miners: at a field of
+    an expansion's farther half before one of its nearer half, the reverse of `mine`'s pick. Among as costly, the one
+    handed over last, most likely yet to collect; across expansions by these alone, as no worker gives a nearest. A
+    count below zero raises `ValueError`, and one beyond those held releases them all.
+  - Measured per three minutes, one to three collectors at Pylon's main's two refineries (`tools/sweep_gas.py`, build
+    75689): each adds 204, 200 and 88 at the nearer, 7.6 from the townhall, and 188, 186 and 116 at the farther, 8.1.
+  - AvocaDOS then drops its caps a refinery (`max_collectors`) and keeps a number of collectors: it hands a worker
+    to `collect`, naming no gas building, while it holds fewer, and calls `release_collectors` when it wants fewer
+    (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto `api.vision` (#227).
+  - Then, in a pull request of its own after #229 and in 0.3.0 too: speed mining lets a worker go once the bot orders
+    it elsewhere, so that `miners` and `collectors` hold only workers at that work and a number kept is true (the
+    owner, review of #229, over ranking such workers first in the releases). It reverses #201, which leaves one alone
+    until it is idle, so a builder no longer comes back by itself; AvocaDOS releases its builders itself already. The
+    bot's orders are read off the order book: one given this turn or sent lately that is not speed mining's own, its
+    gather, return, moves, right-click on the townhall or attack. The game's redirect to another field and a worker
+    inside a gas building stay held; a drone the bot burrows is let go.
+- Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
+  (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
+  the owner. The yield goes into `mine` only if it is measured to mine more.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
@@ -329,7 +344,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   Open, to settle with the owner at the step that needs it (proposed, not decided):
   - Tunneling Claws later, with Blink and Shadow Stride, since a burrowed roach has two upgraded speeds, Tunneling
     Claws alone or with Glial Reconstitution, which would need a second code path.
-- M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa**, a pull request at a time, in the order salsa's
   plan holds. salsa, `maxnus/salsa`, holds the `.salsa` format whole and depends on sc2nachos, its writer reading the
   protocol through NachOS's launch and protocol layers alone (maxnus/salsa#3). Next: starting a replay on its own
@@ -415,24 +429,9 @@ be planned with the owner. Keeping the selections still waits on M5's exit gate.
   would then have to go out as a performer's own id, which needs a link the game's rows do not give (raised with the
   owner in #104, not decided).
 
-## 2. After each nachOS pull request merges
+## 2. Around a release
 
-Record it in AvocaDOS's `docs/plans/nachOS-plan.md`, in the next AvocaDOS pull request: a paragraph under M6's
-"Status" saying what it settled and what AvocaDOS writes differently. AvocaDOS's tests (`uv run pytest`) install nachOS
-from the checkout beside it, so run them on a nachOS pull request that renames or removes anything.
-
-## 3. M6 (python-sc2 gone, NachOS released)
-
-In AvocaDOS's plan, section "M6 — Delete burnysc2". Done: python-sc2 and `external/pathfinding` gone from AvocaDOS
-(AvocaDOS #68, #70), its numeric helpers moved back into it (AvocaDOS #71) before nachOS deleted them (#194), its
-tests playing its own games (AvocaDOS #72) and making units through `sc2nachos.testing` (#196, AvocaDOS #74), the
-README and the API reference (#198), and the release workflow: publishing a GitHub release uploads it to PyPI, its
-version read from its tag (#213, `docs/maintaining/releasing.md`). Next:
-1. The owner's setup, once, that `releasing.md` lists: PyPI's trusted publisher, the `pypi` environment, and GitHub
-   Pages with the `github-pages` environment deploying the tags `v*`.
-2. The first release, 0.1.0, with the owner's permission; a pre-release, 0.1.0rc1, tries the workflow out first.
-3. AvocaDOS pinned to it, in an AvocaDOS pull request: `sc2nachos==0.1.0` from PyPI, without the path to `../NachOS`;
-   its ladder zip taking sc2nachos from the installed environment, as it takes `websocket`, not from NachOS's checkout;
-   and its CI checking NachOS out no more, but for the maps its `.github/sc2-games.yml` reads from
-   `../NachOS/sc2maps/AIE`, which need a home. Section 2's rule then becomes running AvocaDOS's tests when it moves to
-   a newer release, not on every nachOS pull request.
+Before it, run AvocaDOS's tests against the commit to release, `uv run --extra dev --with-editable <this checkout>
+python -m pytest` in AvocaDOS, so that its notes say what a bot has to change. After it, AvocaDOS takes it in a pull
+request of its own, which bumps its pin and `.github/sc2-games.yml`'s NachOS ref, as its `AGENTS.md` says, and runs
+its tests on it; a nachOS pull request is recorded there no more.
