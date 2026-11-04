@@ -487,6 +487,8 @@ class TestWhatHappened:
             UnitCommand(GameTime(steps=15), AbilityId.ATTACK, Units([marine]), enemy, queued=False),
             UnitCommand(GameTime(steps=15), AbilityId.STOP, Units([other]), None, queued=True),
         )
+        # Hashed as their fields are, their units among them.
+        assert len(set(state.actions)) == 3
         assert enemy.is_dead
         assert [cast(UnitCommand, action).known_target for action in state.actions] == [Point((5.0, 6.0)), enemy, None]
 

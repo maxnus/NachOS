@@ -33,8 +33,8 @@ class Units(Sequence[U]):
 
     Every filter returns a new collection. A query that picks the nearest unit, such as `closest_to`, raises
     `ValueError` on an empty collection; `structure_at` answers `None` where no structure stands. Two collections are
-    equal, and hash alike, when they hold the same units in the same order; a collection is never equal to a tuple or a
-    list, as a tuple is never equal to a list.
+    equal, and hash alike, when they hold the same units in the same order; a collection never equals a tuple or a
+    list.
     """
 
     __slots__ = ("_by_id", "_units")
