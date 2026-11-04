@@ -163,8 +163,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A fungal growth showed the step after the cast and was gone 64 steps later (#37; tested).
 - A parasitic bomb's target wears `ParasiticBomb`, and the unit the bomb leaves behind
   ([units](units.md#what-an-observation-lists)) `ParasiticBombUnitKU` and `ParasiticBombSecondaryUnitSearch`. Tool
-  `sweep_buffs` never saw the last two: it watches 128 steps after an order, and a bomb on a target that lives outlasts
-  that (AI Arena matches 4805282 and 4846375, 2026-11-04, build 75689).
+  `sweep_buffs` never saw the last two: it watches 128 steps after an order, and a bomb on a target that lives leaves
+  its dummy only after 175 steps, for 2 (AI Arena matches 4805282 and 4846375, 2026-11-04, build 75689).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what

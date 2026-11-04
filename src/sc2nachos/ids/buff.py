@@ -57,7 +57,7 @@ class BuffId(IdEnum):
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
     VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb  # on its target
-    # Both on each `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND` for as long as it is listed, and on nothing else (in game).
+    # Both on each `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND` while it is listed, and seen on nothing else (in game).
     VIPER_PARASITIC_BOMB_LEFT_BEHIND = RawBuffId.ParasiticBombUnitKU
     VIPER_PARASITIC_BOMB_LEFT_BEHIND_SEARCH = RawBuffId.ParasiticBombSecondaryUnitSearch
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
