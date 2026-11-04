@@ -306,7 +306,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      and scores each slice as upgrade inference does: over #224's 896 playbacks it gives what the fitted model gave at
      1% and 99%, no wrong assumption in 433, no wrong forgetting in 203, and 358 of 417 upgrades assumed, a median of
      3.5 seconds from first sight.
-  4. Its cost a turn over the corpus and AvocaDOS's recorded games.
+  4. Measured in #226, `tools/time_speed_upgrades.py`, the recordings played back with no bot: over AvocaDOS's seven
+     recorded games, 96,552 turns at 250 to 460 µs a turn, the speed code takes 6.9 µs a turn, 4.7 to 12.3 by game,
+     99% of turns within 8.5 to 46.6 µs and the slowest 98.5 µs, measuring 11 units; it measured 0.7 units a turn,
+     18 at most. Of that, about 4 µs a turn is building `api.units.enemy`, a filter over every unit, even with none in
+     sight, and 11 µs decoding the creep map, in an observation in which a Zerg ground unit's window goes on, which
+     anything else reading creep then shares. The corpus, 0.1 units a turn: 4.4 µs. The rest of upgrade inference
+     takes 80 to 100 µs a turn in three of AvocaDOS's games, decoding the buffs of every visible unit each turn.
 
   Open, to settle with the owner at the step that needs it (proposed, not decided):
   - Tunneling Claws later, with Blink and Shadow Stride, since a burrowed roach has two upgraded speeds, Tunneling
