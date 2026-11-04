@@ -79,7 +79,7 @@ class UpgradeInference:
     ```
 
     It reads each turn's observation on its `TurnStartEvent`, and the one the game ended on, which gets no turn, on
-    `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of the bot's, so every handler sees what it
+    `GameEndEvent`, both at `EventPriority.BEFORE`, before any handler of the bot's, so every handler sees what it
     read:
 
     - An enemy unit of a type nothing makes without an upgrade, in sight or remembered: a burrowed unit shows Burrow,
@@ -148,8 +148,8 @@ class UpgradeInference:
             _ = api.enemy
         except NoEnemyError:
             return
-        api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
-        api.on(GameEndEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
+        api.on(TurnStartEvent, priority=EventPriority.BEFORE)(self._assume_the_upgrades_shown)
+        api.on(GameEndEvent, priority=EventPriority.BEFORE)(self._assume_the_upgrades_shown)
         if include_speed_upgrades:
             SpeedUpgradesFromMovement(
                 api,

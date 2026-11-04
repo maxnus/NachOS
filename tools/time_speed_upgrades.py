@@ -27,7 +27,7 @@ from typing import Any
 from loguru import logger
 
 from sc2nachos import Api
-from sc2nachos.events import TurnStartEvent
+from sc2nachos.events import EventPriority, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference import UpgradeInference
 from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindows, speed_upgrade_by_type
 from sc2nachos.run import run_recording
@@ -100,7 +100,7 @@ def _time_the_speed_code(recording: Path, times: _PlaybackTimes) -> None:
     def count_the_units_measured(api: Api[Any]) -> None:
         tracked_types = speed_upgrade_by_type(api.data).keys()
 
-        @api.on(TurnStartEvent)
+        @api.on(TurnStartEvent, priority=EventPriority.BEFORE)
         def count(_: object) -> None:
             times.units_measured_each_turn.append(
                 sum(1 for unit in api.units.enemy if unit.type_id in tracked_types and unit.is_visible)

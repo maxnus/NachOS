@@ -23,7 +23,9 @@ As of 2026-11-04:
 - **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
   64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it. Its notes say too that
   `SpeedMining.workers_at` (#229), `Order.units`, and `UnitCommand.units` and `AutocastToggle.units` hand out `Units`,
-  where they handed out tuples, which a `Units` never equals.
+  where they handed out tuples, which a `Units` never equals, and that an extension's handlers take
+  `EventPriority.BEFORE` or `AFTER`, and only they (#232): AvocaDOS's turn clock, subscribed among its extensions at
+  `HIGHEST`, moves to `BEFORE`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -143,8 +145,12 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 ### Extensions
 
 - **Extensions are the one place for opt-in features** (#201), named over plugins, which suggest changing existing
-  methods. A bot hands `Api(extensions=Extensions)` its own class, which builds each extension, and an extension's
-  handlers run before the bot's of the same priority.
+  methods. A bot hands `Api(extensions=Extensions)` its own class, which builds each extension.
+- **An extension's handlers run before every handler of the bot's or after every one** (the owner, 2026-11-04, #232),
+  at `EventPriority.BEFORE` or `AFTER`, which only a handler subscribed while NachOS builds the extensions takes and
+  which it must take; over reusing `HIGHEST` and `LOWEST`, where an extension's `TurnEvent` handler would still run
+  after a bot's handler of the turn's other events. Upgrade inference runs before the bot, and speed mining after it
+  for now (the owner, over before it): #231 settles which.
 - **Speed mining takes workers only through `mine`, `collect` and `release`** (#202, #208), and only at a base with a
   finished townhall of this player's at the expansion's center: no long-distance mining, and no taking over a bot's
   plain gathers by itself, which the bot's own gathers could undo.
