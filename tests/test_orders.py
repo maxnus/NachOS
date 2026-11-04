@@ -23,7 +23,7 @@ from sc2nachos.orders import Order, OrderBook
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
-from sc2nachos.units import Alliance, OwnUnit, UnitType
+from sc2nachos.units import Alliance, OwnUnit, Units, UnitType
 from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_enemy, make_game_info, make_observation, make_response, make_tables, make_unit
 
@@ -1304,7 +1304,7 @@ class TestAnOrderToSeveralUnits:
         train = game.book.issue([game.own(1), game.own(1)], _TRAIN_MARINE)
         game.book.issue([game.own(2), game.own(3), game.own(2)], _MOVE, target=_SITE)
 
-        assert train.units == (game.own(1),)
+        assert train.units == Units([game.own(1)])
         assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False), (_MOVE, [2, 3], _SITE, False)]
 
     def test_what_the_game_refuses_of_a_command_each_is_listed_for_its_unit(self) -> None:

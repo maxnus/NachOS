@@ -10,6 +10,7 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.state._action_result import ActionResult
+from sc2nachos.units._units import Units
 from sc2nachos.units._values import _NotReported
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ class UnitCommand(Action):
     ability: AbilityId
     """The ability ordered, as the game runs it: an action several types perform reads as that action, whichever
     type's own id the game names, and a research names its level (in game)."""
-    units: tuple[Unit[Any], ...]
+    units: Units[Unit[Any]]
     """The units that took the order, leaving out any the game names by a tag it never reported."""
     _target: Target | Literal[_NotReported.TARGET] | None
     queued: bool
@@ -88,7 +89,7 @@ class AutocastToggle(Action):
     """Units of this player's that had an ability's autocast turned on or off."""
 
     ability: AbilityId
-    units: tuple[Unit[Any], ...]
+    units: Units[Unit[Any]]
     """The units whose autocast was toggled, leaving out any the game names by a tag it never reported."""
 
     @classmethod
@@ -163,6 +164,6 @@ def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any
             return None
 
 
-def _units_reported_under(tags: Iterable[int], unit_by_tag: Callable[[int], Unit[Any] | None]) -> tuple[Unit[Any], ...]:
+def _units_reported_under(tags: Iterable[int], unit_by_tag: Callable[[int], Unit[Any] | None]) -> Units[Unit[Any]]:
     """The units the game reported under `tags`, in their order, leaving out a tag it never reported."""
-    return tuple(unit for tag in tags if (unit := unit_by_tag(tag)) is not None)
+    return Units(unit for tag in tags if (unit := unit_by_tag(tag)) is not None)

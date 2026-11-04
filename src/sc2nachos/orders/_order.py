@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 if TYPE_CHECKING:
     from sc2nachos.gametime import GameTime
     from sc2nachos.ids import AbilityId
-    from sc2nachos.units import OwnUnit, Target
+    from sc2nachos.units import OwnUnit, Target, Units
 
 
 @final
@@ -30,7 +30,7 @@ class Order[T]:
     def __init__(
         self,
         ability: AbilityId,
-        units: tuple[OwnUnit[Any], ...],
+        units: Units[OwnUnit[Any]],
         target: Target | None,
         *,
         queued: bool,
@@ -56,7 +56,7 @@ class Order[T]:
         return self._ability
 
     @property
-    def units(self) -> tuple[OwnUnit[Any], ...]:
+    def units(self) -> Units[OwnUnit[Any]]:
         """The units the order was given to."""
         return self._units
 
