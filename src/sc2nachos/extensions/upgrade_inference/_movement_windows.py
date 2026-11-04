@@ -190,9 +190,11 @@ class MovementWindows:
     A unit's window runs while each observation shows it visible, of the type it had when the window began and on the
     side it was first seen on. A unit missing from an observation, as one in a transport is (in game), or not visible
     in it, begins a new window when it is seen again. Windows end on one clock for every unit, at the first observation
-    of each block of `window_steps` steps: `window_steps` long where every step is observed, but for a unit's first
-    window, which may be shorter, as one that begins again does, and as long as the observations fall otherwise. The
-    prediction of each observation's move takes the speed for the ground the unit stood on at the observation before.
+    of each block of `window_steps` steps, a block beginning at each step whose quotient by `window_steps`, rounded
+    down, is new: so blocks of 22.4 steps are 22 or 23 long. A window is as long as its block where every step is
+    observed, but for a unit's first window, which may be shorter, as one that begins again does, and as long as the
+    observations fall otherwise. The prediction of each observation's move takes the speed for the ground the unit
+    stood on at the observation before.
 
     It reads each turn's observation on `TurnStartEvent` at `EventPriority.BEFORE`.
     """
@@ -200,7 +202,7 @@ class MovementWindows:
     __slots__ = ("_api", "_on_windows", "_open", "_previous_step", "_speeds", "_window_steps")
 
     def __init__(
-        self, api: Api[object], *, window_steps: int, on_windows: Callable[[Sequence[MovementWindow]], object]
+        self, api: Api[object], *, window_steps: float, on_windows: Callable[[Sequence[MovementWindow]], object]
     ) -> None:
         """Measure the enemy of `api`'s game, which must have started, from its next turn."""
         self._api = api

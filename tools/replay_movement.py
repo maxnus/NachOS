@@ -16,22 +16,20 @@ Needs StarCraft II installed, with the replays' build and maps.
   every observation's move to fall in the band too; then, for the proposed window and band, the votes by upgrade, and
   the playbacks in which a wrong assumption was possible, an enemy lacking an upgrade while its units of a type it
   speeds up voted. Last, how long a playback took.
-- `check` scores the playbacks as upgrade inference does, by the rule it ships with, which it imports: windows of 22
-  steps, steady votes within 0.05 of the gap, and none from a unit wearing a buff that changes its speed, or before
-  the upgrade could have finished. The votes of each upgrade in one window's steps are a slice, k fast of n. It
-  scores each slice as upgrade inference does, a slice with a fast vote for the upgrade and one of only slow votes
-  against, from a floor of 1% and assuming at 99%; and, to compare, by a beta-binomial for an enemy that has the
-  upgrade and another for one that lacks it, fitted on the playbacks of `--fit`, from each floor `p0` and threshold of
-  assuming of `_SCORE_SETTINGS`. On the playbacks not fitted on, forgetting below 0.5, it counts the playbacks that
-  assume an upgrade the enemy lacks and those that forget one it has; how long each one it has takes to be assumed,
-  after it finished and after one of its units was first seen in a window it moved in, a unit that does not move in a
-  window not being recorded; and how often a score reads true.
+- `check` runs upgrade inference's rule over the playbacks, by what it imports of it: windows of 22 steps, the
+  default, steady votes within 0.05 of the gap, and none from a unit wearing a buff that changes its speed. The votes
+  of each upgrade in one window's steps are a slice, and the first slice with a fast vote assumes the upgrade for
+  good, from the game's first step. It counts the playbacks in which a wrong assumption was possible, an enemy
+  lacking an upgrade while its units of a type it speeds up voted, and those that assume an upgrade the enemy lacks,
+  before it could have finished too; the slices with a fast vote, by whether the enemy had the upgrade; and how long
+  each one it has takes to be assumed, after it finished and after one of its units was first seen in a window it
+  moved in, a unit that does not move in a window not being recorded.
 
 Run it as::
 
     uv run python tools/replay_movement.py play /mnt/storage/data/sc2ai/aiarena-2026-season-1 --games 100
     uv run python tools/replay_movement.py summarize replay-movement
-    uv run python tools/replay_movement.py check replay-movement --fit pilot-movement
+    uv run python tools/replay_movement.py check replay-movement
 
 The summary and the check are written as JSON.
 """
@@ -39,7 +37,6 @@ The summary and the check are written as JSON.
 import argparse
 import gzip
 import json
-import math
 import random
 import statistics
 import sys
@@ -55,19 +52,17 @@ from loguru import logger
 
 from sc2nachos import Api, run_replay
 from sc2nachos.events import EventPriority, TurnStartEvent
-from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindow, MovementWindows
+from sc2nachos.extensions.upgrade_inference._movement_windows import (
+    MovementWindow,
+    MovementWindows,
+    speed_upgrade_by_type,
+)
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
-    _DEFAULT_ASSUMED_AT,
-    _DEFAULT_FLOOR,
-    _DEFAULT_FORGOTTEN_BELOW,
+    _DEFAULT_WINDOW,
     _LEAST_GAP_AS_SHARE_OF_SPEED,
-    _LOG_ODDS_OF_A_SLICE_AGAINST,
-    _LOG_ODDS_OF_A_SLICE_FOR,
     _SPEED_CHANGING_BUFFS,
     _VOTE_BAND_AS_SHARE_OF_GAP,
-    _earliest_finish_steps,
 )
-from sc2nachos.extensions.upgrade_inference._speed_upgrades import _WINDOW_STEPS as _VOTING_WINDOW_STEPS
 from sc2nachos.gametime import STEPS_PER_SECOND
 from sc2nachos.testing import load_game_data
 
@@ -81,24 +76,13 @@ _PLAYER_IDS = (1, 2)
 _WINDOWS_JOINED = (1, 2, 4)
 _BAND_WIDTHS = (0.05, 0.1, 0.2)
 # The window and band upgrade inference votes by, for the summary's counts by upgrade and by playback.
-_PROPOSED_WINDOWS_JOINED = _VOTING_WINDOW_STEPS // _WINDOW_STEPS
+_PROPOSED_WINDOWS_JOINED = int(_DEFAULT_WINDOW.steps) // _WINDOW_STEPS
 _PROPOSED_BAND_WIDTH = _VOTE_BAND_AS_SHARE_OF_GAP
 # A window does not vote where the prediction with the upgrade is less than this much further than the one without.
 _LEAST_GAP = _LEAST_GAP_AS_SHARE_OF_SPEED
 _VOTE_RULES = {"plain": False, "steady": True}
 # The buffs under which upgrade inference counts no vote, by name, as a playback records them.
 _SPEED_CHANGING_BUFF_NAMES = frozenset(buff.name for buff in _SPEED_CHANGING_BUFFS)
-# The floors `check` runs the fitted beta-binomial's score from, each with the score at which it assumes an upgrade,
-# and where it forgets one, as upgrade inference does.
-_SCORE_SETTINGS = ((0.01, 0.99), (0.01, 0.999), (0.05, 0.999), (0.14, 0.999))
-_FORGOTTEN_BELOW = _DEFAULT_FORGOTTEN_BELOW
-# The beta-binomial spreads `check` fits over, as the correlation of two votes of one slice, and the number of means,
-# spaced evenly in their logarithm from `_LEAST_MEAN` to 0.5.
-_SPREADS_FITTED_OVER = (0.0, 1e-4, 1e-3, 0.01, 0.03, 0.1, 0.3, 0.6, 0.9, 0.99)
-_MEANS_FITTED_OVER = 400
-_LEAST_MEAN = 1e-9
-# Where a score reads, for how often one reads true: each bin from its lower bound up to the next one's.
-_SCORE_BINS = (0.0, 0.02, 0.1, 0.5, 0.9, 0.99, 0.999)
 
 # A playback, by its replay's name without the extension and the player it was played as.
 type _PlaybackKey = tuple[str, int]
@@ -486,41 +470,30 @@ def summarize_playbacks(out_directory: Path) -> dict[str, Any]:
 
 @dataclass(frozen=True, slots=True)
 class _VoteSlice:
-    """The votes of the units one upgrade speeds up, in one window's steps of a playback, by the rule `check` scores."""
+    """The votes of the units one upgrade speeds up, in one window's steps of a playback, by the rule `check` runs:
+    how many were fast, of at least one."""
 
     upgrade: str
     start_step: int
     end_step: int
     fast_votes: int
-    slow_votes: int
     enemy_had_it: bool | None
-
-    @property
-    def vote_count(self) -> int:
-        return self.fast_votes + self.slow_votes
-
-
-def _earliest_finish_steps_by_name() -> dict[str, int]:
-    """The earliest step each speed upgrade could finish, as upgrade inference reckons it, by the upgrade's name."""
-    return {upgrade.name: steps for upgrade, steps in _earliest_finish_steps(load_game_data()).items()}
 
 
 def _proposed_vote(window: _Window) -> str | None:
-    """The window's vote by the rule `check` scores: steady within the proposed band, and none under a buff that changes
+    """The window's vote by the rule `check` runs: steady within the proposed band, and none under a buff that changes
     the unit's speed."""
     if window.buffs & _SPEED_CHANGING_BUFF_NAMES:
         return None
     return window.vote(_PROPOSED_BAND_WIDTH, steady=True)
 
 
-def _vote_slices(
-    playback: dict[str, Any], enemy: dict[str, Any] | None, earliest_finish_steps: dict[str, int]
-) -> list[_VoteSlice]:
-    """The slices of `playback`, in order, without the windows that began before their upgrade could have finished."""
+def _vote_slices(playback: dict[str, Any], enemy: dict[str, Any] | None) -> list[_VoteSlice]:
+    """The slices of `playback` with a vote, in order."""
     votes_by_slice: defaultdict[tuple[str, int], Counter[str]] = defaultdict(Counter)
     enemy_had_it_by_slice: dict[tuple[str, int], bool | None] = {}
     for _, window in _joined_windows(playback, enemy, _PROPOSED_WINDOWS_JOINED):
-        if window.start_step < earliest_finish_steps[window.upgrade] or (vote := _proposed_vote(window)) is None:
+        if (vote := _proposed_vote(window)) is None:
             continue
         slice_key = (window.upgrade, window.start_step)
         votes_by_slice[slice_key][vote] += 1
@@ -528,130 +501,26 @@ def _vote_slices(
     joined_steps = playback["window_steps"] * _PROPOSED_WINDOWS_JOINED
     return sorted(
         (
-            _VoteSlice(
-                upgrade,
-                start,
-                start + joined_steps,
-                counts["fast"],
-                counts["slow"],
-                enemy_had_it_by_slice[upgrade, start],
-            )
+            _VoteSlice(upgrade, start, start + joined_steps, counts["fast"], enemy_had_it_by_slice[upgrade, start])
             for (upgrade, start), counts in votes_by_slice.items()
         ),
         key=lambda vote_slice: vote_slice.start_step,
     )
 
 
-@dataclass(frozen=True, slots=True)
-class _BetaBinomial:
-    """How many of a slice's votes are wrong: each is with probability `mean`, and two of one slice are correlated by
-    `spread`, 0 for votes as independent as coin flips."""
-
-    mean: float
-    spread: float
-
-    def log_probability(self, wrong_votes: int, votes: int) -> float:
-        log_choices = math.lgamma(votes + 1) - math.lgamma(wrong_votes + 1) - math.lgamma(votes - wrong_votes + 1)
-        if self.spread == 0:
-            return log_choices + wrong_votes * math.log(self.mean) + (votes - wrong_votes) * math.log1p(-self.mean)
-        concentration = 1 / self.spread - 1
-        wrong_weight = self.mean * concentration
-        right_weight = concentration - wrong_weight
-        return (
-            log_choices
-            + math.lgamma(wrong_votes + wrong_weight)
-            - math.lgamma(wrong_weight)
-            + math.lgamma(votes - wrong_votes + right_weight)
-            - math.lgamma(right_weight)
-            + math.lgamma(concentration)
-            - math.lgamma(votes + concentration)
-        )
-
-    def as_json(self) -> dict[str, float]:
-        return {"mean": self.mean, "spread": self.spread}
-
-
-def _fit_beta_binomial(slices: Counter[tuple[int, int]]) -> _BetaBinomial:
-    """The beta-binomial most likely to give `slices`, counted by their wrong votes and votes, with half a wrong vote
-    and half a right one added, so that the mean is above 0 though no vote was wrong.
-
-    Where no vote was wrong, the most clustered spread fits best, and the mean comes to about half a vote over the
-    number of slices: how strongly a slice counts then follows from how many slices it was fitted on, not from any
-    error seen."""
-    log_least_mean = math.log(_LEAST_MEAN)
-    log_mean_range = math.log(0.5) - log_least_mean
-    best_log_likelihood = -math.inf
-    best_beta_binomial = _BetaBinomial(0.5, 0.0)
-    for spread in _SPREADS_FITTED_OVER:
-        for mean_index in range(_MEANS_FITTED_OVER):
-            mean = math.exp(log_least_mean + log_mean_range * mean_index / (_MEANS_FITTED_OVER - 1))
-            beta_binomial = _BetaBinomial(mean, spread)
-            log_likelihood = 0.5 * math.log(mean) + 0.5 * math.log1p(-mean)
-            log_likelihood += sum(
-                count * beta_binomial.log_probability(wrong_votes, votes)
-                for (wrong_votes, votes), count in slices.items()
-            )
-            if log_likelihood > best_log_likelihood:
-                best_log_likelihood, best_beta_binomial = log_likelihood, beta_binomial
-    return best_beta_binomial
-
-
-@dataclass(frozen=True, slots=True)
-class _VoteModel:
-    """The likelihood of a slice's votes from an enemy that has the upgrade, and from one that lacks it."""
-
-    had_it: _BetaBinomial
-    lacked_it: _BetaBinomial
-
-    def log_likelihood_ratio(self, fast_votes: int, slow_votes: int) -> float:
-        """How much likelier the votes are from an enemy that has the upgrade, as a logarithm."""
-        votes = fast_votes + slow_votes
-        return self.had_it.log_probability(slow_votes, votes) - self.lacked_it.log_probability(fast_votes, votes)
-
-
-@dataclass(frozen=True, slots=True)
-class _SliceCountModel:
-    """How upgrade inference scores a slice: one with a fast vote for the upgrade, and one of only slow votes against
-    it."""
-
-    def log_likelihood_ratio(self, fast_votes: int, slow_votes: int) -> float:
-        """How much likelier the votes are from an enemy that has the upgrade, as a logarithm."""
-        if fast_votes:
-            return _LOG_ODDS_OF_A_SLICE_FOR
-        return -_LOG_ODDS_OF_A_SLICE_AGAINST if slow_votes else 0.0
-
-
-def _log_odds_of_probability(probability: float) -> float:
-    return math.log(probability / (1 - probability))
-
-
-def _probability_of_log_odds(log_odds: float) -> float:
-    return 1 / (1 + math.exp(-log_odds))
-
-
-def _score_bin(score: float) -> int:
-    return max(index for index, lower_bound in enumerate(_SCORE_BINS) if score >= lower_bound)
-
-
 @dataclass(slots=True)
-class _ScoreCheck:
-    """What the score did over the checked playbacks, by one model of a slice, from one floor and assuming at one
-    score."""
+class _RuleCheck:
+    """What upgrade inference's rule did over the checked playbacks: the first slice with a fast vote for an upgrade
+    assumes it for good, from the game's first step."""
 
-    model_name: str
-    model: _VoteModel | _SliceCountModel
-    floor: float
-    assumed_at: float
     wrongly_assumed: list[str] = field(default_factory=list)
-    wrongly_forgotten: list[str] = field(default_factory=list)
     playbacks_with_a_wrong_assumption_possible: set[_PlaybackKey] = field(default_factory=set)
-    playbacks_with_a_wrong_forgetting_possible: set[_PlaybackKey] = field(default_factory=set)
+    slices_with_a_fast_vote: Counter[bool] = field(default_factory=Counter)
     steps_to_assume: defaultdict[str, list[int]] = field(default_factory=lambda: defaultdict(list))
     steps_from_seeing_to_assuming: defaultdict[str, list[int]] = field(default_factory=lambda: defaultdict(list))
     not_assumed: Counter[str] = field(default_factory=Counter)
-    readings: Counter[tuple[int, bool]] = field(default_factory=Counter)
 
-    def score_upgrade(
+    def check_upgrade(
         self,
         playback: _PlaybackKey,
         upgrade: str,
@@ -659,79 +528,55 @@ class _ScoreCheck:
         first_seen_moving: int | None,
         slices: Sequence[_VoteSlice],
     ) -> None:
-        """Run the score of `upgrade` over its `slices` in `playback`, the enemy having finished it at `finished`, and
+        """Run the rule for `upgrade` over its `slices` in `playback`, the enemy having finished it at `finished`, and
         one of the units it speeds up having first been seen moving after that at `first_seen_moving`."""
-        floor_log_odds = _log_odds_of_probability(self.floor)
-        log_odds = floor_log_odds
-        is_assumed = False
-        assumed_after_finishing = False
         for vote_slice in slices:
-            if is_assumed and vote_slice.enemy_had_it is True:
-                self.playbacks_with_a_wrong_forgetting_possible.add(playback)
-            log_odds = max(
-                floor_log_odds, log_odds + self.model.log_likelihood_ratio(vote_slice.fast_votes, vote_slice.slow_votes)
-            )
-            score = _probability_of_log_odds(log_odds)
-            if vote_slice.enemy_had_it is not None:
-                self.readings[_score_bin(score), vote_slice.enemy_had_it] += 1
             if vote_slice.enemy_had_it is False:
                 self.playbacks_with_a_wrong_assumption_possible.add(playback)
-            has_it = finished is not None and finished <= vote_slice.end_step
-            if not is_assumed and score >= self.assumed_at:
-                is_assumed = True
-                if not has_it:
-                    self.wrongly_assumed.append(f"{playback[0]} as {playback[1]}, {upgrade} at {vote_slice.end_step}")
-                elif finished is not None and not assumed_after_finishing:
-                    assumed_after_finishing = True
-                    self.steps_to_assume[upgrade].append(vote_slice.end_step - finished)
-                    if first_seen_moving is not None:
-                        self.steps_from_seeing_to_assuming[upgrade].append(vote_slice.end_step - first_seen_moving)
-            elif is_assumed and score < _FORGOTTEN_BELOW:
-                is_assumed = False
-                if has_it:
-                    self.wrongly_forgotten.append(f"{playback[0]} as {playback[1]}, {upgrade} at {vote_slice.end_step}")
-        if finished is not None and not assumed_after_finishing:
-            if is_assumed:
-                reason_not_assumed = "assumed before it finished and still"
-            elif first_seen_moving is None:
-                reason_not_assumed = "none of its units seen moving after it finished"
-            elif any(vote_slice.start_step >= finished for vote_slice in slices):
-                reason_not_assumed = "voted on after it finished, too little"
-            else:
-                reason_not_assumed = "its units seen moving after it finished, but no vote"
-            self.not_assumed[f"{upgrade}, {reason_not_assumed}"] += 1
+            if vote_slice.fast_votes and vote_slice.enemy_had_it is not None:
+                self.slices_with_a_fast_vote[vote_slice.enemy_had_it] += 1
+        assumed_at = next((vote_slice.end_step for vote_slice in slices if vote_slice.fast_votes), None)
+        if assumed_at is not None and (finished is None or finished > assumed_at):
+            self.wrongly_assumed.append(f"{playback[0]} as {playback[1]}, {upgrade} at {assumed_at}")
+        elif assumed_at is not None and finished is not None:
+            self.steps_to_assume[upgrade].append(assumed_at - finished)
+            if first_seen_moving is not None:
+                self.steps_from_seeing_to_assuming[upgrade].append(assumed_at - first_seen_moving)
+            return
+        if finished is None:
+            return
+        if assumed_at is not None:
+            reason_not_assumed = "assumed before it finished"
+        elif first_seen_moving is None:
+            reason_not_assumed = "none of its units seen moving after it finished"
+        elif any(vote_slice.start_step >= finished for vote_slice in slices):
+            reason_not_assumed = "its units voted after it finished, but none fast"
+        else:
+            reason_not_assumed = "its units seen moving after it finished, but no vote"
+        self.not_assumed[f"{upgrade}, {reason_not_assumed}"] += 1
 
     def as_json(self) -> dict[str, Any]:
         assumption_possible = len(self.playbacks_with_a_wrong_assumption_possible)
-        forgetting_possible = len(self.playbacks_with_a_wrong_forgetting_possible)
-        readings: dict[str, dict[str, Any]] = {}
-        for index, lower_bound in enumerate(_SCORE_BINS):
-            had_it = self.readings[index, True]
-            lacked_it = self.readings[index, False]
-            if had_it + lacked_it:
-                upper_bound = _SCORE_BINS[index + 1] if index + 1 < len(_SCORE_BINS) else 1.0
-                readings[f"{lower_bound} to {upper_bound}"] = {
-                    "slices": had_it + lacked_it,
-                    "share the enemy had it": round(had_it / (had_it + lacked_it), 5),
-                }
         return {
-            "model": self.model_name,
-            "floor": round(self.floor, 6),
-            "assumed at": round(self.assumed_at, 6),
+            "rule": (
+                f"the first slice of {_PROPOSED_WINDOWS_JOINED * _WINDOW_STEPS} steps with a fast vote for an upgrade "
+                "assumes it for good, from the game's first step"
+            ),
             "playbacks in which a wrong assumption was possible": assumption_possible,
             "wrong assumptions": self.wrongly_assumed,
             "a bound on wrong assumptions a playback, 95%": _rule_of_three(
                 len(self.wrongly_assumed), assumption_possible
             ),
-            "playbacks in which a slice followed an assumption of an upgrade the enemy had": forgetting_possible,
-            "wrong forgettings": self.wrongly_forgotten,
+            "slices with a fast vote, by whether the enemy had the upgrade throughout": {
+                "had it": self.slices_with_a_fast_vote[True],
+                "lacked it": self.slices_with_a_fast_vote[False],
+            },
             (
                 "seconds to being assumed from first sight, after it finished, "
                 "of one of its units in a window it moved in"
             ): _seconds_by_upgrade(self.steps_from_seeing_to_assuming),
             "seconds from finishing to being assumed": _seconds_by_upgrade(self.steps_to_assume),
-            "finished but never assumed after it finished": dict(sorted(self.not_assumed.items())),
-            "how often a score read true, by where it read": readings,
+            "finished but not assumed after it finished": dict(sorted(self.not_assumed.items())),
         }
 
 
@@ -768,63 +613,12 @@ def _rule_of_three(wrong: int, possible: int) -> float | None:
     return round(3 / possible, 5) if wrong == 0 and possible else None
 
 
-def _fit_vote_model(
-    fit_paths: Sequence[Path], earliest_finish_steps: dict[str, int]
-) -> tuple[_VoteModel, dict[str, Any]]:
-    """The vote model fitted on the playbacks at `fit_paths`, and what it was fitted on."""
-    headers = _headers_of(fit_paths)
-    wrong_by_truth: dict[bool, Counter[tuple[int, int]]] = {True: Counter(), False: Counter()}
-    for path in fit_paths:
-        playback = _read_playback(path)
-        if "windows" not in playback:
-            continue
-        replay, player_id = _key_of_playback(path)
-        for vote_slice in _vote_slices(playback, headers.get((replay, 3 - player_id)), earliest_finish_steps):
-            if vote_slice.enemy_had_it is None:
-                continue
-            wrong_votes = vote_slice.slow_votes if vote_slice.enemy_had_it else vote_slice.fast_votes
-            wrong_by_truth[vote_slice.enemy_had_it][wrong_votes, vote_slice.vote_count] += 1
-    model = _VoteModel(_fit_beta_binomial(wrong_by_truth[True]), _fit_beta_binomial(wrong_by_truth[False]))
-    fitted_on: dict[str, Any] = {"playbacks": len(headers)}
-    for truth, truth_name in ((True, "had it"), (False, "lacked it")):
-        slice_counts = wrong_by_truth[truth]
-        fitted_on[f"enemy {truth_name}"] = {
-            "slices": sum(slice_counts.values()),
-            "votes": sum(votes * count for (_, votes), count in slice_counts.items()),
-            "wrong votes": sum(wrong_votes * count for (wrong_votes, _), count in slice_counts.items()),
-            "slices with a wrong vote": sum(count for (wrong_votes, _), count in slice_counts.items() if wrong_votes),
-        }
-    fitted_on["model"] = {"had it": model.had_it.as_json(), "lacked it": model.lacked_it.as_json()}
-    example_slices = ((1, 0), (2, 0), (5, 0), (20, 0), (0, 1), (0, 20), (1, 19), (19, 1))
-    fitted_on["score after one slice of fast and slow votes, from each floor"] = {
-        f"{fast} fast, {slow} slow": {
-            str(floor): round(
-                _probability_of_log_odds(_log_odds_of_probability(floor) + model.log_likelihood_ratio(fast, slow)), 6
-            )
-            for floor in sorted({floor for floor, _ in _SCORE_SETTINGS})
-        }
-        for fast, slow in example_slices
-    }
-    return model, fitted_on
-
-
-def check_playbacks(out_directory: Path, fit_directories: Sequence[Path]) -> dict[str, Any]:
-    """Fit the vote model on the playbacks in `fit_directories` and check the score on those in `out_directory` of
-    other replays, as the module docstring says."""
-    earliest_finish_steps = _earliest_finish_steps_by_name()
-    # By playback, so that a playback copied into two of the folders is fitted on once.
-    fit_paths_by_playback = {
-        _key_of_playback(path): path for directory in fit_directories for path in directory.glob("*.json.gz")
-    }
-    fit_paths = sorted(fit_paths_by_playback.values())
-    model, fitted_on = _fit_vote_model(fit_paths, earliest_finish_steps)
-    fit_replays = {_key_of_playback(path)[0] for path in fit_paths}
-    paths = [path for path in sorted(out_directory.glob("*.json.gz")) if _key_of_playback(path)[0] not in fit_replays]
+def check_playbacks(out_directory: Path) -> dict[str, Any]:
+    """Check upgrade inference's rule on the playbacks in `out_directory`, as the module docstring says."""
+    speed_upgrades = {upgrade.name for upgrade in speed_upgrade_by_type(load_game_data()).values()}
+    paths = sorted(out_directory.glob("*.json.gz"))
     headers = _headers_of(paths)
-    score_checks = [
-        _ScoreCheck("upgrade inference's", _SliceCountModel(), _DEFAULT_FLOOR, _DEFAULT_ASSUMED_AT),
-        *(_ScoreCheck("fitted", model, floor, assumed_at) for floor, assumed_at in _SCORE_SETTINGS),
-    ]
+    rule_check = _RuleCheck()
     playbacks_checked = 0
     for path in paths:
         replay, player_id = key = _key_of_playback(path)
@@ -835,27 +629,18 @@ def check_playbacks(out_directory: Path, fit_directories: Sequence[Path]) -> dic
         playbacks_checked += 1
         playback = _read_playback(path)
         by_upgrade: defaultdict[str, list[_VoteSlice]] = defaultdict(list)
-        for vote_slice in _vote_slices(playback, enemy, earliest_finish_steps):
+        for vote_slice in _vote_slices(playback, enemy):
             by_upgrade[vote_slice.upgrade].append(vote_slice)
-        finished_steps = {
-            upgrade: step for upgrade, step in enemy["upgrades"].items() if upgrade in earliest_finish_steps
-        }
+        finished_steps = {upgrade: step for upgrade, step in enemy["upgrades"].items() if upgrade in speed_upgrades}
         first_seen_moving = _first_seen_moving_steps(playback, finished_steps)
         for upgrade in by_upgrade.keys() | finished_steps.keys():
-            for score_check in score_checks:
-                score_check.score_upgrade(
-                    key,
-                    upgrade,
-                    finished_steps.get(upgrade),
-                    first_seen_moving.get(upgrade),
-                    by_upgrade[upgrade],
-                )
+            rule_check.check_upgrade(
+                key, upgrade, finished_steps.get(upgrade), first_seen_moving.get(upgrade), by_upgrade[upgrade]
+            )
     return {
-        "earliest finish, in steps": dict(sorted(earliest_finish_steps.items())),
-        "fitted on": fitted_on,
         "playbacks checked": playbacks_checked,
         "playbacks left out, as one of the game's two failed or is missing": len(paths) - playbacks_checked,
-        "checks, by floor and where it assumes": [score_check.as_json() for score_check in score_checks],
+        "check": rule_check.as_json(),
     }
 
 
@@ -874,7 +659,6 @@ def main() -> None:
     summarizing.add_argument("--out", type=Path, default=DEFAULT_SUMMARY_PATH)
     checking = commands.add_parser("check")
     checking.add_argument("playbacks", type=Path, nargs="?", default=DEFAULT_OUT_DIRECTORY)
-    checking.add_argument("--fit", type=Path, nargs="+", required=True, help="folders of playbacks to fit on")
     checking.add_argument("--out", type=Path, default=DEFAULT_CHECK_PATH)
     arguments = parser.parse_args()
     if arguments.command == "play":
@@ -891,7 +675,7 @@ def main() -> None:
         arguments.out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
         logger.info("Wrote the summary to {}", arguments.out)
     else:
-        check_result = check_playbacks(arguments.playbacks, arguments.fit)
+        check_result = check_playbacks(arguments.playbacks)
         arguments.out.write_text(json.dumps(check_result, indent=2) + "\n", encoding="utf-8")
         logger.info("Wrote the check to {}", arguments.out)
 

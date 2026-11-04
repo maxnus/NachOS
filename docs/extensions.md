@@ -170,21 +170,16 @@ class ThreatMap:
 
   With `include_speed_upgrades`, on unless `UpgradeInference(api, include_speed_upgrades=False)` turns it off, it also
   reads ten speed upgrades off how fast enemy units move, from Metabolic Boost to Flux Vanes, as its docstring lists.
-  Every 22 steps a unit that moved steadily at its speed with the upgrade votes for it, and one at its speed without
-  against it, and each upgrade keeps the probability that the enemy has it, from a floor of 1%. It assumes the upgrade
-  at 99%, as one block of 22 steps with a vote for it does, and forgets it below 50%, as one with only votes against
-  after that does. The three are arguments, `speed_upgrade_floor`, `assume_speed_upgrade_at` and
-  `forget_speed_upgrade_below`, which set how much evidence it asks for, not what a block of votes weighs: from 0.1%
-  assuming at 99.9%, it takes two blocks. The replays checked the defaults alone. It forgets only a speed upgrade it
-  assumed itself: one the bot assumed first stays, but one the bot assumes after it did, it may forget too. The rule was
-  checked over 1,296 playbacks of AI Arena's games observed at every step, with no wrong assumption in the 433 in which
-  one was possible (tool `replay_movement`); a bot that observes fewer steps tells less well a unit that moved steadily
-  from one that stopped and started again. It measures every visible enemy unit of the types those upgrades speed up,
-  every turn.
+  A unit that moved steadily at its speed with the upgrade through one window shows it, and one window that shows it
+  assumes the upgrade for good, from the game's first step. The windows are 22 steps long, or as long as
+  `speed_window`, a `GameTime`, says; the replays checked 22 steps alone. The rule was checked over 1,296 playbacks of
+  AI Arena's games observed at every step, with no wrong assumption in the 433 in which one was possible (tool
+  `replay_movement`), counting only from the earliest each upgrade could finish, so a game's first minutes went
+  unchecked; a bot that observes fewer steps tells less well a unit that moved steadily from one that stopped and
+  started again. It measures every visible enemy unit of the types those upgrades speed up, every turn.
 
-  It hands out an `EnemyUpgradeAssumedEvent` for each upgrade it adds to `api.enemy.upgrades`, and an
-  `EnemyUpgradeForgottenEvent` for each speed upgrade it forgets, both `AnyUpgradeEvent`s, which `only` selects by the
-  upgrade:
+  It hands out an `EnemyUpgradeAssumedEvent` for each upgrade it adds to `api.enemy.upgrades`, an `AnyUpgradeEvent`,
+  which `only` selects by the upgrade:
 
   ```python
   from sc2nachos.extensions.upgrade_inference import EnemyUpgradeAssumedEvent
@@ -194,9 +189,9 @@ class ThreatMap:
   def expect_fast_zerglings(event: EnemyUpgradeAssumedEvent) -> None: ...
   ```
 
-  Neither comes for what the bot assumes or forgets itself, nor for a level NachOS reads off the enemy's units. Each
-  comes at once, as it reads, so before any of the bot's handlers of `TurnStartEvent`, or of `GameEndEvent` for the
-  observation the game ended on.
+  It does not come for what the bot assumes itself, nor for a level NachOS reads off the enemy's units, and comes at
+  once, as upgrade inference reads, so before any of the bot's handlers of `TurnStartEvent`, or of `GameEndEvent` for
+  the observation the game ended on.
 
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.

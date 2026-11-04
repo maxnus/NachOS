@@ -26,7 +26,7 @@ As of 2026-11-04:
   where they handed out tuples, which a `Units` never equals; that an extension's handlers take
   `EventPriority.BEFORE` or `AFTER`, and only they (#232): AvocaDOS's turn clock, subscribed among its extensions at
   `HIGHEST`, moves to `BEFORE`; and that a handler of `AnyUpgradeEvent` is handed upgrade inference's
-  `EnemyUpgradeAssumedEvent` and `EnemyUpgradeForgottenEvent` too (#233).
+  `EnemyUpgradeAssumedEvent` too (#233).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -163,10 +163,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   first. The rule holds for every race, measured with SCVs only.
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
-- **Upgrade inference hands out what it changes in `api.enemy.upgrades`** (the owner, 2026-11-04): an
-  `EnemyUpgradeAssumedEvent` for each upgrade it adds and an `EnemyUpgradeForgottenEvent` for each it takes out, both
-  `AnyUpgradeEvent`s, at once as it reads, and none for what the bot assumes or forgets or for the levels the core
-  reads.
+- **Upgrade inference hands out what it adds to `api.enemy.upgrades`** (the owner, 2026-11-04): an
+  `EnemyUpgradeAssumedEvent` for each upgrade, an `AnyUpgradeEvent`, at once as it reads, and none for what the bot
+  assumes or for the levels the core reads.
 - **Speed upgrades read off how fast enemy units move**, built in #226 (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
   loop and with few code paths:
@@ -190,34 +189,20 @@ The issue, discussion or pull request named holds the reasons, and the alternati
     allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are closer
     than the measured precision can tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds by only
     3% (tool `sweep_movement`).
-  - A slice is the votes of one upgrade's units in one window's steps, on the one clock. One with a fast vote counts
-    for the upgrade, about 23,000 to 1, and one with only slow votes against it, about 11,000 to 1: by the rule of three
-    over every slice the replays gave (#224), none of the 69,452 from an enemy that lacked an upgrade had a fast vote,
-    and none of the 33,558 from one that had it only slow ones (the owner, planning step 3, over the beta-binomial
-    fitted in #224 and over counting a slice only where its votes agree). It reverses the number of units counting,
-    first decided as "20 of 20 is strong, 1 of 20 counts against it": the units of a slice move as one, the fit's
-    spread coming out at the most clustered tried, and a unit without the upgrade never moved steadily at its speed,
-    while one with it can keep pace with slower units, as the one wrong vote of #224 did beside two fast ones.
-  - The score is the probability that the enemy has the upgrade, by Bayes' rule on each slice, in [0, 1] (the owner,
-    over a clamped sum). No vote counts before the earliest the upgrade could finish: its research time, plus its
-    researcher's build time where no player starts with a researcher, as every Zerg starts with a hatchery, which
-    researches Pneumatized Carapace. After that it starts at a fixed `p0` and moves only with what is seen, `p0` being
-    its floor too, so evidence against it from before the upgrade finished leaves no debt (the owner, over a prior
-    rising with game time, a timing guess that is the bot's to make).
-  - It is assumed at 0.99 and forgotten below 0.5, so it does not flip back and forth (the owner, over assuming for
-    good), from a floor `p0` of 1% (the owner, planning step 3: "1% and 99% may be nice, symmetric defaults, but of
-    course the data should decide", which they did in #224, over 0.999, which takes two fast slices). One fast slice
-    assumes, at 99.6%, and one slice of only slow votes after that one forgets, at 2%. The three are arguments of
-    `UpgradeInference`, `speed_upgrade_floor`, `assume_speed_upgrade_at` and `forget_speed_upgrade_below`, these their
-    defaults, checked to rise from 0 to 1 (the owner, 2026-11-04, after step 4, over constants): they set how much
-    evidence an upgrade needs, not what a slice weighs, which the vote rule's errors fix. It forgets only what speed
-    assumed. The extension cannot see an upgrade the bot assumes after speed did, so speed can forget that one: a limit
-    to document.
-  - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without an
-    upgrade ever reaches 0.99 for it in a game is at most `p0`'s odds over 0.99's, about 1 in 10,000 from 1%, if the
-    likelihoods are right; each climb off the floor adds about as much, and Zerg's six upgrades add up to about 0.06%.
-    The weights are bounds from the rule of three, and the slices of one group follow one another, so what the
-    replays count a playback is the check: in #224, no wrong assumption in 433 playbacks, below 0.7%.
+  - A slice is the votes of one upgrade's units in one window's steps, on the one clock, and the first with a fast
+    vote assumes the upgrade for good, from the game's first step (the owner, 2026-11-04, after #233). It reverses the
+    score #226 built, which `git show 5ab07a2:.claude/plans/next-steps.md` holds in full: the probability that the enemy
+    has the upgrade, by Bayes' rule on each slice from a floor of 1%, assumed at 99% and forgotten below 50%, the three
+    arguments of `UpgradeInference`, and no vote before the earliest the upgrade could finish. By the rule of three over
+    every slice the replays gave (#224), none of the 69,452 from an enemy that lacked an upgrade had a fast vote, after
+    the earliest it could finish, and none of the 33,558 from one that had it only slow ones, so forgetting never
+    fired. Before the earliest finish is unmeasured, where the owner judged a wrong assumption very unlikely; tool
+    `replay_movement check` counts it. In #224, no wrong assumption in 433 playbacks, below 0.7% a playback. One fast
+    vote counts beside any number of slow ones: the units of a slice move as one, and one with the upgrade can keep pace
+    with slower units, as the one wrong vote of #224 did beside two fast ones, while one without it never moved
+    steadily at the faster speed. A bot that wants one gone calls `Enemy.forget_upgrades`.
+  - The window's length is an argument of `UpgradeInference`, `speed_window`, a `GameTime` of 22 steps by default
+    (the owner, 2026-11-04, over `speed_window_steps`), which the replays checked alone.
   - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
     Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
 

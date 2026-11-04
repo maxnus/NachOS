@@ -72,7 +72,7 @@ kind of event, and NachOS never hands one out itself, only the kinds under it:
 - `AnyBuffEvent`, `AnyVitalEvent` and `AnyAreaEvent`: a buff gained or lost, a vital reaching a value or dropping below
   it, and the edge of an area crossed either way, each for this player's units and the enemy's alike.
 - `AnyUpgradeEvent`: a research of this player's started, stopped or finished, and, with upgrade inference, an enemy
-  upgrade it assumed or forgot. `only` selects by the upgrade.
+  upgrade it assumed. `only` selects by the upgrade.
 - `AnyChatEvent`: a message from this player or another.
 
 `AnyVitalEvent` and `AnyAreaEvent` are parameterized, so a handler takes them through `of` and is handed both directions
@@ -179,15 +179,14 @@ A finished research never reads as stopped: its order leaves the structure in th
 structure and shows in another between two observations is neither stopped nor started. A handler of the research
 events that starts mid-game is handed every research already running as started, on its first turn.
 
-Upgrade inference, if the bot builds it ([extensions](extensions.md)), hands out two more `AnyUpgradeEvent`s, imported
+Upgrade inference, if the bot builds it ([extensions](extensions.md)), hands out one more `AnyUpgradeEvent`, imported
 from `sc2nachos.extensions.upgrade_inference`:
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
 | `EnemyUpgradeAssumedEvent` | `upgrade` | `only(*upgrades)` | upgrade inference adds an upgrade to `api.enemy.upgrades`, which did not hold it |
-| `EnemyUpgradeForgottenEvent` | `upgrade` | `only(*upgrades)` | upgrade inference takes a speed upgrade it assumed out of `api.enemy.upgrades` |
 
-Each comes at once, as upgrade inference reads the observation, so before any of the bot's handlers of
+It comes at once, as upgrade inference reads the observation, so before any of the bot's handlers of
 `TurnStartEvent`, or of `GameEndEvent` for the observation the game ended on, which gets no turn. Several of one
 observation come in id order, those read off how fast units move after the rest.
 

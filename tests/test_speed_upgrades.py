@@ -1,5 +1,5 @@
-"""Upgrade inference's speed upgrades, read off how fast enemy units move: what votes, how the score moves, and when it
-assumes and forgets, in made-up games."""
+"""Upgrade inference's speed upgrades, read off how fast enemy units move: what shows one, over what windows, and when
+it is assumed, in made-up games."""
 
 import itertools
 from collections.abc import Callable, Sequence
@@ -10,14 +10,10 @@ from s2clientprotocol import common_pb2, raw_pb2
 
 from sc2nachos import Api
 from sc2nachos.events import AnyUpgradeEvent, GameStartEvent, TurnStartEvent
-from sc2nachos.extensions.upgrade_inference import (
-    EnemyUpgradeAssumedEvent,
-    EnemyUpgradeForgottenEvent,
-    UpgradeInference,
-)
+from sc2nachos.extensions.upgrade_inference import EnemyUpgradeAssumedEvent, UpgradeInference
 from sc2nachos.extensions.upgrade_inference._movement_windows import _CREEP_SPEEDS
 from sc2nachos.gamedata import GameData
-from sc2nachos.gametime import STEPS_PER_SECOND
+from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance
 from support import ScriptedGame, make_bits, make_game_info, make_observation, make_unit, shipped_game_data
@@ -27,8 +23,8 @@ _MAP_ROWS = ("#" * 128,) * 40
 _CREEP_EVERYWHERE = make_bits(*_MAP_ROWS)
 _NO_CREEP = make_bits(*_MAP_ROWS, drawn="")
 _BLOCK_STEPS = 22
-# A block's first step, after every speed upgrade could have finished: Metabolic Boost, the latest, at 2800.
-_LATE_ENOUGH_STEP = _BLOCK_STEPS * 200
+# A block's first step, some minutes into a game.
+_FIRST_STEP = _BLOCK_STEPS * 200
 _METABOLIC_BOOST = frozenset({UpgradeId.ZERGLING_SPEED})
 _NO_UPGRADES: frozenset[UpgradeId] = frozenset()
 
@@ -77,7 +73,7 @@ def _observed_together(*observed: list[list[raw_pb2.Unit]]) -> list[list[raw_pb2
 def _upgrades_at_block_ends(
     observed: Sequence[Sequence[raw_pb2.Unit]],
     *,
-    first_step: int = _LATE_ENOUGH_STEP,
+    first_step: int = _FIRST_STEP,
     steps_apart: int = 1,
     creep: common_pb2.ImageData = _NO_CREEP,
     started: Callable[[Api[Any]], object] = lambda _: None,
@@ -125,7 +121,7 @@ def _upgrade_events_handed_out(
 def _forget_metabolic_boost_on_the_second_blocks_end(api: Api[Any]) -> None:
     @api.on(TurnStartEvent)
     def forget(_: object) -> None:
-        if api.step == _LATE_ENOUGH_STEP + 2 * _BLOCK_STEPS:
+        if api.step == _FIRST_STEP + 2 * _BLOCK_STEPS:
             api.enemy.forget_upgrades(UpgradeId.ZERGLING_SPEED)
 
 
@@ -136,51 +132,42 @@ class TestWhatVotes:
     def test_one_at_its_speed_without_shows_nothing(self) -> None:
         assert _upgrades_at_block_ends(_unit_moving(_block_at(_ZERGLING_STEP))) == [_NO_UPGRADES]
 
-    def test_one_between_the_two_votes_neither_way(self) -> None:
+    def test_one_between_the_two_shows_nothing(self) -> None:
         between = _block_at((_ZERGLING_STEP + _BOOSTED_ZERGLING_STEP) / 2)
         assert _upgrades_at_block_ends(_unit_moving(between)) == [_NO_UPGRADES]
-        assert (
-            _upgrades_at_block_ends(_unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), between)) == [_METABOLIC_BOOST] * 2
-        )
 
-    def test_a_boosted_one_that_stops_now_and_then_votes_neither_way_though_it_covers_what_one_without_does(
-        self,
-    ) -> None:
+    def test_a_boosted_one_that_stops_now_and_then_shows_nothing(self) -> None:
         stopping = [0.0 if step % 3 == 2 or step == 21 else _BOOSTED_ZERGLING_STEP for step in range(_BLOCK_STEPS)]
-        assert abs(sum(stopping) - _BLOCK_STEPS * _ZERGLING_STEP) < 0.05 * _BLOCK_STEPS * (
-            _BOOSTED_ZERGLING_STEP - _ZERGLING_STEP
-        )
-        assert (
-            _upgrades_at_block_ends(_unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), stopping)) == [_METABOLIC_BOOST] * 2
-        )
+        assert _upgrades_at_block_ends(_unit_moving(stopping)) == [_NO_UPGRADES]
 
-    def test_on_creep_a_zergling_votes_by_its_speeds_on_creep(self) -> None:
-        on_creep = _unit_moving(
-            _block_at(_creep_distance_a_step(UnitTypeId.ZERGLING, upgraded=True)),
-            _block_at(_creep_distance_a_step(UnitTypeId.ZERGLING, upgraded=False)),
-        )
-        assert _upgrades_at_block_ends(on_creep, creep=_CREEP_EVERYWHERE) == [_METABOLIC_BOOST, _NO_UPGRADES]
+    def test_on_creep_a_zergling_is_measured_by_its_speeds_on_creep(self) -> None:
+        boosted_on_creep = _unit_moving(_block_at(_creep_distance_a_step(UnitTypeId.ZERGLING, upgraded=True)))
+        plain_on_creep = _unit_moving(_block_at(_creep_distance_a_step(UnitTypeId.ZERGLING, upgraded=False)))
+        assert _upgrades_at_block_ends(boosted_on_creep, creep=_CREEP_EVERYWHERE) == [_METABOLIC_BOOST]
+        assert _upgrades_at_block_ends(plain_on_creep, creep=_CREEP_EVERYWHERE) == [_NO_UPGRADES]
+        # Off creep, the boosted speed on creep is too fast for either speed.
+        assert _upgrades_at_block_ends(boosted_on_creep) == [_NO_UPGRADES]
 
     def test_a_unit_missing_from_an_observation_votes_once_seen_through_a_whole_block(self) -> None:
         observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_BOOSTED_ZERGLING_STEP))
         observed[5] = []
         assert _upgrades_at_block_ends(observed) == [_NO_UPGRADES, _METABOLIC_BOOST]
 
-    def test_a_unit_on_another_side_than_first_seen_votes_neither_way(self) -> None:
+    def test_a_unit_on_another_side_than_first_seen_shows_nothing(self) -> None:
         # As a zergling of this player's under a neural parasite is reported the enemy's.
         observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
         (first_seen,) = observed[0]
         observed[0] = [make_unit(first_seen.tag, UnitTypeId.ZERGLING, at=(first_seen.pos.x, first_seen.pos.y))]
         assert _upgrades_at_block_ends(observed) == [_NO_UPGRADES]
 
-    def test_a_unit_wearing_a_buff_that_changes_its_speed_votes_neither_way(self) -> None:
+    def test_a_unit_wearing_a_buff_that_changes_its_speed_shows_nothing(self) -> None:
         sped_up = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), buff_ids=[BuffId.ACCELERATION_ZONE.value])
         assert _upgrades_at_block_ends(sped_up) == [_NO_UPGRADES]
 
-    def test_no_vote_counts_before_the_upgrade_could_have_finished(self) -> None:
-        """Metabolic Boost could finish at step 2800 at the earliest: its research after a spawning pool's build."""
-        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_BOOSTED_ZERGLING_STEP))
-        assert _upgrades_at_block_ends(observed, first_step=_BLOCK_STEPS * 127) == [_NO_UPGRADES, _METABOLIC_BOOST]
+    def test_a_block_from_the_games_first_step_shows_it(self) -> None:
+        """Though no enemy can have Metabolic Boost before step 2800, its research after a spawning pool's build."""
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
+        assert _upgrades_at_block_ends(observed, first_step=0) == [_METABOLIC_BOOST]
 
     def test_observed_every_other_step_a_zergling_at_its_boosted_speed_shows_it(self) -> None:
         observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), steps_apart=2)
@@ -213,32 +200,21 @@ class TestWhatVotes:
         assert _upgrades_at_block_ends(overlord, creep=_CREEP_EVERYWHERE) == [{UpgradeId.OVERLORD_SPEED}]
 
 
-class TestTheScore:
-    def test_one_vote_for_among_votes_against_counts_for_the_upgrade(self) -> None:
+class TestAssuming:
+    def test_one_unit_showing_it_among_units_at_their_speed_without_assumes_it(self) -> None:
         boosted = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), tag=7, y=20.0)
         kept_to_a_slower_pace = _unit_moving(_block_at(_ZERGLING_STEP), tag=8, y=24.0)
         assert _upgrades_at_block_ends(_observed_together(boosted, kept_to_a_slower_pace)) == [_METABOLIC_BOOST]
 
-    def test_votes_against_leave_no_debt_below_the_floor(self) -> None:
+    def test_one_block_showing_it_assumes_it_after_any_number_at_the_speed_without(self) -> None:
         observed = _unit_moving(*[_block_at(_ZERGLING_STEP)] * 5, _block_at(_BOOSTED_ZERGLING_STEP))
         assert _upgrades_at_block_ends(observed) == [_NO_UPGRADES] * 5 + [_METABOLIC_BOOST]
 
-    def test_a_block_of_votes_against_forgets_what_one_block_of_votes_for_assumed(self) -> None:
-        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP))
-        assert _upgrades_at_block_ends(observed) == [_METABOLIC_BOOST, _NO_UPGRADES]
+    def test_what_it_assumed_it_never_forgets(self) -> None:
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), *[_block_at(_ZERGLING_STEP)] * 3)
+        assert _upgrades_at_block_ends(observed) == [_METABOLIC_BOOST] * 4
 
-    def test_two_blocks_of_votes_for_outweigh_one_against(self) -> None:
-        observed = _unit_moving(*[_block_at(_BOOSTED_ZERGLING_STEP)] * 2, _block_at(_ZERGLING_STEP))
-        assert _upgrades_at_block_ends(observed) == [_METABOLIC_BOOST] * 3
-
-    def test_an_upgrade_the_bot_assumed_first_is_never_forgotten(self) -> None:
-        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP))
-        assumed_first = _upgrades_at_block_ends(
-            observed, started=lambda api: api.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
-        )
-        assert assumed_first == [_METABOLIC_BOOST] * 2
-
-    def test_one_the_bot_forgot_comes_back_with_a_block_of_votes_for_it_but_not_with_one_against(self) -> None:
+    def test_one_the_bot_forgot_comes_back_with_a_block_showing_it(self) -> None:
         boosted, slower = _block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP)
         observed = _unit_moving(boosted, boosted, slower, boosted)
         upgrades = _upgrades_at_block_ends(observed, started=_forget_metabolic_boost_on_the_second_blocks_end)
@@ -250,27 +226,26 @@ class TestTheScore:
 
 
 class TestTheEventsItHandsOut:
-    def test_assuming_and_forgetting_each_come_as_an_event_on_the_turn_a_block_ends(self) -> None:
-        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP))
+    def test_assuming_comes_as_an_event_on_the_turn_its_block_ends(self) -> None:
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_BOOSTED_ZERGLING_STEP))
         assert _upgrade_events_handed_out(observed) == [
-            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + _BLOCK_STEPS),
-            (EnemyUpgradeForgottenEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + 2 * _BLOCK_STEPS),
+            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _FIRST_STEP + _BLOCK_STEPS)
         ]
 
-    def test_one_the_bot_assumed_first_comes_as_neither(self) -> None:
-        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP))
+    def test_one_the_bot_assumed_first_comes_as_no_event(self) -> None:
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
         handed_out = _upgrade_events_handed_out(
             observed, started=lambda api: api.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
         )
         assert handed_out == []
 
-    def test_the_bots_forgetting_comes_as_nothing_and_assuming_again_comes_again(self) -> None:
+    def test_one_the_bot_forgot_comes_again_once_shown_again(self) -> None:
         boosted, slower = _block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP)
         observed = _unit_moving(boosted, boosted, slower, boosted)
         handed_out = _upgrade_events_handed_out(observed, started=_forget_metabolic_boost_on_the_second_blocks_end)
         assert handed_out == [
-            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + _BLOCK_STEPS),
-            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + 4 * _BLOCK_STEPS),
+            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _FIRST_STEP + _BLOCK_STEPS),
+            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _FIRST_STEP + 4 * _BLOCK_STEPS),
         ]
 
     def test_several_in_one_block_come_in_id_order(self) -> None:
@@ -282,46 +257,24 @@ class TestTheEventsItHandsOut:
         assert [upgrade for _, upgrade, _ in handed_out] == [UpgradeId.ROACH_SPEED, UpgradeId.ZERGLING_SPEED]
 
 
-class TestTheThresholds:
-    def test_from_0_1_percent_assuming_at_99_9_it_takes_two_blocks_of_votes_for(self) -> None:
-        """One block of votes for takes the score from 0.1% to 95.8%, two to all but 100%."""
-        observed = _unit_moving(*[_block_at(_BOOSTED_ZERGLING_STEP)] * 2)
-        upgrades = _upgrades_at_block_ends(observed, speed_upgrade_floor=0.001, assume_speed_upgrade_at=0.999)
-        assert upgrades == [_NO_UPGRADES, _METABOLIC_BOOST]
+class TestTheSpeedWindow:
+    def test_a_shorter_window_shows_an_upgrade_a_unit_moved_at_for_part_of_a_block_of_22(self) -> None:
+        boosted_then_still = _unit_moving([_BOOSTED_ZERGLING_STEP] * 11 + [0.0] * 11)
+        assert _upgrades_at_block_ends(boosted_then_still) == [_NO_UPGRADES]
+        assert _upgrades_at_block_ends(boosted_then_still, speed_window=GameTime(steps=11)) == [_METABOLIC_BOOST]
 
-    def test_a_higher_floor_assumes_on_less(self) -> None:
-        """One block of votes for takes the score from 5% to 99.9%, but from 1% to 99.6% only."""
-        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
-        assert _upgrades_at_block_ends(observed, speed_upgrade_floor=0.05, assume_speed_upgrade_at=0.999) == [
-            _METABOLIC_BOOST
-        ]
-        assert _upgrades_at_block_ends(observed, assume_speed_upgrade_at=0.999) == [_NO_UPGRADES]
+    def test_a_window_not_of_whole_steps_begins_a_block_where_its_quotient_rounded_down_is_new(self) -> None:
+        """Blocks of 11.5 steps begin at steps 4405, 4416 and 4428: the window from 4405 to 4416 is boosted throughout,
+        though no window of blocks of 11 steps, which begin at 4400, 4411 and 4422, is."""
+        boosted_from_4404 = _unit_moving([0.0] * 4 + [_BOOSTED_ZERGLING_STEP] * 12 + [0.0] * 6)
+        assert _upgrades_at_block_ends(boosted_from_4404, speed_window=GameTime(steps=11.5)) == [_METABOLIC_BOOST]
+        assert _upgrades_at_block_ends(boosted_from_4404, speed_window=GameTime(steps=11)) == [_NO_UPGRADES]
 
-    def test_a_higher_threshold_of_forgetting_forgets_on_less(self) -> None:
-        """Two blocks of votes for and one against leave the score at 99.8%: forgotten below 99.9%, not below 50%."""
-        boosted, slower = _block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP)
-        observed = _unit_moving(boosted, boosted, slower)
-        upgrades = _upgrades_at_block_ends(observed, assume_speed_upgrade_at=0.9999, forget_speed_upgrade_below=0.999)
-        assert upgrades == [_NO_UPGRADES, _METABOLIC_BOOST, _NO_UPGRADES]
+    @pytest.mark.parametrize("steps", [0, -22])
+    def test_a_window_not_longer_than_0_raises(self, steps: float) -> None:
+        with pytest.raises(ValueError, match="must be longer than 0"):
+            UpgradeInference(Api(), speed_window=GameTime(steps=steps))
 
-    @pytest.mark.parametrize(
-        ("floor", "forgotten_below", "assumed_at"),
-        [
-            (0.0, 0.5, 0.99),
-            (-0.01, 0.5, 0.99),
-            (0.01, 0.5, 1.0),
-            (0.5, 0.5, 0.99),
-            (0.01, 0.99, 0.99),
-            (0.01, 0.9, 0.8),
-        ],
-    )
-    def test_thresholds_not_rising_from_0_to_1_raise(
-        self, floor: float, forgotten_below: float, assumed_at: float
-    ) -> None:
-        with pytest.raises(ValueError, match="must rise in that order between 0 and 1"):
-            UpgradeInference(
-                Api(),
-                speed_upgrade_floor=floor,
-                forget_speed_upgrade_below=forgotten_below,
-                assume_speed_upgrade_at=assumed_at,
-            )
+    def test_a_window_not_a_game_time_raises(self) -> None:
+        with pytest.raises(TypeError, match="is a GameTime, not 22"):
+            UpgradeInference(Api(), speed_window=22)  # pyright: ignore[reportArgumentType]
