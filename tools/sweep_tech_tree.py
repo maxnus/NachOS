@@ -109,7 +109,9 @@ _ADD_ON_REACH = 4
 _BUSY_STEPS = 24
 # What the game remaps every cancel onto, in the raw catalog's spelling.
 _CANCELS = ("Cancel", "Cancel_Last")
-_STRUCTURE_ROOM = 4
+# Half the side of the square claimed for a structure: 7 tiles across hold a townhall, or a barracks with its add-on,
+# put up a tile left of the center. A pad, two more, holds a structure and its pylon or its targets.
+_STRUCTURE_ROOM = 3
 # How far around a trial's unit the computer's units are cleared: beyond any unit's sight.
 _ENEMIES_CLEARED_WITHIN = 16
 # Not ordered at a target to read what the unit is offered meanwhile: anything that sends it somewhere, gathers, loads
