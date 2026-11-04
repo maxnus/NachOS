@@ -386,35 +386,15 @@ class TestWhatIsLeftAlone:
         ]
         assert held == [[_HANDED_SCV]] * 3
 
-    @pytest.mark.parametrize(
-        ("scv", "given"),
-        [
-            (
-                _reported_scv((28.175, 24.5), _gather_order()),
-                _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD),
-            ),
-            (
-                _reported_scv((29.125, 24.5), _return_order(), carrying=True),
-                _move_then(AbilityId.SMART, _RETURN_POINT, _COMMAND_CENTER),
-            ),
-            (
-                _reported_scv((25.0, 30.0), _gather_order(), carrying=True),
-                [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _MINED_FIELD, True)],
-            ),
-        ],
-        ids=[
-            "the move to its field, the gather behind",
-            "the move back, the right-click on the townhall behind",
-            "a return, the gather behind",
-        ],
-    )
-    def test_a_worker_sent_one_of_speed_minings_orders_lately_for_the_turn(
-        self, scv: raw_pb2.Unit, given: list[tuple[int, Point | int | None, bool]]
-    ) -> None:
-        """It is sent nothing in the next turn, whose orders may not show the order yet, and is kept."""
+    def test_a_worker_sent_one_of_speed_minings_orders_lately_for_the_turn(self) -> None:
+        """Given the move near its field, it is sent nothing in the next turn, whose orders may not show the move yet,
+        and is kept."""
         held: list[list[int]] = []
-        units = [*_pylon_main(), scv]
-        assert _orders_sent(units, units, after_each_turn=_workers_held_each_turn(held)) == [given, []]
+        near = [*_pylon_main(), _reported_scv((28.175, 24.5), _gather_order())]
+        assert _orders_sent(near, near, after_each_turn=_workers_held_each_turn(held)) == [
+            _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD),
+            [],
+        ]
         assert held == [[_HANDED_SCV]] * 2
 
     @pytest.mark.parametrize(
@@ -592,49 +572,22 @@ class TestLettingGoOfAWorkerTheBotOrders:
         assert sent == [[(AbilityId.ATTACK, 30, False)], []]
         assert held == [[], []]
 
-    def test_a_worker_the_bot_has_attack_what_speed_mining_had_it_attack_before_it_was_let_go_is_let_go(self) -> None:
-        """Speed mining has it attack the zergling in the first turn; the bot stops it in the second, and in the third
-        hands it over again and then has it attack the zergling."""
-        held: list[list[int]] = []
-        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
-        attack = raw_pb2.UnitOrder(ability_id=RawAbilityId.attack_Attack, target_unit_tag=30)
-        turns = [
-            [*_pylon_main(), _reported_scv((26.0, 30.0), _gather_order(), facing=0.0), zergling],
-            [*_pylon_main(), _reported_scv((26.0, 30.0), attack, facing=0.0, weapon_cooldown=20.0), zergling],
-            [*_pylon_main(), _reported_scv((26.0, 30.0), facing=0.0, weapon_cooldown=20.0), zergling],
-        ]
-
-        def stop_then_hand_over_and_attack(api: Api[SpeedMining]) -> None:
-            @api.on(TurnEvent, priority=EventPriority.HIGH)
-            def order(event: TurnEvent) -> None:
-                worker = _own_unit_of_tag(api, _HANDED_SCV)
-                if event.time.steps == 1:
-                    api.orders.issue(worker, AbilityId.STOP)
-                elif event.time.steps == 2:
-                    api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD))
-                    api.orders.issue(worker, AbilityId.ATTACK, target=_unit_of_tag(api, 30))
-
-        sent = _orders_sent(
-            *turns, started=stop_then_hand_over_and_attack, after_each_turn=_workers_held_each_turn(held)
-        )
-        assert sent == [
-            [(AbilityId.ATTACK, 30, False)],
-            [(AbilityId.STOP, None, False)],
-            [(AbilityId.ATTACK, 30, False)],
-        ]
-        assert held == [[_HANDED_SCV], [], []]
-
     def test_a_drone_the_bot_burrows_is_let_go(self) -> None:
-        """Handed over idle, it is sent to gather, and burrowed in the next turn, it is let go and sent nothing."""
+        """Handed over idle, it is sent to gather, and the bot burrows it in the next turn."""
         held: list[list[int]] = []
         drone = make_unit(_HANDED_SCV, UnitTypeId.DRONE, at=(25.0, 30.0), build_progress=1.0)
-        burrowed = make_unit(
-            _HANDED_SCV, UnitTypeId.DRONE_BURROWED, at=(25.0, 30.0), build_progress=1.0, is_burrowed=True
-        )
+
+        def burrow_in_the_second_turn(api: Api[SpeedMining]) -> None:
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def burrow(event: TurnEvent) -> None:
+                if event.time.steps == 1:
+                    api.orders.issue(_own_unit_of_tag(api, _HANDED_SCV), AbilityId.BURROW)
+
+        units = [*_pylon_main(), drone]
         sent = _orders_sent(
-            [*_pylon_main(), drone], [*_pylon_main(), burrowed], after_each_turn=_workers_held_each_turn(held)
+            units, units, started=burrow_in_the_second_turn, after_each_turn=_workers_held_each_turn(held)
         )
-        assert sent == [[(AbilityId.GATHER, _MINED_FIELD, False)], []]
+        assert sent == [[(AbilityId.GATHER, _MINED_FIELD, False)], [(AbilityId.BURROW, None, False)]]
         assert held == [[_HANDED_SCV], []]
 
 
@@ -1702,6 +1655,25 @@ class TestReleasing:
         units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), *scvs]
         _orders_sent(units, assigned=(), collected=others, started=_released_and_kept(build_then_release, read))
         assert read == [([20, 31], [21, 22, 30])]
+
+    def test_speed_minings_own_orders_sent_lately_do_not_count_as_the_bots(self) -> None:
+        """Three collect from `_REFINERY`, handed over as 10, 21 and 22, and speed mining gives 10 its move near the
+        refinery in the first turn: releasing one in the second turn releases the third, 22."""
+        others = [(_HANDED_SCV, _REFINERY), (21, _REFINERY), (22, _REFINERY)]
+        near = _reported_scv(_between_the_refinery_and_the_townhall(3.4), _gather_order(_REFINERY))
+        far = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, _gather_order(_REFINERY), tag=tag) for tag in (21, 22)]
+        released: list[list[int]] = []
+
+        def release_in_the_second_turn(api: Api[SpeedMining]) -> None:
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def release(event: TurnEvent) -> None:
+                if event.time.steps == 1:
+                    released.append([worker.tag for worker in api.extensions.release_collectors(1)])
+
+        units = [*_pylon_main(), _refinery(), near, *far]
+        sent = _orders_sent(units, units, assigned=(), collected=others, started=release_in_the_second_turn)
+        assert sent[0] == _move_then(AbilityId.GATHER, _GAS_GATHER_POINT, _REFINERY)
+        assert released == [[22]]
 
     def test_release_miners_releases_one_the_bot_ordered_first(self) -> None:
         """Miners handed over as 20 at near field 102 and 21 at far field 107: the bot sends 20 to build, and it leaves

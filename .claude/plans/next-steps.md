@@ -241,14 +241,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   `release_collectors(count)` and `release_miners(count)`, and in #231, which lets a worker go once the bot orders it
   elsewhere, reversing #201 (the owner, review of #229, over keeping such workers and ranking them first in the
   releases), so that a number kept is true. The releases put one the bot has ordered first too, with those let go
-  that turn, so that a bot ordering a worker and releasing one in the same turn loses one. Speed mining tells its own
-  orders from the bot's by their kind (the owner, review of #231, over marking its orders through `Order.data`). Run
-  after the bot (#232), it reads every order the bot gives in a turn in that turn, so one the game refuses lets the
-  worker go too, which the owner chose to document over reading the refusals. What is left is AvocaDOS's: it drops
-  its caps a refinery (`max_collectors`) and keeps a number of collectors, handing a worker to `collect`, naming no
-  gas building, while it holds fewer, and calling
-  `release_collectors` when it wants fewer (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto
-  `api.vision` (#227), and releases its builders itself already.
+  that turn, so that a bot ordering a worker and releasing one in the same turn loses one. Run after the bot (#232),
+  speed mining reads only the orders issued to a worker in the turn, all the bot's but the hand-overs' gathers and
+  returns, which it tells by their kind (the owner, review of #231, over marking its orders through `Order.data`); a
+  refused order lets the worker go too, as documented (the owner, over reading the refusals). What is left is
+  AvocaDOS's: it drops its caps a refinery (`max_collectors`) and keeps a number of collectors, handing a worker to
+  `collect`, naming no gas building, while it holds fewer, and calling `release_collectors` when it wants fewer (the
+  owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto `api.vision` (#227), and releases its builders
+  itself already.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
