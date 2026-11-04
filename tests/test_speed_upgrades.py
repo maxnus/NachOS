@@ -9,8 +9,12 @@ import pytest
 from s2clientprotocol import common_pb2, raw_pb2
 
 from sc2nachos import Api
-from sc2nachos.events import TurnStartEvent
-from sc2nachos.extensions.upgrade_inference import UpgradeInference
+from sc2nachos.events import AnyUpgradeEvent, TurnStartEvent
+from sc2nachos.extensions.upgrade_inference import (
+    EnemyUpgradeAssumedEvent,
+    EnemyUpgradeForgottenEvent,
+    UpgradeInference,
+)
 from sc2nachos.extensions.upgrade_inference._movement_windows import _CREEP_SPEEDS
 from sc2nachos.gamedata import GameData
 from sc2nachos.gametime import STEPS_PER_SECOND
@@ -102,6 +106,31 @@ def _upgrades_at_block_ends(
         for (previous_step, _), (step, upgrades) in itertools.pairwise(upgrades_each_turn)
         if step // _BLOCK_STEPS != previous_step // _BLOCK_STEPS
     ]
+
+
+def _upgrade_events_handed_out(
+    observed: Sequence[Sequence[raw_pb2.Unit]],
+    *,
+    started: Callable[[Api[Any]], object] = lambda _: None,
+    **upgrade_inference_options: Any,
+) -> list[tuple[type[AnyUpgradeEvent], UpgradeId, float]]:
+    """Each `AnyUpgradeEvent` a handler of it is handed, by its type, its upgrade and its step, in the game
+    `_upgrades_at_block_ends` plays on `observed`, with `started` and `upgrade_inference_options`."""
+    handed_out: list[tuple[type[AnyUpgradeEvent], UpgradeId, float]] = []
+
+    def watch(api: Api[Any]) -> None:
+        api.on(AnyUpgradeEvent)(lambda event: handed_out.append((type(event), event.upgrade, event.time.steps)))
+        started(api)
+
+    _upgrades_at_block_ends(observed, started=watch, **upgrade_inference_options)
+    return handed_out
+
+
+def _forget_metabolic_boost_on_the_second_blocks_end(api: Api[Any]) -> None:
+    @api.on(TurnStartEvent)
+    def forget(_: object) -> None:
+        if api.step == _LATE_ENOUGH_STEP + 2 * _BLOCK_STEPS:
+            api.enemy.forget_upgrades(UpgradeId.ZERGLING_SPEED)
 
 
 class TestWhatVotes:
@@ -214,20 +243,47 @@ class TestTheScore:
         assert assumed_first == [_METABOLIC_BOOST] * 2
 
     def test_one_the_bot_forgot_comes_back_with_a_block_of_votes_for_it_but_not_with_one_against(self) -> None:
-        def forget_it_on_the_second_blocks_end(api: Api[Any]) -> None:
-            @api.on(TurnStartEvent)
-            def forget(_: object) -> None:
-                if api.step == _LATE_ENOUGH_STEP + 2 * _BLOCK_STEPS:
-                    api.enemy.forget_upgrades(UpgradeId.ZERGLING_SPEED)
-
         boosted, slower = _block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP)
         observed = _unit_moving(boosted, boosted, slower, boosted)
-        upgrades = _upgrades_at_block_ends(observed, started=forget_it_on_the_second_blocks_end)
+        upgrades = _upgrades_at_block_ends(observed, started=_forget_metabolic_boost_on_the_second_blocks_end)
         assert upgrades == [_METABOLIC_BOOST, _METABOLIC_BOOST, _NO_UPGRADES, _METABOLIC_BOOST]
 
     def test_without_include_speed_upgrades_it_reads_none(self) -> None:
         observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP))
         assert _upgrades_at_block_ends(observed, include_speed_upgrades=False) == [_NO_UPGRADES]
+
+
+class TestTheEventsItHandsOut:
+    def test_assuming_and_forgetting_each_come_as_an_event_on_the_turn_a_block_ends(self) -> None:
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP))
+        assert _upgrade_events_handed_out(observed) == [
+            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + _BLOCK_STEPS),
+            (EnemyUpgradeForgottenEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + 2 * _BLOCK_STEPS),
+        ]
+
+    def test_one_the_bot_assumed_first_comes_as_neither(self) -> None:
+        observed = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP))
+        handed_out = _upgrade_events_handed_out(
+            observed, started=lambda api: api.enemy.assume_upgrades(UpgradeId.ZERGLING_SPEED)
+        )
+        assert handed_out == []
+
+    def test_the_bots_forgetting_comes_as_nothing_and_assuming_again_comes_again(self) -> None:
+        boosted, slower = _block_at(_BOOSTED_ZERGLING_STEP), _block_at(_ZERGLING_STEP)
+        observed = _unit_moving(boosted, boosted, slower, boosted)
+        handed_out = _upgrade_events_handed_out(observed, started=_forget_metabolic_boost_on_the_second_blocks_end)
+        assert handed_out == [
+            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + _BLOCK_STEPS),
+            (EnemyUpgradeAssumedEvent, UpgradeId.ZERGLING_SPEED, _LATE_ENOUGH_STEP + 4 * _BLOCK_STEPS),
+        ]
+
+    def test_several_in_one_block_come_in_id_order(self) -> None:
+        zergling = _unit_moving(_block_at(_BOOSTED_ZERGLING_STEP), tag=7, y=20.0)
+        roach = _unit_moving(
+            _block_at(_distance_a_step(UnitTypeId.ROACH, upgraded=True)), unit_type=UnitTypeId.ROACH, tag=8, y=24.0
+        )
+        handed_out = _upgrade_events_handed_out(_observed_together(zergling, roach))
+        assert [upgrade for _, upgrade, _ in handed_out] == [UpgradeId.ROACH_SPEED, UpgradeId.ZERGLING_SPEED]
 
 
 class TestTheThresholds:

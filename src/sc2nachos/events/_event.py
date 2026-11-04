@@ -171,8 +171,9 @@ class OwnWarpInFinishedEvent(AnyUnitEvent):
 
 
 class AnyUpgradeEvent(Event):
-    """Something happened to one of this player's upgrades. `only` selects by the upgrade. NachOS never hands one out
-    itself."""
+    """Something happened to one upgrade: a research of this player's started, stopped or finished, or, with
+    `sc2nachos.extensions.upgrade_inference.UpgradeInference`, an enemy upgrade it assumed or forgot. `only` selects by
+    the upgrade. NachOS never hands one out itself."""
 
     upgrade: UpgradeId
 
