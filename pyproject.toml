@@ -95,7 +95,11 @@ src = ["src", "tests"]
 exclude = ["src/sc2nachos/gamedata/_techtree/_build_*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "PLR0915"]
+
+[tool.ruff.lint.pylint]
+# A function in `src` stays short; tests and tools are exempt, below.
+max-statements = 30
 
 [tool.ruff.lint.flake8-bugbear]
 # Frozen, so one made as a default argument is safe to share between calls.
@@ -108,3 +112,5 @@ extend-immutable-calls = [
 [tool.ruff.lint.per-file-ignores]
 # What the tech tree holds for one ability goes on one line, however long.
 "src/sc2nachos/gamedata/_techtree/_build_*.py" = ["E501"]
+"tests/**" = ["PLR0915"]
+"tools/**" = ["PLR0915"]
