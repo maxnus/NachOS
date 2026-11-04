@@ -20,7 +20,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
   way (below).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` is the milestone plan (M1 to M6) and records every nachOS PR. It has no
-  python-sc2 left (AvocaDOS #68), and its game map searches run on `Grid` (AvocaDOS #70).
+  python-sc2 left (AvocaDOS #68), its game map searches run on `Grid` (AvocaDOS #70), its expansions and start
+  locations are NachOS's (AvocaDOS #84), and speed mining orders its miners (AvocaDOS #76) and its collectors
+  (AvocaDOS #85).
 
 ## Decided, so not to be proposed again
 
@@ -1026,6 +1028,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
       - Kept: `is_its_work` (over `order_check`, which says nothing of what true means); `_is_returning` taking the
         order its callers hold (81 ns, against 659 for `OwnUnit.is_returning` and 128 for a cached `current_order`);
         and only a townhall at an expansion's center, as #202 settled.
+    - AvocaDOS hands its collectors over (AvocaDOS #85, the owner, 2026-11-04), without waiting for the measurement
+      below, since its own collectors were on plain gathers too, and its own base of this player's, `OwnBase`, went
+      into its expansion manager. Its review found the bot made a base of a townhall within 3 of an expansion's
+      center, where speed mining mines and collects only at one exactly at the center, so a bot keeping its own list
+      of bases must use the same rule.
 - **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
   with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
@@ -1076,8 +1083,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     map.
   - Its reads raise where there is none (over `None`, and over `natural` raising beside a `main_ramp` of
     `Ramp | None`): `natural` raises `NoExpansionError` (`NoNaturalError` until the second round of the review), and
-    `main_ramp` `NoMainRampError`, reversing #156's `Ramp | None`. `api.map.main_ramp` and `main_ramp_of` are private, so `StartLocation.main_ramp` is the one
-    spelling; the walls still take a ramp.
+    `main_ramp` `NoMainRampError`, reversing #156's `Ramp | None`. `api.map.main_ramp` and `main_ramp_of` are
+    private, so `StartLocation.main_ramp` is the one spelling; the walls still take a ramp.
   - `main_area` (over `main_ground` and `plateau`) is the main's ground: every tile within half a level of the
     start's height, walkable as the game began with the townhall's and the start's resources' footprints opened, and
     joined side by side without crossing a ramp, so rocks stay closed. On the corpus it is 744 to 794 tiles, the two
@@ -1103,8 +1110,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
       `main_area` is the start's, read once.
     - `Enemy.assume_start_location(start_location)` (the owner's idea), which replaces any start assumed before, raises
       `ValueError` for one not among the other start locations, and is named in `start_location`'s `NotReportedError`.
-    - `NoStartLocationError` is in `sc2nachos.match`, and `NotReportedError` is defined in `_shared`, still exported from
-      `sc2nachos.units`, so that `Player` and `Enemy` import them at the top (over importing them where they raise).
+    - `NoStartLocationError` is in `sc2nachos.match`, and `NotReportedError` is defined in `_shared`, still exported
+      from `sc2nachos.units`, so that `Player` and `Enemy` import them at the top (over importing them where they
+      raise).
     - The candidates are `candidates`, the finders `StartLocation._find_at` and `_find_at_opponent_starts`
       (classmethods), and `Enemy._learn_start_locations` stays, as `_learn_race` does.
     - Second round: the natural and the thirds raise one `NoExpansionError`, and `NoMainRampError` stays apart (over one
@@ -1112,6 +1120,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
       `Enemy._start_location`, which `_learn_start_locations` sets through `assume_start_location` on a map of two
       starts, so that the property only reads it, and `assume_start_location` tests `not in` the possible starts.
   - Staying in AvocaDOS: the order to take expansions in, and its scouting for the enemy's start.
+  - AvocaDOS reads them since AvocaDOS #84 (2026-11-04): its `ExpansionLocation` and `StartLocation` went, and its
+    scouting hands the start it finds to `assume_start_location`. NachOS's natural, line third and triangle third are
+    the ones its own rules picked on all 14 starts of the corpus, and its order to take expansions in still puts them
+    first.
 
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
@@ -1157,22 +1169,11 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
 ## Next
 
-- **AvocaDOS moves onto `StartLocation`** once #209 merges: its `StartLocation` reads `natural`, the thirds and
-  `main_ramp` from NachOS's, keeps its order to take expansions in, and its unread `region`, `GameMap.floodfill` and
-  `is_at_level` go. Until then AvocaDOS's tests fail on `api.map.main_ramp_of` and `is_start_location`, which #209
-  removes.
-
-- **Extensions** (above), a pull request at a time: `UnitDict` (#200), the extension mechanism with speed mining as
-  its first extension (#201), speed mining only at bases with a townhall of this player's (#202), and `mine` sending
-  the worker (#203); then AvocaDOS moves its mining onto the extension (its `RoleManager` is on `UnitDict` since
-  AvocaDOS #75), and its `docs/plans/nachOS-plan.md` records #199 to #203. Planned with the owner (2026-11-02): an
-  AvocaDOS expansion keeps no map of its miners and reads speed mining's, a worker speed mining lets go is found by its
-  mining role and handed out again, and speed mining picks each field among the base's.
 - **Measuring speed-mined gas** (the owner, 2026-11-03), after #208: a script run through the `sc2` workflow, since
   no game runs in a cloud session, collecting plainly against with a move at the end of each trip, at one, two and
   three workers a geyser. The move goes into `collect` in a pull request of its own only where it collects more, and
-  `_is_mining` and `_is_collecting` then become one check (the owner, review of #208). Then AvocaDOS can hand its
-  collectors to speed mining, dropping its own `Expansion._collect_vespene`.
+  `_is_mining` and `_is_collecting` then become one check (the owner, review of #208). AvocaDOS waits on it no longer:
+  its collectors are speed mining's since AvocaDOS #85.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
