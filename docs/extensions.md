@@ -95,8 +95,8 @@ class ThreatMap:
 - **Speed mining**, `sc2nachos.extensions.speed_mining.SpeedMining`: the workers the bot hands over mine their
   mineral fields, or collect vespene from their gas buildings, each trip ending in a move with the gather or return
   queued behind, which keeps the worker's speed into it
-  ([measured](reference/game-behavior/abilities-and-orders.md#what-an-order-does-to-a-units-orders)). Which worker
-  mines which field stays the bot's:
+  ([measured](reference/game-behavior/abilities-and-orders.md#what-an-order-does-to-a-units-orders)). How many
+  workers mine and how many collect stays the bot's, and which field or gas building each works may be:
 
   ```python
   @api.on(GameStartEvent)

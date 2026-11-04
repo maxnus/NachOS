@@ -253,10 +253,7 @@ class SpeedMining:
         have mined nothing yet.
 
         Raises `ValueError` for a `count` below zero."""
-        _check_is_not_negative(count)
-        leaving = self._miners_cheapest_to_release_first()[:count]
-        self.release(leaving)
-        return tuple(leaving)
+        return self._release_the_first(self._miners_cheapest_to_release_first(), count)
 
     def release_collectors(self, count: int) -> tuple[OwnUnit[UnitType.Worker], ...]:
         """Release `count` of the collectors speed mining holds, as `release` does, those whose leaving costs the least
@@ -267,10 +264,18 @@ class SpeedMining:
         handed over last, the likeliest to have collected nothing yet.
 
         Raises `ValueError` for a `count` below zero."""
-        _check_is_not_negative(count)
-        leaving = self._collectors_cheapest_to_release_first()[:count]
+        return self._release_the_first(self._collectors_cheapest_to_release_first(), count)
+
+    def _release_the_first(
+        self, workers_cheapest_first: list[OwnUnit[UnitType.Worker]], count: int
+    ) -> tuple[OwnUnit[UnitType.Worker], ...]:
+        """Release the first `count` of `workers_cheapest_first`, or all of them where there are fewer, and return
+        them. Raises `ValueError` for a `count` below zero."""
+        if count < 0:
+            raise ValueError(f"speed mining releases no fewer than none, not {count}")
+        leaving = tuple(workers_cheapest_first[:count])
         self.release(leaving)
-        return tuple(leaving)
+        return leaving
 
     def _miners_cheapest_to_release_first(self) -> list[OwnUnit[UnitType.Worker]]:
         """The miners held, those whose leaving costs the least first, as `release_miners` says."""
@@ -283,7 +288,11 @@ class SpeedMining:
             if trip_to_it is None:
                 leaving_rank = 0
             else:
-                alive_fields = [alive for alive in trip_to_it[0].expansion.mineral_fields if alive.is_alive]
+                alive_fields = [
+                    expansion_field
+                    for expansion_field in trip_to_it[0].expansion.mineral_fields
+                    if expansion_field.is_alive
+                ]
                 leaving_rank = 1 if _is_of_the_farther_half(alive_fields.index(field), len(alive_fields)) else 2
             for miner in miners:
                 cost_of_leaving[miner] = (leaving_rank, -handed_over_place[miner])
@@ -415,12 +424,9 @@ class SpeedMining:
         building by gas building, once the workers of the fields and gas buildings no longer mined or collected from
         are let go, since they count among the units in a move's way."""
         townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None] = {}
-        mined_fields = _still_worked(
-            self._field_by_worker, lambda field: self._trip_to_a_field(field, townhall_by_center)
-        )
+        mined_fields = _still_worked(self._field_by_worker, self._trip_to_a_field, townhall_by_center)
         collected_gas_buildings = _still_worked(
-            self._gas_building_by_worker,
-            lambda gas_building: self._trip_to_a_gas_building(gas_building, townhall_by_center),
+            self._gas_building_by_worker, self._trip_to_a_gas_building, townhall_by_center
         )
         units_in_the_way: Units[Unit[Any]] | None = None
         units_near_each_trip_end: dict[Point, Units[Unit[Any]]] = {}
@@ -512,13 +518,16 @@ def _given[R: UnitType.AnyType](
 
 
 def _still_worked[R: Unit[Any], T](
-    resource_by_worker: UnitDict[OwnUnit[UnitType.Worker], R], worked_as: Callable[[R], T | None]
+    resource_by_worker: UnitDict[OwnUnit[UnitType.Worker], R],
+    worked_as: Callable[[R, dict[Point, Unit[UnitType.Townhall] | None]], T | None],
+    townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None],
 ) -> list[tuple[R, list[OwnUnit[UnitType.Worker]], T]]:
     """Each value of `resource_by_worker` with its workers, in the order they were handed over, and what `worked_as`
-    reads of it, once the workers of each it reads `None` for are let go."""
+    reads of it with `townhall_by_center`, once the workers of each it reads `None` for are let go. One call each, the
+    townhalls passed along rather than closed over, as this runs every turn."""
     still_worked: list[tuple[R, list[OwnUnit[UnitType.Worker]], T]] = []
     for resource, workers in _workers_by_resource(resource_by_worker).items():
-        if (worked := worked_as(resource)) is None:
+        if (worked := worked_as(resource, townhall_by_center)) is None:
             for worker in workers:
                 del resource_by_worker[worker]
         else:
@@ -553,12 +562,6 @@ def _check_is_a_worker(unit: Unit[Any]) -> None:
     """Raise `ValueError` unless `unit` is a worker, an SCV, a drone or a probe."""
     if not UnitType.Worker.includes(unit):
         raise ValueError(f"speed mining orders workers, not {unit!r}")
-
-
-def _check_is_not_negative(count: int) -> None:
-    """Raise `ValueError` if `count` is below zero."""
-    if count < 0:
-        raise ValueError(f"speed mining releases no fewer than none, not {count}")
 
 
 def _tuple_of_units[U: Unit[Any]](units: U | Iterable[U]) -> tuple[U, ...]:

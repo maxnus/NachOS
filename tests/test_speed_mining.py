@@ -1474,7 +1474,7 @@ class TestReleasing:
         _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0))], started=release_fewer_than_none)
         assert refused == ["speed mining releases no fewer than none, not -1"] * 2
 
-    def test_a_worker_handed_over_again_counts_as_handed_over_last(self) -> None:
+    def test_a_miner_handed_over_again_counts_as_handed_over_last(self) -> None:
         """20 and 21 mine `_MINED_FIELD`, handed over in that order; 20, handed over to another field and back, comes
         after 21, and is the first `release_miners` releases."""
         read: list[tuple[list[int], list[int]]] = []
@@ -1491,6 +1491,25 @@ class TestReleasing:
         _orders_sent(
             [*_pylon_main(), *scvs], assigned=[(20, _MINED_FIELD), (21, _MINED_FIELD)], started=hand_over_again
         )
+        assert read == [([21, 20], [20])]
+
+    def test_a_collector_handed_over_again_counts_as_handed_over_last(self) -> None:
+        """20 and 21 collect from `_REFINERY`, handed over in that order; 20, handed over to `_OTHER_REFINERY` and back,
+        comes after 21, and is the first `release_collectors` releases."""
+        read: list[tuple[list[int], list[int]]] = []
+
+        def hand_over_again(api: Api[SpeedMining]) -> None:
+            worker = _own_unit_of_tag(api, 20)
+            api.extensions.collect(worker, _unit_of_tag(api, _OTHER_REFINERY))
+            api.extensions.collect(worker, _unit_of_tag(api, _REFINERY))
+            at_the_refinery = api.extensions.workers_at(_unit_of_tag(api, _REFINERY))
+            released = api.extensions.release_collectors(1)
+            read.append(([worker.tag for worker in at_the_refinery], [worker.tag for worker in released]))
+
+        scvs = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, tag=tag) for tag in (20, 21)]
+        units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), *scvs]
+        collected = [(20, _REFINERY), (21, _REFINERY)]
+        _orders_sent(units, assigned=(), collected=collected, started=hand_over_again)
         assert read == [([21, 20], [20])]
 
 
