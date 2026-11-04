@@ -17,7 +17,8 @@ as many as the trial says. A trial is a count of collectors a refinery, a seed, 
 
 After a warm-up from the hand-over, it records over the time measured what each refinery's contents fell by, the
 minerals and vespene the score says were collected, the actions the game refused, the most enemy units in sight at
-once, which the computer may send at some point, and in a moved trial the moves given::
+once, which the computer may send at some point, how many of each refinery's collectors were seen gathering at a
+mineral field, and in a moved trial the moves given::
 
     uv run python tools/sweep_gas.py
     uv run python tools/sweep_gas.py --collectors 2 3 --insets 0 0.175 0.35 --seeds 1 2 --out gas.json
@@ -81,6 +82,8 @@ class _RefineryFindings:
     radius: float
     collectors: int
     vespene_taken: int
+    collectors_seen_mining: int
+    """How many of its collectors were seen gathering at a mineral field over the time measured."""
     gather_point: tuple[float, float] | None = None
     """Where the trip to it ends, in a moved trial."""
 
@@ -118,6 +121,7 @@ class _TrialGame:
         self._vespene_left_at_the_start: dict[Unit[UnitType.GasBuilding], int] = {}
         self._collected_at_the_start = (0.0, 0.0)
         self._trip_ends_by_refinery: dict[Unit[UnitType.GasBuilding], tuple[Point, Point]] = {}
+        self._seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], set[int]] = {}
         self._moves_given = 0
         self._actions_refused = 0
         self._most_enemies_in_sight = 0
@@ -153,13 +157,19 @@ class _TrialGame:
 
     def _finished_refineries(self, main: Expansion) -> list[Unit[UnitType.GasBuilding]] | None:
         """This player's refineries on the geysers of `main`, in their order, once every one is finished and its builder
-        is out of it, else `None`."""
+        is out of it and no longer reads as constructing, else `None`."""
         by_position = {gas_building.position: gas_building for gas_building in self.api.units.own.gas_buildings}
         refineries = []
         for geyser in main.geysers:
             refinery = by_position.get(geyser.position)
             builder = self._builder_by_geyser.get(geyser)
-            if refinery is None or not refinery.is_complete or builder is None or not builder.is_orderable:
+            if (
+                refinery is None
+                or not refinery.is_complete
+                or builder is None
+                or not builder.is_orderable
+                or builder.is_constructing
+            ):
                 return None
             refineries.append(refinery)
         return refineries
@@ -193,8 +203,19 @@ class _TrialGame:
             self._actions_refused = 0
             self._most_enemies_in_sight = 0
         elif self._measuring_from is not None and self.findings is None:
+            self._note_the_collectors_mining()
             if api.time >= self._measuring_from + self._measured:
                 self.findings = self._read_the_findings(main)
+
+    def _note_the_collectors_mining(self) -> None:
+        """Note each collector on a gather at a mineral field, by its refinery."""
+        for scv, refinery in self.api.extensions.collectors.items():
+            current_order = scv.current_order if scv.is_orderable else None
+            if current_order is None or current_order.ability is not AbilityId.GATHER:
+                continue
+            target = current_order.known_target
+            if isinstance(target, Unit) and UnitType.AnyMineralField.includes(target):
+                self._seen_mining_by_refinery.setdefault(refinery, set()).add(scv.id)
 
     def _hand_over(self, main: Expansion, refineries: Sequence[Unit[UnitType.GasBuilding]]) -> None:
         """Hand each of `refineries`' builder and the miners nearest it to speed mining to collect, as many as the trial
@@ -262,6 +283,7 @@ class _TrialGame:
                     radius=refinery.radius,
                     collectors=len(api.extensions.workers_at(refinery)),
                     vespene_taken=self._vespene_left_at_the_start[refinery] - refinery.vespene_contents,
+                    collectors_seen_mining=len(self._seen_mining_by_refinery.get(refinery, ())),
                     gather_point=None if self._trial.inset is None else (gather_point.x, gather_point.y),
                 )
             )
@@ -299,7 +321,8 @@ def _summary(findings: _TrialFindings, measured: GameTime) -> str:
     mode = "plain" if trial.inset is None else f"moved, inset {trial.inset}"
     per_minute = 60 / measured.seconds
     refineries = ", ".join(
-        f"{refinery.vespene_taken * per_minute:.0f} at {refinery.distance_to_the_townhall:.2f}"
+        f"{refinery.vespene_taken * per_minute:.0f} at {refinery.distance_to_the_townhall:.2f} "
+        f"({refinery.collectors_seen_mining} seen mining)"
         for refinery in findings.refineries
     )
     return (
