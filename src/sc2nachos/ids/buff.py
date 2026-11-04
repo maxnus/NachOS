@@ -56,7 +56,10 @@ class BuffId(IdEnum):
     RAVEN_INTERFERENCE_MATRIX = RawBuffId.RavenScramblerMissile
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
-    VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb
+    VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb  # on its target
+    # Both on each `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND` for as long as it is listed, and on nothing else (in game).
+    VIPER_PARASITIC_BOMB_LEFT_BEHIND = RawBuffId.ParasiticBombUnitKU
+    VIPER_PARASITIC_BOMB_LEFT_BEHIND_SEARCH = RawBuffId.ParasiticBombSecondaryUnitSearch
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
     WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
     ZEALOT_CHARGING = RawBuffId.Charging  # on the zealot

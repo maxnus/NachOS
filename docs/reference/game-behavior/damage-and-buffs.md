@@ -137,9 +137,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 
 ## Buffs
 
-- A melee game puts 45 buffs on units, 5 of them for carrying resources: minerals under one buff for every race and
-  another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
-  `sweep_buffs`, #24).
+- The buff sweep saw a melee game put 45 buffs on units, 5 of them for carrying resources: minerals under one buff for
+  every race and another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
+  `sweep_buffs`, #24). It missed a parasitic bomb's two (below).
 - Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 13 of the corpus's 16,760
   buff changes are those (corpus, #37).
 - A worker carries gas from a rich geyser under no buff at all. On PylonAIE a worker of each race, mining its race's
@@ -161,6 +161,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   behind the first, and nothing shows it (#24). The hatchery's `buff_duration_remain` counts it down a step at a
   time, against a `buff_duration_max` of 640 (tool `sweep_orders`, build 75689).
 - A fungal growth showed the step after the cast and was gone 64 steps later (#37; tested).
+- A parasitic bomb's target wears `ParasiticBomb`, and the unit the bomb leaves behind
+  ([units](units.md#what-an-observation-lists)) `ParasiticBombUnitKU` and `ParasiticBombSecondaryUnitSearch`. Tool
+  `sweep_buffs` never saw the last two: it watches 128 steps after an order, and a bomb on a target that lives outlasts
+  that (AI Arena matches 4805282 and 4846375, 2026-11-04, build 75689).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what

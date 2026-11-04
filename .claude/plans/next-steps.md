@@ -1218,6 +1218,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
   2. Starting a replay on its own build with its map, public, for salsa's writer.
 - Apart from salsa, and not waited on by it: an action's target on a copy the fog-off view never lists reads as not
   reported (2026-10-25, above).
+- **Three ids AI Arena's replays report that the curated ids leave out**, found playing back matches 4805282 and
+  4846375 raw while curating the parasitic bomb's dummy (2026-11-04). None stops a playback, since each is read only
+  when a bot reads it, but each raises then: buff 59, `ViperConsumeStructure`, worn by the hive a viper consumed, from
+  step 14,132 and 15,245; ability 1662, `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by
+  itself, which `OwnUnit.orders` raises on for a Zerg bot's tumors; and buff 40,
+  `CollapsibleRockTowerRampDiagonalConjoinedSearch`, worn by PersephoneAIE's `CollapsibleRockTowerDiagonal` from step
+  0, seen with the fog off only.
 
 ## 1. Waiting until something needs them
 
