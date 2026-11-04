@@ -130,12 +130,11 @@ class ThreatMap:
   given some, among them: two workers at each of the base's, nearest its townhall first, and then a third at each,
   farthest first, which is where a third adds the most. A gas building takes three workers at most, at a base with a
   finished townhall of this player's, and its workers are let go once it dies or runs dry, or its base's townhall is
-  gone. As `mine` does, `collect` sends the
-  worker at once, takes none it cannot send, and leaves alone one the bot sends elsewhere; a collector attacks as a
-  miner does, and `collectors` and `workers_at(gas_building)` read them, and `workers` every worker held, miners and
-  collectors. A worker is held at one field or gas building at a time: `mine` moves a collector to minerals, and
-  `collect` a miner to gas. How many collect stays the bot's, and `mine` given no field never picks gas. The API
-  reference says the rest.
+  gone. As `mine` does, `collect` sends the worker at once, takes none it cannot send, and leaves alone one the bot
+  sends elsewhere; a collector attacks as a miner does, and `collectors` and `workers_at(gas_building)` read them, and
+  `workers` every worker held, miners and collectors. A worker is held at one field or gas building at a time: `mine`
+  moves a collector to minerals, and `collect` a miner to gas. How many collect stays the bot's, and `mine` given no
+  field never picks gas. The API reference says the rest.
 - **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
