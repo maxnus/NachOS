@@ -126,15 +126,22 @@ class ThreatMap:
   two workers a refinery collected 9 to 13% more than on plain gathers, two as much each as one alone, and three as
   much as on plain gathers, since a refinery takes one worker at a time
   ([measured](reference/game-behavior/abilities-and-orders.md#what-an-order-does-to-a-units-orders)). Given no gas
-  building, `collect` picks a finished one of this player's with vespene left at the base nearest the worker, and
-  given some, among them: two workers at each of the base's, nearest its townhall first, and then a third at each,
-  farthest first, which is where a third adds the most. A gas building takes three workers at most, at a base with a
-  finished townhall of this player's, and its workers are let go once it dies or runs dry, or its base's townhall is
-  gone. As `mine` does, `collect` sends the worker at once, takes none it cannot send, and leaves alone one the bot
-  sends elsewhere; a collector attacks as a miner does, and `collectors` and `workers_at(gas_building)` read them, and
-  `workers` every worker held, miners and collectors. A worker is held at one field or gas building at a time: `mine`
-  moves a collector to minerals, and `collect` a miner to gas. How many collect stays the bot's, and `mine` given no
-  field never picks gas. The API reference says the rest.
+  building, `collect` picks a finished one of this player's with vespene left, and given some, among them: two
+  workers at each, at the base nearest the worker with one under two, nearest its townhall first, before a third at
+  any, and then a third at the base nearest the worker, farthest first, which is where a third adds the most. A gas
+  building takes three workers at most, at a base with a finished townhall of this player's, and its workers are let
+  go once it dies or runs dry, or its base's townhall is gone. As `mine` does, `collect` sends the worker at once,
+  takes none it cannot send, and leaves alone one the bot sends elsewhere; a collector attacks as a miner does, and
+  `collectors` and `workers_at(gas_building)` read them, and `workers` every worker held, miners and collectors. A
+  worker is held at one field or gas building at a time: `mine` moves a collector to minerals, and `collect` a miner
+  to gas. How many collect stays the bot's, and `mine` given no field never picks gas.
+
+  So a bot can keep a number of collectors without naming a gas building: it hands a worker to `collect(worker)`
+  while it holds fewer, and calls `release_collectors(count)` when it wants fewer, which releases that many, those
+  whose leaving costs the least vespene, and returns them for the bot to hand out again. A third leaves first, at the
+  gas building nearest its townhall first, where it adds the least, and then the others, farthest first, the reverse
+  of how `collect` fills them. `release_miners(count)` does the same for miners, those at the farther half of a
+  base's fields first, the reverse of how `mine` picks. The API reference says the rest.
 - **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
