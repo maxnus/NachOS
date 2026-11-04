@@ -52,7 +52,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   field's contents, a hidden unit's owner. An undetected enemy listed `INVISIBLE` reports its position and cloak, and no
   health, owner, build progress, buffs, facing or energy (#25; corpus).
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
-  player's own units (#25; corpus).
+  player's own units (#25; corpus); an enemy's attacker shows its position and facing as its owner is shown them
+  ([what the enemy sees of an attack](damage-and-buffs.md#what-the-enemy-sees-of-an-attack)).
 - `buff_duration_remain` and `buff_duration_max` give a unit with a timed life the steps it has left only for this
   player's own: a MULE's counted down from 1441 and from 1443 in two games, against a maximum of 1440, and six
   broodlings' in each of two games from between 128 and 132, against 128, each a step at a time to 0 at its last
