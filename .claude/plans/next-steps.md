@@ -110,6 +110,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **NachOS does not scout** (#209): `api.enemy.start_location` raises `NotReportedError` on a map with more than two
   starts until the bot calls `Enemy.assume_start_location`, and the order to take expansions in stays the bot's too.
   A `StartLocation`'s reads raise where there is none, over `None`.
+- **What this player sees is one `Vision`, at `api.vision`** (#227): `in_sight`, `explored` and `last_in_sight`,
+  -1 for a tile never in sight, and one read, `time_unseen`, a length of time over a tile or an area. Not an
+  extension, no aliases for the old grids, and `api.creep` stays out.
 
 ### Running, recordings and replays
 
