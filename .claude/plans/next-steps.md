@@ -190,6 +190,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - **Speed mining's `_is_returning(order)` stays** (#208), over `OwnUnit.is_returning`, some 8 times slower.
 - **The fog-off view has no guard against `id_provider` giving an id a unit already holds**, since no path to it was
   found, and copies each fog-off observation whole (#163).
+- **`playback` names a `ReplayPlayback`, and `game` a `GameProcess`** (the owner, #176, 2026-11-04), over
+  `replay_playback` and `game_process`, which the rule that a name follows its class would give.
 
 ## Next
 
