@@ -1076,7 +1076,25 @@ Keep this file current: when a step is done, say so here in the same pull reques
   one, two and three workers a geyser, with variants of the move on each side of the trip. The move goes into `collect`
   in a pull request of its own only where it collects more, and `_is_mining` and `_is_collecting` then become one check
   (the owner, review of #208). Then AvocaDOS can hand its collectors to speed mining, dropping its own
-  `Expansion._collect_vespene`.
+  `Expansion._collect_vespene`. Where it stands (2026-11-04), on branch `ccr-4657e475-njg2ra`, in no pull request yet:
+  - Each trial is a game on PylonAIE_v4 against the very easy computer: SCVs build both refineries of the main, and
+    `collect` takes the builders and the miners nearest. `--variants` choose the moves (the docstring lists them),
+    `--replays` saves the games, and the job log's last lines and the `output` artifact's `gas.json` hold the
+    findings. Watching a replay from the workflow needs the map in `Maps/AIE` until #218, which copies the maps to the
+    top of `maps`, merges.
+  - One collector a refinery (run 41837996802): the move on both sides of the trip gained 9 to 13%, a round trip of
+    80 and 86 steps against 88 and 94 at the nearer refinery (7.62 from the townhall's center) and the farther (8.06).
+    One side alone gained 2 to 7%; of the trip to the refinery, ending 0.3 short of touching it did best. Giving the
+    move from 3 away rather than 2 changed nothing.
+  - A collector stays inside 32 steps, and goes in and comes out at one point, 1.9 to 2.0 from the refinery's center
+    on the line to the townhall's. A refinery's radius is 1.6875.
+  - Two and three collectors: every run before 45a02a8 lost one collector to the minerals in each variant with the
+    move back. The sweep caused that, as the owner saw in a replay: it gave that move to a collector handed over with
+    minerals, which dropped the gather `collect` had queued behind its return. Fixed in 45a02a8. Unspoiled at two: one
+    side alone gained 2 to 5%, and both sides slowed seed 2's nearer refinery by 12%, a round trip of 100 steps, with no
+    collector lost; not understood yet. Run 41856036606 measures two and three again after the fix, with replays.
+  - Next: read run 41856036606, then plan with the owner whether and how the move goes into `collect`, perhaps only at
+    one or two collectors a refinery. Do not put the findings into speed mining or its docs before that.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.
