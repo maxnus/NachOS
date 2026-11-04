@@ -11,12 +11,12 @@ class EventPriority(ReadableIntEnum):
     as `Api.extensions` says, and no other handler may.
     """
 
-    AFTER = -1
-    LOWEST = 0
-    VERY_LOW = 1
-    LOW = 2
-    MEDIUM = 3
-    HIGH = 4
-    VERY_HIGH = 5
-    HIGHEST = 6
-    BEFORE = 7
+    AFTER = 0
+    LOWEST = 1
+    VERY_LOW = 2
+    LOW = 3
+    MEDIUM = 4
+    HIGH = 5
+    VERY_HIGH = 6
+    HIGHEST = 7
+    BEFORE = 8
