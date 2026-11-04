@@ -967,6 +967,16 @@ class TestATurnGoesOutPriorityFirst:
         )
         assert calls == ["scouted, high", "alert, high", "turn, high", "alert", "turn", "scouted, low"]
 
+    def test_an_extensions_handlers_run_before_every_one_of_the_bots_of_the_turn_or_after_every_one(self) -> None:
+        bus, calls = _EventBus(), []
+        with bus._subscribing_extensions():
+            bus.on(TurnEvent, priority=EventPriority.BEFORE)(lambda event: calls.append("turn, before"))
+            bus.on(_Scouted, priority=EventPriority.AFTER)(lambda event: calls.append("scouted, after"))
+        bus.on(_Scouted, priority=EventPriority.HIGHEST)(lambda event: calls.append("scouted, highest"))
+        bus.on(TurnEvent, priority=EventPriority.LOWEST)(lambda event: calls.append("turn, lowest"))
+        bus._hand_out([_Scouted("main", time=GameTime(steps=0)), TurnEvent(time=GameTime(steps=0))])
+        assert calls == ["turn, before", "scouted, highest", "turn, lowest", "scouted, after"]
+
     def test_a_subscription_during_a_turn_leaves_the_rest_of_it_selecting_as_before(self) -> None:
         bus, alerts, steps = _EventBus(), [], []
         bus.on(TurnEvent, priority=EventPriority.HIGH)(lambda event: bus.on(GameStartEvent)(lambda started: None))

@@ -69,7 +69,8 @@ class SpeedMining:
     but takes none it cannot send, building, burrowed or out of reach of orders, and holds a worker at one field or gas
     building at a time. `release` takes one or several back, `release_miners` and `release_collectors` a number of
     them, those whose leaving costs the least, and `miners`, `collectors`, `workers` and `workers_at` read them. On
-    each `TurnEvent`, at `EventPriority.LOW`, speed mining orders each worker it holds:
+    each `TurnEvent`, at `EventPriority.AFTER`, after every handler of the bot's, speed mining orders each worker it
+    holds:
 
     - A miner idle, gathering minerals, returning minerals, or on speed mining's own move, is kept mining its field:
       one gathering at another field, as the game sends a worker whose field is taken, or on its way to a field it was
@@ -131,7 +132,7 @@ class SpeedMining:
         self._gas_building_by_worker: UnitDict[OwnUnit[UnitType.Worker], Unit[UnitType.GasBuilding]] = UnitDict()
         self._trip_end_points = TripEndPointBook(api.expansions)
         self._trips = WorkerTrips(api)
-        api.on(TurnEvent, priority=EventPriority.LOW)(self._order_the_workers)
+        api.on(TurnEvent, priority=EventPriority.AFTER)(self._order_the_workers)
 
     @property
     def miners(self) -> Mapping[OwnUnit[UnitType.Worker], Unit[UnitType.AnyMineralField]]:

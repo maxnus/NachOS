@@ -9,7 +9,7 @@ import pytest
 from s2clientprotocol import common_pb2, raw_pb2
 
 from sc2nachos import Api
-from sc2nachos.events import TurnStartEvent
+from sc2nachos.events import GameStartEvent, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference import UpgradeInference
 from sc2nachos.extensions.upgrade_inference._movement_windows import _CREEP_SPEEDS
 from sc2nachos.gamedata import GameData
@@ -89,13 +89,9 @@ def _upgrades_at_block_ends(
     ]
     upgrades_each_turn: list[tuple[int, frozenset[UpgradeId]]] = []
 
-    def build_the_extensions(api: Api[Any]) -> UpgradeInference:
-        upgrade_inference = UpgradeInference(api, **upgrade_inference_options)
-        api.on(TurnStartEvent)(lambda _: upgrades_each_turn.append((api.step, api.enemy.upgrades)))
-        started(api)
-        return upgrade_inference
-
-    api: Api[Any] = Api(extensions=build_the_extensions)
+    api: Api[Any] = Api(extensions=lambda api: UpgradeInference(api, **upgrade_inference_options))
+    api.on(TurnStartEvent)(lambda _: upgrades_each_turn.append((api.step, api.enemy.upgrades)))
+    api.on(GameStartEvent)(lambda _: started(api))
     api.play(ScriptedGame(observations, game_info=make_game_info(*_MAP_ROWS), data=shipped_game_data()).joined())
     return [
         upgrades

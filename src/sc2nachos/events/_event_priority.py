@@ -4,9 +4,14 @@ from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 
 
 class EventPriority(ReadableIntEnum):
-    """A handler's place among an event's handlers: higher priorities run first, equal ones in subscription order, those
-    an extension subscribed while NachOS built the extensions first (`Api.extensions`)."""
+    """A handler's place among an event's handlers: higher priorities run first, equal ones in subscription order.
 
+    `BEFORE` and `AFTER` are an extension's, and the only ones it takes: a handler subscribed while NachOS builds the
+    extensions (`Api.extensions`) runs at one of them, before every handler of the bot's or after every one, and no
+    other handler may.
+    """
+
+    AFTER = -1
     LOWEST = 0
     VERY_LOW = 1
     LOW = 2
@@ -14,3 +19,4 @@ class EventPriority(ReadableIntEnum):
     HIGH = 4
     VERY_HIGH = 5
     HIGHEST = 6
+    BEFORE = 7

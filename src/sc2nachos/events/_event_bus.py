@@ -96,6 +96,8 @@ class _EventBus:
         """Subscribe every method of `instance` marked with `on`, as `api.subscribe` says."""
         if not (marked := self._marked_methods(type(instance))):
             raise ValueError(f"{type(instance).__name__} has no method marked with `on`")
+        for _, _, options in marked:
+            self._subscriptions.check_priority(options["priority"])
         marks = {(function, selects) for function, selects, _ in marked}
         if any(
             handler.instance is instance and (handler.function, handler.selects) in marks
@@ -157,7 +159,8 @@ class _EventBus:
 
     @contextmanager
     def _subscribing_extensions(self) -> Iterator[None]:
-        """While NachOS builds the extensions: every handler subscribed goes before the rest of its priority."""
+        """While NachOS builds the extensions: every handler subscribed runs at `EventPriority.BEFORE` or `AFTER`,
+        which no handler subscribed otherwise may."""
         subscriptions = self._subscriptions
         subscriptions.subscribing_extensions = True
         try:

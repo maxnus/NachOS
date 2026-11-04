@@ -70,7 +70,7 @@ class TestBuildingTheExtensions:
         class Recorder:
             def __init__(self, api: Api[object]) -> None:
                 self.turns = 0
-                api.on(TurnEvent)(self.count)
+                api.on(TurnEvent, priority=EventPriority.BEFORE)(self.count)
 
             def count(self, event: TurnEvent) -> None:
                 self.turns += 1
@@ -92,31 +92,92 @@ class TestBuildingTheExtensions:
 
 
 class TestWhereTheirHandlersRun:
-    def test_before_the_bots_of_their_priority_wherever_the_bot_subscribed_and_priorities_first(self) -> None:
+    def test_before_every_handler_of_the_bots_or_after_every_one_each_in_the_order_they_subscribed(self) -> None:
+        """The extension's handler subscribed later, on `GameStartEvent`, runs at a priority of the bot's."""
         ran: list[str] = []
 
         class Extension:
             def __init__(self, api: Api[object]) -> None:
-                api.on(TurnEvent)(lambda event: ran.append("extension"))
-                api.on(TurnEvent, priority=EventPriority.LOW)(lambda event: ran.append("extension, low"))
-                api.on(GameStartEvent)(self.subscribe_later)
+                api.on(TurnEvent, priority=EventPriority.AFTER)(lambda event: ran.append("extension, after"))
+                api.on(TurnEvent, priority=EventPriority.BEFORE)(lambda event: ran.append("extension, before"))
+                api.on(TurnEvent, priority=EventPriority.BEFORE)(lambda event: ran.append("extension, before again"))
+                api.on(GameStartEvent, priority=EventPriority.BEFORE)(self.subscribe_later)
                 self.api = api
 
             def subscribe_later(self, event: GameStartEvent) -> None:
                 self.api.on(TurnEvent)(lambda event: ran.append("extension, later"))
 
         api = Api(extensions=Extension)
-        api.on(TurnEvent, priority=EventPriority.HIGH)(lambda event: ran.append("bot, high"))
+        api.on(TurnEvent, priority=EventPriority.LOWEST)(lambda event: ran.append("bot, lowest"))
+        api.on(TurnEvent, priority=EventPriority.HIGHEST)(lambda event: ran.append("bot, highest"))
         api.on(TurnEvent)(lambda event: ran.append("bot"))
         _play_turns(api, turns=1)
 
-        assert ran == ["bot, high", "extension", "bot", "extension, later", "extension, low"]
+        assert ran == [
+            "extension, before",
+            "extension, before again",
+            "bot, highest",
+            "bot",
+            "extension, later",
+            "bot, lowest",
+            "extension, after",
+        ]
 
-    def test_a_bots_order_to_a_unit_an_extension_ordered_at_its_priority_goes_out_and_stands(self) -> None:
+    @pytest.mark.parametrize("priority", [EventPriority.HIGHEST, EventPriority.MEDIUM, EventPriority.LOWEST])
+    def test_an_extensions_handler_at_a_priority_of_the_bots_raises(self, priority: EventPriority) -> None:
+        api = Api(extensions=lambda api: api.on(TurnEvent, priority=priority)(lambda event: None))
+        with pytest.raises(ValueError, match="runs at BEFORE or AFTER"):
+            _play_turns(api)
+
+    @pytest.mark.parametrize("priority", [EventPriority.BEFORE, EventPriority.AFTER])
+    def test_a_bots_handler_at_an_extensions_priority_raises(self, priority: EventPriority) -> None:
+        api = Api()
+        with pytest.raises(ValueError, match="while NachOS builds the extensions"):
+            api.on(TurnEvent, priority=priority)(lambda event: None)
+
+    def test_a_handler_an_extension_subscribes_later_at_an_extensions_priority_raises(self) -> None:
+        def build_extensions(api: Api[object]) -> None:
+            def subscribe_later(event: GameStartEvent) -> None:
+                api.on(TurnEvent, priority=EventPriority.BEFORE)(lambda turn: None)
+
+            api.on(GameStartEvent, priority=EventPriority.BEFORE)(subscribe_later)
+
+        with pytest.raises(ValueError, match="while NachOS builds the extensions"):
+            _play_turns(Api(extensions=build_extensions))
+
+    def test_an_instance_with_a_method_marked_at_an_extensions_priority_is_refused_whole(self) -> None:
+        """The method marked first, at a priority of the bot's, is not subscribed either."""
+        api = Api()
+        ran: list[str] = []
+
+        class Watcher:
+            @api.on(TurnEvent)
+            def count(self, event: TurnEvent) -> None:
+                ran.append("count")
+
+            @api.on(TurnEvent, priority=EventPriority.BEFORE)
+            def watch_first(self, event: TurnEvent) -> None:
+                ran.append("watch first")
+
+        with pytest.raises(ValueError, match="while NachOS builds the extensions"):
+            api.subscribe(Watcher())
+        _play_turns(api, turns=1)
+        assert ran == []
+
+    @pytest.mark.parametrize(
+        ("extensions_priority", "standing"),
+        [(EventPriority.BEFORE, AbilityId.STOP), (EventPriority.AFTER, AbilityId.MOVE)],
+        ids=["before the bot, the bot's", "after the bot, the extension's"],
+    )
+    def test_of_an_order_the_bot_and_an_extension_give_a_unit_the_last_goes_out_and_stands(
+        self, extensions_priority: EventPriority, standing: AbilityId
+    ) -> None:
         """A unit takes the last unqueued order of a turn."""
 
         def build_extensions(api: Api[object]) -> None:
-            api.on(TurnEvent)(lambda event: api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(3.0, 3.0)))
+            api.on(TurnEvent, priority=extensions_priority)(
+                lambda event: api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(3.0, 3.0))
+            )
 
         api = Api(extensions=build_extensions)
 
@@ -127,7 +188,7 @@ class TestWhereTheirHandlersRun:
         game = _play_turns(api, turns=1)
 
         (sent,) = game.commands_by_turn()[0]
-        assert sent.ability_id == AbilityId.STOP
+        assert sent.ability_id == standing
 
 
 def test_an_api_of_any_extensions_is_taken_where_any_api_is() -> None:
