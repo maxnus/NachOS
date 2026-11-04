@@ -208,8 +208,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   - Not in it, a follow-up: two miners of a field may meet head on the same way, both on their moves (unmeasured).
   - Speed mining is a package (the owner, 2026-11-04, in a pull request of its own after #222), behavior-neutral, as
     upgrade inference became one, a class to a file. `__init__.py` re-exports `SpeedMining`; `_speed_mining.py` holds
-    it, who is held where, `mine`, `collect`, `release`, the picks and the turn's loop; `_worker_trips.py` `WorkerTrips`,
-    each worker's trip a turn, the move, the yield, the plain orders and what stands in a move's way;
+    it, who is held where, `mine`, `collect`, `release`, the picks and the turn's loop; `_worker_trips.py`
+    `WorkerTrips`, each worker's trip a turn, the move, the yield, the plain orders and what stands in a move's way;
     `_trip_end_points.py` `TripEndPoints`; `_trip_end_point_book.py` `TripEndPointBook`, every field's and gas
     building's trip ends and the townhall taking the cargo; and `_worker_attacks.py` `WorkerAttacks`. Names one of its
     modules takes from another have no underscore, as in upgrade inference. The two picks share the expansions to look
