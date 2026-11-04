@@ -2,7 +2,7 @@
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
 catalog member, never a literal id, or is a custom id, assigned `auto()`, which the game's ids read as. Unknown ids
-raise, but a unit's buffs leave out the few in `BuffId._LEFT_OUT_IDS`.
+raise, but a unit's buffs pass over the few in `BuffId._SKIPPED_IDS`.
 """
 
 from enum import auto, nonmember
@@ -73,7 +73,7 @@ class BuffId(IdEnum):
     )
     # Every unit of one type wears each of these for as long as it is listed, so it says nothing the type does not
     # (in game).
-    _LEFT_OUT_IDS = nonmember(
+    _SKIPPED_IDS = nonmember(
         frozenset(
             {
                 RawBuffId.ParasiticBombUnitKU,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
@@ -81,4 +81,4 @@ class BuffId(IdEnum):
             }
         )
     )
-    """Game ids that are no member's own and that a unit's buffs leave out, where any other such id raises."""
+    """Game ids that are no member's own and that a unit's buffs and the buff events pass over."""
