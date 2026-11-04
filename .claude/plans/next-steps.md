@@ -994,6 +994,38 @@ Keep this file current: when a step is done, say so here in the same pull reques
       only on an enemy within a worker's reach. The workers of a field no longer mined are let go before anything
       else in the turn, so a worker let go counts among the units in a move's way; before, that hung on the order the
       fields came in. Played back through AvocaDOS, the orders were the same order for order but for that.
+  - Speed mining collects vespene too (the owner, 2026-11-03, reversing #201's minerals only, one question at a time):
+    - `collect(worker, gas_buildings=None)` hands a worker over to collect, beside `mine` (over `mine` taking gas
+      buildings, which would have had every reader of `miners` tell the two apart); `collectors` and `collectors_at`
+      read them, `release` lets go of either, and a worker is held at one field or gas building at a time.
+    - Given none, `collect` picks as `mine` does (over the bot always naming one): a finished gas building of this
+      player's with vespene left, on a geyser of the expansion nearest the worker with a finished townhall of this
+      player's and one with fewer than three collectors, the nearest to the worker. `mine` given no field never picks
+      gas, so how many collect stays the bot's.
+    - A collector is kept on plain gathers and returns, attacks as a miner does, and is let go once its gas building
+      dies or runs dry, or its base's townhall is gone. A return a worker shows counts as cargo on a hand-over, and a
+      collector returning is left to it, since gas from a rich geyser wears no buff. Collectors, like miners, are in no
+      move's way. Built in #208.
+    - No move for gas until measured (the owner, over measuring first and over building both at once): a geyser's
+      third worker already waits on it (Liquipedia's 1.02, 2.05 and 2.72 gas a second for one, two and three, in
+      AvocaDOS's `COLLECTOR_RATES`), and ares-sc2's gas boost is off by default, only below three workers a geyser,
+      and marked "currently not working".
+    - The owner's review of #208, one question a thread:
+      - `workers` reads every worker held, miners and collectors, and one `workers_at(field_or_gas_building)` replaces
+        `miners_at` and `collectors_at` (the owner, over `workers` alone, which I had recommended, `workers_at` being
+        `miners_at` or `collectors_at` by its argument's type). `miners`, `collectors` and `workers` build their
+        read-only view per read: 57 ns against 22 for a stored one.
+      - `release` takes one worker or several, as `issue` takes its units; `mine` and `collect` stay one worker, since
+        each pick changes the next and the result per worker matters.
+      - `UnitType.AnyResource`, generated, holds the mineral fields and the gas buildings, what a worker gathers at (the
+        owner, over a private alias in the extension, which I had recommended since NachOS calls fields and geysers the
+        resources). Every townhall in speed mining is typed `UnitType.Townhall`.
+      - `mine` and `collect` share a check of what they are given, and one helper groups each kind's workers and lets
+        go of those whose field or gas building no longer qualifies (over a `UnitDict` taking a check of its own, which
+        would run on every read, `in` among them, and let go whenever something read).
+      - Kept: `is_its_work` (over `order_check`, which says nothing of what true means); `_is_returning` taking the
+        order its callers hold (81 ns, against 659 for `OwnUnit.is_returning` and 128 for a cached `current_order`);
+        and only a townhall at an expansion's center, as #202 settled.
 - **Assuming an upgrade assumes what it needs** (the owner, 2026-11-02, over documenting that a level must be assumed
   with those below it): `Enemy.assume_upgrades` also adds every upgrade each one needs researched first, by the
   tables' `tech_requirements`, so level 3 of a line brings levels 1 and 2, and `forget_upgrades` takes with an upgrade
@@ -1077,12 +1109,54 @@ Keep this file current: when a step is done, say so here in the same pull reques
       (classmethods), and `Enemy._learn_start_locations` stays, as `_learn_race` does.
   - Staying in AvocaDOS: the order to take expansions in, and its scouting for the enemy's start.
 
+- **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
+  time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
+  loop and with few code paths:
+  - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own).
+  - The rows give 12 upgrades a speed. Charge stays read off its buff, and the other ten are read off movement:
+    Metabolic Boost, Glial Reconstitution, Centrifugal Hooks, Muscular Augments, Anabolic Synthesis, Pneumatized
+    Carapace (overlord, transport overlord and overseer), Hyperflight Rotors, Gravitic Boosters, Gravitic Drive and Flux
+    Vanes. Tunneling Claws, the twelfth, is open (below).
+  - Each enemy unit of the types those ten speed up keeps a window, where and when it began. It begins again when the
+    unit is not visible, is on another side than when first seen, has no `velocity` after a gap in the observations (a
+    transport, a nydus, out of sight), or wears an acceleration zone's buff. A burrowed roach and a unit known to be a
+    hallucination do not vote: a burrowed roach's unupgraded speed is 0, so one standing still would vote against Glial
+    Reconstitution, and a hallucination may not move at its owner's speed.
+  - A window of about a second compares the distance covered with two predictions, without the upgrade and with it,
+    each summed step by step at the speed for the ground the unit stood on: Zerg ground types count creep too (the
+    owner, over measuring off creep only), from a table measured in game, since the rows hold no creep speed. Where the
+    distance falls between the two, as `u`, 0 without and 1 with: within `x` of 1 is a fast vote, within `x` of 0 a slow
+    one, anything else none (the owner: within a small tolerance of the expected upgraded speed, over faster than
+    allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are closer
+    than the measured precision can tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds only off
+    it.
+  - The votes of a slice are one observation for each upgrade, k fast of the n units that voted, with a beta-binomial
+    likelihood whose spread says how often a whole group comes out fast without the upgrade: 20 of 20 is strong, 1 of
+    20 counts against it (the owner: the number of units, their share and the number of observations all count, over
+    each unit alone). What a slice is, is open (below).
+  - The score is the probability that the enemy has the upgrade, by Bayes' rule on each slice, in [0, 1] (the owner,
+    over a clamped sum). No vote counts before the earliest the upgrade could finish: its research time, plus its
+    researcher's build time where no player starts with a researcher, as every Zerg starts with a hatchery, which
+    researches Pneumatized Carapace. After that it starts at a fixed `p0` and moves only with what is seen, `p0` being
+    its floor too, so evidence against it from before the upgrade finished leaves no debt (the owner, over a prior
+    rising with game time, a timing guess that is the bot's to make).
+  - It is assumed at 0.999 and forgotten at a lower threshold of its own, so it does not flip back and forth (the
+    owner, over assuming for good). It forgets only what speed assumed. The extension cannot see an upgrade the bot
+    assumes after speed did, so speed can forget that one: a limit to document.
+  - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without an
+    upgrade ever reaches 0.999 for it in a game is at most `p0`'s odds over 0.999's, about 1 in 100,000 from `p0` = 1%,
+    if the likelihoods are right; each climb off the floor adds about as much. The bounds of a race's speed upgrades
+    add up, Zerg's six among them, so for 0.1% a game `p0` stays under about 14%, and within that the replays choose
+    it, trading safety against how much evidence an assumption needs.
+  - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
+    Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
+
 ## Next
 
 - **AvocaDOS moves onto `StartLocation`** once #209 merges: its `StartLocation` reads `natural`, the thirds and
   `main_ramp` from NachOS's, keeps its order to take expansions in, and its unread `region`, `GameMap.floodfill` and
-  `is_at_level` go. Until then
-  AvocaDOS's tests fail on `api.map.main_ramp_of` and `is_start_location`, which #209 removes.
+  `is_at_level` go. Until then AvocaDOS's tests fail on `api.map.main_ramp_of` and `is_start_location`, which #209
+  removes.
 
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), the extension mechanism with speed mining as
   its first extension (#201), speed mining only at bases with a townhall of this player's (#202), and `mine` sending
@@ -1090,8 +1164,39 @@ Keep this file current: when a step is done, say so here in the same pull reques
   AvocaDOS #75), and its `docs/plans/nachOS-plan.md` records #199 to #203. Planned with the owner (2026-11-02): an
   AvocaDOS expansion keeps no map of its miners and reads speed mining's, a worker speed mining lets go is found by its
   mining role and handed out again, and speed mining picks each field among the base's.
+- **Measuring speed-mined gas** (the owner, 2026-11-03), after #208: a script run through the `sc2` workflow, since
+  no game runs in a cloud session, collecting plainly against with a move at the end of each trip, at one, two and
+  three workers a geyser. The move goes into `collect` in a pull request of its own only where it collects more, and
+  `_is_mining` and `_is_collecting` then become one check (the owner, review of #208). Then AvocaDOS can hand its
+  collectors to speed mining, dropping its own `Expansion._collect_vespene`.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
+- **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
+  1. `tools/sweep_movement.py`: each type's speed with and without its upgrade, the Zerg ground types on and off
+     creep, how exactly a unit running straight keeps to it, and whether a hallucination moves at its owner's speed.
+     It sets `x`, the window, and the smallest gap between the two predictions at which a window still votes; its
+     findings go in `docs/reference/game-behavior/units.md`.
+  2. A replay tool playing each replay as the bot's player with the extension and as the enemy, whose own upgrades
+     are the truth. It records every vote with whether the enemy had the upgrade then, fits the beta-binomial and
+     `p0` on some of the replays, and checks on the rest that a probability reads true (of moments at 0.99, about 99%
+     had it), how often a game assumes an upgrade the enemy lacks, and how late each real one is found. No false
+     assumption in n games bounds the rate below about 3/n (95%), so 0.1% a game needs about 3,000 games with none.
+  3. The option, with tests for both bands and a window between them, a creep edge, a gap in the observations, a side
+     change, an acceleration zone, the earliest finish, 20 of 20 fast against 1 of 20, the floor, a mistake forgotten
+     and an upgrade the bot assumed first, which is never forgotten. The extension's docstring, which says what it
+     reads stays, and `docs/extensions.md` say what speed may forget.
+  4. Its cost a turn over the corpus and AvocaDOS's recorded games.
+
+  Open, to settle with the owner at the step that needs it (proposed, not decided):
+  - The option's name; `from_movement` was proposed.
+  - What a slice is: proposed, fixed ticks of a second on one clock for every unit, a unit voting in a tick it was
+    measurable through, so each unit keeps only its position at the last tick.
+  - One pair of beta-binomial parameters for every upgrade, which `u` makes comparable, unless the replays show they
+    differ; rare upgrades such as Gravitic Drive have too few votes to fit their own.
+  - Which replays: AvocaDOS's games on AI Arena were proposed, since real bots throw grenades, force fields and drops,
+    and how to reach 3,000 games.
+  - Tunneling Claws later, with Blink and Shadow Stride, since a burrowed roach has two upgraded speeds, Tunneling
+    Claws alone or with Glial Reconstitution, which would need a second code path.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:
