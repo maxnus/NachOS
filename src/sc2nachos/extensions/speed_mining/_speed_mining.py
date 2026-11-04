@@ -1,5 +1,4 @@
-"""Speed mining: workers mine minerals and collect vespene faster, each trip ending in a move that keeps their speed
-into the gather or return."""
+"""`SpeedMining`: the workers it holds, how they are handed over, and its turn, which orders each."""
 
 from __future__ import annotations
 
@@ -7,36 +6,23 @@ import math
 from collections import ChainMap, Counter
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Self, cast, final
+from typing import TYPE_CHECKING, Any, cast, final
 
 from sc2nachos.events import EventPriority, TurnEvent
-from sc2nachos.gametime import GameTime
-from sc2nachos.geometry import POINT_PRECISION, Circle, Point
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPointBook, finished_own_townhall_at_center
+from sc2nachos.extensions.speed_mining._worker_attacks import WorkerAttacks
+from sc2nachos.extensions.speed_mining._worker_trips import WorkerTrips, carries_cargo, units_within_reach_of
+from sc2nachos.ids import AbilityId
 from sc2nachos.units import OwnUnit, Unit, UnitDict, Units, UnitType
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable, Iterator, MutableMapping
 
     from sc2nachos import Api
     from sc2nachos.gamemap import Expansion
+    from sc2nachos.geometry import Point
     from sc2nachos.units import UnitOrder
 
-# How far from a field's center the move of a trip to it ends, toward the townhall: AvocaDOS's value, inside the 1.5
-# at which a worker's circle touches a field's (corpus).
-_GATHER_POINT_DISTANCE = 1.325
-# How far from a townhall's center the move of a trip back to it ends: its radius and a worker's, 2.75 and 0.375
-# (corpus).
-_RETURN_POINT_DISTANCE = 3.125
-# The distances from the point a trip's move ends at between which a worker on a plain gather or return is given the
-# move: AvocaDOS's values.
-_NEAREST_DISTANCE_FOR_THE_MOVE = 0.75
-_FARTHEST_DISTANCE_FOR_THE_MOVE = 2.0
-# An SCV's, a drone's and a probe's radius (corpus).
-_WORKER_RADIUS = 0.375
-# How near the line of a worker's move a unit's circle may come before it stands in the way: a margin for units that
-# move while the move lasts, not tuned.
-_CLEARANCE_OF_THE_MOVE = 0.5
 # The types of units in no move's way, whoever owns them: structures, which a move paths around, and larvae.
 _TYPES_NEVER_IN_THE_WAY = UnitType.Structure.type_ids | UnitType.Larva.type_ids
 # The most workers speed mining holds at one field: with three, it mined 19% less than plain gathers (in game).
@@ -47,18 +33,6 @@ _MOST_COLLECTORS_AT_A_GAS_BUILDING = 3
 # before a third at any, farthest first: two speed collected each collect as much as one alone, and a third adds the
 # most where the trip is longest, its gas building taking one worker at a time (in game).
 _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD = 2
-# The most weapon cooldown, and the most turn toward an enemy, with which a worker attacks it: the first step of a turn
-# costs nothing (in game).
-_MOST_COOLDOWN_TO_ATTACK = GameTime(steps=1)
-_MOST_TURN_TO_ATTACK = GameTime(steps=1)
-# No worker's weapon reaches farther: an SCV's, a drone's and a probe's reach 0.19995, and no upgrade changes it
-# (corpus). An enemy farther than this and both radii from a worker is out of its reach without the full check.
-_MOST_WEAPON_RANGE_OF_A_WORKER = 0.2
-# The townhalls only a morph makes, of a finished command center or hatchery: one that reads unfinished is finishing its
-# morph, as an orbital reads at build progress 0.998 the step before it does (in game).
-_TOWNHALLS_ONLY_A_MORPH_MAKES = frozenset(
-    {UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS, UnitTypeId.LAIR, UnitTypeId.HIVE}
-)
 
 
 @final
@@ -134,14 +108,12 @@ class SpeedMining:
 
     __slots__ = (
         "_api",
-        "_every_trip_end_point",
-        "_expansions_by_geyser_position",
+        "_attack_enemies",
+        "_attacks",
         "_field_by_worker",
         "_gas_building_by_worker",
-        "_attack_enemies",
-        "_target_by_attacker",
-        "_trip_end_points_by_field",
-        "_trip_end_points_by_geyser_position",
+        "_trip_end_points",
+        "_trips",
     )
 
     def __init__(self, api: Api[object], *, attack_enemies: bool = True) -> None:
@@ -149,25 +121,11 @@ class SpeedMining:
         can hit if `attack_enemies`."""
         self._api = api
         self._attack_enemies = attack_enemies
+        self._attacks = WorkerAttacks(api)
         self._field_by_worker: UnitDict[OwnUnit[UnitType.Worker], Unit[UnitType.AnyMineralField]] = UnitDict()
         self._gas_building_by_worker: UnitDict[OwnUnit[UnitType.Worker], Unit[UnitType.GasBuilding]] = UnitDict()
-        # The expansions holding each geyser, by its position, where a gas building on it stands (in game).
-        self._expansions_by_geyser_position = _expansions_of_each_geyser_position(api.expansions)
-        # The workers speed mining has given an attack, with its target, until they have fired.
-        self._target_by_attacker: UnitDict[OwnUnit[UnitType.Worker], Unit[Any]] = UnitDict()
-        self._trip_end_points_by_field = _trip_end_points_of_each_field(api.expansions)
-        # The end points of the trips to the gas building on each geyser, by its position, worked out from the first
-        # gas building seen there, since a gas building's radius is not its geyser's: a refinery's is 1.6875 (in game),
-        # a geyser's 1.5 (corpus).
-        self._trip_end_points_by_geyser_position: dict[Point, tuple[_TripEndPoints, ...]] = {}
-        # Where the move of any trip ends, so a move toward a field or gas building a worker was handed before reads as
-        # speed mining's. A gas building's are added once worked out.
-        self._every_trip_end_point = {
-            point
-            for every_trip_end_points in self._trip_end_points_by_field.values()
-            for trip_end_points in every_trip_end_points
-            for point in (trip_end_points.gather_point, trip_end_points.return_point)
-        }
+        self._trip_end_points = TripEndPointBook(api.expansions)
+        self._trips = WorkerTrips(api)
         api.on(TurnEvent, priority=EventPriority.LOW)(self._order_the_workers)
 
     @property
@@ -267,7 +225,7 @@ class SpeedMining:
         if gas_building is None:
             return None
         # So that a move to where one of its trips ends reads as speed mining's from the first.
-        self._trip_end_points_of_gas_building(gas_building)
+        self._trip_end_points.work_out_gas_building(gas_building)
         if not self._send_to_gather_at(worker, gas_building, mining=False):
             return None
         self._field_by_worker.pop(worker, None)
@@ -298,33 +256,19 @@ class SpeedMining:
             for order in order_book.issued_to(worker, include_sent=True)
         ):
             return True
-        if _carries_cargo(worker):
-            self._hand_in_then_gather(worker, resource)
+        if carries_cargo(worker):
+            self._trips.hand_in_then_gather(worker, resource)
         else:
             order_book.issue(worker, AbilityId.GATHER, target=resource)
         return True
-
-    def _hand_in_then_gather(self, worker: OwnUnit[UnitType.Worker], resource: Unit[UnitType.AnyResource]) -> None:
-        """Have `worker` hand in its cargo and then gather at `resource`: a return with the gather queued behind it,
-        which waits for the cargo to be handed in, so that a worker carrying vespene does not go back to its geyser (in
-        game)."""
-        order_book = self._api.orders
-        # Forced: NachOS leaves out a return to a worker the game reports returning aimed at nothing, and a gather
-        # queued behind the return the worker shows of itself takes its place, the worker carrying its cargo to the
-        # field first (in game).
-        order_book.issue(worker, AbilityId.RETURN, force=True)
-        order_book.issue(worker, AbilityId.GATHER, target=resource, queued=True)
 
     def _nearest_field_with_room(
         self, worker: OwnUnit[UnitType.Worker], only_fields: frozenset[Unit[UnitType.AnyMineralField]] | None
     ) -> Unit[UnitType.AnyMineralField] | None:
         """The field `mine` picks for `worker`, among `only_fields` unless `None`, as it says, or `None` where there is
         none."""
-        miner_counts = Counter(field for miner, field in self._field_by_worker.items() if miner is not worker)
-        expansions = sorted(self._api.expansions, key=lambda expansion: worker.distance_to(expansion.center))
-        for expansion in expansions:
-            if _finished_own_townhall_at_center(expansion) is None:
-                continue
+        miner_counts = _counts_of_the_others(self._field_by_worker, worker)
+        for expansion in self._expansions_with_a_finished_townhall_nearest(worker):
             fields = [field for field in expansion.mineral_fields if field.is_alive]
             nearer_half = math.ceil(len(fields) / 2)
             with_room = [
@@ -341,9 +285,7 @@ class SpeedMining:
     ) -> Unit[UnitType.GasBuilding] | None:
         """The gas building `collect` picks for `worker`, among `only_gas_buildings` unless `None`, as it says, or
         `None` where there is none."""
-        collector_counts = Counter(
-            gas_building for collector, gas_building in self._gas_building_by_worker.items() if collector is not worker
-        )
+        collector_counts = _counts_of_the_others(self._gas_building_by_worker, worker)
         with_room_by_position = {
             gas_building.position: gas_building
             for gas_building in self._api.units.own.gas_buildings
@@ -354,10 +296,7 @@ class SpeedMining:
         }
         if not with_room_by_position:
             return None
-        expansions = sorted(self._api.expansions, key=lambda expansion: worker.distance_to(expansion.center))
-        for expansion in expansions:
-            if _finished_own_townhall_at_center(expansion) is None:
-                continue
+        for expansion in self._expansions_with_a_finished_townhall_nearest(worker):
             # Nearest the expansion's center first, as its geysers are.
             at_the_expansion = [
                 with_room_by_position[geyser.position]
@@ -375,18 +314,29 @@ class SpeedMining:
                 )
         return None
 
+    def _expansions_with_a_finished_townhall_nearest(self, worker: OwnUnit[UnitType.Worker]) -> Iterator[Expansion]:
+        """The expansions with a finished townhall of this player's at their center, nearest `worker` first."""
+        for expansion in sorted(self._api.expansions, key=lambda expansion: worker.distance_to(expansion.center)):
+            if finished_own_townhall_at_center(expansion) is not None:
+                yield expansion
+
     def _order_the_workers(self, _: TurnEvent) -> None:
         """Order each worker held, as the class's docstring says: the miners field by field, then the collectors gas
         building by gas building, once the workers of the fields and gas buildings no longer mined or collected from
         are let go, since they count among the units in a move's way."""
         townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None] = {}
+        trip_end_points = self._trip_end_points
         mined_fields = _still_worked(
             self._field_by_worker,
-            lambda field: None if field.is_dead else self._speed_mined_trip_end_points(field, townhall_by_center),
+            lambda field: None if field.is_dead else trip_end_points.of_field(field, townhall_by_center),
         )
         collected_gas_buildings = _still_worked(
             self._gas_building_by_worker,
-            lambda gas_building: self._speed_collected_trip_end_points(gas_building, townhall_by_center),
+            lambda gas_building: (
+                None
+                if gas_building.is_dead or gas_building.vespene_contents == 0
+                else trip_end_points.of_gas_building(gas_building, townhall_by_center)
+            ),
         )
         units_in_the_way: Units[Unit[Any]] | None = None
         units_near_each_trip_end: dict[Point, Units[Unit[Any]]] = {}
@@ -399,7 +349,7 @@ class SpeedMining:
             if (near := units_near_each_trip_end.get(trip_end)) is None:
                 if units_in_the_way is None:
                     units_in_the_way = self._units_in_the_way_of_a_move()
-                near = units_near_each_trip_end[trip_end] = _units_within_reach_of(trip_end, units_in_the_way)
+                near = units_near_each_trip_end[trip_end] = units_within_reach_of(trip_end, units_in_the_way)
             return near
 
         def workers_to_order(
@@ -414,59 +364,22 @@ class SpeedMining:
                 return free_workers
             if enemies_to_attack is None:
                 enemies_to_attack = self._api.units.enemy.visible.non_structures.ground
-            return [worker for worker in free_workers if not self._attacks(worker, enemies_to_attack)]
+            attacks = self._attacks
+            return [worker for worker in free_workers if not attacks.attacks(worker, enemies_to_attack)]
 
-        mine_plainly = self._mine_plainly
-        for field, workers, (trip_end_points, townhall) in mined_fields:
+        trips = self._trips
+        for field, workers, (field_trip_end_points, townhall) in mined_fields:
             for worker in workers_to_order(workers, mining=True):
-                returning = worker.is_carrying_resource
-                trip_end = trip_end_points.return_point if returning else trip_end_points.gather_point
-                self._speed_trip(
-                    worker,
-                    field,
-                    townhall,
-                    trip_end,
-                    units_near_the_trip_end,
-                    returning=returning,
-                    work_plainly=mine_plainly,
-                )
-        for gas_building, workers, (trip_end_points, townhall) in collected_gas_buildings:
-            self._speed_collect(
+                trips.speed_mine(worker, field, townhall, field_trip_end_points, units_near_the_trip_end)
+        for gas_building, workers, (gas_trip_end_points, townhall) in collected_gas_buildings:
+            trips.speed_collect(
                 gas_building,
                 workers,
                 workers_to_order(workers, mining=False),
-                trip_end_points,
+                gas_trip_end_points,
                 townhall,
                 units_near_the_trip_end,
             )
-
-    def _speed_collected_trip_end_points(
-        self, gas_building: Unit[UnitType.GasBuilding], townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None]
-    ) -> tuple[_TripEndPoints, Unit[UnitType.Townhall]] | None:
-        """The end points of the trips to `gas_building` from the first expansion holding its geyser with a finished
-        townhall of this player's at its center, with that townhall, if `gas_building` is alive with vespene left, else
-        `None`. Each expansion's townhall is read once a turn, kept in `townhall_by_center`."""
-        if gas_building.is_dead or gas_building.vespene_contents == 0:
-            return None
-        for trip_end_points in self._trip_end_points_of_gas_building(gas_building):
-            townhall = _finished_own_townhall_at_center_read_once(trip_end_points.expansion, townhall_by_center)
-            if townhall is not None:
-                return trip_end_points, townhall
-        return None
-
-    def _trip_end_points_of_gas_building(self, gas_building: Unit[UnitType.GasBuilding]) -> tuple[_TripEndPoints, ...]:
-        """The end points of the trips to `gas_building` from each expansion holding its geyser, in their order: worked
-        out from the first gas building seen on that geyser, and then counted among the end points of every trip."""
-        position = gas_building.position
-        if (every_trip_end_points := self._trip_end_points_by_geyser_position.get(position)) is None:
-            every_trip_end_points = tuple(
-                _TripEndPoints.from_gas_building(expansion, gas_building)
-                for expansion in self._expansions_by_geyser_position.get(position, ())
-            )
-            self._trip_end_points_by_geyser_position[position] = every_trip_end_points
-            for trip_end_points in every_trip_end_points:
-                self._every_trip_end_point.update((trip_end_points.gather_point, trip_end_points.return_point))
-        return every_trip_end_points
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
         """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not orderable,
@@ -490,79 +403,11 @@ class SpeedMining:
             case AbilityId.RETURN:
                 return worker.is_carrying_minerals == mining
             case AbilityId.MOVE:
-                return order.known_target in self._every_trip_end_point
+                return order.known_target in self._trip_end_points
             case AbilityId.ATTACK:
-                return self._is_speed_minings_attack(worker, order)
+                return self._attacks.is_speed_minings_attack(worker, order)
             case _:
                 return False
-
-    def _is_speed_minings_attack(self, worker: OwnUnit[UnitType.Worker], order: UnitOrder) -> bool:
-        """Whether `order`, the current one of `worker`, is the attack speed mining gave it."""
-        target = self._target_by_attacker.get(worker)
-        return target is not None and order.known_target is target
-
-    def _is_on_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
-        """Whether `worker` is on speed mining's move to `trip_end`, or was sent it lately, which its orders may not
-        show yet."""
-        if not worker.is_orderable:
-            return False
-        current_order = worker.current_order
-        if (
-            current_order is not None
-            and current_order.ability is AbilityId.MOVE
-            and current_order.known_target == trip_end
-        ):
-            return True
-        return self._was_sent_the_move_to(worker, trip_end)
-
-    def _was_sent_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
-        """Whether the latest order that replaced `worker`'s, sent lately or issued this turn, is speed mining's move to
-        `trip_end`, so that no other order, the bot's included, has taken its place since."""
-        if not worker.is_orderable:
-            return False
-        replacing = [order for order in self._api.orders.issued_to(worker, include_sent=True) if not order.queued]
-        return bool(replacing) and replacing[-1].ability is AbilityId.MOVE and replacing[-1].target == trip_end
-
-    def _attacks(self, worker: OwnUnit[UnitType.Worker], enemies: Units[Unit[Any]]) -> bool:
-        """Whether `worker` attacks this turn: it is on speed mining's attack and has yet to fire, or it is given one on
-        the weakest of `enemies` it can hit as it stands. Speed mining forgets an attack once the worker has fired."""
-        ready = worker.weapon_cooldown <= _MOST_COOLDOWN_TO_ATTACK
-        if (target := self._target_by_attacker.get(worker)) is not None:
-            current_order = worker.current_order
-            if (
-                ready
-                and current_order is not None
-                and current_order.ability is AbilityId.ATTACK
-                and current_order.known_target is target
-            ):
-                return True
-            del self._target_by_attacker[worker]
-        if not ready or not enemies:
-            return False
-        position, reach = worker.position, _MOST_WEAPON_RANGE_OF_A_WORKER + worker.radius
-        reachable = [
-            enemy
-            for enemy in enemies
-            if position.distance_to(enemy.position) <= reach + enemy.radius and _can_attack(worker, enemy)
-        ]
-        if not reachable:
-            return False
-        target = min(reachable, key=lambda enemy: enemy.life)
-        self._api.orders.issue(worker, AbilityId.ATTACK, target=target)
-        self._target_by_attacker[worker] = target
-        return True
-
-    def _speed_mined_trip_end_points(
-        self, field: Unit[UnitType.AnyMineralField], townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None]
-    ) -> tuple[_TripEndPoints, Unit[UnitType.Townhall]] | None:
-        """The end points of the trips to `field` from the first expansion holding it with a finished townhall of this
-        player's at its center, with that townhall, or `None`. Each expansion's townhall is read once a turn, kept in
-        `townhall_by_center`."""
-        for trip_end_points in self._trip_end_points_by_field.get(field, ()):
-            townhall = _finished_own_townhall_at_center_read_once(trip_end_points.expansion, townhall_by_center)
-            if townhall is not None:
-                return trip_end_points, townhall
-        return None
 
     def _units_in_the_way_of_a_move(self) -> Units[Unit[Any]]:
         """The units that can stand in the way of a worker on a move, as the class's docstring counts them. A worker on
@@ -579,190 +424,6 @@ class SpeedMining:
             and unit not in field_by_worker
             and unit not in gas_building_by_worker
         )
-
-    def _collect_plainly(self, worker: OwnUnit[UnitType.Worker], gas_building: Unit[UnitType.GasBuilding]) -> None:
-        """Keep `worker` collecting from `gas_building` with a plain gather, or returning its cargo with the gather
-        queued behind: one returning is left to it."""
-        current_order = worker.current_order
-        if _is_returning(current_order) or _is_gathering_at(current_order, gas_building):
-            return
-        if worker.is_carrying_resource:
-            self._hand_in_then_gather(worker, gas_building)
-        else:
-            self._api.orders.issue(worker, AbilityId.GATHER, target=gas_building)
-
-    def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> None:
-        """Keep `worker` mining `field` with a plain gather, or returning its cargo with the gather queued behind."""
-        current_order = worker.current_order
-        if worker.is_carrying_resource:
-            if current_order is None or current_order.ability is not AbilityId.RETURN:
-                self._hand_in_then_gather(worker, field)
-        elif not _is_gathering_at(current_order, field):
-            self._api.orders.issue(worker, AbilityId.GATHER, target=field)
-
-    def _speed_collect(
-        self,
-        gas_building: Unit[UnitType.GasBuilding],
-        collectors: list[OwnUnit[UnitType.Worker]],
-        collectors_to_order: list[OwnUnit[UnitType.Worker]],
-        trip_end_points: _TripEndPoints,
-        townhall: Unit[UnitType.Townhall],
-        units_near_the_trip_end: Callable[[Point], Units[Unit[Any]]],
-    ) -> None:
-        """Keep `collectors_to_order`, of `gas_building`'s `collectors`, collecting from it, with `townhall` taking
-        their cargo, as `_speed_trip` says: those going in first, and then those coming out, each yielding to any
-        collector going in on its move, ordered this turn or not, that has yet to pass it. Two on their moves meet head
-        on, and the one shoved back nearly stops, where one on its return passes through (in game)."""
-        gather_point = trip_end_points.gather_point
-        return_point = trip_end_points.return_point
-        ordered = set(collectors_to_order)
-        left_alone = [collector for collector in collectors if collector not in ordered]
-        going_in_on_the_move = [
-            collector for collector in left_alone if self._is_on_the_move_to(collector, gather_point)
-        ]
-        coming_out: list[OwnUnit[UnitType.Worker]] = []
-        collect_plainly = self._collect_plainly
-        for collector in collectors_to_order:
-            if _is_on_the_trip_back(collector.current_order, return_point):
-                coming_out.append(collector)
-            elif self._speed_trip(
-                collector,
-                gas_building,
-                townhall,
-                gather_point,
-                units_near_the_trip_end,
-                returning=False,
-                work_plainly=collect_plainly,
-            ):
-                going_in_on_the_move.append(collector)
-        # Handed in rather than sent to gather when taken off the move: gas from a rich geyser shows no cargo, and a
-        # gather sends a worker back with its cargo (in game).
-        hand_in_then_gather = self._hand_in_then_gather
-        for collector in coming_out:
-            self._speed_trip(
-                collector,
-                gas_building,
-                townhall,
-                return_point,
-                units_near_the_trip_end,
-                returning=True,
-                work_plainly=hand_in_then_gather,
-                yields=any(_have_yet_to_pass(going_in, collector, gas_building) for going_in in going_in_on_the_move),
-            )
-        for collector in left_alone:
-            if self._was_sent_the_move_to(collector, return_point) and any(
-                _have_yet_to_pass(going_in, collector, gas_building) for going_in in going_in_on_the_move
-            ):
-                hand_in_then_gather(collector, gas_building)
-
-    def _speed_trip[R: UnitType.AnyResource](
-        self,
-        worker: OwnUnit[UnitType.Worker],
-        resource: Unit[R],
-        townhall: Unit[UnitType.Townhall],
-        trip_end: Point,
-        units_near_the_trip_end: Callable[[Point], Units[Unit[Any]]],
-        *,
-        returning: bool,
-        work_plainly: Callable[[OwnUnit[UnitType.Worker], Unit[R]], None],
-        yields: bool = False,
-    ) -> bool:
-        """Keep `worker` at work at `resource`, a field or a gas building, with `townhall` taking its cargo, on the trip
-        back to `townhall` if `returning`, else on the trip to `resource`: give it the move to `trip_end`, where that
-        trip ends, near the end of the trip, unless it `yields` or one of the units `units_near_the_trip_end` reads for
-        it stands in its way, and take it off the move once it yields or one does. Off the move, `work_plainly` keeps it
-        at work. Returns whether it is on the move afterward. The units are read only for a worker on the move or near
-        enough to be given it."""
-        current_order = worker.current_order
-        if current_order is not None and current_order.ability is AbilityId.MOVE:
-            # Speed mining's own move, to where this trip or another ends.
-            if (
-                yields
-                or current_order.known_target != trip_end
-                or _is_any_in_the_way(units_near_the_trip_end(trip_end), worker.position, trip_end)
-            ):
-                work_plainly(worker, resource)
-                return False
-            if len(worker.orders) == 2:
-                return True
-            # The gather or return queued behind the move is gone, so the two go out again.
-        elif not (_is_returning(current_order) if returning else _is_gathering_at(current_order, resource)):
-            work_plainly(worker, resource)
-            return False
-        elif (
-            yields
-            or not (_NEAREST_DISTANCE_FOR_THE_MOVE < worker.distance_to(trip_end) < _FARTHEST_DISTANCE_FOR_THE_MOVE)
-            or _is_any_in_the_way(units_near_the_trip_end(trip_end), worker.position, trip_end)
-        ):
-            return False
-        order_book = self._api.orders
-        order_book.issue(worker, AbilityId.MOVE, target=trip_end, force=True)
-        if returning:
-            # Aimed at the townhall, so the worker goes on into it at speed; a return aimed at nothing stops it at the
-            # end of the move first (in game).
-            order_book.issue(worker, AbilityId.SMART, target=townhall, queued=True)
-        else:
-            order_book.issue(worker, AbilityId.GATHER, target=resource, queued=True)
-        return True
-
-
-@final
-class _TripEndPoints:
-    """Where the moves of the trips between a field or a gas building and an expansion's townhall end, as the game keeps
-    a point."""
-
-    __slots__ = ("expansion", "gather_point", "return_point")
-
-    def __init__(self, expansion: Expansion, gather_point: Point) -> None:
-        """The end points of the trips between `expansion`'s townhall and a field or a gas building whose trip ends at
-        `gather_point`, before the game keeps it: the trip back ends 3.125 from the townhall's center toward it."""
-        self.expansion = expansion
-        self.gather_point = gather_point.rounded_down(step=POINT_PRECISION)
-        """Where the move of a trip to the field or the gas building ends."""
-        self.return_point = expansion.center.towards(gather_point, _RETURN_POINT_DISTANCE).rounded_down(
-            step=POINT_PRECISION
-        )
-        """Where the move of a trip back to the townhall ends."""
-
-    @classmethod
-    def from_field(cls, expansion: Expansion, field: Unit[UnitType.AnyMineralField]) -> Self:
-        """The end points of the trips between `field`, one of `expansion`'s, and its townhall."""
-        return cls(expansion, cls._gather_point_of_a_field(field, expansion.mineral_fields, expansion.center))
-
-    @classmethod
-    def from_gas_building(cls, expansion: Expansion, gas_building: Unit[UnitType.GasBuilding]) -> Self:
-        """The end points of the trips between `gas_building`, on one of `expansion`'s geysers, and its townhall: the
-        trip to it ends where a worker's circle touches the gas building's, toward the townhall's center."""
-        return cls(expansion, gas_building.position.towards(expansion.center, gas_building.radius + _WORKER_RADIUS))
-
-    @staticmethod
-    def _gather_point_of_a_field(
-        field: Unit[UnitType.AnyMineralField], fields: Units[Unit[UnitType.AnyMineralField]], townhall_center: Point
-    ) -> Point:
-        """Where the move of a trip to `field` ends: 1.325 from it toward the townhall, or, where that is nearer another
-        of `fields`, where circles of 1.325 around the two cross, the crossing nearer the townhall, for the last such
-        field. AvocaDOS's rule: it leaves a point for a field behind two others in the gap between them."""
-        position = field.position
-        gather_point = position.towards(townhall_center, _GATHER_POINT_DISTANCE)
-        field_circle = Circle(position, _GATHER_POINT_DISTANCE)
-        for other_field in fields.within(_GATHER_POINT_DISTANCE, of=gather_point):
-            if other_field is field:
-                continue
-            crossings = field_circle.intersections_with(Circle(other_field.position, _GATHER_POINT_DISTANCE))
-            if crossings:
-                gather_point = townhall_center.closest(crossings)
-        return gather_point
-
-
-def _trip_end_points_of_each_field(
-    expansions: Iterable[Expansion],
-) -> dict[Unit[UnitType.AnyMineralField], tuple[_TripEndPoints, ...]]:
-    """The end points of the trips to each field of `expansions`, from each expansion holding it, in their order."""
-    trip_end_points_by_field: dict[Unit[UnitType.AnyMineralField], list[_TripEndPoints]] = {}
-    for expansion in expansions:
-        for field in expansion.mineral_fields:
-            trip_end_points_by_field.setdefault(field, []).append(_TripEndPoints.from_field(expansion, field))
-    return {field: tuple(every_trip_end_points) for field, every_trip_end_points in trip_end_points_by_field.items()}
 
 
 def _given[R: UnitType.AnyType](
@@ -797,89 +458,8 @@ def _still_worked[R: Unit[Any], T](
     return still_worked
 
 
-def _expansions_of_each_geyser_position(expansions: Iterable[Expansion]) -> dict[Point, tuple[Expansion, ...]]:
-    """The expansions of `expansions` holding each geyser, by its position, in their order."""
-    expansions_by_geyser_position: dict[Point, list[Expansion]] = {}
-    for expansion in expansions:
-        for geyser in expansion.geysers:
-            expansions_by_geyser_position.setdefault(geyser.position, []).append(expansion)
-    return {position: tuple(holders) for position, holders in expansions_by_geyser_position.items()}
-
-
-def _finished_own_townhall_at_center_read_once(
-    expansion: Expansion, townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None]
-) -> Unit[UnitType.Townhall] | None:
-    """`_finished_own_townhall_at_center` of `expansion`, read once a turn: kept in `townhall_by_center`."""
-    center = expansion.center
-    if center not in townhall_by_center:
-        townhall_by_center[center] = _finished_own_townhall_at_center(expansion)
-    return townhall_by_center[center]
-
-
-def _finished_own_townhall_at_center(expansion: Expansion) -> Unit[UnitType.Townhall] | None:
-    """The townhall standing at the center of `expansion` if it is this player's and finished, else `None`. One only a
-    morph makes counts as finished as it reads."""
-    townhall = expansion.townhall
-    if (
-        townhall is None
-        or not townhall.is_own
-        or not (townhall.is_complete or townhall.type_id in _TOWNHALLS_ONLY_A_MORPH_MAKES)
-        or townhall.position != expansion.center
-    ):
-        return None
-    return townhall
-
-
-def _can_attack(worker: OwnUnit[UnitType.Worker], enemy: Unit[Any]) -> bool:
-    """Whether `worker` can hit `enemy` as it stands: in range, and no more than a step's turn away."""
-    if not worker.has_in_range(enemy):
-        return False
-    turn = worker.time_to_face(enemy)
-    return turn is not None and turn <= _MOST_TURN_TO_ATTACK
-
-
-def _units_within_reach_of(trip_end: Point, units: Units[Unit[Any]]) -> Units[Unit[Any]]:
-    """The units of `units` that can stand in the way of a move to `trip_end` from as far as speed mining gives it."""
-    reach = _FARTHEST_DISTANCE_FOR_THE_MOVE + _WORKER_RADIUS + _CLEARANCE_OF_THE_MOVE
-    return units.filter(lambda unit: unit.distance_to(trip_end) < reach + unit.radius)
-
-
-def _is_any_in_the_way(units: Iterable[Unit[Any]], start: Point, end: Point) -> bool:
-    """Whether any of `units` stands in the way of a worker moving from `start` to `end`."""
-    clearance = _WORKER_RADIUS + _CLEARANCE_OF_THE_MOVE
-    return any(unit.position.distance_to_segment(start, end) < clearance + unit.radius for unit in units)
-
-
-def _is_gathering_at(order: UnitOrder | None, resource: Unit[UnitType.AnyResource]) -> bool:
-    """Whether `order` is a gather at `resource`."""
-    return order is not None and order.ability is AbilityId.GATHER and order.known_target is resource
-
-
-def _is_returning(order: UnitOrder | None) -> bool:
-    """Whether `order` is a return of cargo."""
-    return order is not None and order.ability is AbilityId.RETURN
-
-
-def _is_on_the_trip_back(order: UnitOrder | None, return_point: Point) -> bool:
-    """Whether `order` is a return of cargo or a move to `return_point`, where the move of the trip back ends: a
-    collector's trip read off its order, since gas from a rich geyser shows no cargo (in game)."""
-    if order is None:
-        return False
-    ability = order.ability
-    return ability is AbilityId.RETURN or (ability is AbilityId.MOVE and order.known_target == return_point)
-
-
-def _have_yet_to_pass(
-    going_in: OwnUnit[UnitType.Worker], coming_out: OwnUnit[UnitType.Worker], gas_building: Unit[UnitType.GasBuilding]
-) -> bool:
-    """Whether `going_in`, a collector on its way into `gas_building`, and `coming_out`, one on its way out, have yet to
-    pass each other: the one going in is the farther from the gas building's center, or the two touch."""
-    return going_in.distance_to(coming_out) < 2 * _WORKER_RADIUS or going_in.distance_to(
-        gas_building
-    ) > coming_out.distance_to(gas_building)
-
-
-def _carries_cargo(worker: OwnUnit[UnitType.Worker]) -> bool:
-    """Whether `worker` carries cargo, as its buffs show, or as its return shows: a worker carrying gas from a rich
-    geyser wears no buff, and leaves the gas building ordered to return it (in game)."""
-    return worker.is_carrying_resource or _is_returning(worker.current_order)
+def _counts_of_the_others[R: Unit[Any]](
+    resource_by_worker: UnitDict[OwnUnit[UnitType.Worker], R], worker: OwnUnit[UnitType.Worker]
+) -> Counter[R]:
+    """How many workers of `resource_by_worker` each resource has, `worker` left out."""
+    return Counter(resource for other, resource in resource_by_worker.items() if other is not worker)
