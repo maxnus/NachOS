@@ -135,6 +135,40 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   a sentry's at 19 or 20 steps, an oracle's at 18, a void ray's at 10 or 11 and an ultralisk's at 20 or 21, against
   their usual 4 to 8, at a target at any angle, and at another in the second run (tool `sweep_turning`, build 75689).
 
+## What the enemy sees of an attack
+
+Seen with a marauder, a roach, a hydralisk and a stalker, each firing a missile at an enemy's units, standing, walking
+up to a target, stutter-stepping, holding as a target walked by and chasing one, in two runs (tool `sweep_combat`,
+`enemy-view`, build 75689).
+
+- **The enemy is shown an attacker where its owner is, facing as it does, and nothing of its attack.** In every one of
+  8,421 steps it was listed to the enemy, it stood at the same position with the same facing in both views, and showed
+  the enemy no weapon cooldown, order or engaged target. In the step a standing attacker fires, nothing it shows the
+  enemy changes.
+- **An attacker faces the target it is set upon at every step the target is in its reach, and so names it.** Given no
+  other order, it faced the target's center to within 0.1° as it fired, between shots and while its missile flew, and
+  followed a target walking by step by step, until it left its reach. Every shot of 303 left within 0.1° of its target
+  but one: a marauder's first at a target walking into its reach, fired 1.1° off in the step its turn ended, as a
+  marauder can fire before its turn ends (above). Of the enemy's units in its reach, the one whose center the attacker
+  faced to within 0.2° was the one it was engaged with at all 5,553 such steps, and never another; it faced none at 1,644
+  steps, turning or chasing a target out of reach, and none while it was engaged with none. Units behind one another,
+  seen from the attacker, were not tried. An attacker sent off once it has fired turns away as any unit sent off does
+  ([turning](units.md#turning)), while its missile flies on.
+- **A first shot comes a set number of steps after the attacker faces its target, and its missile lands a set number
+  after that.** A roach, a hydralisk and a stalker faced their target 3 steps before their first shot at it, 2 to 4 at
+  most, whether they walked up to it, held as it walked into their reach or caught up with it, and were first shown
+  standing 2 steps before it, at times 3: the steps their cooldown reads 0 before a shot (above). A marauder fired in the
+  step its facing reached the target, walking up to one in the step it arrived, still moving, and stood from the next.
+  Chasing, each stood 8 or 9 steps after a shot before it set off again. Later shots came as the cooldown and its delay
+  give them (above): a marauder's 23 to 26 steps apart, a roach's 31 to 34, a hydralisk's 12 to 16 and a stalker's 29 to
+  32.
+- **A missile at a target standing lands a set number of steps after the shot, by its attacker and the distance
+  between their centers, whether the attacker stands, turns away or moves off once it has fired**, unlike a move ordered
+  the step before (above). Over 240 shots: a marauder's 4 steps after at 3.4, 5 at 5.3 and 7 at 6.6 to 7.6; a roach's 3
+  at 2.5, 5 at 3.9 and 6 at 5.2 to 5.5; a hydralisk's 2 at 3.0, 3 at 4.6 and 4 at 5.9 to 6.6; and a stalker's 4 at 3.4,
+  6 at 5.3, 7 at 6.7 to 7.2 and 8 at 7.5 and 7.6. A walking target took it a step sooner or later. So the step a
+  target loses health gives the step of the shot, and the next shot is due within the 3 steps of the delay.
+
 ## Buffs
 
 - A melee game puts 45 buffs on units, 5 of them for carrying resources: minerals under one buff for every race and
