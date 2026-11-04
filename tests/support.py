@@ -68,6 +68,7 @@ from sc2nachos.protocol import Client, Exchange, Recording, RecordingTransport, 
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
 from sc2nachos.units._tracking import _Tracker
+from sc2nachos.vision import Vision
 
 
 class FakeTransport:
@@ -453,6 +454,7 @@ def played(
                 game_data=tracker.game_data,
                 order_book=order_book,
             ),
+            vision=Vision._build_at_start(game_map, state=state, step=step),
             pathing=Pathing(client),
             camera=Camera._from_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None, step=step),

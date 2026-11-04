@@ -557,7 +557,6 @@ class TestThroughTheApi:
         "ui_unit_counts",
         "upgrades",
         "vision",
-        "explored",
         "creep",
         "placement",
         "pathing",
@@ -600,7 +599,7 @@ class TestThroughTheApi:
         api = Api()
         self._play(api, make_observation(0, (1, Result.VICTORY)))
         with pytest.raises(ProtocolError):
-            _ = api.vision
+            _ = api.vision.in_sight
 
 
 @pytest.mark.integration

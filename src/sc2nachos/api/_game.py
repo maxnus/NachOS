@@ -77,6 +77,7 @@ from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, Unit, VitalType
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._tracking import _Tracker
+from sc2nachos.vision import Vision
 
 _ALERT_BY_VALUE: Mapping[int, Alert] = MappingProxyType({int(alert): alert for alert in Alert})
 # The event a happening comes as, by the alliance of the unit it happened to. An alliance left out gets none.
@@ -105,6 +106,7 @@ class _Game:
     observation: sc2api_pb2.ResponseObservation
     state: _State
     placement: Final[PlacementGrids]
+    vision: Final[Vision]
     pathing: Final[Pathing]
     camera: Final[Camera]
     debug: Final[DebugCommands]
@@ -177,6 +179,7 @@ class _Game:
                 game_data=game_data,
                 order_book=order_book,
             ),
+            vision=Vision._build_at_start(game_map, state=state, step=step),
             pathing=Pathing(client),
             camera=Camera._from_player(observation.observation.raw_data.player),
             debug=DebugCommands(client, game_map, opponent_id=None if enemy is None else enemy.id, step=step),
@@ -215,6 +218,7 @@ class _Game:
         self.time = GameTime(steps=step)
         self.state = _State(observation, self.tracker, self.game_map)
         self.placement._update(self.tracker.unit_tracker.present, self.state, step)
+        self.vision._update(self.state, step)
         self.pathing._update(self.tracker.unit_tracker.present)
         self.camera._update(observation.observation.raw_data.player)
         self.debug._update(step)
