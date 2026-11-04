@@ -769,7 +769,7 @@ class TestWhatAUnitReads:
         assert not bomb.has_buff(set(BuffId))
 
     def test_a_unit_a_stasis_ward_trapped_wears_its_buff(self) -> None:
-        """The enemy's zerglings a ward trapped, as the game listed them, reading no time left (in game)."""
+        """The enemy's zerglings a ward trapped, as the game listed them (in game)."""
         trapped = make_unit(1, RawUnitTypeId.Zergling, alliance=_ENEMY, buff_ids=[RawBuffId.OracleStasisTrapTarget])
         assert _one(trapped).buffs == {BuffId.STASIS_WARD_TRAPPED}
 

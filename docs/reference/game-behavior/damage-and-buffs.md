@@ -209,7 +209,7 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
   its dummy only after 175 steps, for 2. No other unit wears any of the three: the 7 enemy air units seen within 3.5 of
   a bomb's target or its dummy, void rays, an observer and medivacs, 5 of them losing health or shields there, wore no
   buff at all (AI Arena matches 4805282 and 4846375, every step, fog off, 2026-11-04, build 75689).
-- A unit a stasis ward traps wears `OracleStasisTrapTarget` for 480 steps, and the ward wears no buff. In AI Arena
+- The units a stasis ward trapped wore `OracleStasisTrapTarget` for 480 steps, and the ward wore no buff. In AI Arena
   match 4719987 (Zerg against Protoss, on PylonAIE), the one ward was first listed at step 19,032, finished 80 steps
   later and cloaked, and uncloaked at 20,017. Seven steps later three zerglings 4.7 to 5.3 from it wore the buff, from
   20,024 to 20,503 at every step, at full health and never moving, though they took a move two steps in and held it
