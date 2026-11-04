@@ -11,8 +11,9 @@ inputs:
     default: ''
   maps:
     description: >-
-      Folders of .SC2Map files to install, one per line, relative to the workspace. Each is copied to
-      maps/<folder name> in the client, where the map name alone finds it.
+      Folders of .SC2Map files to install, one per line, relative to the workspace. Their maps are copied straight
+      into the client's maps folder, where the map name alone finds it and a replay names the bare file, as AI Arena's
+      do. Two folders holding a map of the same file name fail the step.
     default: ''
   cache:
     description: Keep the downloaded client in the Actions cache, so later runs restore it rather than download it.
@@ -97,12 +98,23 @@ runs:
         INSTALLED: ${{ steps.locate.outputs.installed }}
         CACHED: ${{ steps.restore.outputs.cache-hit }}
       run: |
+        declare -A source_folder
         while IFS= read -r folder; do
           [ -n "$folder" ] || continue
           ls "$folder"/*.SC2Map > /dev/null || { echo "::error::No .SC2Map files in $folder"; exit 1; }
-          mkdir -p "$DIR/maps/$(basename "$folder")"
-          cp "$folder"/*.SC2Map "$DIR/maps/$(basename "$folder")/"
+          for map in "$folder"/*.SC2Map; do
+            name=$(basename "$map")
+            if [ -n "${source_folder[$name]:-}" ]; then
+              echo "::error::$name is in both ${source_folder[$name]} and $folder; the client's maps folder can hold one"
+              exit 1
+            fi
+            source_folder[$name]=$folder
+          done
         done <<< "$MAPS"
+        mkdir -p "$DIR/maps"
+        for name in "${!source_folder[@]}"; do
+          cp "${source_folder[$name]}/$name" "$DIR/maps/"
+        done
         build=$(basename "$(ls -d "$DIR"/Versions/Base* | sort -V | tail -n 1)")
         if [ "$INSTALLED" = true ]; then source=installed; elif [ "$CACHED" = true ]; then source=cache; else source=download; fi
         echo "SC2PATH=$DIR" >> "$GITHUB_ENV"
