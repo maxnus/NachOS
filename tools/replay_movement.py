@@ -43,7 +43,7 @@ from loguru import logger
 
 from sc2nachos import Api, run_replay
 from sc2nachos.events import TurnStartEvent
-from sc2nachos.extensions._movement_windows import MovementWindow, MovementWindows
+from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindow, MovementWindows
 
 DEFAULT_OUT_DIRECTORY = Path("replay-movement")
 DEFAULT_SUMMARY_PATH = Path("replay-movement.json")

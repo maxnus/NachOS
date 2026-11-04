@@ -8,7 +8,7 @@ import pytest
 from s2clientprotocol import common_pb2, raw_pb2
 
 from sc2nachos import Api
-from sc2nachos.extensions._movement_windows import (
+from sc2nachos.extensions.upgrade_inference._movement_windows import (
     _CREEP_SPEEDS,
     MovementWindow,
     MovementWindows,

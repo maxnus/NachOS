@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from sc2nachos import Api
     from sc2nachos.gamedata import GameData
-    from sc2nachos.geometry import Grid, Point
+    from sc2nachos.geometry import Point
 
 # Upgrade inference reads Charge off the buff a charging zealot wears, not off its speed.
 _READ_OFF_BUFFS: Final[frozenset[UpgradeId]] = frozenset({UpgradeId.CHARGE})
@@ -134,6 +134,47 @@ class _OpenWindow:
         self.steps_on_creep = 0
         self.buffs_worn = _NO_BUFFS
 
+    def add_move(
+        self, position: Point, step: int, step_speeds: tuple[float, float], *, on_creep: bool, buffs: frozenset[BuffId]
+    ) -> None:
+        """Add the unit's move to `position`, where `step` observed it, wearing `buffs`, against `step_speeds`: how far
+        it moves in a step at full speed without the upgrade and with it, on the ground the move began on, creep if
+        `on_creep`."""
+        steps = step - self.last_step
+        last_position = self.last_position
+        distance = math.hypot(position[0] - last_position[0], position[1] - last_position[1])
+        without_upgrade, with_upgrade = step_speeds
+        step_share = (distance / steps - without_upgrade) / (with_upgrade - without_upgrade)
+        self.distance += distance
+        self.without_upgrade += without_upgrade * steps
+        self.with_upgrade += with_upgrade * steps
+        self.least_step_share = min(self.least_step_share, step_share)
+        self.greatest_step_share = max(self.greatest_step_share, step_share)
+        if on_creep:
+            self.steps_on_creep += steps
+        if buffs:
+            self.buffs_worn |= buffs
+        self.last_step = step
+        self.last_position = position
+
+    def ended(self, unit_id: int, upgrade: UpgradeId, *, is_hallucination: bool) -> MovementWindow:
+        """The window, ending at its last observation, of the unit `unit_id`, whose type `upgrade` speeds up."""
+        return MovementWindow(
+            unit_id,
+            self.type_id,
+            upgrade,
+            self.start_step,
+            self.last_step,
+            self.distance,
+            self.without_upgrade,
+            self.with_upgrade,
+            self.least_step_share,
+            self.greatest_step_share,
+            self.steps_on_creep,
+            self.buffs_worn,
+            is_hallucination,
+        )
+
 
 @final
 class MovementWindows:
@@ -183,63 +224,24 @@ class MovementWindows:
         api = self._api
         step = api.step
         previous_step = self._previous_step
-        window_steps = self._window_steps
-        block_ended = step // window_steps != previous_step // window_steps
+        block_ended = step // self._window_steps != previous_step // self._window_steps
         previously_open = self._open
         still_open: dict[int, _OpenWindow] = {}
-        creep: Grid[bool] | None = None
         for unit in api.units.enemy:
             speeds = self._speeds.get(type_id := unit.type_id)
             # The units are the enemy's, so one first seen on another side has changed sides.
             if speeds is None or unit.first_alliance is not Alliance.ENEMY or not unit.is_visible:
                 continue
-            unit_id = unit.id
-            position = unit.position
-            window = previously_open.get(unit_id)
+            window = previously_open.get(unit_id := unit.id)
             if window is None or window.last_step != previous_step or window.type_id is not type_id:
-                still_open[unit_id] = _OpenWindow(type_id, step, position)
+                still_open[unit_id] = _OpenWindow(type_id, step, unit.position)
                 continue
-            steps = step - previous_step
-            last_position = window.last_position
-            distance = math.hypot(position[0] - last_position[0], position[1] - last_position[1])
-            window.distance += distance
-            if speeds.creep_speeds_it_up:
-                if creep is None:
-                    creep = api.creep
-                on_creep = creep[last_position]
-            else:
-                on_creep = False
-            without_upgrade, with_upgrade = speeds.on_creep if on_creep else speeds.off_creep
-            window.without_upgrade += without_upgrade * steps
-            window.with_upgrade += with_upgrade * steps
-            step_share = (distance / steps - without_upgrade) / (with_upgrade - without_upgrade)
-            window.least_step_share = min(window.least_step_share, step_share)
-            window.greatest_step_share = max(window.greatest_step_share, step_share)
-            if on_creep:
-                window.steps_on_creep += steps
-            if buffs := unit.buffs:
-                window.buffs_worn |= buffs
-            window.last_step = step
-            window.last_position = position
+            on_creep = speeds.creep_speeds_it_up and api.creep[window.last_position]
+            step_speeds = speeds.on_creep if on_creep else speeds.off_creep
+            window.add_move(unit.position, step, step_speeds, on_creep=on_creep, buffs=unit.buffs)
             if block_ended:
-                self._on_window(
-                    MovementWindow(
-                        unit_id,
-                        type_id,
-                        speeds.upgrade,
-                        window.start_step,
-                        step,
-                        window.distance,
-                        window.without_upgrade,
-                        window.with_upgrade,
-                        window.least_step_share,
-                        window.greatest_step_share,
-                        window.steps_on_creep,
-                        window.buffs_worn,
-                        unit.is_hallucination,
-                    )
-                )
-                window = _OpenWindow(type_id, step, position)
+                self._on_window(window.ended(unit_id, speeds.upgrade, is_hallucination=unit.is_hallucination))
+                window = _OpenWindow(type_id, step, unit.position)
             still_open[unit_id] = window
         self._open = still_open
         self._previous_step = step

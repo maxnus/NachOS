@@ -1187,9 +1187,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
      flying unit's speeding up spoils for one or two windows; and no vote where the gap is under 10% of the speed, as
      for an ultralisk on creep, 3%.
   2. A replay tool, in two pull requests. In the first, this one, `MovementWindows`, private in
-     `sc2nachos/extensions/_movement_windows.py` until step 3, measures each visible enemy unit of the 12 types over
-     windows of 11 steps on one clock: the distance moved, the two predictions, and the least and the greatest share
-     of the gap a single observation's move came to. `tools/replay_movement.py` plays a random sample of every bot's
+     `sc2nachos/extensions/upgrade_inference/_movement_windows.py` until step 3, upgrade inference having become a
+     package (the owner, review of #214), measures each visible enemy unit of the 12 types over windows of 11 steps on
+     one clock: the distance moved, the two predictions, and the least and the greatest share of the gap a single
+     observation's move came to. `tools/replay_movement.py` plays a random sample of every bot's
      games of AI Arena's 2026 Season 1 back as each player (the owner, 2026-11-04, over AvocaDOS's games alone, for a
      wider view), each playback's own upgrades being the truth for the other's, and keeps the windows raw, so the band,
      the window and the least gap come from the data. Its pilot, on two samples of 100 games played as each player,

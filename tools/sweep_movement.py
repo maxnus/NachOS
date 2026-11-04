@@ -37,7 +37,7 @@ from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
-from sc2nachos.extensions._movement_windows import speed_upgrade_by_type
+from sc2nachos.extensions.upgrade_inference._movement_windows import speed_upgrade_by_type
 from sc2nachos.gamedata import Attribute, GameData, Tech
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
