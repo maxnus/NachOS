@@ -57,6 +57,10 @@ template = '''
 __version__ = "{version}"
 '''
 
+[tool.uv]
+# Reinstall NachOS in its own environment when the commit or a tag changes, so that `__about__.py` follows them.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/sc2nachos"]
 
