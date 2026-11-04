@@ -2,10 +2,11 @@
 each trip's end, at one, two and three workers a geyser.
 
 Needs StarCraft II installed. Plays one game on the sandbox's map for each trial, as Terran against the very easy
-computer, which keeps the game going, where a game alone ends at once: a refinery made by debug command on each geyser
-of its main, and the starting SCVs handed to speed mining once the refineries stand,
-`SpeedMining.collect` taking the SCVs nearest each refinery and `mine` the rest. A trial is a count of collectors a
-refinery, a seed, and plain or moved:
+computer, which keeps the game going, where a game alone ends at once. Every starting SCV is handed to speed mining's
+`mine`; once there are the minerals for it, the miner nearest each geyser of the main is released to build a refinery
+on it, as a refinery made there by debug command took no collector (`sc2` run 41827726722). Once both refineries are
+finished and their builders out of them, `SpeedMining.collect` takes each refinery's builder and the miners nearest it,
+as many as the trial says. A trial is a count of collectors a refinery, a seed, and plain or moved:
 
 - Plain, speed mining keeps each collector on plain gathers and returns, as `collect` does.
 - Moved, the sweep also gives a collector on its gather at its refinery, or on its return, the move speed mining gives
@@ -43,7 +44,7 @@ from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty
 from sc2nachos.run import Installation
-from sc2nachos.units import Unit, UnitType
+from sc2nachos.units import OwnUnit, Unit, UnitType
 
 # The distances from where a trip ends between which a collector on its gather or return is given the move, and how far
 # from a townhall's center the move of a trip back ends: speed mining's for its miners.
@@ -54,9 +55,9 @@ _RETURN_POINT_DISTANCE = 3.125
 _WORKER_RADIUS = 0.375
 # Steps between turns: one, so that a move goes out as soon as a worker comes within reach of it.
 _STEPS_PER_TURN = 1
-# How long past the time measured a game may run, for the refineries to appear: the game can make a unit a few steps
-# late (in game).
-_SPARE_TIME = GameTime(seconds=10)
+# How long the refineries may take to be finished, before the warm-up: the minerals for both, an SCV's walk to each
+# geyser, and a build of 480 steps (in game).
+_SETUP_TIME = GameTime(seconds=90)
 # The computer, which keeps the game going: on the ladder's maps a game alone ends at once, in a victory (in game).
 _OPPONENT = Computer(Race.ZERG, Difficulty.VERY_EASY)
 
@@ -97,7 +98,6 @@ class _TrialFindings:
     moves_given: int = 0
     actions_refused: int = 0
     most_enemies_in_sight: int = 0
-    not_handed_over: int = 0
 
 
 class _TrialGame:
@@ -111,6 +111,7 @@ class _TrialGame:
         self._warm_up = warm_up
         self._measured = measured
         self._main: Expansion | None = None
+        self._builder_by_geyser: dict[Unit[UnitType.AnyVespeneGeyser], OwnUnit[UnitType.Worker]] = {}
         self._handed_over_at: GameTime | None = None
         self._measuring_from: GameTime | None = None
         self._measuring_from_step = 0
@@ -120,17 +121,48 @@ class _TrialGame:
         self._moves_given = 0
         self._actions_refused = 0
         self._most_enemies_in_sight = 0
-        self._not_handed_over = 0
-        self.api.on(GameStartEvent)(self._make_the_refineries)
+        self.api.on(GameStartEvent)(self._start_mining)
         self.api.on(TurnEvent)(self._play_the_turn)
 
-    def _make_the_refineries(self, _: GameStartEvent) -> None:
-        """Make a refinery on each geyser of the main, of the kind its geyser takes."""
+    def _start_mining(self, _: GameStartEvent) -> None:
+        """Hand every SCV to speed mining to mine at the main."""
         main = self.api.expansions[0]
         self._main = main
+        for scv in self.api.units.own.workers:
+            self.api.extensions.mine(scv, main.mineral_fields)
+
+    def _build_the_refineries(self, main: Expansion) -> None:
+        """Release the miner nearest each geyser of `main` with no refinery of this player's on it, and no builder on
+        the way, to build one there, while there are the minerals for it."""
+        api = self.api
+        minerals = api.resources.minerals
+        cost = api.data.units[UnitTypeId.REFINERY].cost.minerals
+        standing = {gas_building.position for gas_building in api.units.own.gas_buildings}
         for geyser in main.geysers:
-            rich = geyser.type_id is UnitTypeId.VESPENE_GEYSER_RICH
-            self.api.debug.create_units(UnitTypeId.REFINERY_RICH if rich else UnitTypeId.REFINERY, at=geyser.position)
+            builder = self._builder_by_geyser.get(geyser)
+            if geyser.position in standing or (builder is not None and builder.is_alive and builder.orders):
+                continue
+            miners = [scv for scv in api.extensions.miners if scv.is_orderable]
+            if minerals < cost or not miners:
+                return
+            builder = min(miners, key=lambda scv: scv.distance_to(geyser))
+            api.extensions.release(builder)
+            api.orders.issue(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
+            self._builder_by_geyser[geyser] = builder
+            minerals -= cost
+
+    def _finished_refineries(self, main: Expansion) -> list[Unit[UnitType.GasBuilding]] | None:
+        """This player's refineries on the geysers of `main`, in their order, once every one is finished and its builder
+        is out of it, else `None`."""
+        by_position = {gas_building.position: gas_building for gas_building in self.api.units.own.gas_buildings}
+        refineries = []
+        for geyser in main.geysers:
+            refinery = by_position.get(geyser.position)
+            builder = self._builder_by_geyser.get(geyser)
+            if refinery is None or not refinery.is_complete or builder is None or not builder.is_orderable:
+                return None
+            refineries.append(refinery)
+        return refineries
 
     def _play_the_turn(self, _: TurnEvent) -> None:
         """Hand the SCVs over once the refineries stand, give the moves in a moved trial, and record the time
@@ -140,8 +172,9 @@ class _TrialGame:
         if main is None:
             return
         if self._handed_over_at is None:
-            refineries = api.units.own.gas_buildings.complete
-            if len(refineries) == len(main.geysers):
+            if (refineries := self._finished_refineries(main)) is None:
+                self._build_the_refineries(main)
+            else:
                 self._hand_over(main, refineries)
             return
         if self._trial.inset is not None:
@@ -164,20 +197,19 @@ class _TrialGame:
                 self.findings = self._read_the_findings(main)
 
     def _hand_over(self, main: Expansion, refineries: Sequence[Unit[UnitType.GasBuilding]]) -> None:
-        """Hand the SCVs nearest each of `refineries` to speed mining to collect, as many as the trial says, and the
-        rest to mine, and work out where each refinery's trips end."""
+        """Hand each of `refineries`' builder and the miners nearest it to speed mining to collect, as many as the trial
+        says, and work out where each refinery's trips end. Raises `RuntimeError` for a worker `collect` refuses, as
+        the time measured would then measure nothing."""
         speed_mining = self.api.extensions
-        scvs = list(self.api.units.own.workers)
-        for refinery in refineries:
-            scvs.sort(key=lambda scv: scv.distance_to(refinery))
-            for scv in scvs[: self._trial.collectors]:
+        for geyser, refinery in zip(main.geysers, refineries, strict=True):
+            builder = self._builder_by_geyser[geyser]
+            miners = sorted(
+                (scv for scv in speed_mining.miners if scv.is_orderable), key=lambda scv: scv.distance_to(refinery)
+            )
+            for scv in [builder, *miners[: self._trial.collectors - 1]]:
                 if speed_mining.collect(scv, refinery) is None:
-                    self._not_handed_over += 1
-            del scvs[: self._trial.collectors]
+                    raise RuntimeError(f"collect refused {scv!r} at {refinery!r}")
             self._trip_ends_by_refinery[refinery] = _trip_ends(main, refinery, self._trial.inset or 0.0)
-        for scv in scvs:
-            if speed_mining.mine(scv) is None:
-                self._not_handed_over += 1
         self._handed_over_at = self.api.time
 
     def _give_the_moves(self, main: Expansion) -> None:
@@ -221,7 +253,6 @@ class _TrialGame:
             moves_given=self._moves_given,
             actions_refused=self._actions_refused,
             most_enemies_in_sight=self._most_enemies_in_sight,
-            not_handed_over=self._not_handed_over,
         )
         for refinery, (gather_point, _return_point) in self._trip_ends_by_refinery.items():
             findings.refineries.append(
@@ -254,11 +285,11 @@ def _play(trial: _Trial, *, warm_up: GameTime, measured: GameTime) -> _TrialFind
         _OPPONENT,
         race=Race.TERRAN,
         steps_per_turn=_STEPS_PER_TURN,
-        time_limit=warm_up + measured + _SPARE_TIME,
+        time_limit=_SETUP_TIME + warm_up + measured,
         random_seed=trial.seed,
     )
     if game.findings is None:
-        raise RuntimeError(f"{trial} ended before the time measured did: the refineries never stood")
+        raise RuntimeError(f"{trial} ended before the time measured did: the refineries were not finished in time")
     return game.findings
 
 
