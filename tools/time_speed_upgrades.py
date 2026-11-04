@@ -1,6 +1,6 @@
 """Time what upgrade inference's speed upgrades cost a turn: each recorded game played back with `UpgradeInference`
 built with `include_speed_upgrades` and without it, in rounds that alternate the two, the whole playback timed; and,
-in one round more, the time spent in the speed code itself, `MovementWindows` and the score it hands the windows to,
+in one round more, the time spent in the speed code itself, `MovementWindows` and the rule it hands the windows to,
 with the visible enemy units it measured a turn.
 
 A game recorded through a bot, as AvocaDOS's are, plays back with no bot, `run_recording`'s `permissive`. The times
@@ -89,7 +89,7 @@ def _seconds_to_play_back(
 
 def _time_the_speed_code(recording: Path, times: _PlaybackTimes) -> None:
     """Play `recording` back once more with the speed upgrades, timing `MovementWindows`'s turns, which hand the
-    windows to the score, and counting the units each measures."""
+    windows to the rule, and counting the units each measures."""
     measure = MovementWindows._measure
 
     def timed_measure(windows: MovementWindows, *arguments: object) -> None:
