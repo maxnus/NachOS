@@ -17,6 +17,12 @@ as many as the trial says. A trial is a count of collectors a refinery, a seed, 
   return of vespene, not one returning the minerals it was handed over with, is given a move ending 3.125 from the
   townhall's center, toward that point, with a right-click on the townhall queued behind, which the worker shows as a
   return, and, where the variant says so, a gather at the refinery queued behind that.
+- The `lanes` ones give both moves, as `both` does, but each collector on a lane of its own, so that one going in and
+  one coming out pass side by side, where on `both` at two a refinery they meet head on, the line between the centers
+  being the path of both moves (`sc2` run 41856036606). A refinery's collectors take the lanes in turn, in the order
+  they were handed over: half of `lane_spacing` to the left of that line, seen from the refinery, then as far to the
+  right. A lane's moves end on the same two circles as those of `both`, around the refinery's center and the
+  townhall's, at the lane's distance from the line.
 
 After a warm-up from the hand-over, it records over the time measured what each refinery's contents fell by, the
 minerals and vespene the score says were collected, the actions the game refused, the most enemy units in sight at
@@ -87,6 +93,9 @@ class _Variant:
     """Whether a gather at the refinery is queued behind the right-click on the townhall that ends the trip back."""
     farthest: float = _FARTHEST_DISTANCE_FOR_THE_MOVE
     """How far from where its trip ends a collector may be given the move."""
+    lane_spacing: float | None = None
+    """How far apart, side to side, the lanes of a refinery's collectors are, as the module's docstring says; or `None`
+    for every collector on the line between the centers."""
 
     @property
     def gives_moves(self) -> bool:
@@ -107,6 +116,10 @@ _VARIANTS = {
         _Variant(name="gather-out-0.3", gather_inset=-0.3),
         _Variant(name="gather-out-0.6", gather_inset=-0.6),
         _Variant(name="gather-early", gather_inset=0.0, farthest=3.0),
+        *(
+            _Variant(name=f"lanes-{lane_spacing}", gather_inset=0.0, return_move=True, lane_spacing=lane_spacing)
+            for lane_spacing in (0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+        ),
     )
 }
 
@@ -156,9 +169,10 @@ class _RefineryFindings:
     exit: tuple[float, float] | None
     """Where a collector was first seen coming out, on average, as `entry` gives it."""
     gather_point: tuple[float, float] | None = None
-    """Where the move of the trip to it ends, in a trial that gives that move."""
+    """Where the move of the trip to it ends, in a trial that gives that move, on the line between the centers: a
+    lane's ends to the side of it."""
     return_point: tuple[float, float] | None = None
-    """Where the move of the trip back ends, in a trial that gives that move."""
+    """Where the move of the trip back ends, in a trial that gives that move, as `gather_point` gives it."""
 
 
 @dataclass(kw_only=True)
@@ -194,6 +208,7 @@ class _TrialGame:
         self._vespene_left_at_the_start: dict[Unit[UnitType.GasBuilding], int] = {}
         self._collected_at_the_start = (0.0, 0.0)
         self._trip_ends_by_refinery: dict[Unit[UnitType.GasBuilding], tuple[Point, Point]] = {}
+        self._trip_ends_by_collector: dict[int, tuple[Point, Point]] = {}
         self._seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], set[int]] = {}
         self._first_seen_mining_by_refinery: dict[Unit[UnitType.GasBuilding], GameTime] = {}
         self._trip_log_by_refinery: dict[Unit[UnitType.GasBuilding], _TripLog] = {}
@@ -322,19 +337,23 @@ class _TrialGame:
 
     def _hand_over(self, main: Expansion, refineries: Sequence[Unit[UnitType.GasBuilding]]) -> None:
         """Hand each of `refineries`' builder and the miners nearest it to speed mining to collect, as many as the trial
-        says, and work out where each refinery's trips end. Raises `RuntimeError` for a worker `collect` refuses, as
-        the time measured would then measure nothing."""
+        says, and work out where each refinery's trips end, on the line between the centers and on each collector's
+        lane. Raises `RuntimeError` for a worker `collect` refuses, as the time measured would then measure
+        nothing."""
         speed_mining = self.api.extensions
+        variant = self._trial.variant
+        gather_inset = variant.gather_inset or 0.0
         for geyser, refinery in zip(main.geysers, refineries, strict=True):
             builder = self._builder_by_geyser[geyser]
             miners = sorted(
                 (scv for scv in speed_mining.miners if scv.is_orderable), key=lambda scv: scv.distance_to(refinery)
             )
-            for scv in [builder, *miners[: self._trial.collectors - 1]]:
+            for index, scv in enumerate([builder, *miners[: self._trial.collectors - 1]]):
                 if speed_mining.collect(scv, refinery) is None:
                     raise RuntimeError(f"collect refused {scv!r} at {refinery!r}")
-            gather_inset = self._trial.variant.gather_inset
-            self._trip_ends_by_refinery[refinery] = _trip_ends(main, refinery, gather_inset or 0.0)
+                lane_offset = _lane_offset_of_collector(index, variant.lane_spacing)
+                self._trip_ends_by_collector[scv.id] = _trip_ends(main, refinery, gather_inset, lane_offset)
+            self._trip_ends_by_refinery[refinery] = _trip_ends(main, refinery, gather_inset, 0.0)
         self._handed_over_at = self.api.time
 
     def _give_the_moves(self, main: Expansion) -> None:
@@ -353,7 +372,7 @@ class _TrialGame:
             current_order = scv.current_order
             if current_order is None:
                 continue
-            gather_point, return_point = self._trip_ends_by_refinery[refinery]
+            gather_point, return_point = self._trip_ends_by_collector[scv.id]
             queued_behind: list[tuple[AbilityId, Unit[Any]]]
             if (
                 variant.gather_inset is not None
@@ -416,13 +435,31 @@ class _TrialGame:
         return findings
 
 
-def _trip_ends(main: Expansion, refinery: Unit[UnitType.GasBuilding], inset: float) -> tuple[Point, Point]:
-    """Where the moves of the trips between `refinery` and the townhall at `main`'s center end: `inset` past where a
-    worker's circle touches the refinery's, toward the refinery's center, and 3.125 from the townhall's center, toward
-    that point."""
+def _trip_ends(
+    main: Expansion, refinery: Unit[UnitType.GasBuilding], inset: float, lane_offset: float
+) -> tuple[Point, Point]:
+    """Where the moves of the trips between `refinery` and the townhall at `main`'s center end, on the lane
+    `lane_offset` to the left of the line from the refinery's center to the townhall's, seen from the refinery, or to
+    the right for a negative one: on the circle `inset` inside the one where a worker's circle touches the refinery's,
+    and on the circle 3.125 around the townhall's center."""
     center = main.center
-    gather_point = refinery.position.towards(center, refinery.radius + _WORKER_RADIUS - inset)
-    return gather_point, center.towards(gather_point, _RETURN_POINT_DISTANCE)
+    along = refinery.position.direction_vector(center)
+    to_the_left = Point((-along.y, along.x))
+    gather_distance = refinery.radius + _WORKER_RADIUS - inset
+    gather_point = (
+        refinery.position + along * math.sqrt(gather_distance**2 - lane_offset**2) + to_the_left * lane_offset
+    )
+    return_point = center - along * math.sqrt(_RETURN_POINT_DISTANCE**2 - lane_offset**2) + to_the_left * lane_offset
+    return gather_point, return_point
+
+
+def _lane_offset_of_collector(index: int, lane_spacing: float | None) -> float:
+    """How far to the left of the line between the centers the lane of a refinery's collector handed over `index`th,
+    from 0, lies, negative to the right: half of `lane_spacing` to the left for an even `index`, to the right for an
+    odd one, and none for `None`."""
+    if lane_spacing is None:
+        return 0.0
+    return lane_spacing / 2 if index % 2 == 0 else -lane_spacing / 2
 
 
 def _mean(values: Sequence[float]) -> float | None:
