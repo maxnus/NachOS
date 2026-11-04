@@ -125,6 +125,13 @@ def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: Raw
         AbilityId(reported)
 
 
+def test_the_buffs_a_unit_leaves_out_are_in_the_catalog_and_no_members_own() -> None:
+    """A unit's buffs leave them out, so none may be read as a member too."""
+    left_out = {int(buff) for buff in BuffId._LEFT_OUT_IDS}
+    assert left_out <= {int(buff) for buff in RawBuffId}
+    assert not left_out & ({int(member) for member in BuffId} | set(BuffId._REMAPPED_IDS))
+
+
 @pytest.mark.parametrize(
     "game_id",
     [

@@ -751,8 +751,9 @@ class TestWhatAUnitReads:
         with pytest.raises(UncuratedIdError, match=r"UnitTypeId has no member for id \d+ \(RawUnitTypeId.Viking\)"):
             _one(make_unit(1, RawUnitTypeId.Viking))
 
-    def test_a_parasitic_bomb_left_behind_is_read_with_the_buffs_it_wears(self) -> None:
-        """The game lists one where a bomb's target died, as the viper's player's unit, wearing both buffs (in game)."""
+    def test_a_parasitic_bomb_left_behind_is_read_and_wears_no_buff(self) -> None:
+        """The game lists one where a bomb's target died, as the viper's player's unit, always wearing the same two
+        buffs, which say nothing its type does not (in game)."""
         listed = make_unit(
             1,
             RawUnitTypeId.ParasiticBombDummy,
@@ -764,7 +765,8 @@ class TestWhatAUnitReads:
         )
         bomb = _one(listed)
         assert bomb.type_id is UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND
-        assert bomb.buffs == {BuffId.VIPER_PARASITIC_BOMB_LEFT_BEHIND, BuffId.VIPER_PARASITIC_BOMB_LEFT_BEHIND_SEARCH}
+        assert bomb.buffs == frozenset()
+        assert not bomb.has_buff(set(BuffId))
 
     def test_an_uncurated_buff_raises_when_read(self) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):

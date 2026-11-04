@@ -46,6 +46,12 @@ in-game test found it. It watches 128 steps after each order, and a bomb on a ta
 `PARASITIC_BOMB_LEFT_BEHIND` only after 175 steps, so it missed the two buffs that wears; playing AI Arena replays
 back found them.
 
+**A buff every unit of one type wears for as long as it is listed is left out, not curated**: it says nothing the type
+does not. It goes in `BuffId._LEFT_OUT_IDS`, which a unit's buffs and the buff events pass over, so reading a unit
+that wears one raises nothing. A parasitic bomb left behind always wears `ParasiticBombUnitKU` and
+`ParasiticBombSecondaryUnitSearch`, and reads no buff ([game behavior](../reference/game-behavior/units.md)). Check
+every listing of every unit of the type, in a replay played back every step, before adding one.
+
 **A buff or an effect is named after the one unit type that causes it, then what a player sees**, as an
 ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_INJECTED`, `MARINE_STIMMED`,
 `HIGH_TEMPLAR_STORM`. Where no single type is the source, as with a map's zones or the minerals every worker

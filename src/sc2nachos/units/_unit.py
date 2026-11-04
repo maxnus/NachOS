@@ -46,6 +46,7 @@ _ALLIANCES = {int(member): member for member in Alliance}
 _CLOAKS = {int(member): member for member in CloakState}
 # Worn by a unit a phoenix holds in the air. The game reports such a unit as not flying.
 _LIFTED = int(BuffId.PHOENIX_GRAVITON_BEAM)
+_LEFT_OUT_BUFFS = BuffId._LEFT_OUT_IDS
 # An id is the alliance's digit followed by a count of that alliance's units, below this.
 _IDS_PER_ALLIANCE = 100_000
 # Air weapons hit these, though they stand on the ground: a viking, which has no ground weapon, fired at a colossus
@@ -680,10 +681,11 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def buffs(self) -> frozenset[BuffId]:
-        """The buffs on the unit."""
+        """The buffs on the unit, but those every unit of its type wears for as long as it is listed, which say nothing
+        its type does not: a parasitic bomb left behind reads none."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
-        return frozenset(BuffId.read(buff) for buff in report.buff_ids)
+        return frozenset(BuffId.read(buff) for buff in report.buff_ids if buff not in _LEFT_OUT_BUFFS)
 
     def has_buff(self, buff_ids: BuffId | Collection[BuffId]) -> bool:
         """Whether `buff_ids`, one buff or any of several, is among the unit's `buffs`. Raises `NotReportedError` for a

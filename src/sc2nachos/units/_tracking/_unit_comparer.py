@@ -21,6 +21,7 @@ _VISIBLE = raw_pb2.DisplayType.Visible
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 _OWN = raw_pb2.Alliance.Self
 _ENEMY = raw_pb2.Alliance.Enemy
+_LEFT_OUT_BUFFS = BuffId._LEFT_OUT_IDS
 
 
 @final
@@ -52,7 +53,8 @@ class _UnitComparer:
         invisible. Buffs are compared for a unit visible in both, since an invisible enemy unit shows none (in game).
         Loss is compared for a unit visible in both and of the same type.
 
-        Raises `UncuratedIdError` for a buff the curated ids leave out. Such a buff belongs among them.
+        Raises `UncuratedIdError` for a buff the curated ids leave out, but those `BuffId._LEFT_OUT_IDS` holds, which
+        it passes over. Such a buff belongs among them.
         """
         tracker = self._tracker
         changes = tracker.last_changes
@@ -115,5 +117,5 @@ class _UnitComparer:
         if only is not None:
             gained = [buff for buff in gained if buff in only]
             lost = [buff for buff in lost if buff in only]
-        side.gained_buff.extend((unit, BuffId.read(buff)) for buff in gained)
-        side.lost_buff.extend((unit, BuffId.read(buff)) for buff in lost)
+        side.gained_buff.extend((unit, BuffId.read(buff)) for buff in gained if buff not in _LEFT_OUT_BUFFS)
+        side.lost_buff.extend((unit, BuffId.read(buff)) for buff in lost if buff not in _LEFT_OUT_BUFFS)

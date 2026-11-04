@@ -2,7 +2,7 @@
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
 catalog member, never a literal id, or is a custom id, assigned `auto()`, which the game's ids read as. Unknown ids
-raise.
+raise, but a unit's buffs leave out the few in `BuffId._LEFT_OUT_IDS`.
 """
 
 from enum import auto, nonmember
@@ -57,9 +57,6 @@ class BuffId(IdEnum):
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
     VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb  # on its target
-    # Both on each `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND` while it is listed, and seen on nothing else (in game).
-    VIPER_PARASITIC_BOMB_LEFT_BEHIND = RawBuffId.ParasiticBombUnitKU
-    VIPER_PARASITIC_BOMB_LEFT_BEHIND_SEARCH = RawBuffId.ParasiticBombSecondaryUnitSearch
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
     WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
     ZEALOT_CHARGING = RawBuffId.Charging  # on the zealot
@@ -74,3 +71,14 @@ class BuffId(IdEnum):
             }
         )
     )
+    # Every unit of one type wears each of these for as long as it is listed, so it says nothing the type does not
+    # (in game).
+    _LEFT_OUT_IDS = nonmember(
+        frozenset(
+            {
+                RawBuffId.ParasiticBombUnitKU,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
+                RawBuffId.ParasiticBombSecondaryUnitSearch,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
+            }
+        )
+    )
+    """Game ids that are no member's own and that a unit's buffs leave out, where any other such id raises."""
