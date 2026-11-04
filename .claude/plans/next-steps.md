@@ -255,12 +255,35 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
        player 2 (#223), and is `STASIS_WARD_TRAPPED` now. The unit stands still for 480 steps, so the buff is one that
        changes its speed (above).
 
-     In the second, the run the pilot sizes: it fits the beta-binomial and `p0` on some of the games, and checks on
-     the rest that a probability reads true (of moments at 0.99, about 99% had it), how often a game assumes an upgrade
-     the enemy lacks, and how late each real one is found. No false assumption in n playbacks in which one was possible
-     bounds the rate below about 3/n (95%). In 195 of the pilot's 400 the enemy lacked an upgrade while its units of a
-     type it speeds up voted steadily within 0.05, so 3,000 take some 3,100 games: at the pilot's 13 minutes for 200
-     playbacks, 16 at once, about seven hours.
+     In the second, `check` fits the beta-binomial on the pilot's 200 games and runs the score over others, as
+     upgrade inference is to, timing each upgrade from the first sight of one of its units moving after it finished
+     (the owner, over timing from the finish, which measures the enemy's play more than the evidence) to its
+     assumption. The owner capped the run at an hour, over the seven hours that 3,000 playbacks in which a wrong
+     assumption is possible would take: games 101 to 550 of the shuffled order of seed 1, 900 playbacks in 48 minutes,
+     24 at once. Two games failed, one on the stasis ward's buff (#223) and one whose client dropped the connection,
+     leaving 896 playbacks. By the rule proposed above, a slice being one window's steps:
+     - Votes: 1 of 153,060 was wrong, a slow vote from a zergling with Metabolic Boost on creep at a roach's speed
+       with Glial Reconstitution there, in a slice with two fast ones. None of the pilot's 63,477 was. Over 11 steps,
+       6 steady fast votes came from an enemy that lacked the upgrade, and 12 slow ones from one that had it; over 44,
+       none (tool `replay_movement summarize`, which counts votes under speed-changing buffs and before the earliest
+       finish too).
+     - The fit: with no wrong vote to learn the spread from, it takes the most clustered tried, 0.99, so a slice counts
+       about as one vote, one fast slice taking 1% to 99.8%, and a slice of fast and slow votes counts for little
+       either way, as the one wrong vote's did. Each mean then comes to about half a vote over the slices fitted on,
+       so how strongly a fast slice counts, about 41,000 to 1, follows from the 20,351 slices of enemies that lacked an
+       upgrade, not from an error seen: constants for step 3 fitted so would grow with the games fitted on.
+     - No wrong assumption in the 433 playbacks in which one was possible, below 0.7% a playback (95%), and no wrong
+       forgetting in the 203 in which a slice followed an assumption, at each setting. Every one of 24,046 readings
+       at 0.99 or more was of an enemy that had it.
+     - From 1%, assuming at 99%, as from 5% or 14% at 99.9%: their odds between floor and threshold differ, about
+       9,800, 19,000 and 6,100 to 1, but one fast slice clears each. 358 of 417 finished upgrades were assumed, a
+       median of 3.5 seconds from first sight of one of its units in a window it moved in, 90% within 54. Of the
+       other 59, 29 had no unit seen moving after it finished and 30 none moving steadily at full speed. From 1% at
+       99.9%, whose 99,000 to 1 takes two slices, 338, a median of 9.0 seconds, 90% within 83.
+
+     Proposed, to settle at step 3: a floor of 1% and assuming at 99%, the owner's symmetric defaults "but of course
+     the data should decide" (2026-11-04), which they support; forgetting below 0.5, which no playback reached
+     wrongly. Reaching 0.1% a playback would take some 2,700 games more, nearly five hours, 24 at once.
   3. The option, with tests for both bands and a window between them, a creep edge, a gap in the observations, a side
      change, an acceleration zone, the earliest finish, 20 of 20 fast against 1 of 20, the floor, a mistake forgotten
      and an upgrade the bot assumed first, which is never forgotten. The extension's docstring, which says what it
