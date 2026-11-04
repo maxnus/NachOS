@@ -15,7 +15,7 @@ from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId
 from sc2nachos.match import Computer, Difficulty, Race
 from sc2nachos.run import MapFile, MapNotFoundError
-from sc2nachos.units import Alliance, OwnUnit, Unit
+from sc2nachos.units import Alliance, OwnUnit, Unit, Units
 from support import ScriptedGame, make_game_info, make_observation, make_unit, shipped_game_data
 
 # Pylon's main base, by each resource's offset from where its townhall stands (corpus), around a townhall at the center
@@ -1358,7 +1358,7 @@ class TestHandingOverToCollect:
 
 
 def _released_and_kept(
-    release: Callable[[Api[SpeedMining]], tuple[OwnUnit[Any], ...]],
+    release: Callable[[Api[SpeedMining]], Units[OwnUnit[Any]]],
     read: list[tuple[list[int], list[int]]],
 ) -> Callable[[Api[SpeedMining]], object]:
     """What `_orders_sent` runs as the game starts to `release` workers and append to `read` the tags released, in the

@@ -156,12 +156,12 @@ class SpeedMining:
         )
         return MappingProxyType(ChainMap(miners, collectors))
 
-    def workers_at(self, resource: Unit[UnitType.AnyResource]) -> tuple[OwnUnit[UnitType.Worker], ...]:
+    def workers_at(self, resource: Unit[UnitType.AnyResource]) -> Units[OwnUnit[UnitType.Worker]]:
         """The workers speed mining holds at `resource`, a mineral field or a gas building, in the order they were
         handed over."""
         if UnitType.AnyMineralField.includes(resource):
-            return tuple(worker for worker, field in self._field_by_worker.items() if field is resource)
-        return tuple(
+            return Units(worker for worker, field in self._field_by_worker.items() if field is resource)
+        return Units(
             worker for worker, gas_building in self._gas_building_by_worker.items() if gas_building is resource
         )
 
@@ -245,7 +245,7 @@ class SpeedMining:
             self._field_by_worker.pop(worker, None)
             self._gas_building_by_worker.pop(worker, None)
 
-    def release_miners(self, count: int) -> tuple[OwnUnit[UnitType.Worker], ...]:
+    def release_miners(self, count: int) -> Units[OwnUnit[UnitType.Worker]]:
         """Release `count` of the miners speed mining holds, as `release` does, those whose leaving costs the least
         first, and return them in that order, or all of them where it holds fewer: the reverse of how `mine` picks a
         field. One speed mining would let go this turn leaves first, then one at a field of the farther half of its
@@ -255,7 +255,7 @@ class SpeedMining:
         Raises `ValueError` for a `count` below zero."""
         return self._release_the_first(self._miners_cheapest_to_release_first(), count)
 
-    def release_collectors(self, count: int) -> tuple[OwnUnit[UnitType.Worker], ...]:
+    def release_collectors(self, count: int) -> Units[OwnUnit[UnitType.Worker]]:
         """Release `count` of the collectors speed mining holds, as `release` does, those whose leaving costs the least
         vespene first, and return them in that order, or all of them where it holds fewer: the reverse of how
         `collect` fills gas buildings. One speed mining would let go this turn leaves first, then a gas building's
@@ -268,12 +268,12 @@ class SpeedMining:
 
     def _release_the_first(
         self, workers_cheapest_first: list[OwnUnit[UnitType.Worker]], count: int
-    ) -> tuple[OwnUnit[UnitType.Worker], ...]:
+    ) -> Units[OwnUnit[UnitType.Worker]]:
         """Release the first `count` of `workers_cheapest_first`, or all of them where there are fewer, and return
         them. Raises `ValueError` for a `count` below zero."""
         if count < 0:
             raise ValueError(f"speed mining releases no fewer than none, not {count}")
-        leaving = tuple(workers_cheapest_first[:count])
+        leaving = Units(workers_cheapest_first[:count])
         self.release(leaving)
         return leaving
 
