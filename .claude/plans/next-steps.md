@@ -234,6 +234,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
        0.1 of the gap above its speed without.
      - The Parasitic Bomb's dummy unit, an id the curated unit types left out, stopped 4 playbacks of the second
        sample (#215).
+     - The buff a unit a stasis ward traps wears, an id the curated buffs left out, stopped the playback of 4719987 as
+       player 2 (#223), and is `STASIS_WARD_TRAPPED` now. The unit stands still for 480 steps, so the buff is one that
+       changes its speed (above).
 
      In the second, the run the pilot sizes: it fits the beta-binomial and `p0` on some of the games, and checks on
      the rest that a probability reads true (of moments at 0.99, about 99% had it), how often a game assumes an upgrade

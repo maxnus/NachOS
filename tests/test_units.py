@@ -768,6 +768,25 @@ class TestWhatAUnitReads:
         assert bomb.buffs == frozenset()
         assert not bomb.has_buff(set(BuffId))
 
+    def test_a_unit_a_stasis_ward_trapped_wears_its_buff(self) -> None:
+        """The enemy's zerglings a ward trapped, as the game listed them (in game)."""
+        trapped = make_unit(1, RawUnitTypeId.Zergling, alliance=_ENEMY, buff_ids=[RawBuffId.OracleStasisTrapTarget])
+        assert _one(trapped).buffs == {BuffId.STASIS_WARD_TRAPPED}
+
+    def test_a_unit_trapped_in_stasis_has_the_time_left_to_its_own_player(self) -> None:
+        """A ward's zerglings read 480 steps of 480 to their own player at their first listing trapped (in game)."""
+        trapped = make_unit(
+            1,
+            RawUnitTypeId.Zergling,
+            buff_ids=[RawBuffId.OracleStasisTrapTarget],
+            buff_duration_remain=480,
+            buff_duration_max=480,
+        )
+        zergling = _one(trapped)
+        assert isinstance(zergling, OwnUnit)
+        assert zergling.has_buff(BuffId.STASIS_WARD_TRAPPED)
+        assert zergling.buff_duration_remaining == zergling.buff_duration_max == GameTime(steps=480)
+
     def test_an_uncurated_buff_raises_when_read(self) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
             _ = _one(make_unit(1, buff_ids=[RawBuffId.DutchMarauderSlow])).buffs

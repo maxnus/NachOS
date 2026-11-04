@@ -55,6 +55,7 @@ class BuffId(IdEnum):
     RAVEN_ANTI_ARMOR_MISSILE_INCOMING = RawBuffId.RavenShredderMissileTint  # on its target, until the missile lands
     RAVEN_INTERFERENCE_MATRIX = RawBuffId.RavenScramblerMissile
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
+    STASIS_WARD_TRAPPED = RawBuffId.OracleStasisTrapTarget  # on each unit the ward traps, never on the ward (in game)
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
     VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb  # on its target
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost

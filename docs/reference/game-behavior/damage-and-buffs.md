@@ -181,7 +181,7 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
 
 - The buff sweep saw a melee game put 45 buffs on units, 5 of them for carrying resources: minerals under one buff for
   every race and another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
-  `sweep_buffs`, #24). It missed a parasitic bomb's two (below).
+  `sweep_buffs`, #24). It missed a parasitic bomb's two and a stasis ward's (below).
 - Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 13 of the corpus's 16,760
   buff changes are those (corpus, #37).
 - A worker carries gas from a rich geyser under no buff at all. On PylonAIE a worker of each race, mining its race's
@@ -209,6 +209,15 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
   its dummy only after 175 steps, for 2. No other unit wears any of the three: the 7 enemy air units seen within 3.5 of
   a bomb's target or its dummy, void rays, an observer and medivacs, 5 of them losing health or shields there, wore no
   buff at all (AI Arena matches 4805282 and 4846375, every step, fog off, 2026-11-04, build 75689).
+- The units a stasis ward trapped wore `OracleStasisTrapTarget` for 480 steps, and the ward wore no buff. In AI Arena
+  match 4719987 (Zerg against Protoss, on PylonAIE), the one ward was first listed at step 19,032, finished 80 steps
+  later and cloaked, and uncloaked at 20,017. Seven steps later three zerglings 4.7 to 5.3 from it wore the buff, from
+  20,024 to 20,503 at every step, at full health and never moving, though they took a move two steps in and held it
+  to the end. To their own player they read 480 steps of 480 at the first listing, counting down a step at a time to
+  1 at the last; to the enemy 0 and 0. The ward was last listed at 20,050, 26 steps after it trapped them, with
+  2,871 steps left to its own player of a timed life of 3,808, 170 seconds from when it finished. Nothing else wore
+  the buff. Tool `sweep_buffs` never saw it, since its oracle is never offered Stasis Ward (below). Played back every
+  step as each player, with the fog off (2026-11-04, with a probe, build 75689).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what
