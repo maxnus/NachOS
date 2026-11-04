@@ -193,15 +193,15 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- **Speed collecting** (the owner, 2026-11-03 and 2026-11-04), after #208, in one pull request from branch
-  `ccr-4657e475-njg2ra` with `tools/sweep_gas.py`, its evidence, since both edit this plan. The move went into
-  `collect` only where it was measured to collect more; the findings are in
-  `docs/reference/game-behavior/abilities-and-orders.md`. AvocaDOS's collectors are speed mining's since AvocaDOS
-  #85, so it collects so once it takes the release. Decided, as recommended:
+- **Speed collecting** (the owner, 2026-11-03 and 2026-11-04), after #208, in #222 with `tools/sweep_gas.py`, its
+  evidence, since both edit this plan. The move went into `collect` only where it was measured to collect more; the
+  findings are in `docs/reference/game-behavior/abilities-and-orders.md`. AvocaDOS's collectors are speed mining's
+  since AvocaDOS #85, so it collects so once it takes the release. Decided, as recommended:
   - Both moves on the line between the centers, a collector's trip read off its order, since rich gas shows no cargo,
-    and one coming out kept on its plain return until past every collector of its gas building going in on its move:
-    over lanes, waypoints, the one going in yielding, and moves by the count of collectors, each measured to collect
-    less. `_is_mining` and `_is_collecting` are one check (the owner, review of #208).
+    and one coming out kept on its plain return until past every collector of its gas building going in on its move,
+    and taken off a move it was sent lately too (the owner, review of #222): over lanes, waypoints, the one going in
+    yielding, and moves by the count of collectors, each measured to collect less. `_is_mining` and `_is_collecting`
+    are one check (the owner, review of #208).
   - Given no gas building, `collect` fills a base's to two nearest its townhall first, then to three farthest first,
     over the one nearest the worker.
   - The rule holds for every race, measured with SCVs only.

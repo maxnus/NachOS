@@ -104,8 +104,9 @@ class SpeedMining:
       carrying gas from a rich geyser shows no cargo (`Unit.is_carrying_gas`): the move of a trip to the gas building
       ends where a worker's circle touches the gas building's, toward the townhall's center.
     - A collector coming out of its gas building is given no move while a collector of the same gas building going in,
-      on its move or given it this turn, has yet to pass it, the one going in farther from the gas building's center or
-      the two touching, and is given its return back if it is on its move. It passes through on its return.
+      on its move, given it this turn or sent it lately, has yet to pass it, the one going in farther from the gas
+      building's center or the two touching, and is given its return back, with the gather queued behind, if it is on
+      its move or speed mining's move is the last order it was sent. It passes through on its return.
     - No move is given while a unit stands in the worker's way, its circle within 0.5 of the line from the worker to
       where its trip ends, and a worker on the move that a unit comes in the way of is given its gather or return back.
       Units of both players count, on the ground and not burrowed, but structures, larvae, and the workers speed mining
@@ -512,10 +513,15 @@ class SpeedMining:
             and current_order.known_target == trip_end
         ):
             return True
-        return any(
-            order.ability is AbilityId.MOVE and order.target == trip_end
-            for order in self._api.orders.issued_to(worker, include_sent=True)
-        )
+        return self._was_sent_the_move_to(worker, trip_end)
+
+    def _was_sent_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
+        """Whether the latest order that replaced `worker`'s, sent lately or issued this turn, is speed mining's move to
+        `trip_end`, so that no other order, the bot's included, has taken its place since."""
+        if not worker.is_orderable:
+            return False
+        replacing = [order for order in self._api.orders.issued_to(worker, include_sent=True) if not order.queued]
+        return bool(replacing) and replacing[-1].ability is AbilityId.MOVE and replacing[-1].target == trip_end
 
     def _attacks(self, worker: OwnUnit[UnitType.Worker], enemies: Units[Unit[Any]]) -> bool:
         """Whether `worker` attacks this turn: it is on speed mining's attack and has yet to fire, or it is given one on
@@ -610,10 +616,9 @@ class SpeedMining:
         gather_point = trip_end_points.gather_point
         return_point = trip_end_points.return_point
         ordered = set(collectors_to_order)
+        left_alone = [collector for collector in collectors if collector not in ordered]
         going_in_on_the_move = [
-            collector
-            for collector in collectors
-            if collector not in ordered and self._is_on_the_move_to(collector, gather_point)
+            collector for collector in left_alone if self._is_on_the_move_to(collector, gather_point)
         ]
         coming_out: list[OwnUnit[UnitType.Worker]] = []
         collect_plainly = self._collect_plainly
@@ -630,6 +635,9 @@ class SpeedMining:
                 work_plainly=collect_plainly,
             ):
                 going_in_on_the_move.append(collector)
+        # Handed in rather than sent to gather when taken off the move: gas from a rich geyser shows no cargo, and a
+        # gather sends a worker back with its cargo (in game).
+        hand_in_then_gather = self._hand_in_then_gather
         for collector in coming_out:
             self._speed_trip(
                 collector,
@@ -638,9 +646,14 @@ class SpeedMining:
                 return_point,
                 units_near_the_trip_end,
                 returning=True,
-                work_plainly=collect_plainly,
+                work_plainly=hand_in_then_gather,
                 yields=any(_have_yet_to_pass(going_in, collector, gas_building) for going_in in going_in_on_the_move),
             )
+        for collector in left_alone:
+            if self._was_sent_the_move_to(collector, return_point) and any(
+                _have_yet_to_pass(going_in, collector, gas_building) for going_in in going_in_on_the_move
+            ):
+                hand_in_then_gather(collector, gas_building)
 
     def _speed_trip[R: UnitType.AnyResource](
         self,

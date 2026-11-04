@@ -1002,12 +1002,18 @@ class TestSpeedCollecting:
         )
         assert sent == [[], _move_then(AbilityId.SMART, _GAS_RETURN_POINT, _COMMAND_CENTER)]
 
-    def test_one_coming_out_on_its_move_is_given_its_return_back_when_one_going_in_is_given_its_move(self) -> None:
-        """SCV 11, going in, 3.4 from the refinery's center, has yet to pass `_HANDED_SCV`, 3.0 from it."""
+    @pytest.mark.parametrize(
+        "carrying_vespene", [True, False], ids=["vespene", "gas from a rich geyser, which shows no cargo"]
+    )
+    def test_one_coming_out_on_its_move_is_given_its_return_back_when_one_going_in_is_given_its_move(
+        self, carrying_vespene: bool
+    ) -> None:
+        """SCV 11, going in, 3.4 from the refinery's center, has yet to pass `_HANDED_SCV`, 3.0 from it. A gather
+        alone would send the one coming out back with its cargo."""
         going_in = _reported_scv(_between_the_refinery_and_the_townhall(3.4), _gather_order(_REFINERY), tag=11)
-        coming_out = _scv_carrying_vespene(
-            _between_the_refinery_and_the_townhall(3.0), _move_order(_GAS_RETURN_POINT), _return_order()
-        )
+        at = _between_the_refinery_and_the_townhall(3.0)
+        orders = (_move_order(_GAS_RETURN_POINT), _return_order())
+        coming_out = _scv_carrying_vespene(at, *orders) if carrying_vespene else _reported_scv(at, *orders)
         sent = _orders_sent(
             [*_pylon_main(), _refinery(), coming_out, going_in],
             assigned=(),
@@ -1019,6 +1025,51 @@ class TestSpeedCollecting:
                 (AbilityId.RETURN, None, False),
                 (AbilityId.GATHER, _REFINERY, True),
             ]
+        ]
+
+    def test_one_going_in_sent_its_move_lately_keeps_one_coming_out_off_its_move(self) -> None:
+        """SCV 11, going in, is given its move in the first turn, which its orders do not show yet in the second,
+        where it has yet to pass `_HANDED_SCV`, near enough the townhall for its move by then."""
+        going_in = [
+            _reported_scv(_between_the_refinery_and_the_townhall(distance), _gather_order(_REFINERY), tag=11)
+            for distance in (3.4, 3.0)
+        ]
+        coming_out = [
+            _scv_carrying_vespene(_between_the_refinery_and_the_townhall(distance), _return_order())
+            for distance in (2.3, 2.7)
+        ]
+        sent = _orders_sent(
+            *([*_pylon_main(), _refinery(), out, into] for out, into in zip(coming_out, going_in, strict=True)),
+            assigned=(),
+            collected=[(_HANDED_SCV, _REFINERY), (11, _REFINERY)],
+        )
+        assert sent == [_move_then(AbilityId.GATHER, _GAS_GATHER_POINT, _REFINERY), []]
+
+    def test_one_coming_out_sent_its_move_lately_is_given_its_return_back_when_one_going_in_is_given_its_move(
+        self,
+    ) -> None:
+        """`_HANDED_SCV`, coming out, is given its move in the first turn, which its orders do not show yet in the
+        second, where SCV 11, going in, is given its own and has yet to pass it."""
+        coming_out = [
+            _scv_carrying_vespene(_between_the_refinery_and_the_townhall(distance), _return_order())
+            for distance in (3.0, 3.2)
+        ]
+        going_in = [
+            _reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, _gather_order(_REFINERY), tag=11),
+            _reported_scv(_between_the_refinery_and_the_townhall(3.6), _gather_order(_REFINERY), tag=11),
+        ]
+        sent = _orders_sent(
+            *([*_pylon_main(), _refinery(), out, into] for out, into in zip(coming_out, going_in, strict=True)),
+            assigned=(),
+            collected=[(_HANDED_SCV, _REFINERY), (11, _REFINERY)],
+        )
+        assert sent == [
+            _move_then(AbilityId.SMART, _GAS_RETURN_POINT, _COMMAND_CENTER),
+            [
+                *_move_then(AbilityId.GATHER, _GAS_GATHER_POINT, _REFINERY),
+                (AbilityId.RETURN, None, False),
+                (AbilityId.GATHER, _REFINERY, True),
+            ],
         ]
 
 
@@ -1389,7 +1440,12 @@ def _vespene_collected_on_pylons_main(*, speed_collected: bool) -> float:
         minerals = api.resources.minerals
         cost = api.data.units[UnitTypeId.REFINERY].cost.minerals
         for geyser in main.geysers:
-            if geyser.position in refinery_by_geyser or geyser.position in builder_by_geyser or minerals < cost:
+            builder = builder_by_geyser.get(geyser.position)
+            if (
+                geyser.position in refinery_by_geyser
+                or (builder is not None and builder.is_alive and builder.orders)
+                or minerals < cost
+            ):
                 continue
             builder = min(
                 (scv for scv in api.extensions.miners if scv.is_orderable), key=lambda scv: scv.distance_to(geyser)
