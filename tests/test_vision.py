@@ -77,7 +77,7 @@ class TestLastInSight:
 
     def test_the_first_observation_is_stamped_before_any_handler_runs(self) -> None:
         api = Api()
-        reads: list[tuple[int, GameTime | None]] = []
+        reads: list[tuple[int, GameTime]] = []
 
         @api.on(GameStartEvent)
         def read(_: GameStartEvent) -> None:
@@ -104,7 +104,7 @@ class TestLastInSight:
 class TestTimeUnseen:
     def test_a_tile_or_an_area_reads_how_long_ago_any_tile_of_it_was_in_sight(self) -> None:
         api = Api()
-        reads: list[GameTime | None] = []
+        reads: list[GameTime] = []
 
         @api.on(TurnEvent)
         def read(_: TurnEvent) -> None:
@@ -122,11 +122,18 @@ class TestTimeUnseen:
                 )
 
         _play(api, *_HOME_THEN_OUT_THERE)
-        assert reads == [GameTime(steps=16), GameTime.ZERO, None, GameTime(steps=16), GameTime.ZERO, None]
+        assert reads == [
+            GameTime(steps=16),
+            GameTime.ZERO,
+            GameTime.INFINITE,
+            GameTime(steps=16),
+            GameTime.ZERO,
+            GameTime.INFINITE,
+        ]
 
     def test_ground_off_the_grid_was_never_in_sight(self) -> None:
         api = Api()
-        reads: list[GameTime | None] = []
+        reads: list[GameTime] = []
 
         @api.on(TurnEvent)
         def read(_: TurnEvent) -> None:
@@ -137,7 +144,7 @@ class TestTimeUnseen:
             make_observation(0, visibility=_visibility(in_sight=(_HOME,))),
             make_observation(16, (1, Result.VICTORY)),
         )
-        assert reads == [None, None]
+        assert reads == [GameTime.INFINITE, GameTime.INFINITE]
 
 
 class TestWhatTheObservationReports:

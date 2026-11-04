@@ -65,14 +65,14 @@ class Vision:
             handed_out = self._handed_out = self._stamped_steps().copy().as_readonly()
         return handed_out
 
-    def time_unseen(self, where: PointLike | Area) -> GameTime | None:
-        """How long ago `where`, a tile or any tile of an area, was last in sight: zero while in sight, and `None` if
-        never in sight, as for a point off the grid.
+    def time_unseen(self, where: PointLike | Area) -> GameTime:
+        """How long ago `where`, a tile or any tile of an area, was last in sight: zero while in sight, and
+        `GameTime.INFINITE` if never in sight, as for a point off the grid.
 
         Raises `ProtocolError` if this observation reported no vision, as `in_sight` does.
         """
         last = int(numpy.max(self._stamped_steps()[where], initial=_NEVER_IN_SIGHT))
-        return None if last == _NEVER_IN_SIGHT else GameTime(steps=self._step - last)
+        return GameTime.INFINITE if last == _NEVER_IN_SIGHT else GameTime(steps=self._step - last)
 
     def _update(self, state: _State, step: int) -> None:
         """Take in `state`, the observation at `step`, stamping `step` on each tile it shows in sight. An observation
