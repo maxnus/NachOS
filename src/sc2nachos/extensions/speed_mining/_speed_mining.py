@@ -106,9 +106,10 @@ class SpeedMining:
       field, for a miner, or at a gas building, for a collector, a return, a move to where one of its trips ends, a
       right-click on a townhall of this player's, and its attack: a worker the bot sends to gather at another field is
       sent to its own, as one the game sends there is. A burrowed drone is let go too. So a miner the bot sends to
-      build does not come back to its field: the bot hands it over again. An order given in a handler of a priority
-      above `EventPriority.LOW` lets the worker go in that turn, and one given later in the next, `miners` and
-      `collectors` holding the worker until then.
+      build does not come back to its field: the bot hands it over again. An order given before speed mining's own
+      `TurnEvent` handler, the first of that event's at `EventPriority.LOW`, lets the worker go in that turn, whether
+      or not the game takes it, and one given after it in the next, unless the game refused it, which leaves the
+      worker held. `miners` and `collectors` hold the worker until then.
     - A worker given one of speed mining's orders lately is left alone for the turn. So is one on an order of another
       kind that no order lately explains, as an SCV repairing by autocast, until it is idle or back at its work.
     - A worker is let go alike once it or its field is dead, and once no expansion holding its field has such a
@@ -359,6 +360,9 @@ class SpeedMining:
         from, there at once, as `mine` and `collect` say, unless it is at that work already, and return whether it
         could be: not while it builds, is burrowed or is out of reach of orders. What it is doing is what its orders
         issued this turn or sent lately say, which may not show yet, and otherwise its current order."""
+        if worker not in self._field_by_worker and worker not in self._gas_building_by_worker:
+            # An attack speed mining gave it while it was held before is the bot's now.
+            self._attacks.forget(worker)
         if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
             return False
         order_book = self._api.orders

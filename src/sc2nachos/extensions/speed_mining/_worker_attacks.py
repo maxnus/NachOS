@@ -63,6 +63,10 @@ class WorkerAttacks:
         self._target_by_attacker[worker] = target
         return True
 
+    def forget(self, worker: OwnUnit[UnitType.Worker]) -> None:
+        """Forget the attack speed mining gave `worker`, if any, so that none of its attacks reads as speed mining's."""
+        self._target_by_attacker.pop(worker, None)
+
     def is_speed_minings_attack(self, worker: OwnUnit[UnitType.Worker], target: Target | None) -> bool:
         """Whether an attack of `worker`'s on `target`, the one it carries out or one it was given lately, is the
         attack speed mining gave it."""

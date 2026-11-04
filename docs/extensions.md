@@ -116,9 +116,9 @@ class ThreatMap:
   inside a refinery, it does not take: `mine` returns `None`, and the bot hands it over once it can be sent. A worker
   held that the bot orders elsewhere, to build say, or a drone it burrows, is let go, its orders as they are, and the
   bot hands it over again once it is done; `release(workers)` takes one or several back, and `miners` and
-  `workers_at(field)` read which worker mines which field. A worker on a move, unlike one on a gather or a return, can be stopped by other units, so no move is
-  given while a unit stands in a worker's way. A worker attacks an enemy it can hit as it stands, then goes back to
-  mining, unless speed mining is built with `attack_enemies=False`.
+  `workers_at(field)` read which worker mines which field. A worker on a move, unlike one on a gather or a return, can
+  be stopped by other units, so no move is given while a unit stands in a worker's way. A worker attacks an enemy it
+  can hit as it stands, then goes back to mining, unless speed mining is built with `attack_enemies=False`.
 
   `collect(worker)` hands a worker over to collect vespene instead, each trip ending in a move as a miner's does. Where
   one coming out of the gas building would meet one going in, both on their moves, the one coming out keeps its plain
@@ -140,8 +140,9 @@ class ThreatMap:
   while it holds fewer, and calls `release_collectors(count)` when it wants fewer, which releases that many, those
   whose leaving costs the least vespene, and returns them for the bot to hand out again. One the bot has ordered
   elsewhere in the turn leaves first, then a third, at the gas building nearest its townhall first, where it adds the
-  least, and then the others, farthest first, the reverse of how `collect` fills them. `release_miners(count)` does the same for miners, those at the farther half of a
-  base's fields first, the reverse of how `mine` picks. The API reference says the rest.
+  least, and then the others, farthest first, the reverse of how `collect` fills them. `release_miners(count)` does
+  the same for miners, those at the farther half of a base's fields first, the reverse of how `mine` picks. The API
+  reference says the rest.
 - **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a

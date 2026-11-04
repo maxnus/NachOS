@@ -233,8 +233,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - **Speed mining picks every resource, and releases the workers costing least** (the owner, 2026-11-04), so that a
   bot holds only how many mine and how many collect, which stays its own; in 0.3.0. Built in #229, the picks and
   `release_collectors(count)` and `release_miners(count)`, and in #231, which lets a worker go once the bot orders it
-  elsewhere, reversing #201 (the owner, review of #229, over ranking such workers first in the releases), so that a
-  number kept is true. What is left is AvocaDOS's: it drops its caps a refinery (`max_collectors`) and keeps a number
+  elsewhere, reversing #201 (the owner, review of #229, over keeping such workers and ranking them first in the
+  releases), so that a number kept is true. The releases put one the bot has ordered first too, with those let go
+  that turn, so that a bot ordering a worker and releasing one in the same turn loses one. Speed mining tells its own
+  orders from the bot's by their kind, and a refused order still lets the worker go if given before speed mining's
+  turn, documented (the owner, review of #231, over marking its orders through `Order.data`, and over reading the
+  refusals). What is left is AvocaDOS's: it drops its caps a refinery (`max_collectors`) and keeps a number
   of collectors, handing a worker to `collect`, naming no gas building, while it holds fewer, and calling
   `release_collectors` when it wants fewer (the owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto
   `api.vision` (#227), and releases its builders itself already.

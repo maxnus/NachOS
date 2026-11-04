@@ -385,15 +385,35 @@ class TestWhatIsLeftAlone:
         ]
         assert held == [[_HANDED_SCV]] * 3
 
-    def test_a_worker_sent_one_of_speed_minings_orders_lately_for_the_turn(self) -> None:
-        """Given the move near its field, it is sent nothing in the next turn, whose orders may not show the move yet,
-        and is kept."""
+    @pytest.mark.parametrize(
+        ("scv", "given"),
+        [
+            (
+                _reported_scv((28.175, 24.5), _gather_order()),
+                _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD),
+            ),
+            (
+                _reported_scv((29.125, 24.5), _return_order(), carrying=True),
+                _move_then(AbilityId.SMART, _RETURN_POINT, _COMMAND_CENTER),
+            ),
+            (
+                _reported_scv((25.0, 30.0), _gather_order(), carrying=True),
+                [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _MINED_FIELD, True)],
+            ),
+        ],
+        ids=[
+            "the move to its field, the gather behind",
+            "the move back, the right-click on the townhall behind",
+            "a return, the gather behind",
+        ],
+    )
+    def test_a_worker_sent_one_of_speed_minings_orders_lately_for_the_turn(
+        self, scv: raw_pb2.Unit, given: list[tuple[int, Point | int | None, bool]]
+    ) -> None:
+        """It is sent nothing in the next turn, whose orders may not show the order yet, and is kept."""
         held: list[list[int]] = []
-        near = [*_pylon_main(), _reported_scv((28.175, 24.5), _gather_order())]
-        assert _orders_sent(near, near, started=_workers_held_each_turn(held)) == [
-            _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD),
-            [],
-        ]
+        units = [*_pylon_main(), scv]
+        assert _orders_sent(units, units, started=_workers_held_each_turn(held)) == [given, []]
         assert held == [[_HANDED_SCV]] * 2
 
     @pytest.mark.parametrize(
@@ -558,6 +578,38 @@ class TestLettingGoOfAWorkerTheBotOrders:
         sent = _orders_sent(units, units, started=_ordered_by_the_bot(attack_the_zergling, held))
         assert sent == [[(AbilityId.ATTACK, 30, False)], []]
         assert held == [[], []]
+
+    def test_a_worker_the_bot_has_attack_what_speed_mining_had_it_attack_before_it_was_let_go_is_let_go(self) -> None:
+        """Speed mining has it attack the zergling in the first turn; the bot stops it in the second, and in the third
+        hands it over again and then has it attack the zergling."""
+        held: list[list[int]] = []
+        zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
+        attack = raw_pb2.UnitOrder(ability_id=RawAbilityId.attack_Attack, target_unit_tag=30)
+        turns = [
+            [*_pylon_main(), _reported_scv((26.0, 30.0), _gather_order(), facing=0.0), zergling],
+            [*_pylon_main(), _reported_scv((26.0, 30.0), attack, facing=0.0, weapon_cooldown=20.0), zergling],
+            [*_pylon_main(), _reported_scv((26.0, 30.0), facing=0.0, weapon_cooldown=20.0), zergling],
+        ]
+
+        def stop_then_hand_over_and_attack(api: Api[SpeedMining]) -> None:
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def order(event: TurnEvent) -> None:
+                worker = _own_unit_of_tag(api, _HANDED_SCV)
+                if event.time.steps == 1:
+                    api.orders.issue(worker, AbilityId.STOP)
+                elif event.time.steps == 2:
+                    api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD))
+                    api.orders.issue(worker, AbilityId.ATTACK, target=_unit_of_tag(api, 30))
+
+            _workers_held_each_turn(held)(api)
+
+        sent = _orders_sent(*turns, started=stop_then_hand_over_and_attack)
+        assert sent == [
+            [(AbilityId.ATTACK, 30, False)],
+            [(AbilityId.STOP, None, False)],
+            [(AbilityId.ATTACK, 30, False)],
+        ]
+        assert held == [[_HANDED_SCV], [], []]
 
     def test_a_drone_the_bot_burrows_is_let_go(self) -> None:
         """Handed over idle, it is sent to gather, and burrowed in the next turn, it is let go and sent nothing."""
