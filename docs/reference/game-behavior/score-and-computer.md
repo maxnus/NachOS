@@ -19,6 +19,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 
 - The very easy computer keeps the game going, leaves the player alone and does not come to the map's middle early,
   but it does attack at some point (tool `sweep_buffs`, tool `sweep_tech_tree`).
+- Without it, a game on a melee map ends at once: one created for this player alone on PylonAIE_v4 ended in a victory
+  at step 2 (tool `sweep_gas`'s first run, on GitHub's runner, build 75689).
 - It concedes a game it sees as lost, with nothing left to fight with or its base cleared, and the game ends (tool
   `sweep_alerts`).
 - A bare api against the very hard zerg lasts over 60 s and ends in victory or defeat (tested). Against a bot that

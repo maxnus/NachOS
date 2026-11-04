@@ -1,8 +1,9 @@
 """Find how much vespene workers collect from a refinery in a set time, on plain gathers and returns and with a move at
 each trip's end, at one, two and three workers a geyser.
 
-Needs StarCraft II installed. Plays one game alone on the sandbox's map for each trial, as Terran: a refinery made by
-debug command on each geyser of its main, and the starting SCVs handed to speed mining once the refineries stand,
+Needs StarCraft II installed. Plays one game on the sandbox's map for each trial, as Terran against the very easy
+computer, which keeps the game going, where a game alone ends at once: a refinery made by debug command on each geyser
+of its main, and the starting SCVs handed to speed mining once the refineries stand,
 `SpeedMining.collect` taking the SCVs nearest each refinery and `mine` the rest. A trial is a count of collectors a
 refinery, a seed, and plain or moved:
 
@@ -14,8 +15,8 @@ refinery, a seed, and plain or moved:
   back ends 3.125 from the townhall's center, toward that point.
 
 After a warm-up from the hand-over, it records over the time measured what each refinery's contents fell by, the
-minerals and vespene the score says were collected, the actions the game refused, and in a moved trial the moves
-given::
+minerals and vespene the score says were collected, the actions the game refused, the most enemy units in sight at
+once, which the computer may send at some point, and in a moved trial the moves given::
 
     uv run python tools/sweep_gas.py
     uv run python tools/sweep_gas.py --collectors 2 3 --insets 0 0.175 0.35 --seeds 1 2 --out gas.json
@@ -40,6 +41,7 @@ from sc2nachos.extensions.speed_mining import SpeedMining
 from sc2nachos.gamemap import Expansion
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.match import Computer, Difficulty
 from sc2nachos.run import Installation
 from sc2nachos.units import Unit, UnitType
 
@@ -55,6 +57,8 @@ _STEPS_PER_TURN = 1
 # How long past the time measured a game may run, for the refineries to appear: the game can make a unit a few steps
 # late (in game).
 _SPARE_TIME = GameTime(seconds=10)
+# The computer, which keeps the game going: on the ladder's maps a game alone ends at once, in a victory (in game).
+_OPPONENT = Computer(Race.ZERG, Difficulty.VERY_EASY)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -92,6 +96,7 @@ class _TrialFindings:
     minerals_collected: float = 0.0
     moves_given: int = 0
     actions_refused: int = 0
+    most_enemies_in_sight: int = 0
     not_handed_over: int = 0
 
 
@@ -114,6 +119,7 @@ class _TrialGame:
         self._trip_ends_by_refinery: dict[Unit[UnitType.GasBuilding], tuple[Point, Point]] = {}
         self._moves_given = 0
         self._actions_refused = 0
+        self._most_enemies_in_sight = 0
         self._not_handed_over = 0
         self.api.on(GameStartEvent)(self._make_the_refineries)
         self.api.on(TurnEvent)(self._play_the_turn)
@@ -141,6 +147,7 @@ class _TrialGame:
         if self._trial.inset is not None:
             self._give_the_moves(main)
         self._actions_refused += len(api.action_failures)
+        self._most_enemies_in_sight = max(self._most_enemies_in_sight, len(api.units.enemy.visible))
         if self._measuring_from is None and api.time >= self._handed_over_at + self._warm_up:
             self._measuring_from = api.time
             self._measuring_from_step = api.step
@@ -151,6 +158,7 @@ class _TrialGame:
             self._collected_at_the_start = (collected.minerals, collected.vespene)
             self._moves_given = 0
             self._actions_refused = 0
+            self._most_enemies_in_sight = 0
         elif self._measuring_from is not None and self.findings is None:
             if api.time >= self._measuring_from + self._measured:
                 self.findings = self._read_the_findings(main)
@@ -212,6 +220,7 @@ class _TrialGame:
             minerals_collected=collected.minerals - start_minerals,
             moves_given=self._moves_given,
             actions_refused=self._actions_refused,
+            most_enemies_in_sight=self._most_enemies_in_sight,
             not_handed_over=self._not_handed_over,
         )
         for refinery, (gather_point, _return_point) in self._trip_ends_by_refinery.items():
@@ -242,6 +251,7 @@ def _play(trial: _Trial, *, warm_up: GameTime, measured: GameTime) -> _TrialFind
     run_local(
         MAP,
         game.api,
+        _OPPONENT,
         race=Race.TERRAN,
         steps_per_turn=_STEPS_PER_TURN,
         time_limit=warm_up + measured + _SPARE_TIME,
@@ -263,7 +273,8 @@ def _summary(findings: _TrialFindings, measured: GameTime) -> str:
     )
     return (
         f"{trial.collectors} a geyser, seed {trial.seed}, {mode}: vespene a minute {refineries}; "
-        f"minerals {findings.minerals_collected:.0f}; moves {findings.moves_given}, refused {findings.actions_refused}"
+        f"minerals {findings.minerals_collected:.0f}; moves {findings.moves_given}, "
+        f"refused {findings.actions_refused}; enemies in sight {findings.most_enemies_in_sight}"
     )
 
 
