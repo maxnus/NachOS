@@ -17,11 +17,11 @@ from sc2nachos.gamedata._footprints import ADD_ON_OFFSET, FOOTPRINTS
 from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
@@ -92,7 +92,7 @@ class _Game:
     """A tracker and an order book on a drawn map, fed one observation at a time as `Api.play` feeds them."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, make_enemy())
+        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
@@ -425,7 +425,7 @@ class TestReservingASite:
 
     def test_a_max_time_of_a_second_ends_it_once_22_4_steps_have_passed(self) -> None:
         game = _Game()
-        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime.from_seconds(1))
+        game.observe(0, _scv(1)).reserve(_DEPOT, at=(8.0, 8.0), max_time=GameTime(seconds=1))
 
         assert game.observe(22, _scv(1)).reservations
         assert not game.observe(23, _scv(1)).reservations
@@ -670,7 +670,7 @@ def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_
         elif response.HasField("observation"):
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
-            tracker = _Tracker(data, make_enemy())
+            tracker = _Tracker(data, make_enemy(data))
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
             return GameMap._from_game(info, observation), tracker, data, observation
     raise AssertionError(f"{path.name} holds no observation")
@@ -795,7 +795,7 @@ def _recorded_mains(path: Path) -> list[_RecordedMain]:
     game_map, _, placement_grids = _grids_at_the_start(path)
     recorded_mains = []
     for start_location in game_map.all_start_locations:
-        main_ramp = game_map.main_ramp_of(start_location)
+        main_ramp = game_map._main_ramp_of(start_location)
         assert main_ramp is not None
         recorded_mains.append(_RecordedMain(game_map, placement_grids, start_location, main_ramp))
     return recorded_mains
@@ -895,8 +895,8 @@ def test_on_pylon_the_walls_stand_where_burnysc2_puts_them() -> None:
     game_map, _, placement_grids = _grids_at_the_start(
         next(path for path in CORPUS if path.stem.startswith("PylonAIE"))
     )
-    east_ramp = game_map.main_ramp_of(Point((175.5, 76.5)))
-    west_ramp = game_map.main_ramp_of(Point((72.5, 171.5)))
+    east_ramp = game_map._main_ramp_of(Point((175.5, 76.5)))
+    west_ramp = game_map._main_ramp_of(Point((72.5, 171.5)))
     assert east_ramp is not None and west_ramp is not None
     assert placement_grids.terran_wall(east_ramp) == TerranWall(
         near_depot=Point((163, 82)),
@@ -932,7 +932,7 @@ def test_a_ramp_out_of_no_main_has_no_wall_to_ask_for() -> None:
     game_map, _, placement_grids = _grids_at_the_start(
         next(path for path in CORPUS if path.stem.startswith("PylonAIE"))
     )
-    main_ramps = {game_map.main_ramp_of(start_location) for start_location in game_map.all_start_locations}
+    main_ramps = {game_map._main_ramp_of(start_location) for start_location in game_map.all_start_locations}
     other_ramp = next(ramp for ramp in game_map.ramps if ramp not in main_ramps)
     with pytest.raises(ValueError, match="no start location's main"):
         placement_grids.terran_wall(other_ramp)
@@ -1026,7 +1026,7 @@ class TestAgainstTheRealGame:
             api = Api()
             bot = _DepotBot(api, transport)
             api.on(TurnEvent)(bot.turn)
-            api.play(client, steps_per_turn=8, time_limit=GameTime.from_seconds(60))
+            api.play(client, steps_per_turn=8, time_limit=GameTime(seconds=60))
 
         print("the site, turn by turn (depot stands, reserved, open):", bot.turns)
         before = [turn for turn in bot.turns if not turn[0]]

@@ -10,6 +10,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - A structure or mineral field that leaves sight is replaced, in the same observation, by a remembered copy under a
   new tag at a bit-identical position; seen again, it is back under its first tag, and each return to the fog makes
   another tag. Mineral fields start the game as such copies (#25; tested).
+- A copy of one of this player's own structures can be listed too, `Snapshot` under a tag of its own at the
+  structure's spot, while the structure itself stands listed in sight at full health: a supply depot, raised in one game
+  and lowered in another, at 2:08 and 2:44 of 2 of AvocaDOS's 21 games against the VERY_HARD computer, both against
+  Terran, an enemy SCV 5 and 9 away. Why is not known (in game, build 75689).
 - A copy can have a different type from the structure it copies: a depot that lowered as it left sight (#25).
 - Seen again between two observations and back in the fog by the second, a structure's copy comes in the second under
   a new tag, at the first copy's bit-identical position. So does the copy of a structure killed out of sight and made
@@ -36,10 +40,20 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   disappears (#25; tested).
 - An undetected cloaked enemy is listed, as `CLOAKED` and `INVISIBLE`. An undetected burrowed enemy zergling is not
   listed at all (#37; tested), but an enemy's burrowed widow mine can be (below).
-- Force fields and reaper grenades are listed as units, not effects; a parasitic bomb adds no unit. Lurker spines are
-  one effect with several positions along a line (#12, #25). A force field is neutral, owner 16, in both players'
-  views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to the other (tool `sweep_timed_life`,
-  build 75689).
+- Force fields and reaper grenades are listed as units, not effects, and so is a parasitic bomb once it leaves its
+  target (below). Lurker spines are one effect with several positions along a line (#12, #25). A force field is
+  neutral, owner 16, in both players' views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to
+  the other (tool `sweep_timed_life`, build 75689).
+- A parasitic bomb is its target's buff, `ParasiticBomb`, and no effect. As it leaves the target, the game lists a
+  `ParasiticBombDummy` at the target's last position, the viper's player's unit. When the target dies, the dummy is
+  listed from the observation that reports the death to 161 steps after the buff was first listed, however early the
+  target died: 9 of 9 bombs, on void rays, a raven and a medivac, their dummies listed for 8 to 143 steps. On two void
+  rays that lived, the buff stayed 175 steps, and a dummy was then listed for 2. The dummy never moves, reads 1 health
+  of 1, a radius of 0.5, no orders and no timed life, to its own player too, and wears `ParasiticBombUnitKU` and
+  `ParasiticBombSecondaryUnitSearch`; it is reported dead the step after its last listing. The enemy sees it only where
+  it has sight, as any unit: one player saw 7 of the 9 left in its game. Seen in AI Arena matches 4805282 (Protoss
+  against Zerg, on PylonAIE) and 4846375 (Zerg against Terran, on PersephoneAIE), each bomb a single cast, played back
+  every step as each player and with the fog off (2026-11-04, with a probe, build 75689).
 - Map-owned units are owner 16 (stated). An enemy structure built out of sight is not listed (tested).
 
 ## What is reported of a unit
@@ -48,7 +62,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   field's contents, a hidden unit's owner. An undetected enemy listed `INVISIBLE` reports its position and cloak, and no
   health, owner, build progress, buffs, facing or energy (#25; corpus).
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
-  player's own units (#25; corpus).
+  player's own units (#25; corpus); an enemy's attacker shows its position and facing as its owner is shown them
+  ([what the enemy sees of an attack](damage-and-buffs.md#what-the-enemy-sees-of-an-attack)).
 - `buff_duration_remain` and `buff_duration_max` give a unit with a timed life the steps it has left only for this
   player's own: a MULE's counted down from 1441 and from 1443 in two games, against a maximum of 1440, and six
   broodlings' in each of two games from between 128 and 132, against 128, each a step at a time to 0 at its last
@@ -63,11 +78,27 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - `build_progress` counts up while a structure is built or a unit warps in (a zealot read 0.01, 0.32, 0.64, 0.95,
   1.00), and reads 1 throughout a morph: a larva's egg, a cocoon, and a structure becoming another (#25; tool
   `sweep_orders`, build 75689).
+- A structure's or an add-on's `build_progress` is the steps done over its row's build time, so `(1 - build_progress)`
+  times that time, rounded, gave the steps until it read 1 at every step: a supply depot, a pylon and a spawning
+  pool, each from 0 when first listed, and a tech lab and a reactor, each one step in when first listed, the step
+  after the order. A warp-in's rose 1/256 a step at a pylon far from any warp gate, which gave the steps left exactly,
+  and 1/80 a step at a pylon among warp gates or beside a phasing warp prism, which summed to 0.99998 after 80 steps
+  and read 1 a step later, so the steps left are one more than `(1 - build_progress)` times 80 (tool `sweep_orders`,
+  `production-times`, build 75689). An archon two high templar merge into is first listed at 0 and rises 1/192 a
+  step (probe in #189, under `food`, local game, Linux build 75689). How long each took is in
+  [upgrades and the game's tables](upgrades-and-tables.md).
 - Only the command center (12 of 16, then 9 once three SCVs went to gas) and the refinery (3 of 3) reported
   harvesters. `ideal_harvesters` is 2 per mineral field and 3 per geyser (#25).
 - `is_powered` is true for a gateway in a pylon's field and false outside it, and false for a nexus, an assimilator,
   a barracks, a command center and a pylon, which always stands in its own field, alone or beside another (#25, #27,
   #39).
+- A barracks names its add-on in `add_on_tag` only once the add-on is finished: 0 for the whole build, then the
+  add-on's tag from the first observation where the add-on reads finished. To the enemy it is 0 throughout, though
+  the add-on itself is listed to the enemy, at the barracks's position plus (2.5, -0.5). The barracks's order for it,
+  `Build_Reactor_Barracks`, is aimed at the barracks's own center and reads progress 0 for the whole build, and the
+  barracks has no order once the add-on is finished. Seen in a game of two clients both played from here, where one
+  player's barracks built a reactor beside the other's marine, both views read every 2 steps (2026-10-29, with a
+  probe, fast build on, build 75689).
 - `is_hallucination` is true for an enemy's hallucination only while a detector is near; this player's own are
   always flagged. `is_active` is true for any unit carrying out an order, the enemy's included. `engaged_target_tag`
   names the unit a marine attacks (#25).
@@ -99,6 +130,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   Nothing a unit reports says how far a morph has got. Each was done once the table's build time had passed since
   the order, to within the 16 steps between reads, except the lurker egg, which hatched 402 to 418 steps after the
   order against the table's 553 (tool `sweep_orders`, build 75689).
+- A train's and an egg's order progress is the steps done over the row's build time, sent as a 32-bit float, and
+  shows one step done in the observation after the order. Rounding it times the row's time gave the steps done at
+  every step, and the steps left were the row's time rounded up less those: a marine, an SCV, a probe, a void ray, a
+  drone's egg and a zerglings' egg. Rounding `(1 - progress)` times the row's time gives the same for a row of whole
+  steps, but a step short for the void ray's 963.2. A chrono boost runs it 1.5 steps a step: read at the normal
+  rate, a boosted probe's progress overstated the steps it had left by up to 89.5. A train queued behind another shows
+  progress 0 until the step the one ahead comes out, and one step done in it (tool `sweep_orders`,
+  `production-times`, build 75689).
 - Points come back in single precision (tested). Facing is in radians from the +x axis, in whole 1/4096 radians to
   within 0.02 of one (tool `sweep_turning`, build 75689), and z is on the terrain-height scale (stated).
 - Units on flat ground stand up to 0.03 below the map's height or up to 0.16 above it (corpus).
@@ -133,6 +172,28 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   nova and an uprooted spine or spore crawler**, ordered to move at any angle, though each sets off as the rest do (tool
   `sweep_turning`, build 75689).
 
+## Moving
+
+- **A unit ordered along a straight line moves at its row's speed once it is up to speed, a unit on the ground from the
+  first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for the 12
+  types a speed upgrade changes, with the upgrade and without: every step of a ground unit's run, and every window of
+  11, 22 or 44 steps, came within 0.0001 a second of the row's speed, an upgraded ultralisk's from its third step; a
+  flying unit's windows within 0.15% of it, though a single step of an overlord, an overseer or an observer fell up to
+  1.6% short. A banshee gained 0.0127 a step every step until it reached its speed, 14 steps without Hyperflight Rotors
+  and 19 with; an overlord took 10 steps, 28 with Pneumatized Carapace, and a transport overlord 14 and 32. Along 45
+  degrees every type read up to 0.6% slower, an overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299
+  for 4.1344 (tool `sweep_movement`, build 75689).
+- **Creep makes a Zerg ground unit 1.3 times as fast, to within 0.1%, but for what Muscular Augments and Anabolic
+  Synthesis add**: a zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a
+  roach, a hydralisk and an ultralisk alike without their speed upgrades, and a baneling and a roach with them. Muscular
+  Augments and Anabolic Synthesis add less on creep ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries'
+  creep had stopped spreading, on a course every step of which ended on creep at least 3.3 from ground without it, and
+  off creep with none within 8 of any step; a course laid as soon as creep covered it, 1.5 inside its edge, gave the
+  same speeds (tool `sweep_movement`, build 75689).
+- **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
+  and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
+  `sweep_movement`, build 75689).
+
 ## Units coming, changing and going
 
 - A larva stays one unit as it becomes an `EGG`. What hatches comes under new tags, two zerglings as two units, and
@@ -140,7 +201,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   larva's order ends with its egg dying, and an egg killed before it hatches looks the same (tested).
 - A morph keeps the tag: a tank sieging, a depot lowering, a zergling through `BANELING_COCOON` to a baneling, an
   overlord through `OVERLORD_COCOON` to an overseer. A lair or an orbital command changes type only once the morph
-  finishes (#37; tested). A unit's type changes on burrowing too (#37).
+  finishes (#37; tested). For one step an orbital then reads unfinished: a command center that had read a finished
+  `COMMAND_CENTER` with the morph as its order read `ORBITAL_COMMAND` at build progress 0.998, and 1.0 from the next
+  step (#203, two of AvocaDOS's games against the computer; local game, build 75689). A unit's type changes on
+  burrowing too (#37).
 - A drone that becomes a structure leaves the observation with no death reported, and the structure appears under a
   new tag. The game reports the drone dead when the structure finishes or is killed, in the same step in 3 games of
   6 and a step later in the other 3. On a cancel the structure is reported dead and the drone returns in that

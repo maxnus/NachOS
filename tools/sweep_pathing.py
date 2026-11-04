@@ -72,9 +72,9 @@ from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Point, Rectangle, Tile
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.protocol import GameEndedError
+from sc2nachos.run import Installation
 from sc2nachos.units._unit_type import UnitType
 
 # How far from a unit, in tiles along each axis, the tiles a trace reports lie.
@@ -488,7 +488,7 @@ def _trace_the_maps_units(game: Sandbox, tracer: _Tracer, start: Point, playable
     """Trace the mineral fields nearest the start and farthest from it killed, and the rock nearest the start that
     stands on ground the grid blocks, as `show_map` shows them: a snapshot's tag is not the unit's."""
     neutral = [unit for unit in game.units() if unit.owner == NEUTRAL_REPORTED]
-    fields = [unit for unit in neutral if unit.unit_type in UnitType.AnyMineralField._type_ids]
+    fields = [unit for unit in neutral if unit.unit_type in UnitType.AnyMineralField.type_ids]
     tracer.killed("the mineral field nearest the start killed", _nearest_to(fields, start))
     farthest = max(fields, key=lambda unit: (unit.pos.x - start.x) ** 2 + (unit.pos.y - start.y) ** 2)
     tracer.killed("the mineral field farthest from the start killed", farthest)
@@ -496,8 +496,8 @@ def _trace_the_maps_units(game: Sandbox, tracer: _Tracer, start: Point, playable
     rocks = [
         unit
         for unit in neutral
-        if unit.unit_type in UnitType.Destructible._type_ids
-        and unit.unit_type not in UnitType.CollapsibleTower._type_ids
+        if unit.unit_type in UnitType.Destructible.type_ids
+        and unit.unit_type not in UnitType.CollapsibleTower.type_ids
         and not walkable[int(unit.pos.x) - int(playable.x), int(unit.pos.y) - int(playable.y)]
     ]
     if rocks:

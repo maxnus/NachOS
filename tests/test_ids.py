@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from sc2nachos._enum import ReadableIntEnum
-from sc2nachos.ids import AbilityId, BuffId, EffectId, UnitTypeId, UpgradeId
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
+from sc2nachos.ids import AbilityId, BuffId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids._id_enum import IdEnum
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId, RawEffectId, RawUnitTypeId, RawUpgradeId
 
@@ -123,6 +123,24 @@ def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: Raw
     assert AbilityId.get(reported) is ordered
     with pytest.raises(ValueError):
         AbilityId(reported)
+
+
+@pytest.mark.parametrize(("curated", "raw"), PAIRS)
+def test_the_skipped_ids_are_in_the_catalog_and_no_members_own(
+    curated: type[IdEnum], raw: type[ReadableIntEnum]
+) -> None:
+    """A collection read from the game passes over them, so none may be read as a member too."""
+    skipped = {int(game_id) for game_id in curated._SKIPPED_IDS}
+    assert skipped <= {int(member) for member in raw}
+    assert not skipped & ({int(member) for member in curated} | set(curated._REMAPPED_IDS))
+
+
+def test_reading_several_ids_passes_over_the_skipped_ones_and_reads_the_rest_as_read_does() -> None:
+    gas = RawBuffId.CarryHarvestableVespeneGeyserGas
+    members_read = BuffId._read_each([RawBuffId.ParasiticBombUnitKU, gas, RawBuffId.Stimpack])
+    assert list(members_read) == [BuffId.CARRYING_GAS, BuffId.MARINE_STIMMED]
+    with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
+        list(BuffId._read_each([RawBuffId.DutchMarauderSlow]))
 
 
 @pytest.mark.parametrize(

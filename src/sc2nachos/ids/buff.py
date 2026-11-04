@@ -2,7 +2,7 @@
 
 Hand-maintained: filtered to what multiplayer needs, named for readability. Each member is defined by a raw
 catalog member, never a literal id, or is a custom id, assigned `auto()`, which the game's ids read as. Unknown ids
-raise.
+raise, but a unit's buffs pass over the few in `BuffId._SKIPPED_IDS`.
 """
 
 from enum import auto, nonmember
@@ -56,7 +56,7 @@ class BuffId(IdEnum):
     RAVEN_INTERFERENCE_MATRIX = RawBuffId.RavenScramblerMissile
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
-    VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb
+    VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb  # on its target
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
     WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
     ZEALOT_CHARGING = RawBuffId.Charging  # on the zealot
@@ -71,3 +71,14 @@ class BuffId(IdEnum):
             }
         )
     )
+    # Every unit of one type wears each of these for as long as it is listed, so it says nothing the type does not
+    # (in game).
+    _SKIPPED_IDS = nonmember(
+        frozenset(
+            {
+                RawBuffId.ParasiticBombUnitKU,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
+                RawBuffId.ParasiticBombSecondaryUnitSearch,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
+            }
+        )
+    )
+    """Game ids that are no member's own and that a unit's buffs and the buff events pass over."""

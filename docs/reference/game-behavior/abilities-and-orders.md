@@ -251,6 +251,24 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   first. An order that differs is carried out: a gather sent to a worker returning its cargo sends it back to the
   field with the cargo, so one re-sent every 16 steps mined 5 minerals in 1344 steps against 65 (tool
   `sweep_orders`).
+- A gather queued behind a return given to a worker waits for its cargo to be handed in: SCVs on their way back with
+  minerals, and with vespene, given a return and a gather at a far field queued, showed both, handed their cargo in
+  and went to that field, the one with vespene not back to its refinery; so did those given a right-click on the
+  command center with the gather queued. A gather queued behind the return a worker shows of itself, with no return
+  given, takes its place instead: the SCV went to the field with its minerals, returned them from there, and came back
+  (tested; #203, local game, build 75689).
+- A worker on a move with an order aimed at a unit queued behind goes on into that order at full speed: an SCV moved
+  toward its field with a gather at the field queued, and one moved toward its command center with a right-click on
+  it queued, which it shows as a return at the command center. With a return aimed at nothing queued instead, it slows
+  to a stop at the move's point and sets off again. A plain gather or return slows the worker for its last tile or
+  so. One SCV mining the nearest field of Pylon's main took 98 steps a round trip moved so, against 105 on plain
+  gathers and returns and 107 with the return aimed at nothing, and twelve on its eight fields mined 2315 minerals in
+  three minutes against 2070 (tested; #201, local game, build 75689).
+- A worker on a gather or a return passes through other units, which players call mineral walking: twelve SCVs on
+  Pylon's main mined 2070 minerals in three minutes on plain gathers and returns with a marine standing halfway from
+  the command center to the nearest field, as many as without it (#201, local game, build 75689). A worker on a move
+  is stopped by them (stated). Speed mined, they mined 2275 with the marine there against 2315 without, its move given
+  only while no unit stood in the worker's way.
 
 ## Loading and unloading
 
@@ -401,8 +419,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - An action names the ability as it runs: a move as `Move_Move` (16), which NachOS reads as `MOVE`, a
   research ordered by its general id as its level (1186) (#28; tested).
 - The next observation reports every order the game carried out, stepped or realtime, with the step it was carried
-  out at: one action per command, naming the units that took it, the ability as it runs, the target as sent and
-  whether it was queued. A camera move and an autocast toggle are reported too. An order refused, one answered
-  `Success` but not carried out, and one ignored as identical to a unit's first are not (tool `sweep_orders`).
+  out at: one action per command, naming the units that took it, the ability as it runs, the target as sent, but for
+  the one below, and whether it was queued. A camera move and an autocast toggle are reported too. An order refused,
+  one answered `Success` but not carried out, and one ignored as identical to a unit's first are not (tool
+  `sweep_orders`).
+- A gather sent to a mineral field in the fog by its snapshot's tag is reported aimed at a tag no observation of the
+  game lists, while the SCV's own order shows the snapshot's tag ([units](units.md)): `Harvest_Gather_SCV` at tag
+  8614707213 for a gather sent at 8608809115. It ended 11 of AvocaDOS's 21 games against the VERY_HARD computer, on
+  the 7 maps against the 3 races, at 2:44 to 8:05, before NachOS read such a target (in game, build 75689).
 - In a local realtime game, an order shows in the unit's orders and among the reported actions in the same
   observation, the next one (tool `sweep_orders`).

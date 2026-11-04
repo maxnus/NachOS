@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sc2nachos.constants import POINT_PRECISION
 from sc2nachos.gamedata import TargetType
-from sc2nachos.geometry import Point
+from sc2nachos.geometry import POINT_PRECISION, Point
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:

@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata._resources import Resources
+from sc2nachos.gametime import GameTime
 
 
 @final
@@ -34,6 +34,11 @@ class Cost:
     def resources(self) -> Resources:
         """The minerals and vespene, to compare against what the player has."""
         return Resources(self.minerals, self.vespene)
+
+    @property
+    def is_free(self) -> bool:
+        """Whether it takes no minerals, vespene or supply, whatever its time: a siege, a MULE's calldown."""
+        return not (self.minerals or self.vespene or self.supply)
 
     def __add__(self, other: Cost) -> Cost:
         """The sum of the two costs."""

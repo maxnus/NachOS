@@ -10,14 +10,20 @@ from typing import TYPE_CHECKING, Self, Union, final
 
 import numpy
 
+from sc2nachos._shared.rounding import rounded_half_up
+
 # Imported for the check in `not_a_point_error`. Safe at runtime: `_area` only imports this module for annotations.
 from sc2nachos.geometry._area import Area
-from sc2nachos.util._math import _rounded_half_up
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from s2clientprotocol import common_pb2
+
+
+# The game truncates a point it is given to this fraction of a tile: a move to x = 157.123456 is carried out and
+# reported at 157.123291 (in game).
+POINT_PRECISION = 1 / 4096
 
 
 # Coordinates on the ground plane, with or without a height: anything that *is* a point.
@@ -102,6 +108,18 @@ class _PointND(tuple[float, ...]):
         """Squared ground-plane distance, for when only the ordering matters."""
         return (self[0] - other[0]) ** 2 + (self[1] - other[1]) ** 2
 
+    def distance_to_segment(self, start: PointLike, end: PointLike) -> float:
+        """Distance to the nearest point of the segment from `start` to `end`, on the ground plane: to `start` where the
+        two are one point."""
+        start_x, start_y = start[0], start[1]
+        along_x, along_y = end[0] - start_x, end[1] - start_y
+        offset_x, offset_y = self[0] - start_x, self[1] - start_y
+        length_squared = along_x * along_x + along_y * along_y
+        if not length_squared:
+            return math.hypot(offset_x, offset_y)
+        fraction = min(1.0, max(0.0, (offset_x * along_x + offset_y * along_y) / length_squared))
+        return math.hypot(offset_x - fraction * along_x, offset_y - fraction * along_y)
+
     def is_closer_than(self, distance: float, other: PointLike) -> bool:
         """Whether another point lies strictly within `distance`."""
         return self.distance_to_squared(other) < distance**2
@@ -151,7 +169,7 @@ class _PointND(tuple[float, ...]):
         """
         if step <= 0:
             raise ValueError(f"a lattice step must be positive, got {step}")
-        snapped = (_rounded_half_up(self[0] / step) * step, _rounded_half_up(self[1] / step) * step)
+        snapped = (rounded_half_up(self[0] / step) * step, rounded_half_up(self[1] / step) * step)
         return type(self)(snapped + tuple(self[2:]))
 
     def rounded_down(self, *, step: float) -> Self:

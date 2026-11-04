@@ -1,10 +1,6 @@
 """Errors raised when reading a unit the game has no answer for."""
 
-from sc2nachos._errors import NachOSError
-
-
-class NotReportedError(NachOSError, LookupError):
-    """The game has never shown this unit visible, so it has never reported this field of it."""
+from sc2nachos._shared.errors import NachOSError
 
 
 class UnknownTagError(NachOSError, LookupError):

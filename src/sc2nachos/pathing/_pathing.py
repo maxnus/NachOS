@@ -119,7 +119,7 @@ class Pathing:
             end_point = Point._rounded_to_float32(end.center if isinstance(end, Tile) else end)
             request = query_pb2.RequestQueryPathing(end_pos=common_pb2.Point2D(x=end_point.x, y=end_point.y))
             if isinstance(start, Unit):
-                if start.is_stale:
+                if not start.is_listed:
                     raise ValueError(f"the last observation did not report {start!r}, so the game cannot path from it")
                 request.unit_tag = start.tag
                 start_point = start.position

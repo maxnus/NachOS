@@ -6,13 +6,13 @@ import dataclasses
 import inspect
 import weakref
 from collections.abc import Hashable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from time import perf_counter
 from types import FunctionType, MappingProxyType, MethodType
 from typing import TYPE_CHECKING, Any, final
 
 from loguru import logger
 
-from sc2nachos._checks import check_game_time
 from sc2nachos.events._done import Done
 from sc2nachos.events._event import Event, ParameterizedEvent
 from sc2nachos.events._event_filter import EventFilter
@@ -21,7 +21,8 @@ from sc2nachos.events._event_subscriber import EventSubscriber
 from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.events._handler import _Handler
 from sc2nachos.events._handler_timing import HandlerTiming
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -154,11 +155,15 @@ class _EventBus:
                     raise TypeError(f"{name} of {cls.__name__} is marked with `on` under a {kind}")
         return found
 
-    def _start_game(self) -> None:
-        """Forget what every handler has done, and how long it took."""
-        self._subscriptions.start_game()
-        if self._timings is not None:
-            self._timings = {}
+    @contextmanager
+    def _subscribing_extensions(self) -> Iterator[None]:
+        """While NachOS builds the extensions: every handler subscribed goes before the rest of its priority."""
+        subscriptions = self._subscriptions
+        subscriptions.subscribing_extensions = True
+        try:
+            yield
+        finally:
+            subscriptions.subscribing_extensions = False
 
     def _set_time(self, time: GameTime | None) -> None:
         """Set the time given to events emitted without one: the game's, or `None` once it has ended."""

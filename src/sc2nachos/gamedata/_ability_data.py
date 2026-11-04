@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Self, final
 
 from s2clientprotocol import data_pb2
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import SentAs
 from sc2nachos.gamedata._techtree._overrides import (
@@ -25,8 +25,7 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from sc2nachos.gamedata._techtree import TechTreeAbilities
-    from sc2nachos.gamedata._unit_type_data import UnitTypeData
+    from sc2nachos.gamedata._techtree import TechTree
     from sc2nachos.gamedata._upgrade_data import UpgradeData
 
 
@@ -42,10 +41,10 @@ class TargetType(ReadableIntEnum):
 
 
 class OrderBehavior(Enum):
-    """What ordering an ability does to the unit's current orders (tool `sweep_orders`)."""
+    """What ordering an ability does to the unit's orders (tool `sweep_orders`)."""
 
     REPLACES = "replaces"
-    """Drops the unit's current orders and runs instead: a move, an attack, a worker's build."""
+    """Drops the unit's orders and runs instead: a move, an attack, a worker's build."""
     QUEUES = "queues"
     """Goes behind whatever the structure is making, queued or not: a train or a research."""
     NEEDS_IDLE = "needs idle"
@@ -65,15 +64,14 @@ _NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
 
 @dataclass(frozen=True, slots=True)
 class OrderBehaviors:
-    """What ordering one ability does to a unit's current orders: its own behavior, and each unit type's where that
-    differs."""
+    """What ordering one ability does to a unit's orders: its own behavior, and each unit type's where that differs."""
 
     own: OrderBehavior = OrderBehavior.REPLACES
     by_type: Mapping[UnitTypeId, OrderBehavior] = field(default_factory=lambda: _NO_BEHAVIORS)
 
 
 def order_behaviors(
-    tech_tree_abilities: TechTreeAbilities, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
+    tech_tree: TechTree, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
 ) -> Mapping[AbilityId, OrderBehaviors]:
     """The order behaviors of each ability that does not simply replace every unit's orders, judged for each unit type
     that carries it out: an action several types perform does to each what that type's own does.
@@ -88,16 +86,11 @@ def order_behaviors(
     `structures` and `non_structures` are the types the tables say are and are not structures. They tell a barracks
     training a marine from a larva morphing into one, and a sieged tank from a bunker.
     """
-    order_holders = _unit_types_holding_orders(tech_tree_abilities, non_structures)
+    order_holders = _unit_types_holding_orders(tech_tree, non_structures)
     behaviors: dict[AbilityId, OrderBehaviors] = {}
-    for ability in (
-        tech_tree_abilities.performers.keys()
-        | tech_tree_abilities.products.keys()
-        | KEEPS_ORDERS_ABILITIES
-        | KEEPS_ORDERS_BY_TYPE.keys()
-    ):
-        products_by_maker = tech_tree_abilities.products.get(ability, {})
-        carried_out_by = _performers_of(ability, tech_tree_abilities) | products_by_maker.keys()
+    for ability in tech_tree.abilities.keys() | KEEPS_ORDERS_ABILITIES | KEEPS_ORDERS_BY_TYPE.keys():
+        products_by_maker = tech_tree.ability(ability).products
+        carried_out_by = _performers_of(ability, tech_tree) | products_by_maker.keys()
         behavior_by_type = {
             unit_type: _behavior(ability, unit_type, products_by_maker.get(unit_type), structures, order_holders)
             for unit_type in carried_out_by | KEEPS_ORDERS_BY_TYPE.get(ability, frozenset())
@@ -133,45 +126,40 @@ def _behavior(
 _REPLACES = OrderBehaviors()
 
 
-def _performers_of(ability: AbilityId, tech_tree_abilities: TechTreeAbilities) -> frozenset[UnitTypeId]:
+def _performers_of(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types offered `ability`. The off half of a toggle is offered only once its on half has taken (in
     game), so the tables offer it to nobody, and it takes its on half's."""
-    if (offered_to := tech_tree_abilities.performers.get(ability)) or not ability.name.endswith("_OFF"):
-        return offered_to or frozenset()
+    if (offered_to := tech_tree.ability(ability).performers) or not ability.name.endswith("_OFF"):
+        return offered_to
     on_half = AbilityId.__members__.get(f"{ability.name.removesuffix('_OFF')}_ON")
-    return tech_tree_abilities.performers.get(on_half, frozenset()) if on_half is not None else frozenset()
+    return tech_tree.ability(on_half).performers if on_half is not None else frozenset()
 
-
-# The products of an ability that makes nothing.
-_MAKES_NOTHING: Mapping[UnitTypeId, UnitTypeId | UpgradeId] = MappingProxyType({})
 
 # The cost of an ability that makes nothing.
 _FREE = Cost(0, 0)
 
 
 def ability_costs(
-    units: Mapping[UnitTypeId, UnitTypeData],
+    step_costs: Mapping[UnitTypeId, Cost],
     upgrades: Mapping[UpgradeId, UpgradeData],
-    tech_tree_abilities: TechTreeAbilities,
+    tech_tree: TechTree,
 ) -> Mapping[AbilityId, Cost]:
-    """The cost of ordering each ability, supply included.
-
-    A unit type's row holds everything spent to reach it, so a morph costs the difference from its source type, time
-    included: an orbital command 150 and 560 steps, a siege nothing. An action several types perform costs what each
-    makes costs, which is one price for every action there is: a lift nothing, a tech lab 50/25 and 400 steps.
-    `COST_OVERRIDES` corrects the few the tables get wrong.
+    """The cost of ordering each ability, supply included: the cost of the step that makes its product, of
+    `step_costs`, or the upgrade's cost, time included: an orbital command 150 and 560 steps, a siege nothing. An
+    action several types perform costs what each makes costs, which is one cost for every action there is: a lift
+    nothing, a tech lab 50/25 and 400 steps. `COST_OVERRIDES` gives the few whose product does not say.
     """
     costs: dict[AbilityId, Cost] = {}
-    for ability, products_by_maker in tech_tree_abilities.products.items():
-        prices = {_derived_cost(product, units, upgrades) for product in products_by_maker.values()}
-        if len(prices) == 1 and (price := prices.pop()) is not None:
-            costs[ability] = price
+    for ability, in_tree in tech_tree.abilities.items():
+        product_costs = {_cost_of_making(product, step_costs, upgrades) for product in in_tree.products.values()}
+        if len(product_costs) == 1 and (product_cost := product_costs.pop()) is not None:
+            costs[ability] = product_cost
     costs.update(COST_OVERRIDES)
     return costs
 
 
 def cancel_abilities(
-    tech_tree_abilities: TechTreeAbilities, behaviors: Mapping[AbilityId, OrderBehaviors]
+    tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehaviors]
 ) -> Mapping[AbilityId, AbilityId]:
     """The ability that cancels each ability on a structure carrying it out, for those that have one.
 
@@ -179,42 +167,38 @@ def cancel_abilities(
     which is to say is offered that cancel: a warp gate keeps none (in game). A morph, an add-on and arming a nuke take
     the cancel they were seen offered (tool `sweep_tech_tree`), `CANCEL` for every one of them.
     """
-    keeps_a_queue = tech_tree_abilities.performers.get(AbilityId.CANCEL_LAST, frozenset())
-    cancels_by_ability = dict(tech_tree_abilities.cancels)
+    keeps_a_queue = tech_tree.ability(AbilityId.CANCEL_LAST).performers
+    cancels_by_ability = {
+        ability: in_tree.cancelled_by
+        for ability, in_tree in tech_tree.abilities.items()
+        if in_tree.cancelled_by is not None
+    }
     for ability, behavior in behaviors.items():
-        offered_to = tech_tree_abilities.performers.get(ability, frozenset())
+        offered_to = tech_tree.ability(ability).performers
         if behavior.own is OrderBehavior.QUEUES and offered_to and offered_to <= keeps_a_queue:
             cancels_by_ability[ability] = AbilityId.CANCEL_LAST
     return cancels_by_ability
 
 
-def _derived_cost(
-    product: UnitTypeId | UpgradeId, units: Mapping[UnitTypeId, UnitTypeData], upgrades: Mapping[UpgradeId, UpgradeData]
+def _cost_of_making(
+    product: UnitTypeId | UpgradeId, step_costs: Mapping[UnitTypeId, Cost], upgrades: Mapping[UpgradeId, UpgradeData]
 ) -> Cost | None:
-    """The cost of making `product`, derived from the tables: an upgrade's cost, or a unit type's cost less its source
-    type's. `None` where either has no row."""
+    """The cost of making `product`: an upgrade's cost, or the cost of the step that makes a unit type. `None` where it
+    has no row."""
     if isinstance(product, UpgradeId):
         upgrade = upgrades.get(product)
         return None if upgrade is None else upgrade.cost
-    if (made := units.get(product)) is None:
-        return None
-    if (source := made.morphed_from) is None:
-        return made.cost
-    used = units.get(source)
-    return None if used is None else made.cost - used.cost
+    return step_costs.get(product)
 
 
-def _unit_types_holding_orders(
-    tech_tree_abilities: TechTreeAbilities, non_structures: frozenset[UnitTypeId]
-) -> frozenset[UnitTypeId]:
+def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[UnitTypeId]) -> frozenset[UnitTypeId]:
     """The unit types that hold an order of their own, which an order can take them off: those the game offers a
     move, and a unit offered an attack, a stop or a hold even where it cannot move, such as a sieged tank or a burrowed
     lurker. A structure, an egg and a cocoon hold none. A flying structure is offered a move under its flying type."""
-    performers_by_ability = tech_tree_abilities.performers
-    offered_a_move = performers_by_ability.get(AbilityId.MOVE, frozenset())
+    offered_a_move = tech_tree.ability(AbilityId.MOVE).performers
     offered_an_attack_stop_or_hold = frozenset().union(
         *(
-            performers_by_ability.get(ability, frozenset())
+            tech_tree.ability(ability).performers
             for ability in (AbilityId.ATTACK, AbilityId.STOP, AbilityId.HOLD_POSITION)
         )
     )
@@ -270,7 +254,7 @@ class AbilityData:
     with `ERROR` (tool `sweep_tech_tree`). `None` for everything else, a warp-in and a build among them: a warp gate
     keeps no queue, and a structure under construction is cancelled on itself with `CANCEL`."""
     order_behavior: OrderBehavior
-    """What ordering it does to the unit's current orders: the behavior the types carrying it out share, or `REPLACES`
+    """What ordering it does to the unit's orders: the behavior the types carrying it out share, or `REPLACES`
     where they differ; `order_behavior_for` gives each unit type's."""
     sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
     """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
@@ -291,7 +275,7 @@ class AbilityData:
         return self.needs_placement or self.id in ABILITIES_PLACING_AT_THE_TARGET
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
-        """What ordering it does to the current orders of a unit of `unit_type`: what that type's own does, as a
+        """What ordering it does to the orders of a unit of `unit_type`: what that type's own does, as a
         ghost's hold fire keeps its orders and a burrowed lurker's takes it off its attack, and keeping the orders of
         the types `KEEPS_ORDERS_BY_TYPE` names for it, such as a barracks given a smart (in game)."""
         return self._behaviors_by_performer.get(unit_type, self.order_behavior)
@@ -300,13 +284,13 @@ class AbilityData:
     def _from_proto(
         cls,
         data: data_pb2.AbilityData,
-        tech_tree_abilities: TechTreeAbilities,
+        tech_tree: TechTree,
         behaviors: Mapping[AbilityId, OrderBehaviors],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
-        """Read one ability from the game's table, with what `tech_tree_abilities`, `behaviors`, `costs` and `cancels`
-        say about it."""
+        """Read one ability from the game's table, with what `tech_tree`, `behaviors`, `costs` and `cancels` say about
+        it."""
         ability = AbilityId(data.ability_id)
         behavior = behaviors.get(ability, _REPLACES)
         return cls(
@@ -316,8 +300,8 @@ class AbilityData:
             footprint_radius=data.footprint_radius if data.HasField("footprint_radius") else None,
             needs_placement=data.is_building,
             allows_autocast=data.allow_autocast,
-            performers=_performers_including_sent_as(ability, tech_tree_abilities),
-            products=tech_tree_abilities.products.get(ability, _MAKES_NOTHING),
+            performers=_performers_including_sent_as(ability, tech_tree),
+            products=tech_tree.ability(ability).products,
             cost=costs.get(ability, _FREE),
             multi_unit=ability in MULTI_UNIT_ABILITIES,
             cancelled_by=cancels.get(ability),
@@ -330,13 +314,13 @@ class AbilityData:
     def _custom(
         cls,
         ability: AbilityId,
-        tech_tree_abilities: TechTreeAbilities,
+        tech_tree: TechTree,
         behaviors: Mapping[AbilityId, OrderBehaviors],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
         """The custom ability `ability`, sent as `ABILITIES_SENT_AS_ANOTHER` names for each type, with what
-        `tech_tree_abilities`, `behaviors`, `costs` and `cancels` say about it. It takes no target and has no range."""
+        `tech_tree`, `behaviors`, `costs` and `cancels` say about it. It takes no target and has no range."""
         sent_as = ABILITIES_SENT_AS_ANOTHER[ability]
         behavior = behaviors.get(ability, _REPLACES)
         return cls(
@@ -346,8 +330,8 @@ class AbilityData:
             footprint_radius=None,
             needs_placement=False,
             allows_autocast=False,
-            performers=_performers_including_sent_as(ability, tech_tree_abilities),
-            products=tech_tree_abilities.products.get(ability, _MAKES_NOTHING),
+            performers=_performers_including_sent_as(ability, tech_tree),
+            products=tech_tree.ability(ability).products,
             cost=costs.get(ability, _FREE),
             multi_unit=ability in MULTI_UNIT_ABILITIES,
             cancelled_by=cancels.get(ability),
@@ -361,16 +345,15 @@ class AbilityData:
 _SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 
 
-def _performers_including_sent_as(ability: AbilityId, tech_tree_abilities: TechTreeAbilities) -> frozenset[UnitTypeId]:
+def _performers_including_sent_as(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types offered `ability`, the off half of a toggle taking its on half's as `_performers_of` does, and
     those offered the ability it goes out to them as: a medivac is offered the unload at a point that `UNLOAD` goes
     out to it as."""
-    performers_by_ability = tech_tree_abilities.performers
-    offered_to = _performers_of(ability, tech_tree_abilities)
+    offered_to = _performers_of(ability, tech_tree)
     sent_as_by_type = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
     return offered_to | {
         unit_type
         for unit_type, type_sent_as in sent_as_by_type.items()
         if (sent_ability := AbilityId.get(type_sent_as.ability)) is not None
-        and unit_type in performers_by_ability.get(sent_ability, frozenset())
+        and unit_type in tech_tree.ability(sent_ability).performers
     }

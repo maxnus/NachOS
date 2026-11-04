@@ -1,12 +1,11 @@
 """Drawing, cheats and debug commands: what goes out after each turn's orders, and when."""
 
 import math
-from collections import deque
 from collections.abc import Callable, Sequence
 from typing import Any
 
 import pytest
-from s2clientprotocol import debug_pb2, error_pb2, raw_pb2, sc2api_pb2
+from s2clientprotocol import debug_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, GameTime, NotPlayingError
 from sc2nachos.debug import (
@@ -25,58 +24,26 @@ from sc2nachos.debug import (
 from sc2nachos.events import GameStartEvent, TurnEvent
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.launch import MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Race, Result
-from sc2nachos.protocol import Client, Status
-from sc2nachos.run import run_local
+from sc2nachos.run import MapFile, MapNotFoundError, run_local
 from sc2nachos.units import Alliance, Visibility
-from support import make_game_info, make_observation, make_response, make_unit
+from support import ScriptedGame, make_game_info, make_observation, make_unit
 
 # The ground height of `make_game_info`'s flat map: a height byte of 128 is an eighth above 0.
 _GROUND = 0.125
 _VITALS = debug_pb2.DebugSetUnitValue.UnitValue
 
 
-class _ScriptedGame:
-    """A game that answers every request by its kind: an observation from `observations` in turn, the last ending the
-    game in a victory, and success for every action."""
-
-    def __init__(
-        self, observations: Sequence[sc2api_pb2.ResponseObservation], *, players: int, observers: int = 0
-    ) -> None:
-        self.observations = deque(observations)
-        self.requests: list[sc2api_pb2.Request] = []
-        self.info = make_game_info(players=())
-        for player in range(1, players + 1):
-            self.info.player_info.add(player_id=player, type=sc2api_pb2.PlayerType.Participant)
-        for observer in range(players + 1, players + observers + 1):
-            self.info.player_info.add(player_id=observer, type=sc2api_pb2.PlayerType.Observer)
-
-    def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
-        self.requests.append(request)
-        match request.WhichOneof("request"):
-            case "join_game":
-                return make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1))
-            case "game_info":
-                return make_response(game_info=self.info)
-            case "data":
-                return make_response(data=sc2api_pb2.ResponseData())
-            case "observation":
-                observation = self.observations.popleft()
-                if not self.observations:
-                    observation.player_result.add(player_id=1, result=Result.VICTORY.value)
-                return make_response(Status.ENDED if not self.observations else Status.IN_GAME, observation=observation)
-            case "step":
-                return make_response(step=sc2api_pb2.ResponseStep())
-            case "action":
-                results = [error_pb2.Success] * len(request.action.actions)
-                return make_response(action=sc2api_pb2.ResponseAction(result=results))
-            case "debug":
-                return make_response(debug=sc2api_pb2.ResponseDebug())
-            case other:
-                raise AssertionError(f"the test game was asked for {other}")
-
-    def close(self) -> None: ...
+def _scripted_game(
+    observations: Sequence[sc2api_pb2.ResponseObservation], *, players: int, observers: int = 0
+) -> ScriptedGame:
+    """A game of `observations` among `players` participants and `observers` observers, on open ground."""
+    info = make_game_info(players=())
+    for player in range(1, players + 1):
+        info.player_info.add(player_id=player, type=sc2api_pb2.PlayerType.Participant)
+    for observer in range(players + 1, players + observers + 1):
+        info.player_info.add(player_id=observer, type=sc2api_pb2.PlayerType.Observer)
+    return ScriptedGame(observations, game_info=info)
 
 
 def _play(
@@ -94,9 +61,8 @@ def _play(
     reporting `units` and the tags `dead`, with the drawing refreshed every `refresh_interval`, and return the debug
     commands sent, by the step of the turn that sent them."""
     observations = [make_observation(step, units=units(step), dead=dead(step)) for step in range(turns + 1)]
-    game = _ScriptedGame(observations, players=players, observers=observers)
-    client = Client(game)
-    client.join_game(Race.TERRAN)
+    game = _scripted_game(observations, players=players, observers=observers)
+    client = game.joined()
 
     @api.on(GameStartEvent)
     def on_start(event: GameStartEvent) -> None:
@@ -136,9 +102,8 @@ class TestDrawing:
                 api.debug.draw((2.0, 3.0), DebugText("here"))
 
         observations = [make_observation(step, units=[make_unit(1)]) for step in range(3)]
-        game = _ScriptedGame(observations, players=2)
-        client = Client(game)
-        client.join_game(Race.TERRAN)
+        game = _scripted_game(observations, players=2)
+        client = game.joined()
         api.on(TurnEvent)(lambda event: turn(event.time.steps))
         api.play(client)
 
@@ -293,15 +258,6 @@ class TestDrawing:
     def test_a_game_that_draws_nothing_sends_no_debug_request(self) -> None:
         assert _play(Api(), lambda step: None, turns=3) == {}
 
-    def test_a_new_game_forgets_the_last_ones_drawing(self) -> None:
-        api = Api()
-        _play(
-            api,
-            lambda step: api.debug.draw((1.0, 1.0), DebugText("first game"), shown_for=GameTime(steps=100)),
-            turns=2,
-        )
-        assert _play(api, lambda step: None, turns=2) == {}
-
     @pytest.mark.parametrize(
         "draw",
         [
@@ -359,13 +315,21 @@ class TestDrawing:
         _play(api, turn, turns=1)
         assert raised == [True]
 
+    def test_the_refresh_interval_is_one_step_unless_set(self) -> None:
+        api = Api()
+        seen: list[GameTime] = []
+        # Subscribed before `_play` subscribes the handler that sets it.
+        api.on(GameStartEvent)(lambda event: seen.append(api.debug.refresh_interval))
+        _play(api, lambda step: None, turns=1)
+        assert seen == [GameTime(steps=1)]
+
     def test_the_refresh_interval_is_set_in_a_game_and_must_be_a_whole_number_of_steps_at_least_one(self) -> None:
         api = Api()
         seen: list[GameTime] = []
 
         def turn(step: int) -> None:
             seen.append(api.debug.refresh_interval)
-            for interval in (GameTime(steps=0), GameTime(steps=1.5), GameTime.from_seconds(1)):
+            for interval in (GameTime(steps=0), GameTime(steps=1.5), GameTime(seconds=1)):
                 with pytest.raises(ValueError, match="whole number of steps"):
                     api.debug.refresh_interval = interval
             with pytest.raises(TypeError, match="GameTime"):
@@ -374,13 +338,6 @@ class TestDrawing:
         _play(api, turn, turns=1, refresh_interval=GameTime(steps=4))
 
         assert seen == [GameTime(steps=4)]
-
-    def test_each_game_starts_refreshing_every_step(self) -> None:
-        api = Api()
-        _play(api, lambda step: None, turns=1, refresh_interval=GameTime(steps=4))
-        seen: list[GameTime] = []
-        _play(api, lambda step: seen.append(api.debug.refresh_interval), turns=1)
-        assert seen == [GameTime(steps=1)]
 
     def test_a_drawing_lasts_until_it_is_removed(self) -> None:
         api = Api()

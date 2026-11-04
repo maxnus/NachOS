@@ -87,7 +87,7 @@ class _BuildSites:
             # Shown aimed at a unit the game names by no tag it reports: no site to reserve.
             return
         site = target.position if isinstance(target, Unit) else target
-        if product in UnitType.AnyAddOn._type_ids:
+        if product in UnitType.AnyAddOn.type_ids:
             self._reserve_add_on(reserved, footprint, site, builder, standing)
         elif site is not None and _placement_key(footprint.snapped_center(at=site)) not in standing:
             reserved.fill_footprint(footprint, at=site, value=True)

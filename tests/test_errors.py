@@ -8,14 +8,14 @@ import pytest
 
 import sc2nachos
 from sc2nachos import NachOSError, NotPlayingError
-from sc2nachos.launch import (
+from sc2nachos.protocol import ConnectionClosedError, ConnectionTimeoutError
+from sc2nachos.run import (
     GameLaunchError,
     GameVersionError,
     InstallationNotFoundError,
     MapNotFoundError,
     UnsupportedPlatformError,
 )
-from sc2nachos.protocol import ConnectionClosedError, ConnectionTimeoutError
 from sc2nachos.units import UnitIdsExhaustedError
 
 

@@ -7,9 +7,9 @@ from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 from sc2nachos import Api, Computer, Difficulty, GameTime, NoEnemyError, Race, Result, UnitTypeId, run_local
 from sc2nachos.debug import Cheat
 from sc2nachos.events import EnemyRaceKnownEvent, TurnEvent
-from sc2nachos.launch import MapFile, MapNotFoundError
-from sc2nachos.player import Player
+from sc2nachos.match import Player
 from sc2nachos.protocol import Client, Status
+from sc2nachos.run import MapFile, MapNotFoundError
 from sc2nachos.units import Alliance
 from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
 
@@ -199,7 +199,7 @@ def test_in_a_real_game_against_a_random_computer_its_race_is_known_with_its_fir
         opponent,
         race=Race.RANDOM,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(60),
+        time_limit=GameTime(seconds=60),
         window=(640, 480),
     )
 

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._own_unit import OwnUnit
+from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
@@ -42,7 +44,8 @@ class _BuilderTracker:
         """The unfinished structure of this player's that `unit`'s first order builds, or `None`, as for a dead unit.
 
         An SCV's build order is aimed at the structure's center once construction starts, and at the structure itself
-        once construction is resumed (in game).
+        once construction is resumed (in game). A host's add-on order is aimed at the host's own center, and the add-on
+        stands beside it (in game).
         """
         orders = unit._latest_report.orders
         if not orders or unit._dead:
@@ -55,7 +58,8 @@ class _BuilderTracker:
         for structure in self._structures_under_construction():
             if not self._order_makes_structure(order, structure):
                 continue
-            dx, dy = target[0] - structure._position[0], target[1] - structure._position[1]
+            site = _site_for(structure, target)
+            dx, dy = site[0] - structure._position[0], site[1] - structure._position[1]
             if dx * dx + dy * dy <= nearest:
                 nearest = dx * dx + dy * dy
                 built = structure
@@ -114,7 +118,7 @@ class _BuilderTracker:
         if not self._builders and not self._used_up_builders:
             return
         for builder in self._used_up_builders:
-            if builder._stale and not builder._dead:
+            if not builder._listed and not builder._dead:
                 self._tracker.unit_tracker._mark_unit_dead(builder, present, reported=False)
         self._used_up_builders = []
         for structure, builder in list(self._builders.items()):
@@ -126,11 +130,6 @@ class _BuilderTracker:
         """Forget what was computed from the last observation, as a new one arrives."""
         self._under_construction = None
         self._builders_now = None
-
-    def end(self) -> None:
-        """Forget the builders the game has yet to report dead. The game is over."""
-        self._used_up_builders = []
-        self.forget_observation()
 
     def _order_target_position(self, order: raw_pb2.UnitOrder) -> tuple[float, float] | None:
         """Where `order` is aimed: its point, or the position of its target unit, such as the geyser a gas building
@@ -162,3 +161,11 @@ class _BuilderTracker:
                 if isinstance(unit, OwnUnit) and unit._latest_report.build_progress < 1.0
             ]
         return self._under_construction
+
+
+def _site_for(structure: Unit[Any], order_target: tuple[float, float]) -> tuple[float, float]:
+    """Where an order aimed at `order_target` puts a structure of `structure`'s type: there, or beside it for an
+    add-on."""
+    if structure._type_id in UnitType.AnyAddOn.type_ids:
+        return order_target[0] + ADD_ON_OFFSET[0], order_target[1] + ADD_ON_OFFSET[1]
+    return order_target

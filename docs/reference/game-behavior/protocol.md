@@ -90,8 +90,11 @@ What follows was seen on one game unless an entry says otherwise: the demo bot a
   2026-10-07, all build 75689, gave a bare file name, `PylonAIE_v4.SC2Map` and the like, and the game refused to play
   one back, "LaunchError: Unable to open map", with the map in a folder of the installation's maps (`maps/AIE`) and
   not at the top of `Maps`. Sent the map's bytes as `map_data`, it played each back as player 1 with the fog on and
-  off, and as player 2 with it off. A replay saved here names the map's absolute path, and once that file is gone the
-  game refuses it alike (seen 2026-10-25, with probes; tested).
+  off, and as player 2 with it off. A replay saved here names the map's absolute path in its info, and once that file
+  is gone the game refuses it alike (seen 2026-10-25, with probes; tested). Read from the replay file itself, a game
+  created with the map's absolute path inside the installation's maps names it relative to that folder instead:
+  `AIE/PylonAIE_v4.SC2Map` for one in `maps/AIE`, in both `replay.details` and `replay.initData` (`sc2` workflow run
+  41849753359, read with mpyq, build 75689), which a viewer can open only with the map in `Maps/AIE`.
 - Played back as one of its players, a replay shows what that player saw when the game was played. At each of the 841
   steps the bot observed, every unit in both had the same type, owner, display, position, health, shields, energy and
   number of orders, and the actions reported were the same 465. Only mineral fields and vespene geysers remembered in

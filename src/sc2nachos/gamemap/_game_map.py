@@ -73,7 +73,7 @@ class GameMap:
         townhalls = (
             unit
             for unit in observation.observation.raw_data.units
-            if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type in UnitType.Townhall._type_ids
+            if unit.alliance == raw_pb2.Alliance.Self and unit.unit_type in UnitType.Townhall.type_ids
         )
         townhall = next(townhalls, None)
         if townhall is None:
@@ -144,26 +144,17 @@ class GameMap:
         """Every ramp on the map, ordered by lower left tile."""
         return self._ramps
 
-    @property
-    def main_ramp(self) -> Ramp | None:
-        """The ramp out of this player's main, as `main_ramp_of(start_location)` says."""
-        return self._main_ramps_by_start_tile[Tile.at(self.start_location)]
-
-    def main_ramp_of(self, start: PointLike) -> Ramp | None:
-        """The ramp out of the main at the start location `start`, such as an opponent's: of the ramps whose top is at
-        `start`'s level, within half a level of the height at its tile, the one whose center is the shortest walk from
-        `start`, and of two as short, the first in tile order. The walk is over the pathing grid with the ground a
-        townhall at `start` covers opened, since the start's own townhall closes it. `None` if no such ramp can be
-        walked to. Raises `ValueError` for a point on no start location's tile.
-        """
+    def _main_ramp_of(self, start: PointLike) -> Ramp | None:
+        """The ramp out of the main at the start location `start`, as `StartLocation.main_ramp` finds it, or `None`
+        where none can be walked to. Raises `ValueError` for a point on no start location's tile."""
         start_tile = Tile.at(start)
         if start_tile not in self._main_ramps_by_start_tile:
             raise ValueError(f"{start} is on no start location's tile: {self._all_start_locations}")
         return self._main_ramps_by_start_tile[start_tile]
 
     def _find_main_ramp(self, start: Point) -> Ramp | None:
-        """The ramp out of the main at the start location `start`, as `main_ramp_of` says; `None` for a start beyond the
-        playable area, which only a map drawn for a test has."""
+        """The ramp out of the main at the start location `start`, as `StartLocation.main_ramp` finds it; `None` where
+        none can be walked to, and for a start beyond the playable area, which only a map drawn for a test has."""
         if start not in self._playable:
             return None
         walkable_ground = self._pathing.copy()

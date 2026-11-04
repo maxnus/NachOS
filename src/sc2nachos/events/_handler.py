@@ -9,18 +9,19 @@ if TYPE_CHECKING:
 
     from sc2nachos.events._event_filter import EventFilter
     from sc2nachos.events._event_priority import EventPriority
-    from sc2nachos.game_time import GameTime
+    from sc2nachos.gametime import GameTime
 
 
 @final
 class _Handler:
     """A function handling the events a filter selects, called alone or on the instance it is a method of, with how
-    often it runs and what it has done in the current game."""
+    often it runs and what it has done."""
 
     __slots__ = (
         "at_time",
         "catch_exceptions",
         "done",
+        "from_extensions",
         "function",
         "instance",
         "last_steps",
@@ -55,10 +56,11 @@ class _Handler:
         self.once = once or at_time is not None
         self.catch_exceptions = catch_exceptions
         self.instance = instance
-        # Its place in subscription order across the whole bus, which orders one priority's handlers across event types.
+        # Its place in subscription order across the whole bus, which orders one priority's handlers across event types,
+        # and whether it subscribed while NachOS built the extensions, which puts it before the rest of its priority.
         self.order = 0
-        # What it has done this game; the next game resets it. An unsubscribed handler is `done` too, since an event
-        # being handed out may still reach it.
+        self.from_extensions = False
+        # What it has done. An unsubscribed handler is `done` too, since an event being handed out may still reach it.
         self.last_steps: float | None = None
         self.done = False
 

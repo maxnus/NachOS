@@ -7,15 +7,14 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.constants import STEPS_PER_SECOND
-from sc2nachos.game_time import GameTime
+from sc2nachos._shared.errors import NotReportedError
 from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
 from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
+from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
 from sc2nachos.geometry import Footprint, Point
 from sc2nachos.ids import BuffId, UnitTypeId
 from sc2nachos.match import Race
-from sc2nachos.units._errors import NotReportedError
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, CloakState, Visibility
@@ -36,8 +35,10 @@ _DEFAULT_FACING_TOLERANCE = math.radians(1.0)
 _IN_FOG = raw_pb2.DisplayType.Snapshot
 # The buffs a worker carries resources under: minerals under one for every race and another for rich minerals, and gas
 # from a plain geyser under one, each race's game id read as it. Gas from a rich geyser comes under none (in game).
-_CARRYING_RESOURCE_BUFFS = frozenset({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH, BuffId.CARRYING_GAS})
-_OWN = raw_pb2.Alliance.Self
+_CARRYING_MINERALS_BUFFS = frozenset({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH})
+_CARRYING_RESOURCE_BUFFS = _CARRYING_MINERALS_BUFFS | {BuffId.CARRYING_GAS}
+_OWN_ALLIANCE = raw_pb2.Alliance.Self
+_ENEMY_ALLIANCE = raw_pb2.Alliance.Enemy
 # Looked up by the protocol's value, which is faster than calling the enum. A placeholder has no tag, so it is never
 # read into a unit.
 _VISIBILITIES = {int(member): member for member in Visibility}
@@ -74,21 +75,29 @@ class Unit[K: UnitType.AnyType]:
 
     Position, type and visibility read as of the last observation that listed the unit. Everything else reads as
     of the last observation that showed it visible, `last_seen`, and raises `NotReportedError` for a unit never
-    shown visible. A structure out of sight stays in the observation as `IN_FOG`. A unit that leaves the
-    observation is stale: it keeps its last values, and is observed under the same id again if it comes back.
+    shown visible. A structure out of sight stays in the observation as `IN_FOG`. A unit the observation
+    leaves out is unlisted, `is_listed` false: it keeps its last values, and is observed under the same id again if it
+    comes back.
+
+    `K` is the unit's `UnitType` for the type checker. A read only some types have is typed for them alone, as
+    `mineral_contents` is for a mineral field, and is an error on a unit typed as another type or as a group wider than
+    them. A unit typed `Unit[Any]` reads as any type.
     """
 
     # `OwnUnit` declares no slots, so a unit can change between the two classes in place. `__weakref__` lets a bot
-    # key its own data by unit in a `weakref.WeakKeyDictionary`, which slots would otherwise rule out.
+    # refer to a unit weakly, which slots would otherwise rule out. A `WeakKeyDictionary` keyed by unit still keeps a
+    # dead unit's entry all game, as the tracker keeps every unit it has seen; a `UnitDict` forgets it.
     __slots__ = (
         "__weakref__",
         "_damage_taken",
         "_dead",
+        "_first_seen",
         "_hallucination_confirmed",
         "_id",
         "_latest_report",
         "_last_seen",
         "_latest_visible_report",
+        "_listed",
         "_order_targets",
         "_orders",
         "_own",
@@ -99,7 +108,6 @@ class Unit[K: UnitType.AnyType]:
         "_raw_alliance",
         "_raw_type",
         "_radius_footprint",
-        "_stale",
         "_step",
         "_tag",
         "_tracker",
@@ -112,6 +120,8 @@ class Unit[K: UnitType.AnyType]:
     _latest_report: raw_pb2.Unit
     _latest_visible_report: raw_pb2.Unit | None
     _last_seen: int | None
+    # The step of the first observation that showed the unit visible, or `None` before one has.
+    _first_seen: int | None
     # The alliance of the latest report, as the protocol numbers it, read once per report.
     _raw_alliance: int
     _raw_type: int
@@ -128,7 +138,7 @@ class Unit[K: UnitType.AnyType]:
     _previous_report: raw_pb2.Unit | None
     # `damage_taken` as last worked out, with the tracker update it was worked out at.
     _damage_taken: _Snapshot[float | None]
-    _stale: bool
+    _listed: bool
     _dead: bool
     # Whether the enemy's unit was once reported a hallucination, which the game flags only while a detector is near
     # (in game).
@@ -151,15 +161,16 @@ class Unit[K: UnitType.AnyType]:
         self._latest_visible_report = report if report.display_type == _VISIBLE else None
         # Set only for a unit not visible; a visible unit was last seen at its last observation.
         self._last_seen = None
+        self._first_seen = step if report.display_type == _VISIBLE else None
         self._position = Point((report.pos.x, report.pos.y))
         self._raw_alliance = report.alliance
-        self._own = self._raw_alliance == _OWN
+        self._own = self._raw_alliance == _OWN_ALLIANCE
         self._step = step
         self._previous_position = None
         self._previous_report = None
         self._previous_step = step
         self._damage_taken = _Snapshot(None)
-        self._stale = False
+        self._listed = True
         self._dead = False
         self._hallucination_confirmed = not self._own and report.display_type == _VISIBLE and report.is_hallucination
         self._radius_footprint = None
@@ -175,9 +186,9 @@ class Unit[K: UnitType.AnyType]:
         """
         position = self._position
         last_step = self._step
-        if self._stale:
+        if not self._listed:
             # Back in the observation. How it moved while away is not known.
-            self._stale = False
+            self._listed = True
             self._previous_position = None
         else:
             # A unit is updated once an observation, so this is the report of the observation before.
@@ -192,6 +203,8 @@ class Unit[K: UnitType.AnyType]:
         if x != position[0] or y != position[1]:
             self._position = Point((x, y))
         if report.display_type == _VISIBLE:
+            if self._first_seen is None:
+                self._first_seen = step
             self._latest_visible_report = report
             if not self._own and not self._hallucination_confirmed:
                 self._hallucination_confirmed = report.is_hallucination
@@ -199,21 +212,14 @@ class Unit[K: UnitType.AnyType]:
             # Just stopped being visible: the last sighting must outlive the observation it came in.
             self._latest_visible_report = _copy(self._latest_report)
             self._last_seen = last_step
-        previous_alliance = None
-        if (alliance := report.alliance) != self._raw_alliance:
-            if (alliance == _OWN) is not self._own:
-                previous_alliance = _ALLIANCES[self._raw_alliance]
-                self._update_alliance()
-            self._raw_alliance = alliance
+        previous_alliance = None if report.alliance == self._raw_alliance else self._update_alliance(report.alliance)
         # The game reports orders for this player's units alone.
         if self._own and (orders := self._latest_report.orders):
             self._remember_order_targets(orders)
         self._latest_report = report
         if report.unit_type == self._raw_type:
             return None if previous_alliance is None else _SideOrTypeChange(previous_alliance, None)
-        previous_type = self._type_id
-        self._update_unit_type(report.unit_type)
-        return _SideOrTypeChange(previous_alliance, previous_type)
+        return _SideOrTypeChange(previous_alliance, self._morph_into(report.unit_type))
 
     def _remember_order_targets(self, orders: Iterable[raw_pb2.UnitOrder]) -> None:
         """Keep, by ability, the unit each of `orders`, the latest report's, names under a tag the game has reported."""
@@ -230,10 +236,10 @@ class Unit[K: UnitType.AnyType]:
                     targets = self._order_targets = {}
                 targets[order.ability_id] = unit
 
-    def _mark_stale(self) -> None:
-        """Mark the unit stale: out of the observation, keeping its last values without keeping that observation
+    def _mark_unlisted(self) -> None:
+        """Mark the unit unlisted: out of the observation, keeping its last values without keeping that observation
         alive."""
-        self._stale = True
+        self._listed = False
         self._previous_report = None
         report = self._latest_report
         copy = _copy(report)
@@ -243,8 +249,8 @@ class Unit[K: UnitType.AnyType]:
 
     def _mark_dead(self) -> None:
         """Mark the unit dead: out of the observation for good."""
-        if not self._stale:
-            self._mark_stale()
+        if self._listed:
+            self._mark_unlisted()
         self._dead = True
 
     def _update_unit_type(self, raw_type: int) -> None:
@@ -256,21 +262,36 @@ class Unit[K: UnitType.AnyType]:
         self._raw_type = raw_type
         self._type_id = UnitTypeId.read(raw_type)
 
-    def _update_alliance(self) -> None:
-        """Change sides, and with them class, to `OwnUnit` or back, as when a neural parasite takes a unit over or
-        lets it go."""
-        from sc2nachos.units._own_unit import OwnUnit
+    def _morph_into(self, raw_type: int) -> UnitTypeId:
+        """Set the unit's type to `raw_type`, a report's other than the last. Returns the type before."""
+        previous_type = self._type_id
+        self._update_unit_type(raw_type)
+        return previous_type
 
-        self._own = not self._own
-        # Assigning `self.__class__` directly type-checks only for a class of `Self`.
-        object.__setattr__(self, "__class__", OwnUnit if self._own else Unit)
+    def _update_alliance(self, raw_alliance: int) -> Alliance | None:
+        """Set the unit's alliance to `raw_alliance`, a report's other than the last, as the protocol numbers it.
+        Returns the alliance before if the unit changed sides, to or from this player's, or `None` if it did not.
+
+        A unit that changes sides changes class with them, to `OwnUnit` or back, as when a neural parasite takes it
+        over or lets it go.
+        """
+        previous_alliance = None
+        if (raw_alliance == _OWN_ALLIANCE) is not self._own:
+            from sc2nachos.units._own_unit import OwnUnit
+
+            previous_alliance = _ALLIANCES[self._raw_alliance]
+            self._own = not self._own
+            # Assigning `self.__class__` directly type-checks only for a class of `Self`.
+            object.__setattr__(self, "__class__", OwnUnit if self._own else Unit)
+        self._raw_alliance = raw_alliance
+        return previous_alliance
 
     def _never_seen_error(self, what: str) -> NotReportedError:
         """The error for reading `what` from a unit the game has never shown visible."""
         return NotReportedError(f"the game never showed {self!r} visible, so it never reported its {what}")
 
     def __repr__(self) -> str:
-        state = ", dead" if self._dead else ", stale" if self._stale else ""
+        state = ", dead" if self._dead else "" if self._listed else ", unlisted"
         return f"{type(self).__name__}({self._type_id.name}, id={self._id}, at {self._position}{state})"
 
     # Identity.
@@ -308,6 +329,16 @@ class Unit[K: UnitType.AnyType]:
         return _ALLIANCES[self._raw_alliance]
 
     @property
+    def is_own(self) -> bool:
+        """Whether the unit is this player's."""
+        return self._raw_alliance == _OWN_ALLIANCE
+
+    @property
+    def is_enemy(self) -> bool:
+        """Whether the unit is the enemy's."""
+        return self._raw_alliance == _ENEMY_ALLIANCE
+
+    @property
     def owner_id(self) -> int:
         """The id of the player the unit belongs to. 16 for the map's own units."""
         if (report := self._latest_visible_report) is None:
@@ -317,10 +348,12 @@ class Unit[K: UnitType.AnyType]:
     # Whether the game still reports it.
 
     @property
-    def is_stale(self) -> bool:
-        """Whether the last observation left the unit out: it went out of sight, into a transport or a gas building,
-        or into a structure it is becoming, as a drone does, or it died."""
-        return self._stale
+    def is_listed(self) -> bool:
+        """Whether the last observation listed the unit: in sight and seen, in sight but cloaked and undetected, or a
+        structure remembered in the fog. Not once it went out of sight, or burrowed undetected, as a zergling does, or
+        went into a transport, a gas building or a structure it is becoming, as a drone does, nor once it died.
+        `is_visible` is the first of these alone."""
+        return self._listed
 
     @property
     def is_dead(self) -> bool:
@@ -329,9 +362,31 @@ class Unit[K: UnitType.AnyType]:
         The game reports only the deaths a player can see. A structure that dies out of sight is found dead when its
         spot comes back into sight without it. A unit of this player's that became a structure, as a drone does, is
         dead once that structure finishes, or once it dies without the unit coming back from a cancel. A dead unit is
-        stale for good.
+        never listed again.
         """
         return self._dead
+
+    @property
+    def is_alive(self) -> bool:
+        """Whether the unit is not known to be dead: the opposite of `is_dead`. True for an enemy's unit that died out
+        of sight, whose death the game never reports, until NachOS finds it dead, as `is_dead` says for a structure."""
+        return not self._dead
+
+    @property
+    def is_orderable(self) -> bool:
+        """Whether this player can order the unit now: the last observation listed it as this player's. Not while it
+        is inside a gas building or a transport, nor under a neural parasite, which makes it an enemy `Unit`, nor once
+        it is dead. Read it before ordering a unit kept from an earlier observation, or reading what only `OwnUnit`
+        has. It goes by the listing alone, so a reaper's grenade and a parasitic bomb left behind, each listed as its
+        caster's, read orderable."""
+        return self._listed and self._own
+
+    @property
+    def first_seen(self) -> GameTime | None:
+        """The time of the first observation that showed the unit visible, or `None` if none has, as for `last_seen`.
+        A structure remembered under a new tag keeps it, as it keeps its `id`. Later than `EnemyUnitFirstSeenEvent` for
+        an enemy's unit first listed in the fog or undetected, which that event counts as first seen."""
+        return None if self._first_seen is None else GameTime(steps=self._first_seen)
 
     @property
     def last_seen(self) -> GameTime | None:
@@ -414,9 +469,9 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def is_visible(self) -> bool:
-        """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for a
-        stale unit, whose `visibility` reads as it was last listed."""
-        return not self._stale and self._latest_report.display_type == _VISIBLE
+        """Whether the last observation showed the unit visible: in it, and seen, not cloaked or detected. False for an
+        unlisted unit, whose `visibility` reads as it was last listed."""
+        return self._listed and self._latest_report.display_type == _VISIBLE
 
     @property
     def cloak_state(self) -> CloakState:
@@ -618,14 +673,14 @@ class Unit[K: UnitType.AnyType]:
         return report.shield_upgrade_level
 
     @property
-    def mineral_contents(self) -> int:
+    def mineral_contents(self: Unit[UnitType.AnyMineralField]) -> int:
         """The minerals left in a mineral field. 0 for anything else."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("minerals")
         return report.mineral_contents
 
     @property
-    def vespene_contents(self) -> int:
+    def vespene_contents(self: Unit[UnitType.AnyVespeneGeyser | UnitType.GasBuilding]) -> int:
         """The vespene left in a geyser, or in the gas building on it. 0 for anything else."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("vespene")
@@ -633,10 +688,11 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def buffs(self) -> frozenset[BuffId]:
-        """The buffs on the unit."""
+        """The buffs on the unit, but those every unit of its type wears for as long as it is listed, which say nothing
+        its type does not: a parasitic bomb left behind reads none."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
-        return frozenset(BuffId.read(buff) for buff in report.buff_ids)
+        return frozenset(BuffId._read_each(report.buff_ids))
 
     def has_buff(self, buff_ids: BuffId | Collection[BuffId]) -> bool:
         """Whether `buff_ids`, one buff or any of several, is among the unit's `buffs`. Raises `NotReportedError` for a
@@ -653,6 +709,18 @@ class Unit[K: UnitType.AnyType]:
         `buffs` does."""
         return self.has_buff(_CARRYING_RESOURCE_BUFFS)
 
+    @property
+    def is_carrying_minerals(self) -> bool:
+        """Whether the unit carries minerals, from a plain field or a rich one, as its buffs show. Raises
+        `NotReportedError` for a unit never shown visible, as `buffs` does."""
+        return self.has_buff(_CARRYING_MINERALS_BUFFS)
+
+    @property
+    def is_carrying_gas(self) -> bool:
+        """Whether the unit carries gas, as its buffs show: false for a worker carrying gas from a rich geyser, which
+        the game gives no buff (in game). Raises `NotReportedError` for a unit never shown visible, as `buffs` does."""
+        return self.has_buff(BuffId.CARRYING_GAS)
+
     # From the game's tables.
 
     @property
@@ -663,7 +731,7 @@ class Unit[K: UnitType.AnyType]:
     @property
     def weapons(self) -> tuple[Weapon, ...]:
         """The unit type's weapons with its owner's upgrades applied: this player's upgrades for its own units,
-        `Api.enemy.upgrades` for the enemy's, and none for anyone else's."""
+        `Api.enemy.upgrades` for the enemy's, and none for anyone else's. `active_weapons` are those it can fire now."""
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
@@ -737,6 +805,13 @@ class Unit[K: UnitType.AnyType]:
         has what was measured."""
         return self._repair_cost_of(self.health_max)
 
+    @property
+    def is_repairable(self) -> bool:
+        """Whether `total_repair_cost` gives a cost: whether the unit is a complete Terran mechanical one, whoever's it
+        is, an enemy's included. Raises `NotReportedError` for a Terran mechanical unit never
+        shown visible, whose build progress the game never reported."""
+        return self.total_repair_cost is not None
+
     def time_to_face(
         self, target: PointLike | Unit[Any], *, facing_tolerance: float = _DEFAULT_FACING_TOLERANCE
     ) -> GameTime | None:
@@ -763,7 +838,8 @@ class Unit[K: UnitType.AnyType]:
         is_terran_and_mechanical = type_data.race is Race.TERRAN and Attribute.MECHANICAL in type_data.attributes
         if not is_terran_and_mechanical or not self.is_complete:
             return None
-        type_cost, health_max = type_data.cost, self.health_max
+        # Priced from everything spent to reach the type, an orbital command's 550 (tool `sweep_repair`).
+        type_cost, health_max = type_data._whole_cost, self.health_max
         whole_repair_steps = REPAIR_STEPS_EXCEPTIONS.get(self.type_id, type_cost.time.steps)
         # Multiplied out before the one division, so that a whole number of resources comes out whole.
         return Cost(
@@ -774,18 +850,86 @@ class Unit[K: UnitType.AnyType]:
 
     # Combat.
 
+    @property
+    def active_weapons(self) -> tuple[Weapon, ...]:
+        """The weapons of `weapons` the unit can fire now: all of them, but none for an oracle whose beam is off, which
+        wears `BuffId.ORACLE_PULSAR_BEAM` exactly while it is on (in game). Raises `NotReportedError` for an oracle
+        never shown visible."""
+        if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
+            return ()
+        return self.weapons
+
+    @property
+    def ground_weapon(self) -> Weapon | None:
+        """The weapon of `active_weapons` that fires at the ground, alone or with the air, or `None`. No type has two
+        that do (corpus). Raises as `active_weapons` does."""
+        return self._weapon_firing_at(TargetDomain.GROUND)
+
+    @property
+    def air_weapon(self) -> Weapon | None:
+        """The weapon of `active_weapons` that fires at the air, alone or with the ground, or `None`, as
+        `ground_weapon` is for the ground."""
+        return self._weapon_firing_at(TargetDomain.AIR)
+
+    @property
+    def ground_range(self) -> float:
+        """The range of `ground_weapon`, with its owner's upgrades, or 0 without one."""
+        weapon = self.ground_weapon
+        return 0.0 if weapon is None else weapon.range
+
+    @property
+    def air_range(self) -> float:
+        """The range of `air_weapon`, with its owner's upgrades, or 0 without one."""
+        weapon = self.air_weapon
+        return 0.0 if weapon is None else weapon.range
+
+    @property
+    def ground_damage(self) -> float:
+        """What one attack of `ground_weapon` does before bonuses and armor, its `total_damage`, or 0 without
+        one. A hallucination's counts; `damage_against` is what an attack takes off a target."""
+        weapon = self.ground_weapon
+        return 0.0 if weapon is None else weapon.total_damage
+
+    @property
+    def air_damage(self) -> float:
+        """What one attack of `air_weapon` does before bonuses and armor, as `ground_damage` is for the ground."""
+        weapon = self.air_weapon
+        return 0.0 if weapon is None else weapon.total_damage
+
+    @property
+    def ground_dps(self) -> float:
+        """The `dps` of `ground_weapon`, per second of the game's Faster speed with the mean attack delay, before
+        bonuses, armor and buffs, or 0 without one. A hallucination's counts; `dps_against` is what a target takes."""
+        weapon = self.ground_weapon
+        return 0.0 if weapon is None else weapon.dps
+
+    @property
+    def air_dps(self) -> float:
+        """The `dps` of `air_weapon`, as `ground_dps` is for the ground."""
+        weapon = self.air_weapon
+        return 0.0 if weapon is None else weapon.dps
+
+    @property
+    def is_melee(self) -> bool:
+        """Whether the unit fires at the ground from no farther than 1: its `ground_range` above 0 and at most 1, as a
+        zealot's and a zergling's are."""
+        return 0.0 < self.ground_range <= 1.0
+
+    def _weapon_firing_at(self, domain: TargetDomain) -> Weapon | None:
+        """The weapon of `active_weapons` that fires at `domain`, the ground or the air, alone or with the other."""
+        return next(
+            (weapon for weapon in self.active_weapons if weapon.target_domain in (domain, TargetDomain.ANY)), None
+        )
+
     def weapon_against(self, target: Unit[Any]) -> Weapon | None:
-        """The weapon of `weapons` this unit fires at `target`: one that hits the air for a target that flies, and one
-        that hits the ground for a target on it, or failing that, for a colossus, one that hits the air, as a viking's
-        did (in game). `None` if it has none that hits `target`, and for an oracle whose beam is off, which wears
-        `BuffId.ORACLE_PULSAR_BEAM` exactly while it is on (in game).
+        """The weapon of `active_weapons` this unit fires at `target`: one that hits the air for a target that flies,
+        and one that hits the ground for a target on it, or failing that, for a colossus, one that hits the air, as a
+        viking's did (in game). `None` if it has none that hits `target`, an oracle whose beam is off among them.
 
         Raises `NotReportedError` for a target remembered in the fog and never seen visible, as `is_flying` does, and
         for an oracle never shown visible.
         """
-        if self.type_id is UnitTypeId.ORACLE and BuffId.ORACLE_PULSAR_BEAM not in self.buffs:
-            return None
-        weapons = self.weapons
+        weapons = self.active_weapons
         if target.is_flying:
             return next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.GROUND), None)
         on_the_ground = next((weapon for weapon in weapons if weapon.target_domain is not TargetDomain.AIR), None)
@@ -805,8 +949,9 @@ class Unit[K: UnitType.AnyType]:
         return weapon is not None and self.distance_to(target) <= weapon.range + self.radius + target.radius + margin
 
     def damage_against(self, target: Unit[Any]) -> float:
-        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, as
-        `Weapon.damage_against` works it out from the target's attributes, `armor`, `shield_armor` and `shield`. 0 if
+        """What one attack of `weapon_against(target)` takes off `target`'s shields and health as they stand, every hit
+        of it counted, as `Weapon.damage_against` works it out from the target's attributes, `armor`, `shield_armor`
+        and `shield`. 0 if
         this unit has no weapon against it or is a hallucination, which does no damage (stated). An enemy's reads as
         one only once revealed, as `is_hallucination` has it. No buff on either unit counts.
 
@@ -815,6 +960,15 @@ class Unit[K: UnitType.AnyType]:
         """
         weapon = self.weapon_against(target)
         return 0.0 if weapon is None or self.is_hallucination else _damage_of_one_attack(weapon, target)
+
+    def bonus_damage_against(self, target: Unit[Any]) -> float:
+        """The bonus damage one attack of `weapon_against(target)` does for `target`'s attributes, before armor: its
+        `Weapon.bonus_per_hit_against` them, times its attacks. 0 if this unit has no weapon against it. A
+        hallucination's counts, as for `ground_damage`. Raises `NotReportedError` as `weapon_against` does."""
+        weapon = self.weapon_against(target)
+        if weapon is None:
+            return 0.0
+        return weapon.bonus_per_hit_against(target.type_data.attributes) * weapon.attacks
 
     def dps_against(self, target: Unit[Any]) -> float:
         """`damage_against(target)` per second of real time at the game's Faster speed, with `weapon_against(target)`

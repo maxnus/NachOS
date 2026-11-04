@@ -1,9 +1,10 @@
 """Measure what a unit's attack does: how far it reaches, what one hit takes off a target, what the units the tables
-give no weapon do, and what speeds an attack up.
+give no weapon do, what speeds an attack up, and what the enemy sees of it.
 
 Needs StarCraft II installed. Each mode plays a game of two players on the sandbox's map, both played from here, so
-that no computer moves either side's units; the other player is cleared down to its townhalls and the trials stand
-by this player's start. This player turns on `show_map`, so it sees every unit.
+that no computer moves either side's units, and the trials stand by this player's start. In every mode but
+`enemy-view`, the other player is cleared down to its townhalls and this player turns on `show_map`, so it sees every
+unit.
 
 `range`, under `god` too, so that its attackers take no damage, makes one attacker of this player's at a time,
 holding its position, and then one target of the other player's at a distance from it, across or diagonally, a
@@ -37,7 +38,13 @@ be, and records whether and when its cooldown rose, the target lost health and t
 
 `cooldown-trace` reads the same attackers' cooldowns and the command center's health at every step over
 `_TRACED_SHOTS` shots after the first, and records how long the cooldown read 0 before each shot and when the target
-lost health::
+lost health.
+
+`enemy-view` turns on no cheat, so that each player sees only what its own units see, and leaves the other player its
+units. It sets attackers of this player's that fire missiles upon targets of the other player's: standing, walking up
+to a target, stutter-stepping, holding as a target walks by and chasing one. It reads at every step the attacker as
+each player is shown it and the targets as the other player is, and records what the other player could tell of each
+shot: whether the attacker faced its target, since when it faced it and stood, and when the missile landed::
 
     uv run python tools/sweep_combat.py range --out combat-range.json
     uv run python tools/sweep_combat.py damage --out combat-damage.json
@@ -49,6 +56,7 @@ lost health::
     uv run python tools/sweep_combat.py cooldown-trace --out combat-cooldown-trace.json
     uv run python tools/sweep_combat.py delay-sped-up --out combat-delay-sped-up.json
     uv run python tools/sweep_combat.py move-before-shot --out combat-move-before-shot.json
+    uv run python tools/sweep_combat.py enemy-view --out combat-enemy-view.json
 """
 
 import argparse
@@ -62,9 +70,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from _sandbox import Cheat, OpenGround, Rivals, Sandbox, playing_rivals
+from _sandbox import SUCCESS, Cheat, OpenGround, Rivals, Sandbox, playing_rivals
 from loguru import logger
-from s2clientprotocol import debug_pb2, raw_pb2
+from s2clientprotocol import debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import GameData, TargetDomain, Weapon
 from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
@@ -72,8 +80,8 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
+from sc2nachos.run import Installation
 from sc2nachos.units._unit_type import UnitType
 
 # How many steps a unit is given to fire at a target placed within its reach: a planetary fortress turning its turret
@@ -81,7 +89,7 @@ from sc2nachos.units._unit_type import UnitType
 _FIRING_STEPS = 64
 _SETTLING_STEPS = 4
 _REMOVAL_STEPS = 8
-_TOWNHALL_TYPES = UnitType.Townhall._type_ids
+_TOWNHALL_TYPES = UnitType.Townhall.type_ids
 # Half the width of the open ground trials stand on: room for the longest reach searched, a sieged tank's 13 and more.
 _OPEN_GROUND_HALF_WIDTH = 10
 # How far from where it was asked for a unit may stand before its sample is set aside as displaced.
@@ -1186,6 +1194,587 @@ def measure_moves_before_shots(installation: Installation) -> list[MoveBeforeSho
     return findings
 
 
+# The attackers whose shots the other player watches, each firing a missile, Terran, Zerg, then Protoss.
+_ENEMY_VIEW_ATTACKERS = (UnitTypeId.MARAUDER, UnitTypeId.ROACH, UnitTypeId.HYDRALISK, UnitTypeId.STALKER)
+# A held target lasts every shot fired at it, and its melee weapon, held, reaches no ranged attacker. A walking one is
+# slower than every attacker and fires at nothing while it carries a move. Both report a radius of 1, and no attacker
+# a larger one than `_LARGEST_ATTACKER_RADIUS`, which together place targets within reach.
+_HELD_TARGET = UnitTypeId.ULTRALISK
+_WALKING_TARGET = UnitTypeId.THOR
+_TARGET_RADIUS = 1.0
+_LARGEST_ATTACKER_RADIUS = 0.625
+# Half the width of the open ground the trials are laid out on: the largest the sandbox's map leaves free near this
+# player's start with every worker standing. A trial walks a little past it.
+_ENEMY_VIEW_HALF_WIDTH = 7
+# How far an attacker must go in a step to have moved in it, and how near to a target's bearing, in degrees, its facing
+# must come to face it.
+_MOVED_IN_A_STEP = 0.001
+_FACING_TARGET_DEGREES = 0.2
+# How many steps a trial waits for each shot, for a walking target to arrive and for a missile to land, and how many it
+# goes on after its last shot.
+_STEPS_FOR_A_SHOT = 160
+_STEPS_FOR_A_WALK = 260
+_STEPS_FOR_A_MISSILE = 30
+_STEPS_AFTER_THE_LAST_SHOT = 10
+_SHOTS_AT_EACH_TARGET = 3
+# Each held target by its distance as a share of the attacker's reach and its bearing in degrees, and the order the
+# attacker is set upon them in, so that it turns both ways.
+_HELD_TARGETS_PLACED = ((0.45, 0.0), (0.7, 60.0), (0.95, 130.0))
+_HELD_TARGETS_ATTACKED = (0, 1, 2, 1, 0)
+# Where an attacker walking up to a target starts, as a distance and a bearing from the middle of the ground, and how
+# far beyond its reach the target stands, within the sight of each attacker, which an attack on a unit needs, or the
+# point it attack-moves to lies.
+_WALK_UP_START = (10.0, 225.0)
+_WALK_UP_TARGET_BEYOND_REACH = 2.0
+_ATTACK_MOVE_BEYOND_REACH = 9.0
+# Where a stutter-stepping attacker's target stands east of it, as a share of its reach, how many steps after each shot
+# the move is ordered, how long the attacker moves before it attacks again, and how far off it is sent, west and by
+# turns south and north.
+_STUTTER_SHARE_OF_REACH = 0.7
+_STUTTER_DELAYS = (0, 0, 1, 1, 2, 2, 0, 0)
+_STUTTER_MOVE_STEPS = 10
+_STUTTER_MOVE_OFFSET = (-3.0, 1.5)
+# A target walking by an attacker holding its position: how far west of it it starts and east it stops, and how far
+# north of it it passes as a share of its reach.
+_WALK_BY_HALF_LENGTH = 8.0
+_WALK_BY_SHARE_OF_REACH = 0.6
+# A target walking away from an attacker chasing it: from how far southwest of the middle of the ground to how far
+# northeast, and how far behind it the attacker starts as a share of its reach. And how near its goal a walking target
+# must come to have arrived.
+_CHASE_START_FROM_MIDDLE = 3.0
+_CHASE_GOAL_FROM_MIDDLE = 12.0
+_CHASE_SHARE_OF_REACH = 0.8
+_ARRIVED_WITHIN = 0.5
+
+
+@dataclass(slots=True)
+class ShotSeenFinding:
+    """One shot of an attacker of this player's at a target of the other player's, and what the other player was shown
+    of it. Steps count from the start of the trial."""
+
+    step: int
+    """The step in which the attacker's cooldown rose, as its owner was shown it."""
+    follows_an_order_or_a_move: bool
+    """Whether it is the trial's first shot, or the attacker was ordered or moved since the shot before."""
+    distance: float
+    """Between the centers, at the shot."""
+    steps_to_impact: int | None
+    """How many steps after the shot the target lost health, or None if not within `_STEPS_FOR_A_MISSILE`."""
+    attacker_moved_in_flight: bool
+    target_moved_in_flight: bool
+    degrees_off_target: float | None
+    """How far the target's center lay off the attacker's facing at the shot, or None if the other player did not list
+    the attacker."""
+    most_degrees_off_target_in_flight: float | None
+    """The most it lay off at any step from the shot to the impact."""
+    steps_facing_target_before: int
+    """How many steps before the shot the attacker's facing came within `_FACING_TARGET_DEGREES` of the target, to stay
+    there."""
+    steps_seen_still_before: int | None
+    """How many steps before the shot the other player was first shown the attacker standing, or None if it moved in
+    the shot's step."""
+    steps_standing_after: int | None
+    """How many steps it stood after the shot before it moved again, or None if it did not before its next shot or the
+    trial's end."""
+    fields_changed_at_shot: list[str] | None
+    """The fields of the attacker, as the other player was shown it, that changed in the shot's step, or None if the
+    other player did not list it then and the step before."""
+    engaged_in_the_shots_step: bool
+    """Whether the attacker's owner was shown it engaged with the target in the shot's step, rather than in the step
+    before alone."""
+
+
+@dataclass(slots=True)
+class EnemyViewFinding:
+    """What the other player was shown of one attacker of this player's over one trial."""
+
+    attacker: str
+    trial: str
+    steps: int
+    steps_seen: int
+    """How many of them the other player listed the attacker in."""
+    steps_showing_private_fields: int
+    """How many of those showed it the attacker's weapon cooldown, an order or an engaged target."""
+    steps_differing_from_owners_view: int
+    """How many of those showed it the attacker at another position or facing than its owner was shown."""
+    target_read_from_facing: dict[str, int]
+    """Over the steps the other player listed the attacker, how often the one of its targets in reach whose center its
+    facing came within `_FACING_TARGET_DEGREES` of was the one its owner was shown it engaged: counts under `engaged,
+    read right`, `engaged, read wrong`, `engaged, faced none`, `not engaged, faced none` and `not engaged, faced
+    one`."""
+    shots: list[ShotSeenFinding]
+
+
+@dataclass(frozen=True, slots=True)
+class _StepSeen:
+    """One step of a trial: the attacker as its owner and as the other player were shown it, each None where that
+    player did not list it, and the targets as the other player was shown them."""
+
+    attacker_to_owner: raw_pb2.Unit | None
+    attacker_to_enemy: raw_pb2.Unit | None
+    targets: dict[int, raw_pb2.Unit]
+
+
+class _EnemyViewTrial:
+    """An attacker of this player's and targets of the other player's, both players' views read after every step."""
+
+    def __init__(self, rivals: Rivals, name: str, attacker: raw_pb2.Unit, targets: Sequence[raw_pb2.Unit]) -> None:
+        self._rivals = rivals
+        self.name = name
+        self.attacker_type = UnitTypeId(attacker.unit_type)
+        self._attacker_tag = attacker.tag
+        self._target_tags = [target.tag for target in targets]
+        self.steps: list[_StepSeen] = []
+        self.attacker_order_steps: list[int] = []
+        """The steps in which the attacker was ordered, each before the game ran it."""
+        self._read_both_views()
+
+    @property
+    def step(self) -> int:
+        return len(self.steps) - 1
+
+    @property
+    def attacker_position(self) -> Point:
+        attacker = next(step.attacker_to_owner for step in reversed(self.steps) if step.attacker_to_owner is not None)
+        return Point((attacker.pos.x, attacker.pos.y))
+
+    def _read_both_views(self) -> None:
+        owners_view = {unit.tag: unit for unit in self._rivals.me.units()}
+        enemys_view = {unit.tag: unit for unit in self._rivals.enemy.units()}
+        targets = {tag: enemys_view[tag] for tag in self._target_tags if tag in enemys_view}
+        self.steps.append(_StepSeen(owners_view.get(self._attacker_tag), enemys_view.get(self._attacker_tag), targets))
+
+    def advance(self, count: int = 1) -> None:
+        for _ in range(count):
+            self._rivals.step(1)
+            self._read_both_views()
+
+    def fired_in(self, step: int) -> bool:
+        """Whether the attacker's cooldown rose in `step`, as its owner was shown it."""
+        if step < 1:
+            return False
+        earlier = self.steps[step - 1].attacker_to_owner
+        later = self.steps[step].attacker_to_owner
+        return earlier is not None and later is not None and later.weapon_cooldown > earlier.weapon_cooldown
+
+    def moved_in(self, step: int) -> bool | None:
+        """Whether the attacker moved in `step`, or None if its owner was not shown it then and the step before."""
+        if not 1 <= step < len(self.steps):
+            return None
+        earlier = self.steps[step - 1].attacker_to_owner
+        later = self.steps[step].attacker_to_owner
+        if earlier is None or later is None:
+            return None
+        return math.hypot(later.pos.x - earlier.pos.x, later.pos.y - earlier.pos.y) >= _MOVED_IN_A_STEP
+
+    def until_shot(self) -> bool:
+        """Step until the attacker fires, at most `_STEPS_FOR_A_SHOT` times; whether it fired. False at once if its
+        owner no longer lists it."""
+        for _ in range(_STEPS_FOR_A_SHOT):
+            if self.steps[-1].attacker_to_owner is None:
+                return False
+            self.advance()
+            if self.fired_in(self.step):
+                return True
+        return False
+
+    def until_arrived(self, target_tag: int, goal: Point) -> None:
+        """Step until the target is within `_ARRIVED_WITHIN` of `goal`, or gone, at most `_STEPS_FOR_A_WALK` times."""
+        for _ in range(_STEPS_FOR_A_WALK):
+            self.advance()
+            target = self.steps[-1].targets.get(target_tag)
+            if target is None or goal.distance_to(Point((target.pos.x, target.pos.y))) < _ARRIVED_WITHIN:
+                return
+
+    def order_attacker(self, ability: int, target: Point | int | None = None) -> None:
+        result = self._rivals.me.order(ability, self._attacker_tag, target)
+        if result != SUCCESS:
+            refusal = error_pb2.ActionResult.Name(result)
+            logger.warning("{} {}: the game refused {} as {}", self.attacker_type.name, self.name, ability, refusal)
+        self.attacker_order_steps.append(self.step)
+
+
+def _made_for(rivals: Rivals, side: Sandbox, unit_type: UnitTypeId, at: Point) -> raw_pb2.Unit:
+    """Make one `unit_type` of `side`'s at `at`, and return it as `side` is shown it once both players settle."""
+    before = {unit.tag for unit in side.units()}
+    side.debug(side.create(unit_type, side.player, at))
+    rivals.step(_SETTLING_STEPS)
+    made = [unit for unit in side.units() if unit.tag not in before and unit.unit_type == unit_type]
+    if len(made) != 1:
+        raise RuntimeError(f"the game made {len(made)} {unit_type.name} for player {side.player}, not 1")
+    return made[0]
+
+
+def _removed_from_both_views(rivals: Rivals, tags: Sequence[int]) -> None:
+    """Kill the units under `tags` and step both players until neither lists any of them."""
+    rivals.me.kill(tags)
+    for _ in range(_REMOVAL_STEPS):
+        rivals.step(1)
+        listed = {unit.tag for side in (rivals.me, rivals.enemy) for unit in side.units()}
+        if not set(tags) & listed:
+            return
+    logger.warning("{} units were not removed", len(tags))
+
+
+def _ground_free_in_both_views(rivals: Rivals) -> Point:
+    """The center of open ground nearest this player's start that neither player's units stand on."""
+    me, enemy = rivals.me, rivals.enemy
+    game_map = GameMap._from_game(me.client.game_info(), me.client.observation())
+    units = [*me.units(), *enemy.units()]
+    return OpenGround(game_map, units).claim(game_map.start_location, _ENEMY_VIEW_HALF_WIDTH)
+
+
+def _at_bearing(origin: Point, distance: float, degrees: float) -> Point:
+    """The point `distance` from `origin` at `degrees` counterclockwise from east."""
+    radians = math.radians(degrees)
+    return Point((origin.x + distance * math.cos(radians), origin.y + distance * math.sin(radians)))
+
+
+def _reach_at_a_target(weapon_range: float) -> float:
+    """The farthest an attacker of that range and of `_LARGEST_ATTACKER_RADIUS` fires at a target, between the
+    centers: no attacker here reaches farther."""
+    return weapon_range + _LARGEST_ATTACKER_RADIUS + _TARGET_RADIUS
+
+
+def _attacking_held_targets(
+    rivals: Rivals, ground: Point, attacker_type: UnitTypeId, weapon_range: float
+) -> _EnemyViewTrial:
+    """Held targets placed around the attacker as `_HELD_TARGETS_PLACED` says, each attacked in the order
+    `_HELD_TARGETS_ATTACKED` for `_SHOTS_AT_EACH_TARGET` shots."""
+    me, enemy = rivals.me, rivals.enemy
+    reach = _reach_at_a_target(weapon_range)
+    targets = []
+    for share_of_reach, degrees in _HELD_TARGETS_PLACED:
+        target = _made_for(rivals, enemy, _HELD_TARGET, _at_bearing(ground, share_of_reach * reach, degrees))
+        _hold_position(enemy, target.tag)
+        targets.append(target)
+    attacker = _made_for(rivals, me, attacker_type, ground)
+    trial = _EnemyViewTrial(rivals, "standing", attacker, targets)
+    for index in _HELD_TARGETS_ATTACKED:
+        trial.order_attacker(RawAbilityId.Attack, targets[index].tag)
+        for _ in range(_SHOTS_AT_EACH_TARGET):
+            trial.until_shot()
+        trial.advance(_STEPS_AFTER_THE_LAST_SHOT)
+    _removed_from_both_views(rivals, [attacker.tag, *(target.tag for target in targets)])
+    return trial
+
+
+def _walking_up_to_a_target(
+    rivals: Rivals, ground: Point, attacker_type: UnitTypeId, weapon_range: float, *, attack_move: bool
+) -> _EnemyViewTrial:
+    """A held target northeast of the attacker, `_WALK_UP_TARGET_BEYOND_REACH` beyond its reach, and the attacker
+    ordered to attack it, or to attack-move past it to a point `_ATTACK_MOVE_BEYOND_REACH` beyond."""
+    me, enemy = rivals.me, rivals.enemy
+    reach = _reach_at_a_target(weapon_range)
+    start = _at_bearing(ground, *_WALK_UP_START)
+    target = _made_for(rivals, enemy, _HELD_TARGET, _at_bearing(start, reach + _WALK_UP_TARGET_BEYOND_REACH, 45.0))
+    _hold_position(enemy, target.tag)
+    attacker = _made_for(rivals, me, attacker_type, start)
+    trial = _EnemyViewTrial(rivals, "attack-move" if attack_move else "approach", attacker, [target])
+    goal = _at_bearing(start, reach + _ATTACK_MOVE_BEYOND_REACH, 45.0) if attack_move else target.tag
+    trial.order_attacker(RawAbilityId.Attack, goal)
+    for _ in range(_SHOTS_AT_EACH_TARGET):
+        trial.until_shot()
+    trial.advance(_STEPS_AFTER_THE_LAST_SHOT)
+    _removed_from_both_views(rivals, [attacker.tag, target.tag])
+    return trial
+
+
+def _stutter_stepping(rivals: Rivals, ground: Point, attacker_type: UnitTypeId, weapon_range: float) -> _EnemyViewTrial:
+    """A held target east of the attacker at `_STUTTER_SHARE_OF_REACH` of its reach, attacked; after each shot, as many
+    steps on as `_STUTTER_DELAYS` says, the attacker is sent `_STUTTER_MOVE_OFFSET` off, and `_STUTTER_MOVE_STEPS`
+    steps later set upon the target again."""
+    me, enemy = rivals.me, rivals.enemy
+    distance_east = _STUTTER_SHARE_OF_REACH * _reach_at_a_target(weapon_range)
+    target = _made_for(rivals, enemy, _HELD_TARGET, _at_bearing(ground, distance_east, 0.0))
+    _hold_position(enemy, target.tag)
+    attacker = _made_for(rivals, me, attacker_type, ground)
+    trial = _EnemyViewTrial(rivals, "stutter", attacker, [target])
+    trial.order_attacker(RawAbilityId.Attack, target.tag)
+    offset_x, offset_y = _STUTTER_MOVE_OFFSET
+    for count, delay in enumerate(_STUTTER_DELAYS):
+        if not trial.until_shot():
+            break
+        trial.advance(delay)
+        offset = (offset_x, offset_y if count % 2 else -offset_y)
+        trial.order_attacker(RawAbilityId.Move_Move, trial.attacker_position + offset)
+        trial.advance(_STUTTER_MOVE_STEPS)
+        trial.order_attacker(RawAbilityId.Attack, target.tag)
+    trial.until_shot()
+    trial.advance(_STEPS_AFTER_THE_LAST_SHOT)
+    _removed_from_both_views(rivals, [attacker.tag, target.tag])
+    return trial
+
+
+def _holding_as_a_target_walks_by(
+    rivals: Rivals, ground: Point, attacker_type: UnitTypeId, weapon_range: float
+) -> _EnemyViewTrial:
+    """A walking target sent east past the attacker, which holds its position, from `_WALK_BY_HALF_LENGTH` west of it
+    to as far east, `_WALK_BY_SHARE_OF_REACH` of its reach north of it, before the attacker is made, and sent back once
+    it arrives."""
+    me, enemy = rivals.me, rivals.enemy
+    distance_north = _WALK_BY_SHARE_OF_REACH * _reach_at_a_target(weapon_range)
+    start = Point((ground.x - _WALK_BY_HALF_LENGTH, ground.y + distance_north))
+    goal = Point((ground.x + _WALK_BY_HALF_LENGTH, ground.y + distance_north))
+    target = _made_for(rivals, enemy, _WALKING_TARGET, start)
+    enemy.order(RawAbilityId.Move_Move, target.tag, goal)
+    attacker = _made_for(rivals, me, attacker_type, ground)
+    trial = _EnemyViewTrial(rivals, "walk-by", attacker, [target])
+    trial.order_attacker(RawAbilityId.HoldPosition_Hold)
+    trial.until_arrived(target.tag, goal)
+    enemy.order(RawAbilityId.Move_Move, target.tag, start)
+    trial.advance(_STEPS_AFTER_THE_LAST_SHOT)
+    _removed_from_both_views(rivals, [attacker.tag, target.tag])
+    return trial
+
+
+def _chasing_a_target(rivals: Rivals, ground: Point, attacker_type: UnitTypeId, weapon_range: float) -> _EnemyViewTrial:
+    """A walking target sent northeast, from `_CHASE_START_FROM_MIDDLE` southwest of the middle of the ground to
+    `_CHASE_GOAL_FROM_MIDDLE` northeast of it before the attacker is made, and sent back once it arrives, and the
+    attacker, `_CHASE_SHARE_OF_REACH` of its reach behind it, ordered to attack it."""
+    me, enemy = rivals.me, rivals.enemy
+    start = _at_bearing(ground, _CHASE_START_FROM_MIDDLE, 225.0)
+    goal = _at_bearing(ground, _CHASE_GOAL_FROM_MIDDLE, 45.0)
+    target = _made_for(rivals, enemy, _WALKING_TARGET, start)
+    enemy.order(RawAbilityId.Move_Move, target.tag, goal)
+    distance_behind = _CHASE_SHARE_OF_REACH * _reach_at_a_target(weapon_range)
+    attacker = _made_for(rivals, me, attacker_type, _at_bearing(start, distance_behind, 225.0))
+    trial = _EnemyViewTrial(rivals, "chase", attacker, [target])
+    trial.order_attacker(RawAbilityId.Attack, target.tag)
+    trial.until_arrived(target.tag, goal)
+    enemy.order(RawAbilityId.Move_Move, target.tag, start)
+    trial.advance(_STEPS_AFTER_THE_LAST_SHOT)
+    _removed_from_both_views(rivals, [attacker.tag, target.tag])
+    return trial
+
+
+def _degrees_off_facing(unit: raw_pb2.Unit, target: raw_pb2.Unit) -> float:
+    """How far `target`'s center lies off `unit`'s facing, in degrees from -180 to 180."""
+    bearing = math.atan2(target.pos.y - unit.pos.y, target.pos.x - unit.pos.x)
+    return (math.degrees(bearing - unit.facing) + 180) % 360 - 180
+
+
+def _center_distance(unit: raw_pb2.Unit, other: raw_pb2.Unit) -> float:
+    return math.hypot(other.pos.x - unit.pos.x, other.pos.y - unit.pos.y)
+
+
+def _health_and_shields(unit: raw_pb2.Unit) -> float:
+    return unit.health + unit.shield
+
+
+def _impact_step(trial: _EnemyViewTrial, target_tag: int, shot: int) -> int | None:
+    """The first step from `shot` on, within `_STEPS_FOR_A_MISSILE`, in which the target lost health or shields."""
+    for step in range(max(shot, 1), min(shot + _STEPS_FOR_A_MISSILE, trial.step) + 1):
+        earlier = trial.steps[step - 1].targets.get(target_tag)
+        later = trial.steps[step].targets.get(target_tag)
+        if earlier is not None and later is not None and _health_and_shields(later) < _health_and_shields(earlier):
+            return step
+    return None
+
+
+def _degrees_off_target_in(trial: _EnemyViewTrial, step: int, target_tag: int) -> float | None:
+    """How far the target lay off the attacker's facing in `step`, as the other player was shown both, or None."""
+    seen = trial.steps[step]
+    target = seen.targets.get(target_tag)
+    if seen.attacker_to_enemy is None or target is None:
+        return None
+    return _degrees_off_facing(seen.attacker_to_enemy, target)
+
+
+def _steps_facing_target_before(trial: _EnemyViewTrial, target_tag: int, shot: int) -> int:
+    first_facing = shot
+    while first_facing > 0:
+        degrees_off = _degrees_off_target_in(trial, first_facing - 1, target_tag)
+        if degrees_off is None or abs(degrees_off) >= _FACING_TARGET_DEGREES:
+            break
+        first_facing -= 1
+    return shot - first_facing
+
+
+def _steps_seen_still_before(trial: _EnemyViewTrial, shot: int) -> int | None:
+    if trial.moved_in(shot):
+        return None
+    first_still = shot
+    while first_still > 0 and trial.moved_in(first_still) is False:
+        first_still -= 1
+    if trial.moved_in(first_still):
+        first_still += 1
+    return shot - first_still
+
+
+def _steps_standing_after(trial: _EnemyViewTrial, shot: int, next_shot: int | None) -> int | None:
+    end = trial.step if next_shot is None else next_shot
+    for after in range(1, end - shot + 1):
+        if trial.moved_in(shot + after):
+            return after - 1
+    return None
+
+
+def _shot_seen(trial: _EnemyViewTrial, shots: Sequence[int], index: int) -> ShotSeenFinding | None:
+    """What the other player was shown of the shot `shots[index]`, or None if its target is not one of the trial's.
+    The target is the one the attacker's owner was shown it engaged with in the shot's step, or in the step before where
+    it shows none, as when the target leaves its reach in that step."""
+    shot = shots[index]
+    attacker = trial.steps[shot].attacker_to_owner
+    attacker_before = trial.steps[shot - 1].attacker_to_owner
+    if attacker is None or attacker_before is None:
+        return None
+    target_tag = attacker.engaged_target_tag or attacker_before.engaged_target_tag
+    target = trial.steps[shot].targets.get(target_tag)
+    if target is None:
+        return None
+    previous_shot = shots[index - 1] if index else None
+    follows_an_order_or_a_move = previous_shot is None or any(
+        previous_shot <= ordered < shot for ordered in trial.attacker_order_steps
+    )
+    if previous_shot is not None:
+        follows_an_order_or_a_move |= any(trial.moved_in(step) for step in range(previous_shot + 1, shot))
+    impact = _impact_step(trial, target_tag, shot)
+    flight = range(shot, shot + 1 if impact is None else impact + 1)
+    degrees_off_in_flight = [
+        abs(degrees_off)
+        for step in flight
+        if (degrees_off := _degrees_off_target_in(trial, step, target_tag)) is not None
+    ]
+    landed_on = None if impact is None else trial.steps[impact].targets.get(target_tag)
+    return ShotSeenFinding(
+        shot,
+        follows_an_order_or_a_move,
+        round(_center_distance(attacker, target), 3),
+        None if impact is None else impact - shot,
+        any(trial.moved_in(step) for step in flight[1:]),
+        landed_on is not None and _center_distance(target, landed_on) >= _MOVED_IN_A_STEP,
+        _degrees_off_target_in(trial, shot, target_tag),
+        max(degrees_off_in_flight) if degrees_off_in_flight else None,
+        _steps_facing_target_before(trial, target_tag, shot),
+        _steps_seen_still_before(trial, shot),
+        _steps_standing_after(trial, shot, shots[index + 1] if index + 1 < len(shots) else None),
+        _fields_changed_to_enemy(trial, shot),
+        attacker.engaged_target_tag == target_tag,
+    )
+
+
+def _fields_changed_to_enemy(trial: _EnemyViewTrial, step: int) -> list[str] | None:
+    """The fields of the attacker, as the other player was shown it, that differ in `step` from the step before, or None
+    if it did not list the attacker in both."""
+    earlier = trial.steps[step - 1].attacker_to_enemy
+    later = trial.steps[step].attacker_to_enemy
+    if earlier is None or later is None:
+        return None
+    return sorted(
+        descriptor.name
+        for descriptor in raw_pb2.Unit.DESCRIPTOR.fields
+        if getattr(earlier, descriptor.name) != getattr(later, descriptor.name)
+    )
+
+
+def _target_faced(seen: _StepSeen, weapon_range: float) -> int | None:
+    """The target in the attacker's reach whose center lay nearest its facing, within `_FACING_TARGET_DEGREES`, as the
+    other player was shown them, or None."""
+    attacker = seen.attacker_to_enemy
+    if attacker is None:
+        return None
+    degrees_off = {
+        tag: abs(_degrees_off_facing(attacker, target))
+        for tag, target in seen.targets.items()
+        if _center_distance(attacker, target) <= weapon_range + attacker.radius + target.radius
+    }
+    nearest = min(degrees_off, key=degrees_off.__getitem__, default=None)
+    return nearest if nearest is not None and degrees_off[nearest] < _FACING_TARGET_DEGREES else None
+
+
+def _target_read_from_facing(trial: _EnemyViewTrial, weapon_range: float) -> dict[str, int]:
+    readings: Counter[str] = Counter()
+    for seen in trial.steps:
+        if seen.attacker_to_owner is None or seen.attacker_to_enemy is None:
+            continue
+        engaged = seen.attacker_to_owner.engaged_target_tag
+        faced = _target_faced(seen, weapon_range)
+        if engaged in seen.targets:
+            reading = "faced none" if faced is None else "read right" if faced == engaged else "read wrong"
+            readings[f"engaged, {reading}"] += 1
+        else:
+            readings["not engaged, faced none" if faced is None else "not engaged, faced one"] += 1
+    return dict(sorted(readings.items()))
+
+
+def _shows_private_fields(unit: raw_pb2.Unit) -> bool:
+    """Whether `unit` reports a weapon cooldown, an order or an engaged target."""
+    return bool(unit.weapon_cooldown or unit.orders or unit.engaged_target_tag)
+
+
+def _position_and_facing(unit: raw_pb2.Unit) -> tuple[float, float, float]:
+    return unit.pos.x, unit.pos.y, unit.facing
+
+
+def _enemy_view_finding(trial: _EnemyViewTrial, weapon_range: float) -> EnemyViewFinding:
+    seen = [(step.attacker_to_owner, step.attacker_to_enemy) for step in trial.steps]
+    seen_by_enemy = [(to_owner, to_enemy) for to_owner, to_enemy in seen if to_enemy is not None]
+    showing_private_fields = sum(_shows_private_fields(to_enemy) for _, to_enemy in seen_by_enemy)
+    differing = sum(
+        to_owner is not None and _position_and_facing(to_owner) != _position_and_facing(to_enemy)
+        for to_owner, to_enemy in seen_by_enemy
+    )
+    shots = [step for step in range(len(trial.steps)) if trial.fired_in(step)]
+    shots_seen = [finding for index in range(len(shots)) if (finding := _shot_seen(trial, shots, index)) is not None]
+    if len(shots_seen) < len(shots):
+        logger.warning(
+            "{} {}: {} shots at none of the trial's targets left out",
+            trial.attacker_type.name,
+            trial.name,
+            len(shots) - len(shots_seen),
+        )
+    finding = EnemyViewFinding(
+        trial.attacker_type.name,
+        trial.name,
+        len(trial.steps),
+        len(seen_by_enemy),
+        showing_private_fields,
+        differing,
+        _target_read_from_facing(trial, weapon_range),
+        shots_seen,
+    )
+    logger.info(
+        "{} {}: (step, distance, steps to impact, facing before, seen still before) {}",
+        finding.attacker,
+        finding.trial,
+        [
+            (
+                shot.step,
+                round(shot.distance, 1),
+                shot.steps_to_impact,
+                shot.steps_facing_target_before,
+                shot.steps_seen_still_before,
+            )
+            for shot in shots_seen
+        ],
+    )
+    return finding
+
+
+def measure_enemy_view(installation: Installation) -> list[EnemyViewFinding]:
+    """Every attacker of `_ENEMY_VIEW_ATTACKERS` in every trial, with neither side upgraded and no cheat."""
+    findings = []
+    with playing_rivals(Race.TERRAN, installation) as rivals:
+        rivals.step(_SETTLING_STEPS)
+        ground = _ground_free_in_both_views(rivals)
+        game_data = GameData(rivals.me.client.game_data())
+        for attacker_type in _ENEMY_VIEW_ATTACKERS:
+            weapon_range = _weapon_range(game_data, attacker_type, flying=False)
+            if weapon_range is None:
+                raise RuntimeError(f"the tables give a {attacker_type.name} no ground weapon")
+            trials = (
+                _attacking_held_targets(rivals, ground, attacker_type, weapon_range),
+                _walking_up_to_a_target(rivals, ground, attacker_type, weapon_range, attack_move=False),
+                _walking_up_to_a_target(rivals, ground, attacker_type, weapon_range, attack_move=True),
+                _stutter_stepping(rivals, ground, attacker_type, weapon_range),
+                _holding_as_a_target_walks_by(rivals, ground, attacker_type, weapon_range),
+                _chasing_a_target(rivals, ground, attacker_type, weapon_range),
+            )
+            findings.extend(_enemy_view_finding(trial, weapon_range) for trial in trials)
+    return findings
+
+
 def main(argv: Sequence[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     measures = {
@@ -1199,6 +1788,7 @@ def main(argv: Sequence[str]) -> None:
         "cooldown-trace": measure_cooldown_trace,
         "delay-sped-up": measure_delay_sped_up,
         "move-before-shot": measure_moves_before_shots,
+        "enemy-view": measure_enemy_view,
     }
     parser.add_argument("mode", choices=tuple(measures))
     parser.add_argument("--out", type=Path, help="where to write what it found, as JSON")

@@ -27,9 +27,7 @@ _ENEMY_ALLIANCE = raw_pb2.Alliance.Enemy
 # The structures that can leave the spot they are remembered at: those offered a lift or an uproot, in their grounded
 # forms alone, since one lifted off or uprooted, like a viking in either form, is never remembered in the fog (stated).
 _MOVABLE_UNIT_TYPE_IDS = frozenset(
-    unit_type
-    for ability in (AbilityId.LIFT, AbilityId.UPROOT)
-    for unit_type in TECH_TREE.abilities.performers.get(ability, ())
+    unit_type for ability in (AbilityId.LIFT, AbilityId.UPROOT) for unit_type in TECH_TREE.ability(ability).performers
 )
 
 type _UnitsByTag = dict[int, Unit[Any]]
@@ -49,11 +47,11 @@ class _UnitTracker:
         "_present_townhalls",
         "_present_units",
         "_present_units_by_tag",
-        "_stale_units",
         "_tracker",
         "_unfinished",
         "_units_by_id",
         "_units_seen_per_alliance",
+        "_unlisted_units",
     )
 
     def __init__(self, tracker: _Tracker, *, id_provider: Callable[[raw_pb2.Unit], int] | None = None) -> None:
@@ -76,7 +74,7 @@ class _UnitTracker:
         self._present_units_by_tag: _UnitsByTag = {}
         self._present_units: Units[Unit[Any]] = Units()
         # The living units out of the observation, by id.
-        self._stale_units: dict[int, Unit[Any]] = {}
+        self._unlisted_units: dict[int, Unit[Any]] = {}
         self._known_units: Units[Unit[Any]] | None = None
         self._present_townhalls: Units[Unit[UnitType.Townhall]] | None = None
         # This player's units first seen unfinished and not finished since, by id.
@@ -98,9 +96,9 @@ class _UnitTracker:
 
     @property
     def known(self) -> Units[Unit[Any]]:
-        """Every unit not known to be dead: those in the last observation, then the stale ones."""
+        """Every unit not known to be dead: those in the last observation, then the unlisted ones."""
         if self._known_units is None:
-            self._known_units = Units((*self._present_units, *self._stale_units.values()))
+            self._known_units = Units((*self._present_units, *self._unlisted_units.values()))
         return self._known_units
 
     def by_tag(self, tag: int) -> Unit[Any]:
@@ -125,7 +123,7 @@ class _UnitTracker:
         self._set_present_units(present)
 
     def _update_units(self, reports: Sequence[raw_pb2.Unit], step: int, dead: Iterable[int]) -> _UnitsByTag:
-        """Take in the units the observation lists, and mark those that left it stale, or dead where they must be.
+        """Take in the units the observation lists, and mark those that left it unlisted, or dead where they must be.
 
         Returns the listed units by tag, in the order the game listed them.
         """
@@ -186,22 +184,39 @@ class _UnitTracker:
                     continue
                 unit = by_tag.get(tag)
                 if unit is None:
-                    new.append(report)
+                    # The game may list a copy of one of this player's structures in the fog, under a tag of its own,
+                    # where the structure itself stands listed in sight (in game). It tells nothing new.
+                    if report.display_type != _IN_FOG_DISPLAY or report.alliance != _OWN_ALLIANCE:
+                        new.append(report)
                     continue
-                if unit._stale:
-                    del self._stale_units[unit._id]
-                    self._record_entered_sight(unit, report)
-                elif unit._tag in self._in_fog_tags:
-                    still_ignored.append(unit._tag)
-                    self._ignore_structure_fog_copy(unit._tag, previous, present)
-                    self._record_entered_sight(unit, report)
-                unit._tag = tag
+                self._observe_under_linked_tag(unit, report, previous, present, still_ignored)
             if (side_or_type_change := unit._update(report, step)) is not None:
                 self._record_side_or_type_change(unit, side_or_type_change)
             present[tag] = unit
         if ignored:
             self._ignored_tags = set(still_ignored)
         return present, new
+
+    def _observe_under_linked_tag(
+        self,
+        unit: Unit[Any],
+        report: raw_pb2.Unit,
+        previous: _UnitsByTag,
+        present: _UnitsByTag,
+        still_ignored: list[int],
+    ) -> None:
+        """Observe `unit` under `report`'s tag, linked to it already, though the last observation did not list it under
+        that tag: a unit back in the observation, or a structure back in sight whose fog copy the last observation
+        listed. That copy is ignored from now on: its tag is dropped from `previous` and `present`, and added to
+        `still_ignored`."""
+        if not unit._listed:
+            del self._unlisted_units[unit._id]
+            self._record_entered_sight(unit, report)
+        elif unit._tag in self._in_fog_tags:
+            still_ignored.append(unit._tag)
+            self._ignore_structure_fog_copy(unit._tag, previous, present)
+            self._record_entered_sight(unit, report)
+        unit._tag = report.tag
 
     def _record_side_or_type_change(self, unit: Unit[Any], side_or_type_change: _SideOrTypeChange) -> None:
         """Record what a report changed of `unit`'s side and type."""
@@ -288,8 +303,8 @@ class _UnitTracker:
                 self._tracker.last_changes.own_units_finished.append(unit)
 
     def _handle_departed_units(self, departed: _UnitsByTag, present: _UnitsByTag, step: int, dead: set[int]) -> None:
-        """Unlink the tags that did not come back, and mark the units behind them stale, or dead where they must be. A
-        fog copy whose tag, or whose unit's last visible tag, is among `dead`, the tags the observation reports dead,
+        """Unlink the tags that did not come back, and mark the units behind them unlisted, or dead where they must be.
+        A fog copy whose tag, or whose unit's last visible tag, is among `dead`, the tags the observation reports dead,
         died as reported."""
         for tag, unit in departed.items():
             if tag in self._in_fog_tags:
@@ -303,12 +318,12 @@ class _UnitTracker:
                     # Its spot came into sight without it. The game reports no death it cannot see (in game).
                     self._mark_unit_dead(unit, present, reported=False)
                     continue
-            if unit._step != step and not unit._stale:
+            if unit._step != step and unit._listed:
                 report = unit._latest_report
                 if report.alliance == _ENEMY_ALLIANCE and report.display_type != _IN_FOG_DISPLAY:
                     self._tracker.last_changes.enemy_units_left_sight.append(unit)
-                unit._mark_stale()
-                self._stale_units[unit._id] = unit
+                unit._mark_unlisted()
+                self._unlisted_units[unit._id] = unit
 
     def _create_unit(self, report: raw_pb2.Unit, step: int) -> Unit[Any]:
         """Create the unit first seen in `report`, under the id the id provider gives it."""
@@ -350,19 +365,12 @@ class _UnitTracker:
         unit._mark_dead()
         changes = self._tracker.last_changes
         (changes.units_died if reported else changes.units_found_dead).append(unit)
-        self._stale_units.pop(unit._id, None)
+        self._unlisted_units.pop(unit._id, None)
         for tag in tags:
             if self._by_tag.get(tag) is unit:
                 del self._by_tag[tag]
             self._in_fog_tags.discard(tag)
             present.pop(tag, None)
-
-    def end(self) -> None:
-        """Mark every unit stale. The game is over."""
-        for unit in self._present_units_by_tag.values():
-            unit._mark_stale()
-        self._set_present_units({})
-        self._unfinished = {}
 
 
 def _holds_a_tag_of(tags: set[int], unit: Unit[Any]) -> bool:

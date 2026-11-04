@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 if TYPE_CHECKING:
-    from sc2nachos.game_time import GameTime
+    from sc2nachos.gametime import GameTime
     from sc2nachos.ids import AbilityId
     from sc2nachos.units import OwnUnit, Target
 
@@ -67,7 +67,7 @@ class Order[T]:
 
     @property
     def queued(self) -> bool:
-        """Whether the order goes behind each unit's current orders instead of replacing them."""
+        """Whether the order goes behind each unit's orders instead of replacing them."""
         return self._queued
 
     @property

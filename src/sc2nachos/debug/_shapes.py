@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, debug_pb2
 
-from sc2nachos._checks import is_whole_number
+from sc2nachos._shared.checks import is_whole_number
 from sc2nachos.debug._color import Color, _kept_color, _proto_color, _Rgb, _rgb_if_given
 from sc2nachos.debug._marker import Marker
 

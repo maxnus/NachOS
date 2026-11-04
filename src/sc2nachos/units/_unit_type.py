@@ -17,14 +17,16 @@ if TYPE_CHECKING:
 class UnitType:
     """Every type of unit, and every group of types, for the type checker. None is ever instantiated.
 
-    `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
-    its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the Terran and the Zerg townhalls, the mineral fields, the vespene geysers, the gas
-    buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and acceleration zones,
-    the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the spires, the overlords,
-    or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
-    a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
-    `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+    `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
+    `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
+    workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
+    geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
+    acceleration zones, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the
+    spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such as a supply
+    depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that
+    holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+
+    `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
 
     class AnyType:
@@ -35,17 +37,20 @@ class UnitType:
         error on it until `includes` narrows it.
         """
 
-        _type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
+        type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
+        """The ids this class stands for: a type's own `id`, or those of every type in a group. A type id with no unit
+        is tested against them, as for a structure about to be built: `type_id in UnitType.GasBuilding.type_ids`. A
+        unit is tested by `includes`, which narrows it."""
 
         def __init_subclass__(cls) -> None:
             """Add the type a class names by its `id` to every group it is in. A class without an `id` is a group."""
             super().__init_subclass__()
             type_id: UnitTypeId | None = cls.__dict__.get("id")
-            cls._type_ids = frozenset() if type_id is None else frozenset((type_id,))
+            cls.type_ids = frozenset() if type_id is None else frozenset((type_id,))
             if type_id is not None:
                 # Everything between the class and `object` is a group it is in, `AnyType` included.
                 for group in cast("tuple[type[UnitType.AnyType], ...]", cls.__mro__[1:-1]):
-                    group._type_ids |= cls._type_ids
+                    group.type_ids |= cls.type_ids
 
         @overload
         @classmethod
@@ -61,7 +66,7 @@ class UnitType:
 
             Raises `UncuratedIdError` for a unit of a type the curated ids leave out.
             """
-            return unit.type_id in cls._type_ids
+            return unit.type_id in cls.type_ids
 
     class Structure(AnyType):
         """A type the game's tables give the structure attribute."""
@@ -96,13 +101,16 @@ class UnitType:
     class AnyZergTownhall(Townhall, ZergStructure):
         """A Zerg townhall: a hatchery, a lair or a hive."""
 
-    class AnyMineralField(Structure):
+    class AnyResource(Structure):
+        """What a worker gathers at: a mineral field or a gas building, never the geyser under it."""
+
+    class AnyMineralField(AnyResource):
         """A mineral field of any kind: one the game's tables say holds minerals."""
 
     class AnyVespeneGeyser(Structure):
         """A vespene geyser of any kind: one the game's tables say holds vespene, of no race."""
 
-    class GasBuilding(Structure):
+    class GasBuilding(AnyResource):
         """A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race."""
 
     class Destructible(Structure):
@@ -854,6 +862,9 @@ class UnitType:
 
     class OverseerSieged(AnyOverseer):
         id = UnitTypeId.OVERSEER_SIEGED
+
+    class ParasiticBombLeftBehind(Zerg):
+        id = UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND
 
     class Phoenix(Protoss):
         id = UnitTypeId.PHOENIX

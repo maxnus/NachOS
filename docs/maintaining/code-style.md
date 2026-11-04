@@ -28,6 +28,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Keyword-only args**: use `*` in signatures liberally.
 - **Type hints** on all parameters and return types.
 - **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
+- **A parameter a function never reads is named `_`**, and `*_` takes any number of them: `def macro(_: TurnEvent)`
+  in the demo bot, and `UpgradeInference._assume_the_upgrades_shown(self, *_: object)`, the handler of two events,
+  over a second method that only forwards to it.
 
 ## Structure
 
@@ -35,7 +38,10 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **No circular imports.** Where two modules would import each other, move what both need into a module of its own.
   A `TYPE_CHECKING` guard around an import that would be circular is the last resort.
 - **A value derived from a data object is a property on that object**, not a lookup its callers repeat.
-- **Short functions**: extract a named helper rather than growing the caller.
+- **Short functions**: extract a named helper rather than growing the caller. A function in `src` holds at most 30
+  statements, as ruff's `PLR0915` counts them, which `ruff check` enforces; `tests` and `tools` are exempt. In the hot
+  loop, extract the rare path, so that the common one makes no extra call: `Unit._update` calls `_update_alliance`
+  only for a report whose alliance changed.
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
   `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
   (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.
@@ -49,6 +55,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
 ## Docstrings
 
 - **Docstrings** on all public functions and classes, but without parameter/return sections.
+- **A docstring in `src` is Markdown**: the API reference renders it with pdoc (`tools/build_api_reference.py`),
+  which links a public name in backticks to its entry, such as `Api.on` or `UnitTypeId`. Write no reStructuredText
+  there.
 - **A docstring states the contract and never argues for the design.** Delete any sentence that explains why the
   code is shaped this way (a name, a method rather than a property, where something lives); keep what a caller
   cannot infer (an edge case, a rounding rule, what it raises). An answer given in chat does not also go into the
@@ -70,3 +79,5 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **A moment or a length of game time is a `GameTime`, named for what it times**: `api.time`, `event.time`,
   `build_time`, `weapon_cooldown`, `min_interval`, never a name ending in `_steps`. A name ending in `_steps` holds a
   plain count of steps, as `steps_per_turn` does, and `api.step` is the one counter of them.
+- **The races go Terran, Zerg, Protoss**, wherever they are listed: the members of an enum, a table's rows, a
+  docstring's examples, a tool's modes. `Tech` lists the Terran structures, then the Zerg, then the Protoss.

@@ -29,8 +29,11 @@ difference that rests on what the game does links there for its evidence.
   command line. The replay is saved however the game ends, after a handler raises too, and before leaving a game the bot
   leaves, since the game gives none to a client that has left ([game behavior](game-behavior/protocol.md)). A save
   that fails is logged, not raised.
-- **One api plays any number of games.** Each game starts from nothing. Before the first game, everything that
-  belongs to a game, such as `api.step` or `api.map`, raises `NotPlayingError`.
+- **An api plays one game.** A second, through `Api.play` or any runner, raises `RuntimeError` before anything starts,
+  so a program that plays several games in one process makes an api for each, and a bot whose api is made at import
+  plays a game per process ([testing a bot](../testing.md#playing-any-bot-through-a-recording)). Before the game,
+  everything that belongs to it, such as `api.step` or `api.map`, raises `NotPlayingError`, and after it ends the api
+  keeps answering from it.
 - **New: recordings.** Both runners accept `record_to=path`, which writes the whole conversation with the game to
   `path`, and `--RecordFile` on the command line. `run_recording(path, api)` then plays the bot through it again
   exactly with no game running, and with `permissive=True` plays any bot through it, answering what the bot asks of
@@ -58,9 +61,8 @@ difference that rests on what the game does links there for its evidence.
 - **The last observation gets no turn, as in python-sc2, but it is taken in.** A `GameEndEvent` handler reads the
   game as it ended; python-sc2's `on_end` sees the observation before it.
 - **A handler cannot be `async`.** One that is is refused when it subscribes.
-- **Subscriptions outlive a game.** A function stays subscribed for the life of the api, and an instance until it
-  is passed to `api.unsubscribe`; both are held strongly. A bot that makes new objects for each game
-  unsubscribes the old ones, or they go on handling events alongside the new.
+- **A subscription lasts until it is passed to `api.unsubscribe`**, a function's and an instance's alike, held
+  strongly: an object a bot drops goes on handling events until it is unsubscribed.
 - **The `on_unit_*` hooks are events too**, handed out each turn between `TurnStartEvent` and `TurnEvent`, in the
   order [events.md](../events.md) gives, and made only for the types something subscribes to:
 
@@ -121,7 +123,10 @@ it.
 | nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
-| `unit.is_using_ability(a)`, `is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_collecting`, `is_repairing` | `unit.is_doing(a)`, with `AbilityId.MOVE`, `ATTACK`, `GATHER`, `RETURN`, `{GATHER, RETURN}` and `REPAIR`, each one id whatever the unit's type; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
+| `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
+| `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
+| `unit.is_using_ability(a)`, `is_collecting` | `unit.is_doing(a)`, one ability or several: `is_doing({AbilityId.GATHER, AbilityId.RETURN})`, each one id whatever the unit's type |
+| `order.target`, a tag or a point | `order.target`, the unit or the point, raising `NotReportedError` for a unit the game names by a tag it never reports, and `order.known_target`, `None` there |
 | nothing | `order.data`, `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
@@ -204,7 +209,7 @@ it.
 
 - **One game loop is one step, and every moment and length of game time is a `GameTime`.** `api.step` is
   python-sc2's `state.game_loop`, an int, and `api.time.seconds` its `time`. A `GameTime` adds to and compares with
-  another alone, so `api.time > 120` raises `TypeError`: `api.time > GameTime.from_seconds(120)` says which unit.
+  another alone, so `api.time > 120` raises `TypeError`: `api.time > GameTime(seconds=120)` says which unit.
   Where python-sc2 gives a length in seconds or in steps, as a float or an int, NachOS gives a `GameTime`: a cost's
   time, a cooldown, a score's idle time.
 - **`api.time.to_string()` is python-sc2's `time_formatted` to the millisecond**, `"3:20.000"` where python-sc2 reads
@@ -285,17 +290,19 @@ it.
 | `bot.mineral_field`, `vespene_geyser` | `api.units.mineral_fields`, `geysers` |
 | `bot.enemy_units`, `enemy_structures` | `api.units.enemy.non_structures`, `api.units.enemy.structures` |
 | `unit.tag`, to tell units apart | `unit.id` |
-| `unit.is_mine`, `is_enemy` | `unit.alliance is Alliance.OWN`, `Alliance.ENEMY`; or `isinstance(unit, OwnUnit)` |
-| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation |
+| `unit.is_mine`, `is_enemy` | `unit.is_own`, `unit.is_enemy`; `isinstance(unit, OwnUnit)` narrows to your own unit's reads |
+| `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_listed` while the observation lists it, cloaked or remembered in the fog included |
+| `unit.age`, `age_in_frames`, `is_memory`, of a unit kept from an earlier step | nothing: a unit is updated in place every observation, and `unit.is_listed` false once the observation leaves it out; `unit.first_seen` and `unit.last_seen`, the first and the last observation that showed it visible, each `None` if none has |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
 | `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
-| `unit.repairable` | `unit.total_repair_cost is not None`, with `unit.required_repair_cost` from its health now, each a `Cost` with its steps; `None` for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
+| `unit.repairable` | `unit.is_repairable`, with `unit.total_repair_cost` and `unit.required_repair_cost` from its health now, each a `Cost` with its steps; not for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
 | `unit.shield_health`, `shield_health_max` | `unit.life`, `life_max` |
 | `unit.cargo_left` | `unit.cargo_max - unit.cargo_used` |
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
-| `unit.is_constructing_scv` | `unit.construction is not None` once the structure is placed, and `structure.builder` |
-| `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `has_buff({BuffId.CARRYING_MINERALS, BuffId.CARRYING_MINERALS_RICH})` and `has_buff(BuffId.CARRYING_GAS)`, every race's gas one buff; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
+| `unit.is_constructing_scv` | `unit.is_constructing`, from the order on, as python-sc2's is, and for any unit ordered to place a structure, a probe or a drone on its way, a queen placing a tumor and a barracks building its add-on among them; or once the structure is placed `unit.construction is not None`, with `structure.builder` |
+| `unit.has_add_on`, `has_reactor`, `has_techlab` | `unit.add_on is not None`, `unit.has_reactor`, `unit.has_tech_lab`, and `unit.production_capacity`, how many it trains at once |
+| `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_gas`, every race's gas one buff, `BuffId.CARRYING_GAS`; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
 | `unit.has_buff(b)` | `unit.has_buff(b)`, or any of several |
 | `unit.can_be_attacked`, of an enemy | `unit.is_visible`, which a remembered structure and an undetected unit are not; it is true of a cloaked unit of your own or an ally's, which python-sc2 calls not attackable |
 | `unit.distance_to(p)` | `unit.distance_to(p)`, a point or a unit, between positions |
@@ -303,21 +310,30 @@ it.
 | nothing, for whether a unit fires facing its target | `weapon.turns_to_fire`, false for one that fires at any angle, a battlecruiser's or a planetary fortress's among them |
 | `unit.name` | `unit.type_id.name` |
 | `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
-| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | `unit.weapons`, which count them, and `unit.weapon_against(target)` |
-| `unit.can_attack_ground`, `can_attack_air` | `unit.weapon_against(target) is not None` |
+| `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | the same, which count them, a dps per second of Faster speed; with `unit.ground_weapon`, `air_weapon`, `ground_damage`, `air_damage`, and `unit.weapon_against(target)` |
+| `unit.can_attack_ground`, `can_attack_air` | `unit.ground_weapon is not None`, `air_weapon`; `unit.weapon_against(target) is not None` against one target |
+| `unit.is_melee` | `unit.is_melee`, a ground range above 0 and at most 1 |
 | `unit.target_in_range(t, bonus_distance)` | `unit.has_in_range(t, margin=...)` |
-| `units.in_attack_range_of(u)` | `units.filter(lambda enemy: enemy.has_in_range(u))` |
+| `units.in_attack_range_of(u)`, the units `u` can hit | `units.in_range_of(u)`, the units `u` has in range; and `units.having_in_range(target)`, the units that have `target` in range |
 | `unit.calculate_damage_vs_target(t)[0]` | `unit.damage_against(t)`, one attack as the target stands |
+| `unit.bonus_damage_against_target(t)` | `unit.bonus_damage_against(t)`, the bonus summed over the target's attributes, 0 without |
 | `unit.calculate_dps_vs_target(t)` | `unit.dps_against(t)`, per second of Faster speed |
-| `unit.weapon_ready` | `not unit.weapon_cooldown` |
+| `unit.weapon_ready` | `unit.is_weapon_ready`, on your own units, which is true too while an attack is under way, its cooldown reading zero |
 | `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
+| `self.units.find_by_tag(t)` is `None`, for a unit of yours that left the observation | `unit.is_orderable` is false, on the unit kept: inside a transport or a gas building, under a neural parasite, or dead; and `units.orderable` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
 | `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
 | `unit.type_id == UnitTypeId.MARINE`, to then use it as a marine | `UnitType.Marine.includes(unit)`, which narrows it |
-| `units.owned`, `structure`, `ready` | `units.own`, `units.structures`, `units.complete` |
-| `units.closer_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d` |
+| `mineral_ids`, `geyser_ids`, `ALL_GAS`, sets of type ids | `UnitType.AnyMineralField.type_ids`, `AnyVespeneGeyser.type_ids` and `GasBuilding.type_ids`, the same types; every type and group has its `type_ids`, for a type with no unit |
+| `units.owned`, `structure`, `ready`, `not_ready` | `units.own`, `units.structures`, `units.complete`, `units.not_complete` |
+| `units.flying`, `not_flying` | `units.air`, `units.ground`, a structure remembered in the fog counting as on the ground |
+| `units.visible` | `units.visible` |
+| nothing, a collection being new every step | `units.alive`, `units.dead`, `units.listed` and `units.not_listed`, for a collection kept from an earlier observation |
+| `units.closer_than(d, p)`, `further_than(d, p)` | `units.within(d, of=p)`, a point, a unit or several, which counts a unit at exactly `d`, and `units.beyond(d, of=p)` |
+| `units.filter(lambda u: u.position in area)` | `units.inside(areas)`, `units.outside(areas)`, one area or several |
+| `units \| other`, `units - other`, `units.sorted(key, reverse)` | `units.combined_with(other)` and `units.without(other)`, by NachOS id, `other` one unit or several, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
 | nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
@@ -328,25 +344,28 @@ it.
   game as one. NachOS follows a structure through those swaps, so it keeps its object and id, and `unit.tag` is
   only the game's current handle. An id's first digit is the unit's alliance when first seen, 1 for yours and 4 for
   the enemy's; the rest counts that alliance's units. python-sc2 builds new objects every step, keyed by tag.
-- **A unit out of the observation is stale, not gone.** It keeps what it last read, `is_stale` is true, and it is
-  in `api.known_units` but not `api.units`. If it comes back, as a unit leaving a transport or an enemy walking back
+- **A bot's data for each unit goes in a `UnitDict`**, keyed by the unit: a dict that forgets a unit once it is dead.
+  A dict keyed by tag, as a python-sc2 bot keeps one, loses a structure each time it goes out of sight.
+- **A unit out of the observation is unlisted, not gone.** It keeps what it last read, `is_listed` is false, and it
+  is in `api.known_units` but not `api.units`. If it comes back, as a unit leaving a transport or an enemy walking back
   into sight does, it is the same object. Only death ends it: `is_dead` becomes true.
 - **The game reports only the deaths you can see.** A structure that burns down or is killed out of sight stays
   remembered until its spot is in sight again; NachOS then finds it missing and marks it dead. A structure that can
-  lift off or uproot may have moved instead, so it stays stale until it turns up. python-sc2 drops the remembered
+  lift off or uproot may have moved instead, so it stays unlisted until it turns up. python-sc2 drops the remembered
   copy and says nothing.
-- **A drone that becomes a structure is stale until the structure finishes or dies, then dead**, up to an observation
+- **A drone that becomes a structure is unlisted until the structure finishes or dies, then dead**, up to an observation
   after the structure's `OwnConstructionFinishedEvent`. If the structure is cancelled, the drone comes back as the same
   object ([game behavior](game-behavior/units.md#units-coming-changing-and-going)). `builder` links the two
   for your own drones only, since only your own units' orders are reported.
 - **A unit refers to other units by object.** An order's target, a rally target, a passenger, an add-on and an
-  engaged target are units, stale or dead ones included; python-sc2 gives tags to look up. An order aimed at
+  engaged target are units, unlisted or dead ones included; python-sc2 gives tags to look up. An order aimed at
   nothing has `None` for its target; python-sc2's is `0`.
-- **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it
-  or the drone that became it, and `scv.construction` the structure. Both read `None` once it is finished, while
-  it is halted, and for a Protoss structure. python-sc2 has `is_constructing_scv` and no link; it is true from the
-  order on, while the SCV walks to the site, whereas `construction` is `None` until the structure is placed, so an
-  SCV on its way is one whose first order is the build ability.
+- **`builder` and `construction` link a structure and what builds it.** `structure.builder` is the SCV building it,
+  the queen planting a creep tumor, the barracks, factory or starport building its add-on, or the drone that became
+  it, and `scv.construction` the structure. Both read `None` once it is finished, while it is halted, and for a
+  Protoss structure. python-sc2 has `is_constructing_scv` and no link; it is true from the order on, while the SCV
+  walks to the site, whereas `construction` is `None` until the structure is placed, and `is_constructing` is true
+  from the order on, as python-sc2's is.
 - **A remembered structure reads as it was last seen.** Its position and type are current; its health, contents
   and buffs are as of `unit.last_seen`. python-sc2 reads the zeros the game sends for them.
 - **What the game never showed raises `NotReportedError`**: the health of a cloaked enemy never detected, or the
@@ -354,13 +373,20 @@ it.
 - **Orders, cargo, harvesters, rally points and weapon cooldown are on `OwnUnit` only**, the class of your own
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
   `is_idle`. `units.own` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
-  neural parasite changes class, and changes back.
+  neural parasite changes class, and changes back, so a unit you kept may be an enemy `Unit` now:
+  `unit.is_orderable` says whether it is yours and in the observation.
 - **A unit's type is a type parameter too.** `UnitType` has a class for every type, `UnitType.Marine`, whose `id`
   is its `UnitTypeId`, and for the groups the game's tables put them in: `UnitType.Terran`, `UnitType.Structure`,
   `UnitType.ProtossStructure`. `Unit[UnitType.Marine]` is a marine, and a read only some types have is an error on
-  the others, as `is_powered` is on anything but a Protoss structure. A unit typed `Unit[Any]` reads as any type;
-  on a `Unit[UnitType.AnyType]` such a read is an error until `UnitType.ProtossStructure.includes(unit)` narrows
-  it. The type checker cannot follow a morph: a `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
+  the others, and on a group wider than them:
+  - `is_powered`, for a Protoss structure, and `builder`, for any structure;
+  - `mineral_contents`, for a mineral field, and `vespene_contents`, for a geyser or a gas building;
+  - `assigned_harvesters` and `ideal_harvesters`, for a townhall or a gas building;
+  - `add_on`, `has_reactor` and `has_tech_lab`, for a barracks, a factory or a starport.
+
+  A unit typed `Unit[Any]` reads as any type, as python-sc2's does; on a `Unit[UnitType.AnyType]` such a read is an
+  error until `UnitType.ProtossStructure.includes(unit)` narrows it. The type checker cannot follow a morph: a
+  `Unit[UnitType.SiegeTank]` that sieges is still typed a siege tank.
 - **Workers, townhalls, mineral fields, geysers and gas buildings are groups of `UnitType`**, `UnitType.Worker`,
   `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, which `Units` also reads as `workers`,
   `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`. A MULE is not a worker, and a lifted command center
@@ -390,11 +416,10 @@ it.
   and the unit's line: a marine at attack level 2 puts the first two Terran Infantry Weapons into
   `api.enemy.upgrades`, and every enemy marauder then counts them, in the fog as much as in sight. An ultralisk's
   armor is left out, since 2 could be two levels or Chitinous Plating. Anything the game never reports, such as
-  Metabolic Boost, a bot adds with `api.enemy.assume_upgrades` and takes back with `forget_upgrades`; with
-  `Api(enemy_upgrade_inference=UpgradeInference.NONE)` NachOS adds nothing itself. With
-  `UpgradeInference.INTERMEDIATE` it also reads what only an upgrade brings about: an enemy warp gate or burrowed
-  unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a unit of yours slowed by concussive
-  shells or matrixed, and an enemy storm. python-sc2 leaves all of this to the bot, per call.
+  Metabolic Boost, a bot adds with `api.enemy.assume_upgrades` and takes back with `forget_upgrades`. The extension
+  `UpgradeInference` also reads what only an upgrade brings about: an enemy warp gate or burrowed unit, a stimmed,
+  charging, lunging or cloaked enemy, a marine at 55 health, a unit of yours slowed by concussive shells or matrixed,
+  and an enemy storm ([extensions](../extensions.md#nachoss-own)). python-sc2 leaves all of this to the bot, per call.
 - **`unit.armor` is what a unit in sight reports, so it is exact.** For a unit out of sight it is what the enemy is
   known to have.
 - **`unit.shield_armor` is the shields level its owner has**, which python-sc2 writes as
@@ -406,20 +431,22 @@ it.
   covers in a real second. NachOS has done that already: a zergling's `speed` is 4.13, not 2.95.
 - **`armor_upgrade_level` is armor, not a count of levels**, where `attack_upgrade_level` is a count
   ([game behavior](game-behavior/units.md#what-is-reported-of-a-unit)).
-- **Reaper grenades and force fields stay units**, and are not in `api.effects`. python-sc2 moves them into
-  `state.effects`; in NachOS a force field is among the map's units as `FORCE_FIELD`, and a grenade among its
-  thrower's as `REAPER_GRENADE`, a structure as the tables have it, so leave them out of an army count and a count of
-  structures ([game behavior](game-behavior/units.md#what-an-observation-lists)).
+- **Reaper grenades, force fields and the parasitic bombs vipers leave behind stay units**, and are not in
+  `api.effects`. python-sc2 moves them into `state.effects`, a bomb as `PARASITICBOMB`; in NachOS a force field is
+  among the map's units as `FORCE_FIELD`, a grenade among its thrower's as `REAPER_GRENADE`, a structure as the tables
+  have it, and a bomb among its viper's player's as `PARASITIC_BOMB_LEFT_BEHIND`, once its target has died or the bomb
+  has run out. Until then a bomb is its target's buff, `VIPER_PARASITIC_BOMB`. Leave them all out of an army count and
+  a count of structures ([game behavior](game-behavior/units.md#what-an-observation-lists)).
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
   `all_units`; NachOS has neither yet.
 - **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.
 - **A collection never changes.** python-sc2's `Units` is a list you can append to; NachOS's is a fixed sequence,
   and every filter returns a new one.
-- **Collections are combined with `Units.combined(a, b, ...)`**, which keeps each unit where it first appears and
-  knows a unit by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
+- **Collections are combined with `Units.combined(a, b, ...)`**, or `a.combined_with(b)` for `b` one unit or several.
+  Each keeps a unit where it first appears and knows it by its NachOS id. python-sc2 spells it `a | b` and `a + b`.
 - **Your own data about a unit is keyed by the unit or its id.** A unit takes no attributes of yours, and its class
-  is not yours to subclass. A `weakref.WeakKeyDictionary` keyed by unit lets go of an entry once the unit is dead
-  and dropped.
+  is not yours to subclass. A `UnitDict` forgets a unit once it is dead; a `weakref.WeakKeyDictionary` keyed by unit
+  never does, as NachOS keeps every unit it has seen all game.
 
 ## The state
 
@@ -438,7 +465,7 @@ it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)` |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction` with its `producer`, its `unit` once it stands, its `progress` and its `time_left` |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `time_left`; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
 | `state.creep` | `api.creep` |
@@ -478,18 +505,19 @@ it.
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.pathing.cheapest_paths_from(a).distances[b]` over the turn's grid, which leaves a structure `a` lies in as the game does |
 | `game_info.map_center` | `api.map.playable_area.center` |
-| `start_location` | `api.map.start_location` |
-| `enemy_start_locations` | `api.map.opponent_start_locations` |
+| `start_location` | `api.map.start_location`, or `api.player.start_location`, its `StartLocation` |
+| `enemy_start_locations` | `api.map.opponent_start_locations`, or `api.enemy.start_location`, its `StartLocation`, on a map of two starts or once `api.enemy.assume_start_location` names one |
 | `game_info.map_ramps` | `api.map.ramps` |
 | `game_info.vision_blockers` | nothing; see below |
 | `ramp.points`, `ramp.upper`, `ramp.lower` | `ramp.tiles`, `ramp.top`, `ramp.bottom` |
 | `ramp.top_center`, `ramp.bottom_center`, `ramp.center` | `ramp.top.center`, `ramp.bottom.center`, `ramp.tiles.center` |
-| `main_base_ramp` | `api.map.main_ramp`, and `api.map.main_ramp_of(start)` for another main |
+| `main_base_ramp` | `api.player.start_location.main_ramp`, and `api.enemy.start_location.main_ramp` for the enemy's main |
 | `ramp.corner_depots`, `ramp.depot_in_middle`, `ramp.depot_locations` | `api.placement.terran_wall(ramp)`'s `near_depot`, `far_depot` and `middle_depot` |
 | `ramp.barracks_correct_placement`, `ramp.barracks_in_middle` | its `barracks_with_add_on`, with its `add_on`, and `barracks_in_wall` |
 | `ramp.barracks_can_fit_addon` | `wall.barracks_with_add_on == wall.barracks_in_wall` |
 | `ramp.protoss_wall_pylon`, `protoss_wall_buildings`, `protoss_wall_warpin` | `api.placement.protoss_wall(ramp)`'s `pylon`, `near_building` and `far_building`, and `gap` |
 | nothing | `ramp.orientation`, the `Direction` it climbs, and `ramp.width`; `api.map.all_start_locations` |
+| nothing | a `StartLocation`'s `natural`, `line_third` and `triangle_third`, and its `main_area`, the main's ground; any expansion's `plateau()` |
 | `expansion_locations_list` | `[expansion.center for expansion in api.expansions]` |
 | `expansion_locations_dict` | each expansion's `mineral_fields` and `geysers`, its units for the whole game |
 | `get_next_expansion()` | the first of `api.expansions` whose `townhall` is `None` |
@@ -531,9 +559,9 @@ it.
   natural on 3 maps of the 2026 pool. On that pool both find the same expansions, but python-sc2 puts 4 where
   the game takes no townhall: both of Magannatha's gold bases, on a Xel'Naga tower, and two of LeyLines' bases, a
   tile too close to their resources. NachOS finds each spot by the rule the game was measured to follow, with towers
-  and debris in the way ([game behavior](game-behavior/map.md)). Each expansion says
-  whether a player starts there, `is_start_location`, and its pathing distance from this player's start,
-  `pathing_distance_from_start`.
+  and debris in the way ([game behavior](game-behavior/map.md)). Each expansion says its pathing distance from this
+  player's start, `pathing_distance_from_start`, walked around every mineral field and geyser, which the game's grid
+  leaves out but for this player's own, and one where a player starts is a `StartLocation`.
 - **Where a structure may stand is read, not asked.** python-sc2's `can_place` and `find_placement` ask the game each
   time. `api.placement` reads it from what NachOS knows, in three layers: `static`, the map's buildable ground less its
   geysers and collapsible towers; `dynamic`, true where no structure in sight or remembered in the fog stands, and no
@@ -554,13 +582,13 @@ it.
 | `game_data` | `api.data` |
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
-| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps |
-| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` counts what it morphed from too |
-| `unit_data._proto.food_required`, `food_provided` | `unit_data.cost.supply`, `unit_data.supply_provided` |
+| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
+| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
+| `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_used`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
 | `unit_data.unit_alias` | nothing: `unit_data.morphed_from` gives the type a form is made from, a siege tank for a sieged tank |
-| `unit_data.tech_alias` | `unit_data.tech_aliases`, empty rather than `None` |
+| `unit_data.tech_alias` | `unit_data.techs_granted`, the `Tech`s it grants rather than the types it counts as; the `UnitType.Any…` groups for a unit's forms |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
 | `upgrade_data.cost.time`, in steps | `upgrade_data.cost.time`, a `GameTime` |
@@ -569,14 +597,16 @@ it.
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
 | `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
-| `bot.calculate_supply_cost(t)` | `unit_data.cost.supply`, the type's own; `ability_data.cost.supply` of what makes it counts what the order frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
-| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and api.supply.left >= cost.supply`, with `cost` the ability's |
+| `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's order for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
+| `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the order that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
+| `bot.calculate_unit_value(t)` | `unit_data.total_cost`, what every order that made one cost: 550 for an orbital command, 350 for a hatchery, two high templar's 100/300 for an archon, nothing for a MULE |
+| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: an order that takes no supply goes though the army stands over the cap |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
-| `UPGRADE_RESEARCHED_FROM[u]` | `data.abilities[data.upgrades[u].research_ability].performers` |
-| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]` |
-| `TERRAN_TECH_REQUIREMENT` and its siblings | the `structures` of the ability's requirements |
-| `EQUIVALENTS_FOR_TECH_PROGRESS` | `unit_data.tech_aliases` of the type that stands |
+| `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |
+| `TRAIN_INFO[maker][t]`, `RESEARCH_INFO[maker][u]` | `data.units[maker].ability_requirements[ability]`, or every maker's together, `data.units[t].tech_requirements` and `data.upgrades[u].tech_requirements` |
+| `TERRAN_TECH_REQUIREMENT` and its siblings | `data.units[t].tech_requirements.techs`, `Tech`s rather than unit types |
+| `EQUIVALENTS_FOR_TECH_PROGRESS` | `data.types_granting(tech)`, every type whose `techs_granted` hold it |
 | `UNIT_ABILITIES[t]` | `data.units[t].abilities` |
 | `GENERIC_REDIRECT_ABILITIES` | nothing: a unit type's own id of an action reads as the action's |
 | a requirement's `requires_power` | `unit_data.needs_power` |
@@ -604,36 +634,39 @@ it.
 - **A table holds only the rows a bot can name.** It keeps the rows of the game's catalog that the curated ids
   name and drops the rest, so nothing it hands back is a number without a word for it. python-sc2 filters on the
   `available` flag instead, which filters nothing ([game behavior](game-behavior/upgrades-and-tables.md)).
-- **A field naming something uncurated reads `None`, and `tech_aliases` drops it, except where an override names what
-  works.** Eight rows name a creation ability that does nothing, or none
+- **A field naming something uncurated reads `None`, except where an override names what works.** Eight rows name a creation ability that does nothing, or none
   ([game behavior](game-behavior/abilities-and-orders.md#ids-what-a-unit-is-offered-ordered-and-runs)); for these,
   `creation_ability` is the ability that works, `ZERGLING_MORPH_BANELING`, `HYDRALISK_MORPH_LURKER`, the plain gas
   builds and so on, from `gamedata/_techtree/_overrides.py`, which the tech tree sweep checks in game each time it runs
   (`docs/maintaining/curating-ids.md`). python-sc2 papers over only the lurker, by writing `MORPH_LURKER` into the
   message it was handed, and keeps the rest, because the game marks them available. The rest name an ability nothing can
-  order, such as a changeling's disguise, and read `None`; the viking's alias is a row no unit is ever one of, so
-  `tech_aliases` drops it.
+  order, such as a changeling's disguise, and read `None`.
 - **There is no ability for unloading one passenger.** The game takes it only as a UI action, which NachOS has
   no path for yet ([game behavior](game-behavior/abilities-and-orders.md#loading-and-unloading)), so `UNLOAD`,
   and `UNLOAD_AT` put everyone down at once.
-- **A cost is minerals, vespene, supply and time, and a type's time is everything spent to reach it.** python-sc2's
-  `Cost` carries a `time` in steps too, which its `__add__` adds and its `__eq__` ignores, and for a morph it is the
-  morph's alone, an orbital command's 560. NachOS's `unit_data.cost.time`, a `GameTime`, adds the time of each stage
-  that costs something, as the minerals do: an orbital command's 2160 steps, the command center's 1600 included, and a
-  sieged tank's the tank's 720, since a switch that costs nothing adds none. `build_time` is the last stage alone.
-  NachOS's `Cost` adds, subtracts, scales and compares every field; costs added up add their times, which is production time one after
-  another, not how long they take side by side. What a player holds is `Resources`, minerals and vespene alone, which
-  adds, subtracts, scales, divides and answers `covers`; `cost.resources` is what to hold against it. Its amounts are
-  fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays whole until
-  something divides it.
-- **A unit type's cost is everything spent to reach it; an ability's is what the game charges.** `unit_data.cost` hands
-  the game's number back as it is, an orbital command's 550 with the command center's 400 in it, and `morphed_from` says
-  what to subtract; `ability_data.cost` has it subtracted already: `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` charges 150,
-  an extractor 25 and a baneling 25/25 ([game behavior](game-behavior/upgrades-and-tables.md)). python-sc2 does the same
-  in `morph_cost` and `calculate_ability_cost` off a hand-written `UNIT_TRAINED_FROM`; two of its hard-coded corrections
-  are stale, since the game's rows now price a reactor 50/50 and a tech lab 50/25, and its `cost_zerg_corrected` is
-  wrong for the hatchery, whose row is 325 rather than the drone's 50 and a hatchery's 300. An action several types
-  perform costs the same whichever does it, every tech lab 50/25.
+- **A cost is minerals, vespene, supply and time.** python-sc2's `Cost` carries a `time` in steps too, which its
+  `__add__` adds and its `__eq__` ignores, and for a morph it is the morph's alone, an orbital command's 560. So is
+  NachOS's `unit_data.cost.time`, a `GameTime`, the time of its last step that cost anything: an orbital command's 560,
+  and a sieged tank's the tank's 720, since a switch costs nothing. NachOS's `Cost` adds, subtracts, scales and compares
+  every field; costs added up add their times, which is production time one after another, not how long they take
+  side by side. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts, scales, divides,
+  answers `covers` and takes the `minimum` and `maximum` of each resource; `cost.resources` is what to hold against
+  it. Its amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game
+  gave stays whole until something divides it. `cost.is_free` says whether a cost takes no minerals, vespene or
+  supply, whatever its time.
+- **A unit type's cost is what the order that made one cost, and an ability's what ordering it costs.**
+  python-sc2's `unit_data.cost` hands the game's number back as it is, an orbital command's 550 with the command
+  center's 400 in it. NachOS's is that of the last step that cost anything, an orbital command's 150, as
+  `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` costs, an extractor's 25 and a baneling's 25/25
+  ([game behavior](game-behavior/upgrades-and-tables.md)). Every form of a unit costs the same: a sieged tank the
+  tank's 150/125, though the siege costs nothing. An archon, a MULE and an auto-turret cost nothing, whatever their
+  rows hold. `unit_data.total_cost` adds up every step back to the first, an orbital command's 550 and a hatchery's
+  350 with its drone, where the game's row reads 325; an archon counts two high templar. python-sc2 subtracts in
+  `morph_cost` and `calculate_ability_cost` off a hand-written
+  `UNIT_TRAINED_FROM`; two of its hard-coded corrections are stale, since the game's rows now price a reactor 50/50
+  and a tech lab 50/25, and its `cost_zerg_corrected` is wrong for the hatchery, whose row is 325 rather than the
+  drone's 50 and a hatchery's 300. An action several types perform costs the same whichever does it, every tech lab
+  50/25.
 - **A rich gas building's build time is its plain one's.** python-sc2's `cost.time` reads the game's row, which can
   give it none; NachOS's `build_time` reads its plain building's ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **The relations between the tables were swept in game, not read from the game's files**, since `RequestData` holds
@@ -646,8 +679,13 @@ it.
 - **Requirements belong to a unit type and an ability together**, since one ability can need different things of
   different types: a burrowed roach moves only once Tunneling Claws is researched, and nothing else needs anything
   to move. `units[t].ability_requirements` holds an entry for every ability `units[t]` is offered, even one that
-  needs nothing. A required structure counts as standing where a type whose `tech_aliases` name it stands, and an
-  add-on among them has to be the unit's own, which is what python-sc2's `requires_techlab` says.
+  needs nothing. A required structure is a `Tech`, which a player has while a structure of a type granting it
+  stands, where python-sc2 names a unit type and lists what counts as it apart: `units[t].techs_granted` says what a
+  type grants, a greater spire `Tech.SPIRE` and `Tech.GREATER_SPIRE`, and `api.data.types_granting(tech)` lists the
+  types granting one. A required tech lab is apart, `needs_tech_lab`, and has to be the unit's own, as python-sc2's
+  `requires_techlab` says; nothing requires a reactor. Every type that makes a unit type or researches an upgrade
+  needs the same for it, so `unit_data.tech_requirements` and `upgrade_data.tech_requirements` hold what each maker
+  needs ([game behavior](game-behavior/upgrades-and-tables.md)).
 - **Power is the structure's, not the ability's.** An unpowered gateway is offered nothing it trains, which
   python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
@@ -660,8 +698,8 @@ it.
   `GATEWAY_TRAIN_ZEALOT`, whose `performers` hold no warp gate.
 - **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is
   gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
-  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. The price of a morph is its
-  `cost` less that of what it came from, which `ability_data.cost` has done already.
+  for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. A morph's `cost` is that of its own
+  step, its `ability_data.cost`.
 - **What an upgrade changes was swept in game too, and is added, not multiplied.** python-sc2 writes
   `DAMAGE_BONUS_PER_UPGRADE` and its speed dicts by hand, the speeds as factors. `unit_data.upgrades` holds what
   `tools/sweep_upgrades.py` read off the game's rows after each upgrade, plus every upgrade that raises a level the

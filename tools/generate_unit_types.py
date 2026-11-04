@@ -41,14 +41,16 @@ if TYPE_CHECKING:
 class UnitType:
     """Every type of unit, and every group of types, for the type checker. None is ever instantiated.
 
-    `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is
-    its `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them;
-    or the workers, the townhalls, the Terran and the Zerg townhalls, the mineral fields, the vespene geysers, the gas
-    buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and acceleration zones,
-    the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the spires, the overlords,
-    or the two forms of a structure or a unit that changes and changes back, such as a supply depot raised or lowered,
-    a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types:
-    `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+    `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
+    `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
+    workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
+    geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
+    acceleration zones, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the
+    spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such as a supply
+    depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that
+    holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+
+    `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
 
     class AnyType:
@@ -59,17 +61,20 @@ class UnitType:
         error on it until `includes` narrows it.
         """
 
-        _type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
+        type_ids: ClassVar[frozenset[UnitTypeId]] = frozenset()
+        """The ids this class stands for: a type's own `id`, or those of every type in a group. A type id with no unit
+        is tested against them, as for a structure about to be built: `type_id in UnitType.GasBuilding.type_ids`. A
+        unit is tested by `includes`, which narrows it."""
 
         def __init_subclass__(cls) -> None:
             """Add the type a class names by its `id` to every group it is in. A class without an `id` is a group."""
             super().__init_subclass__()
             type_id: UnitTypeId | None = cls.__dict__.get("id")
-            cls._type_ids = frozenset() if type_id is None else frozenset((type_id,))
+            cls.type_ids = frozenset() if type_id is None else frozenset((type_id,))
             if type_id is not None:
                 # Everything between the class and `object` is a group it is in, `AnyType` included.
                 for group in cast("tuple[type[UnitType.AnyType], ...]", cls.__mro__[1:-1]):
-                    group._type_ids |= cls._type_ids
+                    group.type_ids |= cls.type_ids
 
         @overload
         @classmethod
@@ -85,7 +90,7 @@ class UnitType:
 
             Raises `UncuratedIdError` for a unit of a type the curated ids leave out.
             """
-            return unit.type_id in cls._type_ids
+            return unit.type_id in cls.type_ids
 '''
 
 # The races with a group of their own. A map's own units, such as mineral fields and rocks, have no race.
@@ -233,6 +238,7 @@ ROLES = {
     "Townhall": "A townhall: a command center or what it becomes, lifted or not, a nexus, a hatchery, lair or hive.",
     "AnyTerranTownhall": "A command center or an orbital command, lifted or not, or a planetary fortress.",
     "AnyZergTownhall": "A Zerg townhall: a hatchery, a lair or a hive.",
+    "AnyResource": "What a worker gathers at: a mineral field or a gas building, never the geyser under it.",
     "AnyMineralField": "A mineral field of any kind: one the game's tables say holds minerals.",
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
@@ -255,6 +261,8 @@ ROLES = {
 }
 # The groups that hold every type of another group, by that other group.
 HOLDING_GROUPS = {
+    "AnyMineralField": "AnyResource",
+    "GasBuilding": "AnyResource",
     "AnyTechLab": "AnyAddOn",
     "AnyReactor": "AnyAddOn",
     "CollapsibleTower": "Destructible",
@@ -280,8 +288,9 @@ def class_name(unit_type: UnitTypeId) -> str:
     return "".join(part.capitalize() for part in unit_type.name.split("_"))
 
 
-def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
-    """The groups of what `unit_type`, whose row is `row`, is for."""
+def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTypeId]) -> list[str]:
+    """The groups of what `unit_type`, whose row is `row` and which the tables count as each of `counted_as`, is
+    for."""
     curated = (
         ("Worker", WORKERS),
         ("Townhall", TOWNHALLS),
@@ -299,7 +308,7 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData) -> list[str]:
         found.append("AnyMineralField")
     if row.has_vespene:
         found.append("GasBuilding" if row.race in RACES else "AnyVespeneGeyser")
-    found += [group for group, plain in COUNTED_AS.items() if unit_type is plain or plain in row.tech_aliases]
+    found += [group for group, plain in COUNTED_AS.items() if unit_type is plain or plain in counted_as]
     found += [group for group, prefix in MAP_OBJECTS.items() if unit_type.name.startswith(prefix)]
     return found + [HOLDING_GROUPS[role] for role in found if role in HOLDING_GROUPS]
 
@@ -323,10 +332,15 @@ def narrowest(groups: list[str], bases: dict[str, tuple[str, ...]]) -> tuple[str
     return tuple(dict.fromkeys(group for group in groups if group not in inner))
 
 
-def render(tables: GameData) -> str:
-    """The module source for the types in `tables`."""
+def render(answer: sc2api_pb2.ResponseData) -> str:
+    """The module source for the types in the game's tables, `answer`."""
+    tables = GameData(answer)
+    counted_as = tech_aliases(answer)
     table_groups = {unit_type: table_group(tables.units[unit_type]) for unit_type in UnitTypeId}
-    found = {unit_type: roles(unit_type, tables.units[unit_type]) for unit_type in UnitTypeId}
+    found = {
+        unit_type: roles(unit_type, tables.units[unit_type], counted_as.get(unit_type, frozenset()))
+        for unit_type in UnitTypeId
+    }
     bases: dict[str, tuple[str, ...]] = {
         "Structure": ("AnyType",),
         **{name: ("AnyType",) for name in RACES.values()},
@@ -369,11 +383,17 @@ def corpus_answer() -> sc2api_pb2.ResponseData:
     return next(exchange.response.data for exchange in recording if exchange.response.HasField("data"))
 
 
-def corpus_tables() -> GameData:
-    """The tables of the first corpus game."""
-    return GameData(corpus_answer())
+def tech_aliases(answer: sc2api_pb2.ResponseData) -> dict[UnitTypeId, frozenset[UnitTypeId]]:
+    """The types the game's tables, `answer`, count each type as, their `tech_alias`, where both are curated: a command
+    center, for an orbital command. A type they count as nothing else is left out."""
+    return {
+        unit_type: aliases
+        for row in answer.units
+        if (unit_type := UnitTypeId.get(row.unit_id)) is not None
+        and (aliases := frozenset(filter(None, map(UnitTypeId.get, row.tech_alias))))
+    }
 
 
 if __name__ == "__main__":
-    OUTPUT.write_text(render(corpus_tables()), encoding="utf-8")
+    OUTPUT.write_text(render(corpus_answer()), encoding="utf-8")
     print(f"{OUTPUT.name}: {len(UnitTypeId)} types")

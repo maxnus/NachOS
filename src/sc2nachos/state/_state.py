@@ -5,9 +5,9 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Resources
 from sc2nachos.gamemap._image_data import image_tiles
+from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
 from sc2nachos.state._actions import Action, ActionFailure, read_action
@@ -69,7 +69,7 @@ class _State:
                 continue
             if (row := rows.get(unit._type_id)) is not None:
                 # The unit's fractional supply: 0.5 for a zergling, 0 for a roach.
-                taken += row.cost.supply % 1
+                taken += row.supply_used % 1
         # The fraction left after the whole supplies, which the game does count: two zerglings leave nothing.
         return taken % 1
 
@@ -125,7 +125,7 @@ class _State:
 
         Raises `UncuratedIdError` if an action names an ability the curated ids leave out.
         """
-        unit_by_tag = self._tracker.unit_tracker.by_tag
+        unit_by_tag = self._tracker.unit_tracker.get_by_tag
         actions = (read_action(action, unit_by_tag) for action in self._response.actions)
         return tuple(action for action in actions if action is not None)
 

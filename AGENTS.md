@@ -8,7 +8,7 @@
 
 The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
 `docs/plans/nachOS-initial-prompt.md`. The README's "Documentation" lists this repo's docs, and `docs/maintaining/`
-holds how to curate the game's ids, the code style and what reviews keep finding.
+holds how to curate the game's ids, the code style, what reviews keep finding and how to make a release.
 
 ## Keep this file small
 
@@ -39,12 +39,15 @@ These are the non-negotiables. They exist because this library is published for 
   instance-based `Api`; the consuming bot decides whether to make one global. Two `Api` instances must be able to
   coexist in one process.
 - **The API is instantiated, never subclassed.** Do not document, encourage or design for bot authors inheriting
-  from `Api`, and never add a mixin or extension hook for them to hang helpers on. Their helpers belong in their
-  own modules as ordinary functions. A felt need to subclass means NachOS is missing an API: treat it as a bug
-  report against this library, not as a pattern to support.
+  from `Api`, and never add a mixin for them to hang helpers on. Their helpers belong in their own modules as
+  ordinary functions. A feature a bot opts into goes in an extension, which `Api(extensions=...)` builds, and nowhere
+  else. A felt need to subclass means NachOS is missing an API: treat it as a bug report against this library, not
+  as a pattern to support.
 - **`Api.__init__` must be cheap and must not require a live connection.** Consumers construct it at import time
   so that `@api.on(...)` decorators can run as their modules load. Connecting happens in `run_local` /
   `run_ladder`, which take an already-built instance.
+- **An api plays one game.** `play` refuses a second, so nothing is reset between games, and a test or tool that
+  plays several builds an api for each.
 - **No AvocaDOS-shaped quirks.** Nothing may exist in NachOS solely to make something work in AvocaDOS. If in
   doubt, the awkwardness stays in AvocaDOS. Better still, fix it so neither side needs it.
 - **NachOS owes python-sc2 nothing.** This is a new package, not a fork and not a compatible replacement — no API
@@ -58,7 +61,9 @@ These are the non-negotiables. They exist because this library is published for 
   the short `docs/migrating-from-python-sc2.md` only if most bots moving over would.
 - **Scope:** anything useful to any bot maker, if it is (or can be made) acceptable quality — protocol, state, data
   model, units, orders, events, geometry, pathfinding, map analysis, generic utilities. Not: strategy, build
-  orders, combat micro, roles, economy management.
+  orders, combat micro, roles, economy management. `sc2nachos.extensions` may hold opt-in features outside that
+  scope, as speed mining is; each is a module, or a package once it needs more than one, imports only public names
+  but its own, which a test checks, the core imports none, and a heavy dependency goes behind an optional install.
 - **The protocol transport is injectable.** Everything above it must be testable with no game client running,
   against recorded observation fixtures.
 - **Performance matters.** This code sits in the bot's hot loop. Do not add abstraction layers that cost step time.
@@ -120,7 +125,8 @@ protobuf fixtures via the fixture transport.
 **The corpus** in `tests/corpus` is seven whole games, a bare api losing to the computer, one on each map of the
 current ladder pool, recorded by `tools/record_corpus.py`, which says what each one is and holds. Playing a game back
 asks the same questions in the same order, so a change to what the library asks a game fails `test_corpus.py` until
-the corpus is recorded again.
+the corpus is recorded again. The game's data `sc2nachos.testing` ships is the first game's: if it changed,
+`test_made_up_units.py` fails until `tools/write_shipped_game_data.py` writes it again.
 
 | Task | Command |
 |---|---|

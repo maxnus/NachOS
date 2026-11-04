@@ -6,7 +6,6 @@ from typing import Any, Self
 import pytest
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
-import sc2nachos.replay
 from sc2nachos import (
     AbilityId,
     Api,
@@ -35,7 +34,6 @@ from sc2nachos.events import (
     UnitFoundDeadEvent,
 )
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.launch import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError
 from sc2nachos.protocol import (
     Client,
     Exchange,
@@ -44,6 +42,7 @@ from sc2nachos.protocol import (
     Status,
     WebSocketTransport,
 )
+from sc2nachos.run import GameProcess, GameVersionError, Installation, MapFile, MapNotFoundError, _replay
 from sc2nachos.state import UnitCommand
 from sc2nachos.units import NotReportedError, Unit, Units, Visibility
 from support import (
@@ -143,8 +142,8 @@ class TestPlayingARecordedReplay:
     def test_at_the_time_limit_it_is_undecided(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(Recording(PYLON_CORPUS_GAME)))
         api = Api()
-        assert run_recording(recording, api, time_limit=GameTime.from_seconds(60)) is Result.UNDECIDED
-        assert GameTime.from_seconds(60) <= api.time < GameTime.from_seconds(61)
+        assert run_recording(recording, api, time_limit=GameTime(seconds=60)) is Result.UNDECIDED
+        assert GameTime(seconds=60) <= api.time < GameTime(seconds=61)
 
     def test_a_bot_that_leaves_it_is_undecided_where_it_left(self, tmp_path: Path) -> None:
         recording = write_recording(tmp_path / "replay.sc2rec", _played_back(pylon_game_stopped_after(100)))
@@ -244,20 +243,20 @@ class TestTheReplaysPlayer:
     @pytest.mark.parametrize("player_id", [1, 2])
     def test_either_player_of_a_game_against_the_computer_may_be_played_for(self, player_id: int) -> None:
         info = self._replay_info_of_players(sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Computer)
-        sc2nachos.replay._check_replay_player(info, player_id)
+        _replay._check_replay_player(info, player_id)
 
     @pytest.mark.parametrize("player_id", [0, 3])
     def test_a_player_the_replay_does_not_list_is_refused(self, player_id: int) -> None:
         info = self._replay_info_of_players(sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Computer)
         with pytest.raises(ValueError, match=f"the replay's players are 1 and 2, and {player_id} is not one of them"):
-            sc2nachos.replay._check_replay_player(info, player_id)
+            _replay._check_replay_player(info, player_id)
 
     def test_an_observer_is_not_one_of_its_players(self) -> None:
         info = self._replay_info_of_players(
             sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Participant, sc2api_pb2.PlayerType.Observer
         )
         with pytest.raises(ValueError, match="the replay's players are 1 and 2, and 3 is not one of them"):
-            sc2nachos.replay._check_replay_player(info, 3)
+            _replay._check_replay_player(info, 3)
 
 
 class _ClientLaunched:
@@ -321,7 +320,7 @@ class TestTheReplaysBuild:
 
         monkeypatch.setattr(GameProcess, "launch", launch)
         monkeypatch.setattr(WebSocketTransport, "connect", connect)
-        monkeypatch.setattr(sc2nachos.replay, "connect_client", connect_to_play)
+        monkeypatch.setattr(_replay, "connect_client", connect_to_play)
         with pytest.raises(raising), open_replay(replay, player_id=1, installation=Installation(tmp_path, "Linux")):
             pass
         return launched_builds, launched_clients
@@ -402,7 +401,7 @@ class TestTheReplaysMap:
         monkeypatch.setattr(
             WebSocketTransport, "connect", lambda url: FakeTransport(make_response(Status.LAUNCHED, replay_info=info))
         )
-        monkeypatch.setattr(sc2nachos.replay, "connect_client", lambda url, record_to: client)
+        monkeypatch.setattr(_replay, "connect_client", lambda url, record_to: client)
         with (
             pytest.raises(ClientStarted),
             open_replay(replay, player_id=1, installation=Installation(tmp_path, "Linux")),
@@ -636,7 +635,7 @@ def test_in_a_real_game_its_replay_plays_back_as_it_was_played(tmp_path: Path) -
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(20),
+        time_limit=GameTime(seconds=20),
         save_replay_to=replay,
     )
     assert result is Result.TIE
@@ -744,7 +743,7 @@ def test_in_a_real_game_its_replay_plays_back_once_its_map_is_gone_from_where_it
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(5),
+        time_limit=GameTime(seconds=5),
         save_replay_to=replay,
     )
     assert played is Result.TIE
@@ -793,7 +792,7 @@ def test_in_a_real_game_its_replay_opens_as_each_player_at_once_and_reads_to_one
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(10),
+        time_limit=GameTime(seconds=10),
         save_replay_to=replay,
     )
     assert played is Result.TIE
@@ -834,7 +833,7 @@ def test_in_a_real_game_its_replay_with_the_fog_off_shows_the_player_what_the_fo
         opponent,
         race=Race.TERRAN,
         steps_per_turn=8,
-        time_limit=GameTime.from_seconds(100),
+        time_limit=GameTime(seconds=100),
         save_replay_to=replay,
     )
 

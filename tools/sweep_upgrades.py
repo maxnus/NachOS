@@ -43,9 +43,9 @@ from sweep_tech_tree import Findings as TechFindings
 from sweep_tech_tree import TechSweep
 
 from sc2nachos.ids.raw import RawUnitTypeId, RawUpgradeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.protocol import GameEndedError
+from sc2nachos.run import Installation
 
 OUT = Path(__file__).parents[1] / "data" / "upgrades.json"
 

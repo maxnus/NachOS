@@ -1,6 +1,6 @@
 """Whether a structure may stand on creep."""
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 
 
 class CreepRequirement(ReadableIntEnum):

@@ -20,32 +20,54 @@ classifiers = [
 dependencies = [
     "pys2clientprotocol>=1.0.2",
     "websocket-client>=1.9",
-    "numpy>=2.1",
+    "numpy>=2.0",
     "scipy>=1.14",
-    "semita>=0.2",
+    "semita>=0.2.1",
     "loguru>=0.7",
 ]
 
 [project.urls]
-Homepage = "https://github.com/maxnus/nachOS"
-Repository = "https://github.com/maxnus/nachOS"
+Homepage = "https://github.com/maxnus/NachOS"
+Repository = "https://github.com/maxnus/NachOS"
+Documentation = "https://maxnus.github.io/NachOS/"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "pyright>=1.1.390",
+    "pdoc>=15",
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
+# The version is the git tag: a release is made by tagging, `v0.1.0` building 0.1.0, never by editing a file, and a
+# commit after it builds a dev version of the next. The fallback is for a copy of the source without git.
 [tool.hatch.version]
-path = "src/sc2nachos/__about__.py"
+source = "vcs"
+fallback-version = "0.0.0"
+
+# Written at every build and editable install, and not tracked, so that `sc2nachos.__version__` reads without git.
+[tool.hatch.build.hooks.vcs]
+version-file = "src/sc2nachos/__about__.py"
+template = '''
+# Written by hatch-vcs from the git tag at build time; not tracked.
+__version__ = "{version}"
+'''
+
+[tool.uv]
+# Reinstall NachOS in its own environment when the commit or a tag changes, so that `__about__.py` follows them.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sc2nachos"]
+
+# What builds the wheel and runs the tests, which read data/, tools/ and examples/; without the maps, 33 MB, or what
+# only this repository's CI and agents use.
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/data", "/tools", "/examples", "/docs", "/README.md", "/LICENSE", "/NOTICE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -73,12 +95,22 @@ src = ["src", "tests"]
 exclude = ["src/sc2nachos/gamedata/_techtree/_build_*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "PLR0915"]
+
+[tool.ruff.lint.pylint]
+# A function in `src` stays short; tests and tools are exempt, below.
+max-statements = 30
 
 [tool.ruff.lint.flake8-bugbear]
 # Frozen, so one made as a default argument is safe to share between calls.
-extend-immutable-calls = ["sc2nachos.GameTime", "sc2nachos.game_time.GameTime"]
+extend-immutable-calls = [
+    "sc2nachos.GameTime",
+    "sc2nachos.gametime.GameTime",
+    "sc2nachos.gametime._game_time.GameTime",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # What the tech tree holds for one ability goes on one line, however long.
 "src/sc2nachos/gamedata/_techtree/_build_*.py" = ["E501"]
+"tests/**" = ["PLR0915"]
+"tools/**" = ["PLR0915"]

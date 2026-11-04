@@ -12,9 +12,12 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   the later in its step the cooldown ran out: before 2% of shots when it ran out in the step's first tenth, 31% in
   its last. An adept with Resonating Glaives read 0 for 3 before every shot, as without (tool `sweep_combat`,
   `delay-sped-up`, build 75689).
-- **Why a missile lands later when its attacker moves off.** A marauder's and a stalker's missiles fired just before
-  a move order landed some 4 steps later than when the attacker stood (tool `sweep_combat`, `move-before-shot`, build
-  75689; the entry in [damage and buffs](damage-and-buffs.md)).
+- **Why a missile lands later when its attacker is sent off the step before it fires.** A marauder's and a stalker's
+  missiles fired a step after a move order landed some 4 steps later than when the attacker stood (tool
+  `sweep_combat`, `move-before-shot`, build 75689). A marauder's, a roach's, a hydralisk's and a stalker's landed when
+  they would have had the attacker stood when the move was ordered after the shot, in the observation that showed it or
+  1 or 2 steps later (tool `sweep_combat`, `enemy-view`, build 75689; the entries in [damage and
+  buffs](damage-and-buffs.md)).
 - **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it
   answered 22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots,
   with the point outside 6.5 away, it found no path either way (tool `sweep_requests`; `tests/test_pathing.py`'s setup,
@@ -31,7 +34,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   played back 8 steps a turn its last observation, which says it ended, with the victory and the defeat, reads step 8
   (tool `sweep_replays`, `ending`, build 75689).
 - **A structure that dies just as vision of it lapses**, before the game swaps it for a copy in the fog, is neither
-  reported dead nor listed as a copy, so NachOS keeps it, stale, and never learns it died (#37).
+  reported dead nor listed as a copy, so NachOS keeps it, unlisted, and never learns it died (#37).
 - **A transfuse's buff** was not seen in game: the probe's marine was killed first (#37).
 - **Whether `ResponseGameInfo.player_info` lists a game's observers, and whether their chat reaches the players**: no
   game with an observer has been played. NachOS hands out no event for a message whose sender that list names as an

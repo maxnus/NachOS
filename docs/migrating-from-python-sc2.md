@@ -77,10 +77,10 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   [in detail](reference/python-sc2.md#events)).
 - **Game time is counted in steps**, the game loop, never in iterations. A turn is one step unless `steps_per_turn`
   says otherwise ([in detail](reference/python-sc2.md#running-a-game)). Every moment and length of game time is a
-  `GameTime`, which compares only with another: `self.time > 300` is `api.time > GameTime.from_seconds(300)`, and
+  `GameTime`, which compares only with another: `self.time > 300` is `api.time > GameTime(seconds=300)`, and
   `self.time` alone `api.time.seconds` ([in detail](reference/python-sc2.md#time)).
-- **A unit is one object under one id for the whole game.** Out of sight it is stale, not gone, and only death ends it.
-  A tag is only the game's current handle for it ([in detail](reference/python-sc2.md#units)).
+- **A unit is one object under one id for the whole game.** Out of sight it is unlisted, not gone, and only death
+  ends it. A tag is only the game's current handle for it ([in detail](reference/python-sc2.md#units)).
 - **Your own units are `OwnUnit`s**, the only ones with orders, cargo and weapon cooldown. A unit's type can be a type
   parameter: `units.own.of_type(UnitType.Marine)` is typed as your marines ([in detail](reference/python-sc2.md#units)).
 - **Ids use the names players use**, `CONCUSSIVE_SHELLS` for `PUNISHERGRENADES`, cover only what a melee game needs,
@@ -104,12 +104,13 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   second marine needs `queued=True` ([orders](orders.md#one-order-a-unit-a-turn)).
 - **A larva's morph is given to a larva**, a drone or an overlord say, not to the hatchery, which refuses it
   ([in detail](reference/python-sc2.md#orders)).
-- **A tag is not a unit.** A structure gets a new tag each time it leaves sight; keep `unit.id`, or the unit itself
-  ([in detail](reference/python-sc2.md#units)).
+- **A tag is not a unit.** A structure gets a new tag each time it leaves sight; keep `unit.id`, or the unit itself,
+  and before ordering a unit you kept, check `unit.is_orderable`, false while it is in a transport or under a neural
+  parasite ([in detail](reference/python-sc2.md#units)).
 - **`api.units` is every unit**, of every side; python-sc2's `bot.units` is this player's non-structures, which is
   `api.units.own.non_structures` ([in detail](reference/python-sc2.md#units)).
-- **Out of sight is stale, not gone.** `api.units` is what the observation lists, and `api.known_units` adds what is
-  remembered ([in detail](reference/python-sc2.md#units)).
+- **Out of sight is unlisted, not gone.** `api.units` is what the observation lists, and `api.known_units` adds what
+  is remembered ([in detail](reference/python-sc2.md#units)).
 - **Only your own units have orders**, cargo, rallies and weapon cooldown; the game reports them for nobody else's
   ([in detail](reference/python-sc2.md#units)).
 - **Speeds are per second of Faster speed already, and include upgrades**: drop python-sc2's `1.4 *`
@@ -123,8 +124,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   ([in detail](reference/python-sc2.md#ids)).
 - **Half a supply is kept**: the game rounds a zergling's half down, and NachOS adds it back, so a zergling made at 14
   supply reads 14.5 ([in detail](reference/python-sc2.md#the-state)).
-- **Subscriptions outlive a game.** Objects a bot makes for each game unsubscribe the old ones, or both go on handling
-  events ([in detail](reference/python-sc2.md#events)).
+- **An api plays one game.** A second raises `RuntimeError`, so a bot plays a game per process, and a test suite plays
+  each recording in a process of its own ([in detail](reference/python-sc2.md#running-a-game)).
 - **`api.chat` and `api.leave_game()` act at the end of the turn**, and a goodbye sent in the turn that leaves never
   arrives ([in detail](reference/python-sc2.md#debug-chat-the-camera-and-leaving)).
 - **A pathing distance with no path is `math.inf`**, not `None` ([in detail](reference/python-sc2.md#the-map)).

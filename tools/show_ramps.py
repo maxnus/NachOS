@@ -22,9 +22,9 @@ from s2clientprotocol import common_pb2, debug_pb2
 
 from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Tile
-from sc2nachos.launch import GameProcess, Installation, MapFile
 from sc2nachos.match import AIBuild, Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, GameEndedError, WebSocketTransport
+from sc2nachos.run import GameProcess, Installation, MapFile
 
 # The maps the corpus is recorded on: the current ladder pool.
 MAPS = (

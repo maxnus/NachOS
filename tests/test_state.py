@@ -8,15 +8,15 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
 
 from sc2nachos import Api, GameTime, NotPlayingError
-from sc2nachos.events import AnyChatEvent, OwnChatEvent
+from sc2nachos.events import AnyChatEvent, OwnActionEvent, OwnChatEvent
 from sc2nachos.gamedata import GameData, Resources
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Tile
 from sc2nachos.ids import AbilityId, EffectId, UncuratedIdError, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawEffectId, RawUpgradeId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
 from sc2nachos.protocol import Client, ProtocolError, Status, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import (
     AutocastToggle,
     CameraMove,
@@ -30,7 +30,7 @@ from sc2nachos.state import (
     VitalScore,
 )
 from sc2nachos.state._state import _State
-from sc2nachos.units import Alliance, Unit
+from sc2nachos.units import Alliance, NotReportedError, Unit
 from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
@@ -58,7 +58,7 @@ class _Game:
     """A game on an eight by eight map, taking in observations one at a time."""
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None, tables: GameData = _TABLES) -> None:
-        self.tracker = _Tracker(tables, make_enemy())
+        self.tracker = _Tracker(tables, make_enemy(tables))
         self.map = GameMap(game_info or make_game_info(), start_location=Point((0.5, 0.5)))
 
     def observe(self, step: int = 0, **fields: Any) -> _State:
@@ -67,41 +67,56 @@ class _Game:
         return _State(observation, self.tracker, self.map)
 
 
-def _row(unit_type: UnitTypeId, *, structure: bool = False, minerals: int = 0) -> data_pb2.UnitTypeData:
-    """A unit type's row, a structure or not, at its price in minerals."""
+def _row(
+    unit_type: UnitTypeId, *, structure: bool = False, minerals: int = 0, build_time: float = 0.0
+) -> data_pb2.UnitTypeData:
+    """A unit type's row, a structure or not, at its price in minerals, made in `build_time` steps."""
     attribute = data_pb2.Attribute.Structure if structure else data_pb2.Attribute.Biological
-    return data_pb2.UnitTypeData(unit_id=unit_type, attributes=[attribute], mineral_cost=minerals)
+    return data_pb2.UnitTypeData(
+        unit_id=unit_type, attributes=[attribute], mineral_cost=minerals, build_time=build_time
+    )
 
 
+# At the build times of the game's tables, a void ray's no whole number of steps.
 _MAKING_TABLES = make_tables(
-    _row(UnitTypeId.MARINE, minerals=50),
-    _row(UnitTypeId.BARRACKS, structure=True, minerals=150),
+    _row(UnitTypeId.MARINE, minerals=50, build_time=400.0),
+    _row(UnitTypeId.BARRACKS, structure=True, minerals=150, build_time=1040.0),
     *(
-        _row(reactor, structure=True, minerals=50)
+        _row(reactor, structure=True, minerals=50, build_time=800.0)
         for reactor in (UnitTypeId.REACTOR_BARRACKS, UnitTypeId.REACTOR_FACTORY, UnitTypeId.REACTOR_STARPORT)
     ),
-    _row(UnitTypeId.SCV, minerals=50),
-    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100),
-    _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400),
-    _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550),
+    _row(UnitTypeId.SCV, minerals=50, build_time=272.0),
+    _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100, build_time=480.0),
+    _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400, build_time=1590.0),
+    _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550, build_time=560.0),
     _row(UnitTypeId.LARVA),
     _row(UnitTypeId.EGG),
-    _row(UnitTypeId.DRONE, minerals=50),
-    _row(UnitTypeId.ZERGLING, minerals=25),
+    _row(UnitTypeId.DRONE, minerals=50, build_time=272.0),
+    _row(UnitTypeId.ZERGLING, minerals=25, build_time=384.0),
     _row(UnitTypeId.BANELING_COCOON),
-    _row(UnitTypeId.BANELING, minerals=50),
-    _row(UnitTypeId.ZEALOT, minerals=100),
+    _row(UnitTypeId.BANELING, minerals=50, build_time=320.0),
+    _row(UnitTypeId.ZEALOT, minerals=100, build_time=608.0),
+    _row(UnitTypeId.PYLON, structure=True, minerals=100, build_time=400.0),
+    _row(UnitTypeId.STARGATE, structure=True, minerals=150, build_time=960.0),
+    _row(UnitTypeId.VOID_RAY, minerals=250, build_time=963.2),
+    _row(UnitTypeId.SPAWNING_POOL, structure=True, minerals=200, build_time=1040.0),
+    # As the game's row gives it: no build time, though a merge takes 192 steps (in game).
+    _row(UnitTypeId.ARCHON),
     _row(UnitTypeId.SIEGE_TANK, minerals=150),
     _row(UnitTypeId.SIEGE_TANK_SIEGED, minerals=150),
     _row(UnitTypeId.ENGINEERING_BAY, structure=True, minerals=125),
     abilities=[
         data_pb2.AbilityData(ability_id=AbilityId.BARRACKS_TRAIN_MARINE),
+        data_pb2.AbilityData(ability_id=AbilityId.STARGATE_TRAIN_VOID_RAY),
         data_pb2.AbilityData(ability_id=AbilityId.BUILD_REACTOR, is_building=True),
         data_pb2.AbilityData(
             ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=data_pb2.AbilityData.Target.Point, is_building=True
         ),
         data_pb2.AbilityData(ability_id=AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND),
         data_pb2.AbilityData(ability_id=AbilityId.LARVA_MORPH_DRONE),
+        data_pb2.AbilityData(
+            ability_id=AbilityId.DRONE_MORPH_SPAWNING_POOL, target=data_pb2.AbilityData.Target.Point, is_building=True
+        ),
         data_pb2.AbilityData(ability_id=AbilityId.ZERGLING_MORPH_BANELING),
         data_pb2.AbilityData(ability_id=RawAbilityId.SiegeMode_SiegeMode),
         data_pb2.AbilityData(ability_id=AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1),
@@ -131,13 +146,31 @@ def _making(ability: int, progress: float = 0.0, at: tuple[float, float] | None 
     return order
 
 
-def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int, float | None]]:
-    """The tag of the unit each `unit_type` in production is read from, and its progress."""
-    return [(item.unit.tag, item.progress) for item in state.production.of_types({unit_type})]
+def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int | None, int | None, float | None]]:
+    """For each `unit_type` in production, the tag of what makes it and of the unit itself, and its progress."""
+    return [
+        (
+            None if item.producer is None else item.producer.tag,
+            None if item.unit is None else item.unit.tag,
+            item.progress,
+        )
+        for item in state.production.of_types({unit_type})
+    ]
+
+
+def _timed(state: _State, unit_type: UnitTypeId) -> list[tuple[float | None, float | None]]:
+    """For each `unit_type` in production, the steps the whole of it takes and the steps it has left."""
+    return [
+        (
+            None if item.total_time is None else item.total_time.steps,
+            None if item.time_left is None else item.time_left.steps,
+        )
+        for item in state.production.of_types({unit_type})
+    ]
 
 
 class TestProduction:
-    def test_each_train_a_structure_shows_is_one_at_its_progress(self) -> None:
+    def test_each_train_a_structure_shows_is_one_made_by_it_with_its_time_left(self) -> None:
         train = AbilityId.BARRACKS_TRAIN_MARINE
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[
@@ -145,52 +178,114 @@ class TestProduction:
                 _done(2, UnitTypeId.REACTOR_BARRACKS),
             ]
         )
-        assert _made(state, UnitTypeId.MARINE) == [(1, 0.5), (1, 0.25)]
+        assert _made(state, UnitTypeId.MARINE) == [(1, None, 0.5), (1, None, 0.25)]
+        assert _timed(state, UnitTypeId.MARINE) == [(400, 200), (400, 300)]
 
-    def test_an_egg_is_what_it_becomes_at_its_progress(self) -> None:
+    def test_a_train_queued_behind_another_has_all_its_time_left(self) -> None:
+        train = AbilityId.BARRACKS_TRAIN_MARINE
+        state = _Game(tables=_MAKING_TABLES).observe(
+            units=[_done(1, UnitTypeId.BARRACKS, _making(train, 0.5), _making(train))]
+        )
+        assert _timed(state, UnitTypeId.MARINE) == [(400, 200), (400, 400)]
+
+    def test_a_train_whose_build_time_is_no_whole_step_takes_it_rounded_up(self) -> None:
+        """The progress is the steps done over the tables' 963.2, sent as a 32-bit float; the void ray comes out after
+        964 (in game)."""
+        train = AbilityId.STARGATE_TRAIN_VOID_RAY
+        game = _Game(tables=_MAKING_TABLES)
+        begun = game.observe(units=[_done(1, UnitTypeId.STARGATE, _making(train, 1 / 963.2))])
+        assert _timed(begun, UnitTypeId.VOID_RAY) == [(964, 963)]
+        ending = game.observe(962, units=[_done(1, UnitTypeId.STARGATE, _making(train, 963 / 963.2))])
+        assert _timed(ending, UnitTypeId.VOID_RAY) == [(964, 1)]
+
+    def test_an_egg_is_what_it_becomes_made_by_the_egg_with_its_time_left(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.EGG, _making(AbilityId.LARVA_MORPH_DRONE, 0.375))]
         )
-        assert _made(state, UnitTypeId.DRONE) == [(1, 0.375)]
+        assert _made(state, UnitTypeId.DRONE) == [(1, None, 0.375)]
+        assert _timed(state, UnitTypeId.DRONE) == [(272, 170)]
         assert _made(state, UnitTypeId.EGG) == []
 
-    def test_a_worker_on_its_way_to_build_is_one_until_the_structure_stands_which_then_is(self) -> None:
+    def test_a_worker_on_its_way_to_build_is_one_until_the_structure_stands_which_its_builder_makes(self) -> None:
         build = _making(AbilityId.SCV_BUILD_SUPPLY_DEPOT, at=(20.0, 20.0))
         game = _Game(tables=_MAKING_TABLES)
         walking = game.observe(units=[_done(1, UnitTypeId.SCV, build, at=(10.0, 10.0))])
-        assert _made(walking, UnitTypeId.SUPPLY_DEPOT) == [(1, 0.0)]
+        assert _made(walking, UnitTypeId.SUPPLY_DEPOT) == [(1, None, 0.0)]
+        assert _timed(walking, UnitTypeId.SUPPLY_DEPOT) == [(480, 480)]
         depot = make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(20.0, 20.0), build_progress=0.25)
         building = game.observe(16, units=[_done(1, UnitTypeId.SCV, build, at=(19.0, 20.0)), depot])
-        assert _made(building, UnitTypeId.SUPPLY_DEPOT) == [(2, 0.25)]
+        assert _made(building, UnitTypeId.SUPPLY_DEPOT) == [(1, 2, 0.25)]
+        assert _timed(building, UnitTypeId.SUPPLY_DEPOT) == [(480, 360)]
+
+    def test_a_structure_nobody_builds_goes_up_by_itself(self) -> None:
+        pylon = make_unit(1, UnitTypeId.PYLON, build_progress=0.5)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[pylon])
+        assert _made(state, UnitTypeId.PYLON) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.PYLON) == [(400, 200)]
+
+    def test_a_zerg_structure_going_up_is_made_by_the_drone_that_became_it(self) -> None:
+        build = _making(AbilityId.DRONE_MORPH_SPAWNING_POOL, at=(20.5, 20.5))
+        game = _Game(tables=_MAKING_TABLES)
+        game.observe(units=[_done(1, UnitTypeId.DRONE, build, at=(19.0, 20.5))])
+        pool = make_unit(2, UnitTypeId.SPAWNING_POOL, at=(20.5, 20.5), build_progress=0.25)
+        state = game.observe(16, units=[pool])
+        assert _made(state, UnitTypeId.SPAWNING_POOL) == [(1, 2, 0.25)]
+        assert _timed(state, UnitTypeId.SPAWNING_POOL) == [(1040, 780)]
 
     def test_an_add_on_is_one_by_its_order_until_it_stands_which_then_is(self) -> None:
+        """As the game shows it: the host's order is aimed at the host's own center, and the host names its add-on
+        only once the add-on is finished (in game)."""
         game = _Game(tables=_MAKING_TABLES)
-        ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR))])
-        assert _made(ordered, UnitTypeId.REACTOR_BARRACKS) == [(1, 0.0)]
+        build = _making(AbilityId.BUILD_REACTOR, at=(20.5, 20.5))
+        ordered = game.observe(units=[_done(1, UnitTypeId.BARRACKS, build, at=(20.5, 20.5))])
+        assert _made(ordered, UnitTypeId.REACTOR_BARRACKS) == [(1, None, 0.0)]
+        assert _timed(ordered, UnitTypeId.REACTOR_BARRACKS) == [(800, 800)]
         going_up = game.observe(
             16,
             units=[
-                _done(1, UnitTypeId.BARRACKS, _making(AbilityId.BUILD_REACTOR), add_on_tag=2),
-                make_unit(2, UnitTypeId.REACTOR_BARRACKS, build_progress=0.125),
+                _done(1, UnitTypeId.BARRACKS, build, at=(20.5, 20.5)),
+                make_unit(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0), build_progress=0.125),
             ],
         )
-        assert _made(going_up, UnitTypeId.REACTOR_BARRACKS) == [(2, 0.125)]
+        assert _made(going_up, UnitTypeId.REACTOR_BARRACKS) == [(1, 2, 0.125)]
+        assert _timed(going_up, UnitTypeId.REACTOR_BARRACKS) == [(800, 700)]
+        standing = game.observe(
+            32,
+            units=[
+                _done(1, UnitTypeId.BARRACKS, at=(20.5, 20.5), add_on_tag=2),
+                _done(2, UnitTypeId.REACTOR_BARRACKS, at=(23.0, 20.0)),
+            ],
+        )
+        assert _made(standing, UnitTypeId.REACTOR_BARRACKS) == []
 
-    def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress(self) -> None:
+    def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress_or_time(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND))]
         )
-        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None)]
+        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None, None)]
+        assert _timed(state, UnitTypeId.ORBITAL_COMMAND) == [(None, None)]
 
-    def test_a_cocoon_is_what_it_becomes_at_no_known_progress(self) -> None:
+    def test_a_cocoon_is_what_it_becomes_at_no_known_progress_or_time(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(
             units=[_done(1, UnitTypeId.BANELING_COCOON, _making(AbilityId.ZERGLING_MORPH_BANELING))]
         )
-        assert _made(state, UnitTypeId.BANELING) == [(1, None)]
+        assert _made(state, UnitTypeId.BANELING) == [(1, None, None)]
+        assert _timed(state, UnitTypeId.BANELING) == [(None, None)]
 
-    def test_a_unit_warping_in_is_one_at_its_progress(self) -> None:
+    def test_a_unit_warping_in_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:
         state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)])
-        assert _made(state, UnitTypeId.ZEALOT) == [(1, 0.5)]
+        assert _made(state, UnitTypeId.ZEALOT) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.ZEALOT) == [(None, None)]
+
+    def test_an_archon_merging_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ARCHON, build_progress=0.5)])
+        assert _made(state, UnitTypeId.ARCHON) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.ARCHON) == [(None, None)]
+
+    def test_a_type_the_tables_give_no_row_going_up_is_taken_for_a_unit_warping_in(self) -> None:
+        state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ADEPT, build_progress=0.5)])
+        assert _made(state, UnitTypeId.ADEPT) == [(None, 1, 0.5)]
+        assert _timed(state, UnitTypeId.ADEPT) == [(None, None)]
 
     def test_a_free_order_that_makes_a_form_is_none(self) -> None:
         siege = _making(RawAbilityId.SiegeMode_SiegeMode)
@@ -393,6 +488,35 @@ class TestWhatHappened:
             UnitCommand(GameTime(steps=15), AbilityId.STOP, (other,), None, queued=True),
         )
         assert enemy.is_dead
+        assert [cast(UnitCommand, action).known_target for action in state.actions] == [Point((5.0, 6.0)), enemy, None]
+
+    def test_a_command_aimed_at_a_unit_the_game_never_reported_has_its_target_not_reported(self) -> None:
+        """As a gather sent to a mineral field in the fog by its snapshot's tag comes back, aimed at a tag no
+        observation lists (in game)."""
+        game = _Game()
+        game.observe(0, units=[make_unit(1, UnitTypeId.SCV)])
+        scv = game.tracker.unit_tracker.present.by_id(100001)
+        gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
+        (command,) = game.observe(16, units=[make_unit(1, UnitTypeId.SCV)], actions=[gather]).actions
+        assert isinstance(command, UnitCommand)
+        assert (command.ability, command.units, command.known_target) == (AbilityId.GATHER, (scv,), None)
+        with pytest.raises(NotReportedError, match="this GATHER was aimed at by no tag it reports"):
+            _ = command.target
+
+    def test_a_command_and_a_toggle_leave_out_a_unit_the_game_never_reported(self) -> None:
+        game = _Game()
+        game.observe(0, units=[make_unit(1, UnitTypeId.MEDIVAC)])
+        medivac: Unit[Any] = game.tracker.unit_tracker.present[0]
+        toggle = raw_pb2.ActionRawToggleAutocast(ability_id=AbilityId.MEDIVAC_HEAL, unit_tags=[1, 77])
+        actions = [
+            _command(AbilityId.STOP, 77, 1),
+            sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(toggle_autocast=toggle), game_loop=3),
+        ]
+        state = game.observe(16, units=[make_unit(1, UnitTypeId.MEDIVAC)], actions=actions)
+        assert [cast(UnitCommand | AutocastToggle, action).units for action in state.actions] == [
+            (medivac,),
+            (medivac,),
+        ]
 
     def test_an_autocast_toggle_and_a_camera_move(self) -> None:
         game = _Game()
@@ -455,6 +579,21 @@ class TestThroughTheApi:
         )
         assert api.resources == Resources(75, 0)
         assert api.supply.used == 13
+
+    def test_a_command_aimed_at_a_unit_the_game_never_reported_is_handed_out_and_the_game_plays_on(self) -> None:
+        """The gather that ended AvocaDOS's smoke games (in game), through the turn that hands it out."""
+        api = Api()
+        handed_out: list[UnitCommand] = []
+        api.on(OwnActionEvent)(lambda event: handed_out.append(cast(UnitCommand, event.action)))
+        gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
+        self._play(
+            api,
+            make_observation(0, units=[make_unit(1, UnitTypeId.SCV)]),
+            make_observation(16, units=[make_unit(1, UnitTypeId.SCV)], actions=[gather]),
+            make_observation(32, (1, Result.VICTORY), units=[make_unit(1, UnitTypeId.SCV)]),
+        )
+        assert [(command.ability, command.known_target) for command in handed_out] == [(AbilityId.GATHER, None)]
+        assert api.step == 32
 
     def test_nothing_is_read_out_of_an_observation_until_it_is_asked_for(self) -> None:
         """An observation without map state plays, and the grid it lacks raises only when read."""

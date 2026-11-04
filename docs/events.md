@@ -22,8 +22,8 @@ class Economy:
 A function is subscribed when it is defined, a static method included. A method, which takes `self` and the event, is
 marked, then subscribed for each instance passed to `api.subscribe`, and `api.unsubscribe` takes a function, a method or
 an instance off again. `on` takes a `priority`, and `min_interval`, `at_time` or `once` to limit when the handler runs,
-the first two a `GameTime`. A handler that returns `Done` is not called again that game. All of this starts over with each game. An api made with
-`time_handlers=True` says how long each handler took in `api.handler_timings`.
+the first two a `GameTime`. A handler that returns `Done` is not called again. An api made with `time_handlers=True`
+says how long each handler took in `api.handler_timings`.
 
 ## Selecting some events
 
@@ -111,6 +111,8 @@ out `TurnStartEvent`, then the events its observation reports, in the order of t
   sees every death and sighting of a turn before any handler at `MEDIUM` acts on one, and a bot's `TurnEvent` handler
   runs after the turn's other events at its priority. An event a handler emits goes out at once, in its own handlers'
   priority order.
+- **An extension's handlers go first within their priority**: those subscribed while NachOS builds the extensions run
+  before the rest of their priority, wherever the bot's subscribed ([extensions](extensions.md)).
 - **An event's time is when NachOS learned of it.** What happened out of sight is reported when it is next seen:
   a morph in the fog, a structure that died there, energy a unit regenerated.
 - **The first turn reports the units the game starts with as created.** The last observation of a game gets no turn,

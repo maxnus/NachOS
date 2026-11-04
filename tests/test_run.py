@@ -3,19 +3,19 @@ from collections.abc import Callable, Iterator
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-import sc2nachos.run
 from sc2nachos import (
     AIBuild,
     Api,
     Computer,
     Difficulty,
     GameTime,
+    NoEnemyError,
     Race,
     Result,
     run_from_command_line,
@@ -23,12 +23,10 @@ from sc2nachos import (
     run_recording,
     run_replay,
 )
-from sc2nachos._command_line_arguments import _CommandLineArguments
 from sc2nachos.events import (
     TurnEvent,
 )
 from sc2nachos.gamedata._techtree import TECH_TREE
-from sc2nachos.launch import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.match import Participant
 from sc2nachos.protocol import (
     Client,
@@ -38,6 +36,8 @@ from sc2nachos.protocol import (
     Recording,
     WebSocketTransport,
 )
+from sc2nachos.run import GameProcess, Installation, MapFile, MapNotFoundError, _runners, free_port
+from sc2nachos.run._command_line_arguments import _CommandLineArguments
 from support import (
     PYLON_CORPUS_GAME,
     ClientStarted,
@@ -64,8 +64,9 @@ def played(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         calls.update(map_file=map_file, api=api, opponent=opponent, **kwargs)
         return Result.VICTORY
 
-    monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
-    monkeypatch.setattr(Api, "time", property(lambda self: GameTime.from_seconds(754.3841)))
+    monkeypatch.setattr(_runners, "run_local", run_local)
+    monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=754.3841)))
+    monkeypatch.setattr(Api, "enemy", property(lambda self: SimpleNamespace(race=Race.ZERG)))
     return calls
 
 
@@ -78,9 +79,10 @@ def ladder_played(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         calls.update(api=api, **kwargs)
         return Result.DEFEAT
 
-    monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
-    monkeypatch.setattr(Api, "time", property(lambda self: GameTime.from_seconds(61.25)))
+    monkeypatch.setattr(_runners, "run_ladder", run_ladder)
+    monkeypatch.setattr(Api, "time", property(lambda self: GameTime(seconds=61.25)))
     monkeypatch.setattr(Api, "map", property(lambda self: SimpleNamespace(name="Pylon AIE")))
+    monkeypatch.setattr(Api, "enemy", property(lambda self: SimpleNamespace(race=Race.PROTOSS)))
     return calls
 
 
@@ -136,6 +138,7 @@ class TestALadderGame:
             "result": "DEFEAT",
             "map": "Pylon AIE",
             "game_time": 61.25,
+            "opponent_actual_race": "PROTOSS",
         }
 
 
@@ -145,7 +148,7 @@ class TestTheLadderClosingTheConnection:
         def run_ladder(api: Api, **kwargs: Any) -> Result:
             raise ConnectionClosedError("the connection to the game closed")
 
-        monkeypatch.setattr(sc2nachos.run, "run_ladder", run_ladder)
+        monkeypatch.setattr(_runners, "run_ladder", run_ladder)
 
     def test_ends_a_ladder_game_undecided_with_a_warning(
         self, ladder_played: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path, logged: list[str]
@@ -169,13 +172,14 @@ class TestTheLadderClosingTheConnection:
             "result": "UNDECIDED",
             "map": None,
             "game_time": None,
+            "opponent_actual_race": None,
         }
 
     def test_in_a_local_game_is_raised(self, played: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
         def run_local(*args: Any, **kwargs: Any) -> Result:
             raise ConnectionClosedError("the connection to the game closed")
 
-        monkeypatch.setattr(sc2nachos.run, "run_local", run_local)
+        monkeypatch.setattr(_runners, "run_local", run_local)
         with pytest.raises(ConnectionClosedError):
             run_from_command_line(Api(), [], race=Race.TERRAN)
 
@@ -249,7 +253,27 @@ def test_the_result_file_is_what_the_match_workflow_reads(played: dict[str, Any]
         "result": "VICTORY",
         "map": "PylonAIE_v4",
         "game_time": 754.384,
+        "opponent_actual_race": "ZERG",
     }
+
+
+def _raise_no_enemy(api: Api) -> NoReturn:
+    """`Api.enemy` in a game with no other player."""
+    raise NoEnemyError("this game has no other player")
+
+
+@pytest.mark.parametrize(
+    "enemy",
+    [property(lambda api: SimpleNamespace(race=None)), property(_raise_no_enemy)],
+    ids=["a race never known", "no enemy"],
+)
+def test_the_result_file_reads_an_opponents_race_not_known_as_null(
+    played: dict[str, Any], enemy: property, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Api, "enemy", enemy)
+    result_file = tmp_path / "result.json"
+    run_from_command_line(Api(), ["--ResultFile", str(result_file)], race=Race.TERRAN)
+    assert json.loads(result_file.read_text(encoding="utf-8"))["opponent_actual_race"] is None
 
 
 @pytest.mark.parametrize(
@@ -314,6 +338,18 @@ def _pylon_game_left_after(observations: int) -> Iterator[Exchange]:
             yield exchange
 
 
+def _api_leaving_at(step: int) -> Api:
+    """An api that leaves its game on its first turn at or after `step`."""
+    api = Api()
+
+    @api.on(TurnEvent)
+    def leave(_: TurnEvent) -> None:
+        if api.step >= step:
+            api.leave_game()
+
+    return api
+
+
 class TestPlayingARecording:
     def test_by_default_a_bot_that_asks_what_the_recording_was_not_asked_raises(self) -> None:
         api = Api()
@@ -364,10 +400,9 @@ class TestPlayingARecording:
     def test_at_the_time_limit_it_is_a_tie(self, permissive: bool) -> None:
         api = Api()
         assert (
-            run_recording(PYLON_CORPUS_GAME, api, permissive=permissive, time_limit=GameTime.from_seconds(60))
-            is Result.TIE
+            run_recording(PYLON_CORPUS_GAME, api, permissive=permissive, time_limit=GameTime(seconds=60)) is Result.TIE
         )
-        assert GameTime.from_seconds(60) <= api.time < GameTime.from_seconds(61)
+        assert GameTime(seconds=60) <= api.time < GameTime(seconds=61)
 
     def test_by_default_a_recording_that_stops_before_the_games_end_needs_its_time_limit(self, tmp_path: Path) -> None:
         stopped = write_recording(tmp_path / "stopped.sc2rec", pylon_game_stopped_after(100))
@@ -381,21 +416,10 @@ class TestPlayingARecording:
     def test_by_default_a_bot_that_left_after_saving_its_replay_needs_where_to_save_it(self, tmp_path: Path) -> None:
         left = write_recording(tmp_path / "left.sc2rec", _pylon_game_left_after(100))
         last_step = last_recorded_step(left)
-
-        def leaving_api() -> Api:
-            api = Api()
-
-            @api.on(TurnEvent)
-            def leave(_: TurnEvent) -> None:
-                if api.step >= last_step:
-                    api.leave_game()
-
-            return api
-
         with pytest.raises(ProtocolError, match="answers save_replay next, and was asked for leave_game"):
-            run_recording(left, leaving_api())
+            run_recording(left, _api_leaving_at(last_step))
         replay = tmp_path / "game.SC2Replay"
-        assert run_recording(left, leaving_api(), save_replay_to=replay) is Result.DEFEAT
+        assert run_recording(left, _api_leaving_at(last_step), save_replay_to=replay) is Result.DEFEAT
         assert replay.read_bytes() == b"the replay recorded"
 
     def test_a_permissive_one_saves_no_replay_and_says_so(self, tmp_path: Path, logged: list[str]) -> None:
@@ -460,18 +484,12 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     tmp_path: Path,
 ) -> None:
     """Run with `pytest -m integration`. Plays a second of a game the bot leaves, joined as a ladder's bot joins, then
-    plays it back exactly from its recording."""
+    plays it back exactly from its recording, with an api of its own."""
     try:
         game_map = MapFile.find(_LADDER_MAP)
     except MapNotFoundError as missing:
         pytest.skip(str(missing))
-    api = Api()
-
-    @api.on(TurnEvent)
-    def give_up(event: TurnEvent) -> None:
-        if event.time.steps >= 16:
-            api.leave_game()
-
+    api = _api_leaving_at(16)
     port = free_port()
     replay, record = tmp_path / "game.SC2Replay", tmp_path / "game.sc2rec"
     result_file = tmp_path / "result.json"
@@ -491,12 +509,13 @@ def test_in_a_real_game_joined_from_the_ladders_command_line_the_opponent_replay
     assert result is Result.DEFEAT
     assert api.enemy.ladder_id == "5a1f"
     written = json.loads(result_file.read_text(encoding="utf-8"))
-    assert (written["result"], written["map"]) == ("DEFEAT", api.map.name)
+    assert (written["result"], written["map"], written["opponent_actual_race"]) == ("DEFEAT", api.map.name, "ZERG")
     assert not read_back.HasField("error")
     assert read_back.game_duration_loops >= 8
     assert [entry.player_info.player_id for entry in read_back.player_info] == [1, 2]
 
     replayed = tmp_path / "replayed.SC2Replay"
-    assert run_recording(record, api, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
-    assert (api.step, api.enemy.ladder_id) == (left_at_step, "5a1f")
+    playing_back = _api_leaving_at(16)
+    assert run_recording(record, playing_back, enemy_ladder_id="5a1f", save_replay_to=replayed) is Result.DEFEAT
+    assert (playing_back.step, playing_back.enemy.ladder_id) == (left_at_step, "5a1f")
     assert replayed.read_bytes() == replay.read_bytes()

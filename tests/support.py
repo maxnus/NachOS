@@ -1,21 +1,23 @@
 """Fakes and builders shared by the tests that run the library without a game."""
 
+import dataclasses
 import importlib.util
+import lzma
 from collections import deque
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
+from importlib import resources
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import numpy
-from s2clientprotocol import common_pb2, data_pb2, debug_pb2, raw_pb2, sc2api_pb2, score_pb2
+from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, score_pb2
 from websocket import WebSocketConnectionClosedException
 
 from sc2nachos import GameTime
-from sc2nachos._game import _chat_event_types_by_player, _Game
+from sc2nachos.api._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
 from sc2nachos.debug import DebugCommands
-from sc2nachos.enemy import Enemy, UpgradeInference
 from sc2nachos.events import (
     AlertEvent,
     EnemyUnitCloakChangedEvent,
@@ -55,14 +57,13 @@ from sc2nachos.events import (
 )
 from sc2nachos.events._event_bus import _EventBus
 from sc2nachos.gamedata import GameData
-from sc2nachos.gamemap import Expansion, GameMap
+from sc2nachos.gamemap import Expansion, GameMap, StartLocation
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
-from sc2nachos.match import Race, Result
+from sc2nachos.match import Enemy, Player, Race, Result
 from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
-from sc2nachos.player import Player
 from sc2nachos.protocol import Client, Exchange, Recording, RecordingTransport, Status
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, Unit, Units, Visibility
@@ -85,6 +86,76 @@ class FakeTransport:
 
     def close(self) -> None:
         self.closed = True
+
+
+class ScriptedGame:
+    """A game that answers every request by its kind: the map `game_info`, or `make_game_info`'s; the tables `data`, or
+    none; an observation from `observations` in turn, the last ending the game in a victory; and success for every
+    action and debug command. It records every request."""
+
+    def __init__(
+        self,
+        observations: Sequence[sc2api_pb2.ResponseObservation],
+        *,
+        game_info: sc2api_pb2.ResponseGameInfo | None = None,
+        data: sc2api_pb2.ResponseData | None = None,
+    ) -> None:
+        self.observations = deque(observations)
+        self.requests: list[sc2api_pb2.Request] = []
+        self.info = make_game_info() if game_info is None else game_info
+        self.data = sc2api_pb2.ResponseData() if data is None else data
+
+    def request(self, request: sc2api_pb2.Request) -> sc2api_pb2.Response:
+        self.requests.append(request)
+        match request.WhichOneof("request"):
+            case "join_game":
+                return make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1))
+            case "game_info":
+                return make_response(game_info=self.info)
+            case "data":
+                return make_response(data=self.data)
+            case "observation":
+                observation = self.observations.popleft()
+                if not self.observations:
+                    observation.player_result.add(player_id=1, result=Result.VICTORY.value)
+                return make_response(Status.ENDED if not self.observations else Status.IN_GAME, observation=observation)
+            case "step":
+                return make_response(step=sc2api_pb2.ResponseStep())
+            case "action":
+                results = [error_pb2.Success] * len(request.action.actions)
+                return make_response(action=sc2api_pb2.ResponseAction(result=results))
+            case "debug":
+                return make_response(debug=sc2api_pb2.ResponseDebug())
+            case other:
+                raise AssertionError(f"the test game was asked for {other}")
+
+    def close(self) -> None: ...
+
+    def joined(self) -> Client:
+        """A client over this game, joined as player one."""
+        client = Client(self)
+        client.join_game(Race.TERRAN)
+        return client
+
+    def commands_by_turn(self) -> list[list[raw_pb2.ActionRawUnitCommand]]:
+        """The unit commands each turn sent, by the observation the turn read, counting from the first."""
+        commands: list[list[raw_pb2.ActionRawUnitCommand]] = []
+        for request in self.requests:
+            if request.HasField("observation"):
+                commands.append([])
+            elif request.HasField("action"):
+                commands[-1] += [
+                    action.action_raw.unit_command
+                    for action in request.action.actions
+                    if action.action_raw.HasField("unit_command")
+                ]
+        return commands
+
+
+def shipped_game_data() -> sc2api_pb2.ResponseData:
+    """The game's answer to `RequestData` that `sc2nachos.testing` ships, build 75689's."""
+    shipped_file = resources.files("sc2nachos.testing").joinpath("game_data_75689.binpb.xz")
+    return sc2api_pb2.ResponseData.FromString(lzma.decompress(shipped_file.read_bytes()))
 
 
 class FakeWebSocket:
@@ -259,9 +330,11 @@ _AGAINST_THE_COMPUTER = (
 )
 
 
-def make_enemy() -> Enemy:
-    """The Zerg computer of `make_game_info`, as a game reads it."""
-    return Enemy(player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG, ladder_id=None)
+def make_enemy(game_data: GameData) -> Enemy:
+    """The Zerg computer of `make_game_info`, as a game of `game_data` reads it."""
+    return Enemy(
+        player_id=ENEMY_ID, requested_race=Race.ZERG, name=None, race=Race.ZERG, ladder_id=None, game_data=game_data
+    )
 
 
 def require_enemy(enemy: Enemy | None) -> Enemy:
@@ -345,7 +418,6 @@ def played(
     observation: sc2api_pb2.ResponseObservation,
     events: _EventBus,
     *,
-    infer: UpgradeInference = UpgradeInference.NONE,
     player: Player = PLAYER,
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
@@ -357,14 +429,18 @@ def played(
         present_units = tracker.unit_tracker.present
         order_book = OrderBook(tracker.game_data)
         state = _State(observation, tracker, game_map)
+        expansions = Expansion._find_all(game_map, tracker.unit_tracker)
+        if tracker.enemy is not None:
+            tracker.enemy._learn_start_locations(StartLocation._find_at_opponent_starts(expansions, game_map))
         game = _Game(
             client=client,
             game_map=game_map,
-            expansions=Expansion._find_all(game_map, tracker.unit_tracker),
+            expansions=expansions,
             game_data=tracker.game_data,
-            player=player,
+            player=dataclasses.replace(
+                player, _start_location=StartLocation._find_at(expansions, game_map.start_location)
+            ),
             enemy=tracker.enemy,
-            enemy_upgrade_inference=infer,
             tracker=tracker,
             orders=order_book,
             observation=observation,
@@ -423,18 +499,18 @@ class RealGame:
         self.events = events or _EventBus()
         info = client.game_info()
         self.map = GameMap._from_game(info, client.observation())
-        self.own_player = Player._from_game(info, player)
-        self.enemy = Enemy._from_game(info, player)
-        self.tracker = _Tracker(GameData(client.game_data()), self.enemy)
+        self.own_player = Player._from_game(info, player, start_location=None)
+        game_data = GameData(client.game_data())
+        self.enemy = Enemy._from_game(info, player, game_data=game_data)
+        self.tracker = _Tracker(game_data, self.enemy)
         self.game: _Game | None = None
         self.state = self._observe()
 
     def _observe(self) -> _State:
         response = self.client.observation()
         self.step = response.observation.game_loop
-        basic = UpgradeInference.BASIC
         self.game = played(
-            self.game, self.client, self.map, self.tracker, response, self.events, infer=basic, player=self.own_player
+            self.game, self.client, self.map, self.tracker, response, self.events, player=self.own_player
         )
         return self.game.state
 

@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from sc2nachos.launch import (
+from sc2nachos.match import Computer, Difficulty, Participant, Race
+from sc2nachos.protocol import Client, PlaybackTransport, RecordingTransport, Status, WebSocketTransport
+from sc2nachos.run import (
     MINIMUM_BASE_BUILD,
     GameLaunchError,
     GameProcess,
@@ -21,9 +23,7 @@ from sc2nachos.launch import (
     UnsupportedPlatformError,
     free_port,
 )
-from sc2nachos.launch._game_process import launch_command
-from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.protocol import Client, PlaybackTransport, RecordingTransport, Status, WebSocketTransport
+from sc2nachos.run._game_process import launch_command
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"

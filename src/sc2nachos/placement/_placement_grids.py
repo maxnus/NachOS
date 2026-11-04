@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, Self, final
 
-from sc2nachos._checks import check_game_time
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import CreepRequirement
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
 from sc2nachos.geometry import Grid, Point, Rectangle
 from sc2nachos.geometry._footprint import _margin_sides
 from sc2nachos.placement._build_sites import _BuildSites, _placement_key, _standing_centers
@@ -171,7 +171,7 @@ class PlacementGrids:
         `is_free` and `nearest_free` from now, the rest of this turn included, until the reservation is withdrawn, until
         `max_time` has passed if given, or until an observation shows one of this player's structures standing on its
         site, whatever type it stands as. `max_time=GameTime(steps=1)` keeps it for this turn alone. Reservations may
-        overlap, and each game starts with none.
+        overlap, and the game starts with none.
 
         Raises `TypeError` for a `max_time` that is not a `GameTime` or a margin that is neither a count of tiles nor a
         tuple of four, and `ValueError` for a type with no footprint, for a gas building, which stands on a geyser, for
@@ -242,10 +242,11 @@ class PlacementGrids:
         return footprint.center_in_tile(candidates.argmin())
 
     def terran_wall(self, main_ramp: Ramp) -> TerranWall | None:
-        """Where a Terran wall closes `main_ramp`, the ramp out of a start location's main as `GameMap.main_ramp_of`
-        finds it, at its top, as `TerranWall` says, near and far going by that start: `None` if the ramp is not of the
-        shape every main ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether a structure may
-        stand at a site now is for `is_free` to say. Raises `ValueError` for a ramp out of no start location's main."""
+        """Where a Terran wall closes `main_ramp`, the ramp out of a start location's main, its
+        `StartLocation.main_ramp`, at its top, as `TerranWall` says, near and far going by that start: `None` if the
+        ramp is not of the shape every main ramp of the pool is, two top tiles 2 wide climbing along a diagonal. Whether
+        a structure may stand at a site now is for `is_free` to say. Raises `ValueError` for a ramp out of no start
+        location's main."""
         return TerranWall._from_ramp(main_ramp, start=self._start_of_main_ramp(main_ramp))
 
     def protoss_wall(self, main_ramp: Ramp) -> ProtossWall | None:
@@ -258,7 +259,7 @@ class PlacementGrids:
         """The start location whose main `main_ramp` leaves; raises `ValueError` for a ramp out of no start location's
         main."""
         for start_location in self._game_map.all_start_locations:
-            if self._game_map.main_ramp_of(start_location) == main_ramp:
+            if self._game_map._main_ramp_of(start_location) == main_ramp:
                 return start_location
         raise ValueError(f"the ramp at {main_ramp.top.center} leads out of no start location's main")
 
@@ -268,7 +269,7 @@ class PlacementGrids:
         row = self._game_data.units.get(unit_type)
         requirement = None if row is None else row.creep_requirement
         keeps_to = requirement if requirement in (CreepRequirement.ON_CREEP, CreepRequirement.OFF_CREEP) else None
-        needs = (unit_type in UnitType.Townhall._type_ids, keeps_to)
+        needs = (unit_type in UnitType.Townhall.type_ids, keeps_to)
         if (ground := self._ground_by_needs.get(needs)) is None:
             ground = self._static & self.dynamic
             if needs[0]:
@@ -283,7 +284,7 @@ class PlacementGrids:
     def _footprint_of(self, unit_type: UnitTypeId) -> Footprint:
         """The footprint a structure of `unit_type` covers; raises `ValueError` for a type with none, and for a gas
         building, since `static` closes the geysers it stands on."""
-        if unit_type in UnitType.GasBuilding._type_ids:
+        if unit_type in UnitType.GasBuilding.type_ids:
             raise ValueError(f"{unit_type.name} stands on a geyser, which no placement grid leaves free")
         row = self._game_data.units.get(unit_type)
         if row is None or row.footprint is None:

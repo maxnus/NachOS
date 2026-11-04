@@ -1,0 +1,68 @@
+"""The maps an installation can play on."""
+
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Self
+
+from loguru import logger
+
+from sc2nachos._shared.errors import NachOSError
+from sc2nachos.run._installation import Installation
+
+_SUFFIX = ".SC2Map"
+
+
+class MapNotFoundError(NachOSError, LookupError):
+    """The installation holds no map by the name asked for."""
+
+
+@dataclass(frozen=True, slots=True)
+class MapFile:
+    """A map file the game can load.
+
+    Construct one directly to play a map that lives outside the installation.
+    """
+
+    path: Path
+
+    @property
+    def name(self) -> str:
+        """The file name without its extension, which is the name the map is known by."""
+        return self.path.stem
+
+    @classmethod
+    def find(cls, name: str, *, installation: Installation | None = None) -> Self:
+        """The map called `name`, anywhere under the installation's map directory, linked directories included.
+
+        The extension `.SC2Map` is optional, and the name and extension match exactly, case included, on every
+        platform. Map packs install alongside the maps they replace, so a name can match more than once: the shallowest
+        match wins, ties alphabetically.
+        """
+        installation = installation or Installation.find()
+        wanted = name.removesuffix(_SUFFIX)
+        matches = sorted(
+            (path for path in cls._paths(installation) if path.stem == wanted),
+            key=lambda path: (len(path.parts), path),
+        )
+        if not matches:
+            raise MapNotFoundError(
+                f"{installation.maps} holds no map called {wanted}; it has {cls._names(installation)}"
+            )
+        if len(matches) > 1:
+            logger.debug("{} maps are called {}; playing {}", len(matches), wanted, matches[0])
+        return cls(matches[0])
+
+    @staticmethod
+    def _names(installation: Installation) -> list[str]:
+        return sorted({path.stem for path in MapFile._paths(installation)})
+
+    @staticmethod
+    def _paths(installation: Installation) -> Iterator[Path]:
+        maps = installation.maps
+        for directory, subdirectories, files in maps.walk(follow_symlinks=True):
+            # A linked directory that leads back into one the walk is inside is not entered, or the walk would go
+            # round it.
+            inside = {path.resolve() for path in (directory, *directory.parents) if path.is_relative_to(maps)}
+            subdirectories[:] = [name for name in subdirectories if (directory / name).resolve() not in inside]
+            yield from (directory / name for name in files if name.endswith(_SUFFIX))

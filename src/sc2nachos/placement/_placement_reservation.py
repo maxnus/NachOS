@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, final
 
 if TYPE_CHECKING:
-    from sc2nachos.game_time import GameTime
+    from sc2nachos.gametime import GameTime
     from sc2nachos.geometry import Footprint, Margin, Point
     from sc2nachos.ids import UnitTypeId
 

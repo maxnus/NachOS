@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self, final
 
-from sc2nachos.game_time import GameTime
 from sc2nachos.gamedata import Resources
+from sc2nachos.gametime import GameTime
 
 if TYPE_CHECKING:
     from s2clientprotocol import score_pb2
@@ -136,8 +136,8 @@ class Score:
         return cls(
             score=proto.score,
             # The game counts these in seconds at Normal speed, always a whole number of steps (corpus).
-            idle_production_time=GameTime.from_normal_seconds(details.idle_production_time),
-            idle_worker_time=GameTime.from_normal_seconds(details.idle_worker_time),
+            idle_production_time=GameTime(normal_seconds=details.idle_production_time),
+            idle_worker_time=GameTime(normal_seconds=details.idle_worker_time),
             total_value=ValueScore(details.total_value_units, details.total_value_structures),
             killed_value=ValueScore(details.killed_value_units, details.killed_value_structures),
             collected=Resources(details.collected_minerals, details.collected_vespene),

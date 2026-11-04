@@ -12,7 +12,7 @@ import pytest
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos import Api, run_recording
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.debug import DebugText
 from sc2nachos.events import (
     AnyUnitDiedEvent,
@@ -146,7 +146,8 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), make_enemy())
+    tables = _tables(recording)
+    tracker = _Tracker(tables, make_enemy(tables))
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(recorded_observations(recording)):
         step = observation.observation.game_loop
@@ -156,7 +157,7 @@ def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under
         assert len({id(unit) for unit in units}) == len(units), "two tags of one observation are one unit"
         for unit in units:
             assert objects.setdefault(unit.id, unit) is unit
-            assert not unit.is_stale
+            assert unit.is_listed
         for unit in units.own:
             for name in _NAMING:
                 getattr(unit, name)
@@ -293,7 +294,8 @@ _STATE_READS = sorted(
 @pytest.mark.parametrize("path", CORPUS, ids=lambda path: path.stem)
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
-    tracker = _Tracker(_tables(recording), make_enemy())
+    tables = _tables(recording)
+    tracker = _Tracker(tables, make_enemy(tables))
     game_map = _map(recording)
     for observation in recorded_observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)

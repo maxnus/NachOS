@@ -9,9 +9,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   range, armor and speed, each added on. Every level adds the same amount to a type, but different types get
   different amounts: a marauder gets +1 and +1 against armored (tool `sweep_upgrades`, #30).
 - The rows leave out attack speed (Adrenal Glands, Resonating Glaives), shield armor and what abilities and buffs do,
-  and do not change for shields levels, Combat Shield, Stim or Concussive Shells. They count Anabolic Synthesis whether
-  the unit is on creep or not, though in play it speeds an ultralisk only off creep (stated) (tool `sweep_upgrades`,
-  #30).
+  and do not change for shields levels, Combat Shield, Stim or Concussive Shells (tool `sweep_upgrades`, #30). They hold
+  no creep speed, and count Muscular Augments and Anabolic Synthesis the same on creep and off, though both add less
+  on it: an ultralisk ran 4.13 a second off creep and 4.87 with Anabolic Synthesis, 5.37 and 5.53 on it, and a
+  hydralisk 3.15 and 4.13 with Muscular Augments off creep, 4.09 and 4.83 on it (tool `sweep_movement`, build 75689).
 - The void ray, carrier, sentry, battlecruiser and oracle have no weapon in the rows, yet the first three take
   attack levels (tool `sweep_upgrades`, #30).
 - A type's armor plus the armor its units report from upgrades is the upgraded row's armor. Armor levels add 1
@@ -40,6 +41,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   requirement, has room for only one requirement, and holds no upgrade requirement (tool `sweep_tech_tree`, #29).
   Requirements belong to a type and an ability together: a burrowed roach moves only once Tunneling Claws is
   researched (#29).
+- Every type that makes a unit type needs the same structures and upgrades for it, each for the ability it makes it
+  by: a gateway's train of an adept and a warp gate's warp-in of one both need a cybernetics core. So does every type
+  that researches an upgrade: flyer attacks level 2 needs a lair and level 1, of a spire and of a greater spire alike.
+  No gateway is offered the warp gate, so nothing records what it needs (tool `sweep_tech_tree`; corpus).
 - The catalog holds 2005 unit types, 940 of them unnamed skipped ids, 4134 abilities, 306 upgrades, 303 buffs and
   13 effects; 894 ability names repeat, and 23 buff ids share their number with a unit type (#23).
 - The `available` flag filters nothing: `MorphZerglingToBaneling` is marked unavailable though zerglings morph, and
@@ -58,11 +63,28 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   curated ids name no unit type for it. An interceptor's row reads 15, but the table names no ability that makes one,
   and the sweep never saw a carrier offered Build Interceptors (tool `sweep_tech_tree`). A reactor and a tech lab no
   longer need a correction of their own: their rows read 50/50 and 50/25 (corpus).
+- Two rows price what no order charges. A MULE's reads 50 minerals, but two orbital commands each calling one down
+  spent 50 energy and not a mineral, the purse holding at 4614/4938 for 24 steps (tool `sweep_orders`,
+  `one-command-each`, build 75689). An archon's reads 175/275, one high and one dark templar's, but two high templar
+  merging into one were charged nothing (tool `sweep_orders`, `one-command-many-makers`, build 75689). A repair still
+  prices a MULE and an auto-turret from their rows, 7 minerals for half a MULE's health and 13 for half a turret's
+  (tool `sweep_repair`, build 75689).
 - A train takes its row's build time rounded up to a whole step, counted from the step the order is sent after to the
   step its unit is first listed: a void ray 964 of its 963.2, a zealot 608 and a drone 272 of theirs. A unit's morph
   does not keep to its row: an overseer took 267 of its 266.68, a brood lord 542 of 541.35, an overlord transport 336 of
   336.02, two banelings 319 of 320, a ravager 271 of 272 and two lurkers 403 of 553.33 (probe in #159, under `free` and
   `food`, local game, Linux build 75689).
+- Read every step, a structure a worker builds reads done its row's time after it is first listed: a supply depot
+  480 steps, a pylon 400, a spawning pool 1040. An add-on reads done its row's time
+  after the order: a tech lab 400, a reactor 800. A structure's morph changes its type a step short of its row after
+  the order: an orbital command 559 steps of 560, a planetary fortress 799 of 800, a lair 1279 of 1280, a hive and a
+  greater spire 1599 of 1600. Three marines queued in one request came out 400, 799 and 1198 steps after it, each
+  after the first starting in the step the one ahead came out, and two beside a reactor both after 400. A chrono
+  boost for the whole build brought a probe out after 182 steps of 272. A warp-in has no row and takes the same for a
+  zealot and a stalker: 256 steps at a pylon far from any warp gate, and 81 at a pylon among warp gates or beside a
+  phasing warp prism (tool `sweep_orders`, `production-times`, build 75689). An archon's row gives no build time,
+  and two high templar merged into one 192 steps after it was first listed, twice (probe in #189, under `food`, local
+  game, Linux build 75689). What each reports meanwhile is in [units](units.md).
 - Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
   done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker, though their rows
   give the three rich ones no build time (tool `sweep_orders`, `gas-buildings`, build 75689; corpus).

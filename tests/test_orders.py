@@ -18,10 +18,10 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
-from sc2nachos.launch import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
 from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
 from sc2nachos.units import Alliance, OwnUnit, UnitType
 from sc2nachos.units._tracking import _Tracker
@@ -106,7 +106,7 @@ class _Game:
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.tracker = _Tracker(tables, make_enemy())
+        self.tracker = _Tracker(tables, make_enemy(tables))
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(tables)
 
@@ -1638,8 +1638,9 @@ class _GroupUnloadingBot:
 class _ProductionBot:
     """A terran bot that raises a barracks and an engineering bay by debug command under cheats for supply and
     resources, gives the barracks a marine and a second queued behind it and the bay infantry weapons 1, and records
-    each turn after what is in production: the marines, the research's progress, and the first marine's, and with
-    the step the steps the research has left."""
+    each turn after what is in production: the marines, the research's progress, and the first marine's, with the
+    step the steps the research and the first of two marines have left, and the types of what makes the marines and
+    whether any is read as a unit already."""
 
     race = Race.TERRAN
 
@@ -1650,6 +1651,9 @@ class _ProductionBot:
         self.ordered = False
         self.reads: list[tuple[int, float | None, float | None]] = []
         self.times_left: list[tuple[int, float]] = []
+        self.marine_times_left: list[tuple[int, float]] = []
+        self.marine_producers: set[UnitTypeId | None] = set()
+        self.marine_read_as_a_unit = False
 
     def turn(self, event: TurnEvent) -> None:
         api = self.api
@@ -1677,6 +1681,12 @@ class _ProductionBot:
             self.reads.append((len(marines), progress, marines[0].progress if marines else None))
             if research is not None:
                 self.times_left.append((api.step, research.time_left.steps))
+            if len(marines) == 2 and marines[0].time_left is not None:
+                self.marine_times_left.append((api.step, marines[0].time_left.steps))
+            self.marine_producers |= {
+                None if marine.producer is None else marine.producer.type_id for marine in marines
+            }
+            self.marine_read_as_a_unit |= any(marine.unit is not None for marine in marines)
 
 
 class _GroupTrainingBot:
@@ -1801,6 +1811,11 @@ class TestAgainstTheRealGame:
         # Every read of the steps a research has left names one step for it to finish at.
         assert len(bot.times_left) > 1
         assert len({step + left for step, left in bot.times_left}) == 1
+        # So does every read of the steps the first of two marines has left, the second waiting behind it.
+        assert len(bot.marine_times_left) > 1
+        assert len({step + left for step, left in bot.marine_times_left}) == 1
+        assert bot.marine_producers == {UnitTypeId.BARRACKS}
+        assert not bot.marine_read_as_a_unit
         assert all(marine is not None for count, _, marine in bot.reads if count)
         marine = [each for count, _, each in bot.reads if count == 2 and each is not None]
         assert marine == sorted(marine)
@@ -1847,5 +1862,5 @@ def _play_a_minute[
         failures: list[ActionFailure] = []
         api.on(TurnEvent)(lambda _: failures.extend(api.action_failures))
         api.on(TurnEvent)(bot.turn)
-        api.play(client, steps_per_turn=8, time_limit=GameTime.from_seconds(60))
+        api.play(client, steps_per_turn=8, time_limit=GameTime(seconds=60))
     return bot, failures

@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, debug_pb2
 
-from sc2nachos._checks import check_game_time, is_whole_number
+from sc2nachos._shared.checks import is_whole_number
 from sc2nachos.debug._cheat import Cheat
 from sc2nachos.debug._color import Color, _Rgb, _rgb_of
 from sc2nachos.debug._drawing import Drawing, _Anchor, _draw_all, _PlacedShape
 from sc2nachos.debug._shapes import DebugGroup, DebugLine, DebugText, _check_text, _ScreenText
-from sc2nachos.game_time import GameTime
+from sc2nachos.gametime import GameTime
+from sc2nachos.gametime._game_time import check_game_time
 from sc2nachos.units import Alliance, Unit
 from sc2nachos.units._units import _unit_tuple
 
@@ -85,9 +86,8 @@ class DebugCommands:
 
     @property
     def refresh_interval(self) -> GameTime:
-        """The least time between two refreshes of the drawing, one step unless set; a `GameStartEvent` handler sets it
-        for every game. Set to anything but a `GameTime` it raises `TypeError`, and to one that is not a whole number
-        of steps, at least 1, `ValueError`."""
+        """The least time between two refreshes of the drawing, one step unless set. Set to anything but a `GameTime` it
+        raises `TypeError`, and to one that is not a whole number of steps, at least 1, `ValueError`."""
         return self._refresh_interval
 
     @refresh_interval.setter

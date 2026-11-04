@@ -7,7 +7,7 @@ from typing import final
 @final
 @dataclass(slots=True)
 class HandlerTiming:
-    """How long one handler has taken in the current game, or the last one played."""
+    """How long one handler has taken."""
 
     calls: int
     """The number of calls."""

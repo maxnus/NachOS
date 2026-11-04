@@ -8,7 +8,7 @@ from typing import Literal
 from loguru import logger
 from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 
-from sc2nachos.match import Computer, Participant, Player, Race, Result
+from sc2nachos.match import Computer, Participant, PlayerSetup, Race, Result
 from sc2nachos.protocol._errors import ConnectionClosedError, GameEndedError, GameNotStartedError, ProtocolError
 from sc2nachos.protocol._ports import GamePorts
 from sc2nachos.protocol._status import Status
@@ -51,7 +51,7 @@ def _raw_interface(*, raw_affects_selection: bool) -> sc2api_pb2.InterfaceOption
     )
 
 
-def _player_setup(player: Player) -> sc2api_pb2.PlayerSetup:
+def _player_setup(player: PlayerSetup) -> sc2api_pb2.PlayerSetup:
     """One slot in a game being created. A participant's slot carries nothing: it says who it is when it joins."""
     match player:
         case Participant():
@@ -132,7 +132,7 @@ class Client:
     def create_game(
         self,
         map_path: Path | str,
-        players: Sequence[Player],
+        players: Sequence[PlayerSetup],
         *,
         realtime: bool = False,
         disable_fog: bool = False,

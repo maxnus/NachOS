@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any, Literal, Self, final
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos._enum import ReadableIntEnum
+from sc2nachos._shared.errors import NotReportedError
+from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.units._errors import NotReportedError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -131,6 +131,13 @@ class UnitOrder:
             raise NotReportedError(f"the game names the unit this {self.ability.name} is aimed at by no tag it reports")
         return self._target
 
+    @property
+    def known_target(self) -> Target | None:
+        """`target`, or `None` where `target` raises: for an order aimed at a unit the game names by a tag it never
+        reports, with no earlier order of the same ability to read it from. `None` also for an order aimed at nothing;
+        `target` tells the two apart."""
+        return None if self._target is _NotReported.TARGET else self._target
+
     @classmethod
     def _from_proto(
         cls, order: raw_pb2.UnitOrder, unit_target_of_order: Callable[[raw_pb2.UnitOrder], Unit[Any] | None]
@@ -171,7 +178,7 @@ class Passenger:
     """A unit inside a transport, bunker or other unit that holds units, as the unit holding it reports it."""
 
     unit: Unit[Any]
-    """The unit itself. It is stale while inside, and reads as it was when it went in."""
+    """The unit itself. It is unlisted while inside, and reads as it was when it went in."""
     type_id: UnitTypeId
     health: float
     health_max: float

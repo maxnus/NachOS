@@ -1,8 +1,11 @@
-# Testing a bot on a recorded game
+# Testing a bot
+
+A bot is tested without a game client in two ways: a test of code that reads units makes the units it needs
+([making units for a unit test](#making-units-for-a-unit-test)), and the whole bot plays a recorded game.
 
 A bot runs from start to end with no game client by playing a recorded game. The bot is the player recorded, and its
-handlers run on every recorded observation, a turn at each, whether the game was played stepped or in real time: the
-corpus's are 16 steps apart. `run_recording` plays a recording in one of two ways:
+handlers run on every recorded observation, a turn at each, whether the game was played stepped, `steps_per_turn` steps
+apart, or in real time. `run_recording` plays a recording in one of two ways:
 - **exactly**, by default, for a bot playing its own game back, as it asked then, with the game's own answers;
 - **permissively**, for any bot, or one whose code has changed since, which makes the recording a smoke test that runs
   anywhere, CI included.
@@ -17,9 +20,15 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG), race=Race.TERRAN, record_to="
 
 `run_from_command_line` takes the file as `--RecordFile`, in a ladder game too
 ([playing on the ladder](ladder.md#replays-recordings-and-results)). The file is complete once the runner returns; a
-run killed before then leaves only part of it. NachOS's own repository holds seven such games in `tests/corpus`, a bot
-that does nothing losing to the computer on each map of the ladder pool, three of them as Terran;
-`tools/record_corpus.py` says what each one is.
+run killed before then leaves only part of it.
+
+Record games of the bot itself for its tests: a game in which it builds, fights and loses units gives its code those
+turns to run on. The corpus in NachOS's repository, `tests/corpus`, is NachOS's own test data and does not ship with
+the package: a bare api that never acts, whose recorded side only ever has its townhall and workers.
+
+A recording plays back only on a NachOS that asks the same kinds of question, in the same order, as the one that
+recorded it, permissively too: NachOS's own requests, such as for the tables and each observation, are answered from the
+file in turn. One recorded before NachOS came to ask otherwise raises `ProtocolError`, and is recorded again.
 
 ## Playing a bot's own game back exactly
 
@@ -55,15 +64,44 @@ Underneath, `run_recording` plays the file through a `PlaybackTransport`.
 
 ## Playing any bot through a recording
 
+An api plays one game, so a bot's tests play each recording in a process of its own, where the bot's modules load
+afresh with an api of their own:
+
 ```python
-def test_the_bot_plays_a_whole_recorded_game() -> None:
-    run_recording("tests/corpus/PylonAIE_v4-TvZ.sc2rec", api, permissive=True)
+# tests/play_recording.py
+import sys
+
+from sc2nachos import run_recording
+
+from my_bot import api
+
+run_recording(sys.argv[1], api, permissive=True)
 ```
+
+```python
+# tests/test_recorded_games.py
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+_PLAYER = Path(__file__).with_name("play_recording.py")
+
+
+@pytest.mark.parametrize("recording", sorted(Path(__file__).with_name("games").glob("*.sc2rec")))
+def test_the_bot_plays_a_whole_recorded_game(recording: Path) -> None:
+    played = subprocess.run([sys.executable, str(_PLAYER), str(recording)], capture_output=True, text=True)
+    assert played.returncode == 0, played.stderr
+```
+
+A handler's exception ends the process, and its traceback is in `played.stderr`.
 
 With `permissive=True`, it returns `UNDECIDED` if the recording stops before the game's end, as one made with a time
 limit does, and `DEFEAT` if the bot leaves first. The bot sees the game as recorded, whatever it does: its orders
-change nothing that comes after them. What it asks of the game of its own accord is answered as if the game had
-answered:
+change nothing that comes after them. A game an older version of the bot played still tests a newer one: where the newer
+one decides otherwise, it sees what the older one did. What it asks of the game of its own accord is answered as if the
+game had answered:
 - **Orders, the camera and chat** are accepted: every order reads as sent, and `api.action_failures` stays empty.
 - **Debug requests** are accepted, and draw nothing.
 - **`api.pathing.query_distance` and `query_distances`** answer the straight line between each pair of ends, from a
@@ -76,3 +114,38 @@ A query for abilities or placements through `api.client.query` raises `ProtocolE
 recording holds no answer to.
 
 Underneath, `run_recording` plays the file through a `PermissivePlaybackTransport`.
+
+## Making units for a unit test
+
+`MadeUpUnits` makes units as NachOS makes them in a game, from the reports of one observation after another, so the
+code under test reads the same `Unit` and `OwnUnit` objects it reads in a game:
+
+```python
+from sc2nachos.ids import UnitTypeId
+from sc2nachos.testing import MadeUpUnits, UnitReport
+from sc2nachos.units import Alliance
+
+
+def test_the_marine_targets_the_nearer_zergling() -> None:
+    marine, near_zergling, far_zergling = MadeUpUnits().observe(
+        UnitReport(1, UnitTypeId.MARINE, at=(10, 10)),
+        UnitReport(2, UnitTypeId.ZERGLING, at=(13, 10), alliance=Alliance.ENEMY),
+        UnitReport(3, UnitTypeId.ZERGLING, at=(20, 10), alliance=Alliance.ENEMY),
+    )
+    assert pick_target(marine, [near_zergling, far_zergling]) is near_zergling
+```
+
+- **A `UnitReport`** is this player's finished unit in sight unless its fields say otherwise, and each field reads back
+  as the unit's property of the same name. Health, shield and energy read zero unless given, and each maximum reads as
+  its value. An order is the ability and its target, and its progress if any: `(AbilityId.MOVE, (20, 10))`, aimed at a
+  point, at another unit's report, at a tag, or at `None`.
+- **`observe`** returns the units of its reports in their order. A report under a tag seen before is of the same unit,
+  read anew: `dataclasses.replace(report, at=(12, 10))` moves it, at the velocity the steps between give. A unit not
+  reported again is no longer listed, `dead` reports units dead, and `units` lists every unit of the latest
+  observation. Each observation is a step after the one before unless `step` says otherwise.
+- **The game's data** the units read their types from is by default that of build 75689, StarCraft II 4.10 for Linux,
+  which NachOS ships, read afresh in about 15 ms for each `MadeUpUnits`. `load_game_data(base_build=75689)` reads it
+  once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
+
+The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
+a recorded game, as above.

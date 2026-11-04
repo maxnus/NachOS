@@ -35,6 +35,7 @@ The findings are written as JSON, in the raw catalog's spelling, for `tools/gene
 
 import argparse
 import json
+import math
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
@@ -42,6 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from _sandbox import NEUTRAL, NEUTRAL_REPORTED, SUCCESS, Cheat, OpenGround, Sandbox, playing, unit_aliases
+from generate_unit_types import tech_aliases
 from loguru import logger
 from s2clientprotocol import data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
@@ -51,9 +53,9 @@ from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId, RawUpgradeId
-from sc2nachos.launch import Installation
 from sc2nachos.match import Race
 from sc2nachos.protocol import GameEndedError
+from sc2nachos.run import Installation
 
 OUT = Path(__file__).parents[1] / "data" / "tech_tree.json"
 
@@ -107,7 +109,9 @@ _ADD_ON_REACH = 4
 _BUSY_STEPS = 24
 # What the game remaps every cancel onto, in the raw catalog's spelling.
 _CANCELS = ("Cancel", "Cancel_Last")
-_STRUCTURE_ROOM = 4
+# Half the side of the square claimed for a structure: 7 tiles across hold a townhall, or a barracks with its add-on,
+# put up a tile left of the center. A pad, two more, holds a structure and its pylon or its targets.
+_STRUCTURE_ROOM = 3
 # How far around a trial's unit the computer's units are cleared: beyond any unit's sight.
 _ENEMIES_CLEARED_WITHIN = 16
 # Not ordered at a target to read what the unit is offered meanwhile: anything that sends it somewhere, gathers, loads
@@ -195,6 +199,7 @@ class TechSweep:
         raw_data = self._client.game_data()
         self._data = GameData(raw_data)
         self._form_of = unit_aliases(raw_data)
+        self._counted_as = tech_aliases(raw_data)
         self._targets = {ability.ability_id: ability.target for ability in raw_data.abilities}
         findings.remaps |= {
             _ability_name(entry.ability_id): _ability_name(entry.remaps_to_ability_id)
@@ -277,9 +282,12 @@ class TechSweep:
                 requests.append((unit_type, self._player, spot - (1, 0)))
                 if self._race is Race.PROTOSS:
                     requests.append((UnitTypeId.PYLON, self._player, spot + (2.5, 2.5)))
-        area = self._ground.claim(self._sandbox, 8)
+        # The units stand 2 apart in a square of as many columns as rows, a tile in from the edge of the ground claimed.
+        columns = math.ceil(math.sqrt(len(units)))
+        area = self._ground.claim(self._sandbox, columns)
+        first = area - (columns - 1, columns - 1)
         requests += [
-            (unit_type, self._player, area + (-7 + 2 * (index % 8), -7 + 2 * (index // 8)))
+            (unit_type, self._player, first + (2 * (index % columns), 2 * (index // columns)))
             for index, unit_type in enumerate(units)
         ]
         made = self._game.spawn(requests)
@@ -354,7 +362,9 @@ class TechSweep:
         logger.info("Reading what {} newly offered abilities need", len(pairs))
         standing = {UnitTypeId(unit.unit_type) for unit in self._mine() if UnitTypeId.get(unit.unit_type)}
         for structure in sorted(standing & self._structure_types, key=lambda unit_type: unit_type.name):
-            aliases = {row.id for row in self._data.units.values() if structure in row.tech_aliases} & standing
+            aliases = {
+                counting for counting, counted_as in self._counted_as.items() if structure in counted_as
+            } & standing
             gone = self._lost({structure, *aliases}, pairs)
             if aliases:
                 gone -= self._lost(aliases, pairs)
