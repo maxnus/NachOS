@@ -38,6 +38,7 @@ from sc2nachos.protocol import Client, GameEndedError
 from sc2nachos.state import ActionFailure, Effect, InProduction, Research, Score, Supply, UiUnitCounts
 from sc2nachos.units import Unit, Units, UnitType
 from sc2nachos.units._units import _type_ids_of
+from sc2nachos.vision import Vision
 
 # The most bytes of UTF-8 a chat message may take: one of 1040 kills the game client (in game).
 _MOST_CHAT_BYTES = 1039
@@ -389,14 +390,10 @@ class Api[E]:
         return enemy
 
     @property
-    def vision(self) -> Grid[bool]:
-        """Where this player can see now, over the playable area like the map's grids."""
-        return self._current_game().state.vision
-
-    @property
-    def explored(self) -> Grid[bool]:
-        """Where this player has seen at any point in the game, over the playable area."""
-        return self._current_game().state.explored
+    def vision(self) -> Vision:
+        """What this player sees: where it can see now, where it has seen at any point in the game, and when it last
+        saw each tile, as `Vision` says."""
+        return self._current_game().vision
 
     @property
     def placement(self) -> PlacementGrids:

@@ -467,7 +467,7 @@ it.
 | `state.upgrades` | `api.upgrades` |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction` with its `producer`, its `unit` once it stands, its `progress` and its `time_left` |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `time_left`; once done, `u in api.upgrades` |
-| `state.visibility[p] == 2`, `> 0` | `api.vision[p]`, `api.explored[p]` |
+| `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]` the step it was last in sight |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
 | `state.common.larva_count` | `len(api.units.own.of_type(UnitType.Larva))` |
@@ -488,8 +488,8 @@ it.
 - **The idle times are whole steps.** The game counts them in seconds of its Normal speed, 16 steps each, which
   python-sc2 hands on as they are. Each is summed over the idle units: two idle workers add two steps a step.
 - **The recent APM is left out of the score**, since it reads zero in a game played through the raw interface.
-- **The grids are the map's shape.** `vision`, `explored` and `creep` cover the playable area and read `False`
-  past it, as `api.map.pathing` does, so they combine with it directly.
+- **The grids are the map's shape.** `api.vision`'s and `api.creep` cover the playable area and read `False`, or
+  -1 for `last_in_sight`, past it, as `api.map.pathing` does, so they combine with it directly.
 
 ## The map
 

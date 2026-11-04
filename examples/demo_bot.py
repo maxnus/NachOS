@@ -227,7 +227,6 @@ class Army:
 
     def __init__(self) -> None:
         self.attacking = False
-        self.last_seen: dict[Point, int] = {}
         api.subscribe(self)
 
     @api.on(TurnEvent, min_interval=GameTime(steps=4))
@@ -235,7 +234,6 @@ class Army:
         """Defend against what comes near the bases, attack once there are enough marines, and fall back once too few
         are left."""
         marines = api.units.own.of_type(UnitType.Marine)
-        self._remember_what_is_seen()
         threats = api.units.enemy.non_structures.within(DEFEND_WITHIN, of=api.units.own.townhalls)
         if len(marines) >= ATTACK_WITH:
             self.attacking = True
@@ -263,13 +261,8 @@ class Army:
         structures = api.units.enemy.structures
         if structures:
             return structures.closest_to(marines.center).position
-        return min(_places_to_look(), key=lambda place: self.last_seen.get(place, -1))
-
-    def _remember_what_is_seen(self) -> None:
-        """Note the step at which each place to look is in sight."""
-        for place in _places_to_look():
-            if api.vision[place]:
-                self.last_seen[place] = api.step
+        last_in_sight = api.vision.last_in_sight
+        return min(_places_to_look(), key=lambda place: last_in_sight[place])
 
 
 def _places_to_look() -> list[Point]:
