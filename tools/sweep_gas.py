@@ -14,9 +14,9 @@ as many as the trial says. A trial is a count of collectors a refinery, a seed, 
   refinery, a collector on its gather at it is given a move ending `gather_inset` past where a worker's circle touches
   the refinery's, on the line from the refinery's center to the townhall's, as a miner's ends 0.175 past touching its
   field's, or short of touching for a negative one, with the gather queued behind. On the trip back, a collector on its
-  return is given a move ending 3.125 from the townhall's center, toward that point, with a right-click on the townhall
-  queued behind, which the worker shows as a return, and, where the variant says so, a gather at the refinery queued
-  behind that.
+  return of vespene, not one returning the minerals it was handed over with, is given a move ending 3.125 from the
+  townhall's center, toward that point, with a right-click on the townhall queued behind, which the worker shows as a
+  return, and, where the variant says so, a gather at the refinery queued behind that.
 
 After a warm-up from the hand-over, it records over the time measured what each refinery's contents fell by, the
 minerals and vespene the score says were collected, the actions the game refused, the most enemy units in sight at
@@ -338,8 +338,10 @@ class _TrialGame:
         self._handed_over_at = self.api.time
 
     def _give_the_moves(self, main: Expansion) -> None:
-        """Give each collector on its gather at its refinery, or on its return, near where its trip ends, the move there
-        with what the variant queues behind, for the trips the variant gives a move."""
+        """Give each collector on its gather at its refinery, or on its return of vespene, near where its trip ends, the
+        move there with what the variant queues behind, for the trips the variant gives a move. A collector returning
+        minerals, handed over with them, is left to its return and the gather `collect` queued behind it, which a move
+        would drop, sending the collector back to its field (`sc2` run 41849753359)."""
         townhall = main.townhall
         if townhall is None:
             return
@@ -360,7 +362,7 @@ class _TrialGame:
             ):
                 trip_end = gather_point
                 queued_behind = [(AbilityId.GATHER, refinery)]
-            elif variant.return_move and current_order.ability is AbilityId.RETURN:
+            elif variant.return_move and current_order.ability is AbilityId.RETURN and not scv.is_carrying_minerals:
                 trip_end = return_point
                 queued_behind = [(AbilityId.SMART, townhall)]
                 if variant.gather_after_return:
