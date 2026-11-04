@@ -35,6 +35,7 @@ The findings are written as JSON, in the raw catalog's spelling, for `tools/gene
 
 import argparse
 import json
+import math
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
@@ -279,9 +280,12 @@ class TechSweep:
                 requests.append((unit_type, self._player, spot - (1, 0)))
                 if self._race is Race.PROTOSS:
                     requests.append((UnitTypeId.PYLON, self._player, spot + (2.5, 2.5)))
-        area = self._ground.claim(self._sandbox, 8)
+        # The units stand 2 apart in a square of as many columns as rows, a tile in from the edge of the ground claimed.
+        columns = math.ceil(math.sqrt(len(units)))
+        area = self._ground.claim(self._sandbox, columns)
+        first = area - (columns - 1, columns - 1)
         requests += [
-            (unit_type, self._player, area + (-7 + 2 * (index % 8), -7 + 2 * (index // 8)))
+            (unit_type, self._player, first + (2 * (index % columns), 2 * (index // columns)))
             for index, unit_type in enumerate(units)
         ]
         made = self._game.spawn(requests)
