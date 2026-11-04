@@ -1,9 +1,9 @@
 name: release
 
-# Publishing a GitHub release puts its tag on PyPI: `v0.1.0` uploads sc2nachos 0.1.0, and a pre-release `v0.2.0rc1`
-# uploads 0.2.0rc1, which pip installs only when asked for it by its version. The build reads the version from the tag,
-# and a tag that is not `v` and the version as PyPI writes it fails before anything is uploaded. The api-reference
-# workflow publishes the reference on the same release, by itself.
+# Publishing a GitHub release puts its tag on PyPI, and then its reference on GitHub Pages: `v0.1.0` uploads sc2nachos
+# 0.1.0 and publishes its reference, and a pre-release `v0.2.0rc1` uploads 0.2.0rc1 and leaves the reference as it
+# is. The build reads the version from the tag. A tag that is not `v` and the version as PyPI writes it, or a release
+# marked a pre-release whose version is not one, or the other way round, fails before anything is uploaded.
 #
 # PyPI takes the upload from this workflow, in the `pypi` environment, alone; the environment is where to require an
 # approval before it. docs/maintaining/releasing.md says how to set both up. PyPI never takes a version twice, even
@@ -11,11 +11,6 @@ name: release
 on:
   release:
     types: [published]
-
-# Two uploads must not interleave.
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -25,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TAG: ${{ github.event.release.tag_name }}
+      MARKED_PRERELEASE: ${{ github.event.release.prerelease }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -58,6 +54,18 @@ jobs:
               exit 1
             fi
           done
+          # In the form PyPI writes, which the file names have just shown the version to be in, a pre-release, as
+          # 0.2.0rc1, and a dev version are the only ones with an a, b, rc or dev part.
+          version_is_prerelease=false
+          if [[ "$version" =~ (a|b|rc|\.dev)[0-9]+ ]]; then version_is_prerelease=true; fi
+          if [ "$MARKED_PRERELEASE" = true ] && [ "$version_is_prerelease" = false ]; then
+            echo "::error::The release is marked a pre-release, but $version is not one, as 0.2.0rc1 is."
+            exit 1
+          fi
+          if [ "$MARKED_PRERELEASE" = false ] && [ "$version_is_prerelease" = true ]; then
+            echo "::error::$version is a pre-release, but the release is not marked one."
+            exit 1
+          fi
 
       - name: Test
         run: uv run pytest
@@ -86,3 +94,13 @@ jobs:
 
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Only once PyPI has it, so that the reference describes a version pip installs.
+  reference:
+    needs: publish
+    if: ${{ !github.event.release.prerelease }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/api-reference.yml
