@@ -135,7 +135,7 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   handlers run before the bot's of the same priority.
 - **Speed mining takes workers only through `mine`, `collect` and `release`** (#202, #208), and only at a base with a
   finished townhall of this player's at the expansion's center: no long-distance mining, and no taking over a bot's
-  plain gathers by itself, which the bot's own gathers could undo. Gas gets no move until it is measured (Next).
+  plain gathers by itself, which the bot's own gathers could undo. Gas got its moves once measured (Next).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
@@ -193,11 +193,28 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- **Measuring speed-mined gas** (the owner, 2026-11-03), after #208: a script run through the `sc2` workflow, since
-  no game runs in a cloud session, collecting plainly against with a move at the end of each trip, at one, two and
-  three workers a geyser. The move goes into `collect` in a pull request of its own only where it collects more, and
-  `_is_mining` and `_is_collecting` then become one check (the owner, review of #208). AvocaDOS waits on it no longer:
-  its collectors are speed mining's since AvocaDOS #85.
+- **Speed collecting** (the owner, 2026-11-03 and 2026-11-04), after #208, in #222 with `tools/sweep_gas.py`, its
+  evidence, since both edit this plan. The move went into `collect` only where it was measured to collect more; the
+  findings are in `docs/reference/game-behavior/abilities-and-orders.md`. AvocaDOS's collectors are speed mining's
+  since AvocaDOS #85, so it collects so once it takes the release. Decided, as recommended:
+  - Both moves on the line between the centers, a collector's trip read off its order, since rich gas shows no cargo,
+    and one coming out kept on its plain return until past every collector of its gas building going in on its move,
+    and taken off a move it was sent lately too (the owner, review of #222): over lanes, waypoints, the one going in
+    yielding, and moves by the count of collectors, each measured to collect less. `_is_mining` and `_is_collecting`
+    are one check (the owner, review of #208).
+  - Given no gas building, `collect` fills a base's to two nearest its townhall first, then to three farthest first,
+    over the one nearest the worker.
+  - The rule holds for every race, measured with SCVs only.
+  - Not in it, a follow-up: two miners of a field may meet head on the same way, both on their moves (unmeasured).
+  - Next, in a pull request of its own once #222 merges (the owner, 2026-11-04): speed mining becomes a package, as
+    upgrade inference did, behavior-neutral. `__init__.py` re-exports `SpeedMining`; `_speed_mining.py` holds it, who is
+    held where, `mine`, `collect`, `release`, the picks and the turn's loop; `_worker_trips.py` `_WorkerTrips`, one
+    worker's trip each turn, the move, the yield and the plain orders; `_trip_end_points.py` `_TripEndPoints` and the
+    book of every field's and gas building's trip ends with the townhall taking the cargo; `_worker_attacks.py`
+    `_WorkerAttacks`. `mine` and `collect`, the field and gas picks, and the two trip-end lookups each share one
+    helper. NachOS has nothing more to reuse: its one-or-several helper is private, `Units.within` adds no radius, and
+    `OwnUnit.is_returning` stays out (#208). Checked by the tests unchanged, the sweep's `collect` variant to the
+    vespene, the in-game tests, and a turn timed before and after.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:

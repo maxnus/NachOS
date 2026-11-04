@@ -51,7 +51,8 @@ def run_local(
     """Start a game client, create a match on `map_file` for `api` against `opponent`, and play it out.
 
     `map_file` is a file or the name of one under the installation. The api takes the first slot, playing `race` under
-    `name`, and without an `opponent` it plays the map alone. `realtime` creates the game in real time and plays it so.
+    `name`, and without an `opponent` it plays the map alone, which on a melee map, such as the ladder's, ends at once
+    in a victory (in game). `realtime` creates the game in real time and plays it so.
     `record_to` is a file to record the whole conversation into, and `save_replay_to` one to save the game's replay to,
     as `Api.play` says. Each must be in a folder that exists, or `FileNotFoundError` is raised before the game starts,
     and `IsADirectoryError` if it names a folder; so is `TypeError` for a `time_limit` that is not a `GameTime`. However

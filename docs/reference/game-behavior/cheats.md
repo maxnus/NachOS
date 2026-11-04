@@ -44,6 +44,10 @@ test turns a cheat on: several change more than their name says.
   and no structure on ground it cannot stand on; a photon cannon ordered onto this player's creep was never made (tool
   `sweep_alerts`, #37).
 - **A unit made for player 0 is reported as owner 16** (tool `_sandbox`).
+- **A refinery made at a geyser's position took no worker.** Two made so at the main of each of two starts on
+  PylonAIE_v4 stood 8.60 to 10.05 from its center, and speed mining's `collect`, which takes a gas building on an
+  expansion's geyser with vespene left, refused every worker at them (tool `sweep_gas`, `sc2` run 41827726722 on
+  GitHub, build 75689). One an SCV builds stands on the geyser.
 - **A debug-made unit can be yours where the real one is nobody's.** A force field a sentry casts is neutral, owner 16,
   and offered nothing, and Shatter ordered on it is refused; made straight onto the map, one is yours and offered
   `Shatter`, which no player can ever reach. Check `alliance` on the real unit before trusting what a made one is

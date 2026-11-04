@@ -269,6 +269,22 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   the command center to the nearest field, as many as without it (#201, local game, build 75689). A worker on a move
   is stopped by them (stated). Speed mined, they mined 2275 with the marine there against 2315 without, its move given
   only while no unit stood in the worker's way.
+- A refinery takes one worker at a time, for 32 steps, and a worker comes out where it went in, 1.9 to 2.0 from the
+  refinery's center on the side toward the command center. A refinery's radius is 1.6875, its geyser's 1.5 (corpus).
+  On Pylon's main, one SCV at the nearer refinery, 7.62 from the command center's center, took 88 steps a round trip
+  on plain gathers and returns and 80 moved at both ends as a miner is, and at the farther, 8.06 from it, 94 and 86;
+  three a refinery took 99 on plain gathers, 33 for each inside and changing over, and collected 163 to 164 a minute
+  at either, and no move made them faster. Moved at one end only, one SCV gained 2 to 7% (`tools/sweep_gas.py`,
+  `sc2` runs 41837996802 and 41856036606, build 75689).
+- Two workers on moves meet head on and push each other aside, where one on a gather or a return passes through one
+  on a move. Two SCVs a refinery moved at both ends of their trips, along the line between the two centers, met once
+  every round trip, about 2.5 from the refinery's center: at the nearer refinery the one going in was shoved back,
+  nearly stopped, and took some 20 steps to get back to speed, and the two collected 12% less than on plain gathers.
+  With the one coming out kept on its plain return until past the one going in on its move, and given its move then,
+  each made the round trip of one alone: 9 to 10% more than on plain gathers. With the one going in kept off its move
+  instead, they gained 6 to 9%; on lanes of their own 0.75 to 1 apart, 4 to 7%; and on waypoints to either side, 5
+  to 8% at best (`tools/sweep_gas.py`, `sc2` runs 41856036606, 41861977180 and 41861981124, and local games, build
+  75689, which gave what the runs gave to the vespene).
 
 ## Loading and unloading
 
