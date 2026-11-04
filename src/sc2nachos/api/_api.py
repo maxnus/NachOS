@@ -212,10 +212,10 @@ class Api[E]:
         `GameStartEvent`, so `api.map`, `api.units` and the rest answer while it is built. Every handler subscribed
         meanwhile runs at `EventPriority.BEFORE`, before every handler of the bot's of its event and of the turn's
         events handed out with it, or at `EventPriority.AFTER`, after every one, in the order they subscribed; one
-        subscribed at another priority raises `ValueError`. So what an extension works out before the
-        bot is up to date when the bot's handlers read it, an order a bot's handler gives a unit an extension ordered
-        before it goes out last and stands, and an extension working after the bot sees every order the bot gave in the
-        turn. A handler an extension subscribes later is subscribed as the bot's are.
+        subscribed at another priority raises `ValueError`. So what an extension works out before the bot is up to date
+        when the bot's handlers read it, an order a bot's handler gives a unit an extension ordered before it goes out
+        last and stands, and an extension working after the bot sees every order the bot gave in the turn. A handler an
+        extension subscribes later is subscribed as the bot's are.
 
         Raises `NotPlayingError` before the game starts, and `RuntimeError` while the extensions are being built, or
         once building them raised.

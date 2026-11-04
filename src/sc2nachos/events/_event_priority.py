@@ -7,8 +7,8 @@ class EventPriority(ReadableIntEnum):
     """A handler's place among an event's handlers: higher priorities run first, equal ones in subscription order.
 
     `BEFORE` and `AFTER` are an extension's, and the only ones it takes: a handler subscribed while NachOS builds the
-    extensions (`Api.extensions`) runs at one of them, before every handler of the bot's or after every one, and no
-    other handler may.
+    extensions runs at one of them, before or after every handler of the bot's of the events handed out with its own,
+    as `Api.extensions` says, and no other handler may.
     """
 
     AFTER = -1

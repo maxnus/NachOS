@@ -47,9 +47,11 @@ def defend(event: TurnEvent) -> None:
 
 An extension subscribes its handlers in its constructor, with `api.on`, **at `EventPriority.BEFORE` or
 `EventPriority.AFTER`**, which only a handler subscribed while NachOS builds the extensions takes, and which it must
-take: any other priority raises `ValueError`, and so does one of these for any other handler. A turn goes out priority
+take: any other priority raises `ValueError`, and so does one of these for any other handler. Events go out priority
 first ([events](events.md#when-events-come)), so a handler before the bot runs ahead of every handler of the bot's of
-its event and of the turn's other events, and one after the bot behind them all, in the order they subscribed.
+the events handed out with its own, and one after the bot behind them all, in the order they subscribed. Those are a
+turn's events but `TurnStartEvent`, which goes out alone, before the rest, as an event a handler emits goes out alone,
+at once: an extension reading each observation before any handler of the bot's does so on `TurnStartEvent`.
 
 - **Before the bot**, an extension works out what the bot's handlers read, as upgrade inference does on
   `TurnStartEvent`. An order the bot then gives a unit the extension ordered goes out last and stands, as a unit takes
