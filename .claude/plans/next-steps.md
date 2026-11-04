@@ -137,7 +137,7 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   finished townhall of this player's at the expansion's center: no long-distance mining, and no taking over a bot's
   plain gathers by itself, which the bot's own gathers could undo. Gas got its moves once measured (Next).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
-- **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
+- **Speed upgrades read off how fast enemy units move**, built in #226 (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
   loop and with few code paths:
   - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own),
@@ -294,16 +294,15 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
      Settled when planning step 3 (above): a floor of 1%, assuming at 99% and forgetting below 0.5. Reaching 0.1% a
      playback would take some 2,700 games more, nearly five hours, 24 at once.
-  3. The option, `UpgradeInference(api, include_speed_upgrades=True)`, by the rule above and the pilot's proposals:
-     windows of 22 steps, steady votes within 0.05 of the gap, none where the gap is under 10% of the speed, none
-     under a buff that changes speed (only Time Warp's slow measured), and none before the earliest finish, from
-     `api.data`. `MovementWindows` hands over the windows ending at an observation together, once a window's steps,
-     which are a slice; a private `_speed_upgrades.py` turns them into votes and the score, and assumes and forgets
-     through `api.enemy`, the numbers constants citing #224. Tests for both bands and a window between them, a creep
-     edge, a gap in the observations, a side change, a speed-changing buff, the earliest finish, one fast vote among
-     slow ones counting for the upgrade, the floor, a mistake forgotten and an upgrade the bot assumed first, which is
-     never forgotten. The extension's docstring, which says what it reads stays, and `docs/extensions.md` say what
-     speed may forget.
+  3. Done in #226: the option, `UpgradeInference(api, include_speed_upgrades=True)`, by the rule above and the
+     pilot's proposals: windows of 22 steps, steady votes within 0.05 of the gap, none where the gap is under 10% of
+     the speed, none under a buff that changes speed (only Time Warp's slow measured), and none before the earliest
+     finish, from `api.data`. `MovementWindows` hands over the windows ending at an observation together, once a
+     window's steps, each saying whether it covered its whole block; a private `_speed_upgrades.py` turns them into
+     votes and the score, and assumes and forgets through `api.enemy`. The corpus now shows Metabolic Boost in its two
+     games where the computer's zerglings attacked, at 1.3% of their boosted speed. It observes every 16 steps, so a
+     window holds one or two moves, and the docs say a bot observing fewer than every step tells a steady unit less
+     well from one that stopped; how often the replays' rule then errs is not measured.
   4. Its cost a turn over the corpus and AvocaDOS's recorded games.
 
   Open, to settle with the owner at the step that needs it (proposed, not decided):
