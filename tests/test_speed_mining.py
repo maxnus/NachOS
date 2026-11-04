@@ -370,6 +370,18 @@ class TestWhatIsLeftAlone:
         elsewhere = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order(_OTHER_FIELD))]
         assert _orders_sent(elsewhere, started=release) == [[]]
 
+    def test_several_released_at_once(self) -> None:
+        """A miner and a collector, released as `Units`, each gathering where speed mining would send it back to its
+        own."""
+
+        def release_both(api: Api[SpeedMining]) -> None:
+            api.extensions.release(api.units.own.workers)
+
+        miner = _reported_scv((25.0, 30.0), _gather_order(_OTHER_FIELD))
+        collector = _reported_scv((25.0, 20.0), _gather_order(_OTHER_REFINERY), tag=11)
+        units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), miner, collector]
+        assert _orders_sent(units, collected=[(11, _REFINERY)], started=release_both) == [[]]
+
     def test_a_worker_whose_field_is_mined_out_is_let_go(self) -> None:
         held: list[int] = []
 
@@ -662,7 +674,7 @@ class TestHandingOver:
                 miners = api.extensions.miners
                 scv = _own_unit_of_tag(api, 11) if event.time.steps == 0 else None
                 field = None if scv is None else miners.get(scv)
-                at_the_other_field = api.extensions.miners_at(_unit_of_tag(api, _OTHER_FIELD))
+                at_the_other_field = api.extensions.workers_at(_unit_of_tag(api, _OTHER_FIELD))
                 tags = [worker.tag for worker in at_the_other_field]
                 read.append((scv in miners, None if field is None else field.tag, len(miners), tags))
 
@@ -1101,7 +1113,7 @@ class TestHandingOverToCollect:
 
         def read_the_collectors(api: Api[SpeedMining]) -> None:
             def read_them(event: TurnEvent) -> None:
-                at_the_other = api.extensions.collectors_at(_unit_of_tag(api, _OTHER_REFINERY))
+                at_the_other = api.extensions.workers_at(_unit_of_tag(api, _OTHER_REFINERY))
                 read.append((len(api.extensions.collectors), [worker.tag for worker in at_the_other]))
 
             api.on(TurnEvent, priority=EventPriority.LOWEST)(read_them)
@@ -1120,6 +1132,29 @@ class TestHandingOverToCollect:
             dead=lambda step: [11] * (step == 1),
         )
         assert read == [(2, [11]), (1, [])]
+
+    def test_workers_reads_the_miners_and_the_collectors_and_no_dead_one(self) -> None:
+        read: list[list[tuple[int, int]]] = []
+
+        def read_the_workers(api: Api[SpeedMining]) -> None:
+            api.on(TurnEvent, priority=EventPriority.LOWEST)(
+                lambda event: read.append(
+                    sorted((worker.tag, held_at.tag) for worker, held_at in api.extensions.workers.items())
+                )
+            )
+
+        scvs = [
+            _reported_scv((25.0, 30.0), _gather_order()),
+            _reported_scv((28.0, 27.0), _gather_order(_REFINERY), tag=11),
+        ]
+        _orders_sent(
+            [*_pylon_main(), _refinery(), *scvs],
+            [*_pylon_main(), _refinery(), scvs[0]],
+            collected=[(11, _REFINERY)],
+            started=read_the_workers,
+            dead=lambda step: [11] * (step == 1),
+        )
+        assert read == [[(_HANDED_SCV, _MINED_FIELD), (11, _REFINERY)], [(_HANDED_SCV, _MINED_FIELD)]]
 
 
 def _workers_on_the_main(api: Api[object]) -> list[tuple[OwnUnit[Any], Unit[Any]]]:
