@@ -221,7 +221,7 @@ class TestReadingAMap:
     def test_the_main_ramp_is_the_ramp_out_of_the_starts_main(self) -> None:
         game_map = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((5.5, 1.5)))
         (ramp,) = game_map.ramps
-        assert game_map.main_ramp is game_map.main_ramp_of(Point((5.5, 1.5))) is ramp
+        assert game_map._main_ramp_of(Point((5.5, 1.5))) is ramp
 
     def test_of_several_ramps_out_of_a_main_the_main_ramp_is_the_nearest_by_ground(self) -> None:
         game_map = GameMap(
@@ -229,8 +229,8 @@ class TestReadingAMap:
             start_location=Point((5.5, 1.5)),
         )
         left_ramp, right_ramp = game_map.ramps
-        assert game_map.main_ramp is left_ramp
-        assert game_map.main_ramp_of(Point((6.5, 1.5))) is right_ramp
+        assert game_map._main_ramp_of(game_map.start_location) is left_ramp
+        assert game_map._main_ramp_of(Point((6.5, 1.5))) is right_ramp
 
     def test_of_several_ramps_the_main_ramp_is_the_nearer_walk_not_the_nearer_in_a_line(self) -> None:
         game_map = GameMap(
@@ -240,7 +240,7 @@ class TestReadingAMap:
         left_ramp, right_ramp = game_map.ramps
         main_start = game_map.start_location
         assert left_ramp.tiles.center.distance_to(main_start) < right_ramp.tiles.center.distance_to(main_start)
-        assert game_map.main_ramp is right_ramp
+        assert game_map._main_ramp_of(game_map.start_location) is right_ramp
 
     def test_the_main_does_not_reach_across_rocks_whose_ground_is_buildable(self) -> None:
         rocks = GameMap(
@@ -248,33 +248,35 @@ class TestReadingAMap:
             start_location=Point((10.5, 1.5)),
         )
         left_ramp, right_ramp = rocks.ramps
-        assert rocks.main_ramp is left_ramp
+        assert rocks._main_ramp_of(rocks.start_location) is left_ramp
         open_ground = GameMap(
             make_game_info(*[_HIGH_GROUND_BEYOND_ROCKS.replace("=", "#")] * 3, heights=_RAMPS_EITHER_SIDE_OF_ROCKS),
             start_location=Point((10.5, 1.5)),
         )
-        assert open_ground.main_ramp == right_ramp
+        assert open_ground._main_ramp_of(open_ground.start_location) == right_ramp
 
     def test_a_ramp_up_from_the_start_is_not_its_main_ramp(self) -> None:
         game_map = GameMap(
             make_game_info(*[_HIGH_GROUND_BETWEEN_TWO_RAMPS] * 3, heights=_TWO_RAMPS), start_location=Point((0.5, 1.5))
         )
         assert len(game_map.ramps) == 2
-        assert game_map.main_ramp is None
+        assert game_map._main_ramp_of(game_map.start_location) is None
 
     def test_a_start_on_a_ramp_or_on_closed_ground_or_with_no_ramp_or_off_the_map_has_no_main_ramp(self) -> None:
         on_a_ramp = GameMap(make_game_info(*["#~~~~#"] * 3, heights=_SLOPE), start_location=Point((2.5, 1.5)))
-        assert on_a_ramp.main_ramp is None
+        assert on_a_ramp._main_ramp_of(on_a_ramp.start_location) is None
         on_closed_ground = GameMap(make_game_info("....", "....", "...."), start_location=Point((1.5, 1.5)))
-        assert on_closed_ground.main_ramp is None
-        assert GameMap(make_game_info(), start_location=Point((0.5, 0.5))).main_ramp is None
-        assert GameMap(make_game_info(), start_location=Point((20.5, 0.5))).main_ramp is None
+        assert on_closed_ground._main_ramp_of(on_closed_ground.start_location) is None
+        with_no_ramp = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
+        assert with_no_ramp._main_ramp_of(with_no_ramp.start_location) is None
+        off_the_map = GameMap(make_game_info(), start_location=Point((20.5, 0.5)))
+        assert off_the_map._main_ramp_of(off_the_map.start_location) is None
 
     def test_a_point_that_is_no_start_location_has_no_main_ramp_to_ask_for(self) -> None:
         game_map = GameMap(make_game_info(start_locations=((5.5, 5.5),)), start_location=Point((0.5, 0.5)))
-        assert game_map.main_ramp_of(Point((5.5, 5.5))) is game_map.main_ramp_of(Point((5.2, 5.8))) is None
+        assert game_map._main_ramp_of(Point((5.5, 5.5))) is game_map._main_ramp_of(Point((5.2, 5.8))) is None
         with pytest.raises(ValueError, match="no start location"):
-            game_map.main_ramp_of(Point((3.5, 3.5)))
+            game_map._main_ramp_of(Point((3.5, 3.5)))
 
     def test_an_image_too_short_for_its_size_is_refused(self) -> None:
         info = make_game_info()
@@ -378,7 +380,7 @@ class TestARecordedMap:
         game_map = GameMap._from_game(info, observation)
         diagonals = {Direction.NORTH_EAST, Direction.NORTH_WEST, Direction.SOUTH_WEST, Direction.SOUTH_EAST}
         for start in game_map.all_start_locations:
-            ramp = game_map.main_ramp_of(start)
+            ramp = game_map._main_ramp_of(start)
             assert ramp is not None
             assert (len(ramp.tiles), len(ramp.top), len(ramp.bottom)) == (16, 2, 2)
             assert ramp.orientation in diagonals
@@ -386,7 +388,6 @@ class TestARecordedMap:
             top_tile_offset = ramp._point_at_offset_from_the_top((0.5, -0.5))
             assert Tile.at(top_tile_offset) in ramp.top
             assert ramp is min(game_map.ramps, key=lambda each: each.top.center.distance_to(start))
-        assert game_map.main_ramp is game_map.main_ramp_of(game_map.start_location)
 
     def test_a_ramp_leads_out_of_this_players_own_base(self, path: Path) -> None:
         info, observation = _start(path)

@@ -443,7 +443,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     and `gap`, all Points (over Rectangles, a `Square` and Tiles). A tie in the corners goes to the lower x;
   - `api.map.main_ramp` and `main_ramp_of(start)` for start locations only, found when the map is made (over finding
     other points on asking): of the ramps whose top is at the start's level, the one whose center is the shortest walk,
-    over the pathing grid with a townhall's footprint at the start opened;
+    over the pathing grid with a townhall's footprint at the start opened. Private since #209, whose
+    `StartLocation.main_ramp` reads them (the start locations, below);
   - `api.map.all_start_locations`, one tuple with this player's first, over `start_locations`;
   - `Ramp.orientation`, the `Direction.closest` of eight compass directions to the climb, never `None`; `Ramp.width`,
     how many tiles the top spans across the climb; and the private `Ramp._point_at_offset_from_the_top(offset)`;
@@ -1062,6 +1063,56 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `_shared`, which imports nothing else of NachOS; so `check_game_time` is beside `GameTime`.
   - `camera`, `pathing` and `placement` stay packages of their own (above), `protocol` stays the transport's own layer,
     and `testing` and `extensions` stay apart as what a bot opts into.
+- **Start locations** (the owner, 2026-11-03, one question at a time, from a survey of what AvocaDOS has that any bot
+  needs; built in #209):
+  - `StartLocation`, a subclass of `Expansion`, is every expansion a player starts at in `api.expansions` (over
+    `StartExpansion`, which reads as if a player expands there, and `MainBase`). `Expansion` loses `@final` and
+    `is_start_location`: `isinstance` is the one spelling, and narrows.
+  - This player's is `api.player.start_location` and the enemy's `api.enemy.start_location`, on the player records
+    (over `api.start_location` and `api.opponent_start_locations` beside `api.map`'s `Point`s, over making those
+    private, and over `api.expansions` alone). The enemy's raises `NotReportedError` on a map with more than two
+    starts, and NachOS does not scout for it (over `None` there, and over narrowing it by scouting, as AvocaDOS's
+    `GameMap` does). Either raises `NoStartLocationError` where no expansion stands at the start, as on a mini-game's
+    map.
+  - Its reads raise where there is none (over `None`, and over `natural` raising beside a `main_ramp` of
+    `Ramp | None`): `natural` raises `NoExpansionError` (`NoNaturalError` until the second round of the review), and
+    `main_ramp` `NoMainRampError`, reversing #156's `Ramp | None`. `api.map.main_ramp` and `main_ramp_of` are private, so `StartLocation.main_ramp` is the one
+    spelling; the walls still take a ramp.
+  - `main_area` (over `main_ground` and `plateau`) is the main's ground: every tile within half a level of the
+    start's height, walkable as the game began with the townhall's and the start's resources' footprints opened, and
+    joined side by side without crossing a ramp, so rocks stay closed. On the corpus it is 744 to 794 tiles, the two
+    mains of a map within a tile of each other, each bordering its main ramp alone.
+  - `natural` is the nearest expansion to walk to where no player starts (my call in the build, so that no start can
+    name another as its natural). On every map of the pool it is the expansion below the main ramp, the next nearest
+    1.32 to 2.18 times as far.
+  - The owner's review of #209 (2026-11-04, one question at a time):
+    - `line_third` and `triangle_third` join `StartLocation` (the owner, reversing the thirds staying in AvocaDOS). The
+      thirds are the two full bases, 8 fields or more and 2 geysers, where no player starts but the natural, nearest
+      the natural by walking; the line third is the one whose straight-line distance to the main is the larger against
+      its distance to the playable area's nearest edge (the owner's rule, over an angle from the main's way to the
+      natural and over the two nearest in a straight line split by the edge alone). Each raises `NoExpansionError` where
+      there are not two. On the corpus the ratios lie at least 3.4 times apart, and the thirds' walks within 1.42 times.
+    - Every walk the expansions take at the start, `pathing_distance_from_start` (so `api.expansions`' order), the
+      natural and the thirds, is over the ground as the game began with every mineral field and geyser on it, which the
+      game's grid leaves out but for this player's own (over doing so for the thirds alone). It moves Torches' two bases
+      behind mineral walls from 3rd and 5th to beyond the thirds; LeyLines' thirds needed the full-base rule instead,
+      since its 7-field bases lie nearer the natural. `GameMap`'s main-ramp walk stays over the game's grid, and
+      nothing is cached: no `functools.lru_cache`, one cache on the class for every `GameMap`, which ruff's B019 flags.
+    - `Expansion.plateau(*, max_distance=math.inf, height_tolerance=1.0)`, public (the owner's idea, named over
+      `ground_at_its_level`), the ground at its level joined to `center` within `max_distance` in a straight line;
+      `main_area` is the start's, read once.
+    - `Enemy.assume_start_location(start_location)` (the owner's idea), which replaces any start assumed before, raises
+      `ValueError` for one not among the other start locations, and is named in `start_location`'s `NotReportedError`.
+    - `NoStartLocationError` is in `sc2nachos.match`, and `NotReportedError` is defined in `_shared`, still exported from
+      `sc2nachos.units`, so that `Player` and `Enemy` import them at the top (over importing them where they raise).
+    - The candidates are `candidates`, the finders `StartLocation._find_at` and `_find_at_opponent_starts`
+      (classmethods), and `Enemy._learn_start_locations` stays, as `_learn_race` does.
+    - Second round: the natural and the thirds raise one `NoExpansionError`, and `NoMainRampError` stays apart (over one
+      error for all three, whose name would be vague; both subclass `LookupError`). The enemy's start is
+      `Enemy._start_location`, which `_learn_start_locations` sets through `assume_start_location` on a map of two
+      starts, so that the property only reads it, and `assume_start_location` tests `not in` the possible starts.
+  - Staying in AvocaDOS: the order to take expansions in, and its scouting for the enemy's start.
+
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
   loop and with few code paths:
@@ -1103,7 +1154,13 @@ Keep this file current: when a step is done, say so here in the same pull reques
     it, trading safety against how much evidence an assumption needs.
   - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
     Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
+
 ## Next
+
+- **AvocaDOS moves onto `StartLocation`** once #209 merges: its `StartLocation` reads `natural`, the thirds and
+  `main_ramp` from NachOS's, keeps its order to take expansions in, and its unread `region`, `GameMap.floodfill` and
+  `is_at_level` go. Until then AvocaDOS's tests fail on `api.map.main_ramp_of` and `is_start_location`, which #209
+  removes.
 
 - **Extensions** (above), a pull request at a time: `UnitDict` (#200), the extension mechanism with speed mining as
   its first extension (#201), speed mining only at bases with a townhall of this player's (#202), and `mine` sending
@@ -1172,9 +1229,6 @@ typed order methods, can be planned with the owner. Keeping the selections still
   AvocaDOS #49). The owner's two ideas: one key for a set of selections in any order, so `own.structures` and
   `structures.own` are built once, and lazy views, so a chain filters once. A view must still be a `Sequence`.
 
-- A type for start locations, perhaps a subclass of `Expansion` holding its main ramp (the owner, second review of
-  #156), to plan once M5 shows how AvocaDOS reads its mains; `main_ramp_of` and the walls take a start location Point
-  until then.
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
   need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.

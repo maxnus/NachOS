@@ -251,7 +251,8 @@ class Api[E]:
     def expansions(self) -> tuple[Expansion, ...]:
         """Every place on the map to build a townhall, as the game began, by pathing distance from this player's start,
         nearest first: its own start, then its natural. Those no path reaches come last, sorted by increasing
-        straight-line distance from this player's start."""
+        straight-line distance from this player's start. Each start location is a `StartLocation`, this player's
+        `player.start_location` and the enemy's `enemy.start_location`."""
         return self._current_game().expansions
 
     @property
@@ -370,7 +371,7 @@ class Api[E]:
 
     @property
     def player(self) -> Player:
-        """This player: its id, its race and the one it asked for, and its name."""
+        """This player: its id, its race and the one it asked for, its name, and its `start_location`."""
         return self._current_game().player
 
     @property
@@ -380,7 +381,8 @@ class Api[E]:
 
         `api.enemy.upgrades` holds the upgrade levels enemy units have shown and those the bot or an extension added
         with `assume_upgrades`, as `Enemy.upgrades` says. Everything an upgrade changes on an enemy unit,
-        `Unit.weapons` and `Unit.speed` among them, counts them.
+        `Unit.weapons` and `Unit.speed` among them, counts them. `api.enemy.start_location` is where it started, as
+        `Enemy.start_location` says.
         """
         if (enemy := self._current_game().enemy) is None:
             raise NoEnemyError("this game has no other player")
