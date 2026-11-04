@@ -52,25 +52,25 @@ class _UnitComparer:
         invisible. Buffs are compared for a unit visible in both, since an invisible enemy unit shows none (in game).
         Loss is compared for a unit visible in both and of the same type.
 
-        Raises `UncuratedIdError` for a buff the curated ids leave out. Such a buff belongs among them.
+        Raises `UncuratedIdError` for a buff the curated ids leave out, but those in `BuffId._SKIPPED_IDS`, which it
+        passes over. Such a buff belongs among them.
         """
-        tracker = self._tracker
-        changes = tracker.last_changes
+        changes = self._tracker.last_changes
         update = changes.update
         before = self._compared.at(update - 1, default=None)
         worn_before = self._worn.at(update - 1, default=None) if buffs else None
         compared: dict[int, raw_pb2.Unit] = {}
         worn: dict[int, tuple[int, ...]] = {}
-        for unit in tracker.unit_tracker.present:
-            alliance = unit._raw_alliance
-            if alliance != _OWN and alliance != _ENEMY:
+        changes_by_alliance: dict[int, _ComparedChanges[Any]] = {_OWN: changes.own, _ENEMY: changes.enemy}
+        for unit in self._tracker.unit_tracker.present:
+            # This player's units and the enemy's alone are compared.
+            if (side := changes_by_alliance.get(unit._raw_alliance)) is None:
                 continue
             report = unit._latest_report
             if report.display_type == _IN_FOG:
                 continue
             compared[unit._id] = report
             visible = report.display_type == _VISIBLE
-            side: _ComparedChanges[Any] = changes.own if alliance == _OWN else changes.enemy
             if buffs and visible and (listed := report.buff_ids):
                 worn[unit._id] = tuple(listed)
             if before is None or (then := before.get(unit._id)) is None:
@@ -81,12 +81,8 @@ class _UnitComparer:
                 continue
             if worn_before is not None and (now := worn.get(unit._id, ())) != (was := worn_before.get(unit._id, ())):
                 self._record_buffs(side, unit, was, now, only_buffs)
-            if report.unit_type != then.unit_type:
-                continue
-            if damage and (lost := unit.damage_taken):
-                side.damaged.append((unit, lost))
-            if energy and (drained := then.energy - report.energy) > 0.0:
-                side.energy_lost.append((unit, drained))
+            if (damage or energy) and report.unit_type == then.unit_type:
+                self._record_damage_and_energy_lost(side, unit, report, then, damage=damage, energy=energy)
         self._compared = _Snapshot(compared, update)
         if buffs:
             self._worn = _Snapshot(worn, update)
@@ -95,6 +91,23 @@ class _UnitComparer:
         """Drop the reports and buffs kept."""
         self._compared = _Snapshot({})
         self._worn = _Snapshot({})
+
+    def _record_damage_and_energy_lost(
+        self,
+        side: _ComparedChanges[Any],
+        unit: Unit[Any],
+        report: raw_pb2.Unit,
+        then: raw_pb2.Unit,
+        *,
+        damage: bool,
+        energy: bool,
+    ) -> None:
+        """Record into `side`, as the flags ask, the health and shields and the energy `unit` lost between `then`, its
+        report at the previous update, and `report`, its latest."""
+        if damage and (lost := unit.damage_taken):
+            side.damaged.append((unit, lost))
+        if energy and (drained := then.energy - report.energy) > 0.0:
+            side.energy_lost.append((unit, drained))
 
     def _record_buffs(
         self,
@@ -115,5 +128,5 @@ class _UnitComparer:
         if only is not None:
             gained = [buff for buff in gained if buff in only]
             lost = [buff for buff in lost if buff in only]
-        side.gained_buff.extend((unit, BuffId.read(buff)) for buff in gained)
-        side.lost_buff.extend((unit, BuffId.read(buff)) for buff in lost)
+        side.gained_buff.extend((unit, buff) for buff in BuffId._read_each(gained))
+        side.lost_buff.extend((unit, buff) for buff in BuffId._read_each(lost))

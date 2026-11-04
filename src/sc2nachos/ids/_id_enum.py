@@ -1,6 +1,6 @@
 """The base of every curated id enum, which names the raw catalog member of an id it leaves out."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from enum import nonmember
 from types import MappingProxyType
 from typing import Self, cast
@@ -29,7 +29,8 @@ class IdEnum(ReadableIntEnum):
     which names the raw catalog member.
 
     `read` and `get` also take a game id that is not a member but reads as one (`_REMAPPED_IDS`). Calling the enum
-    takes only a member's own id, as reading the game's tables needs.
+    takes only a member's own id, as reading the game's tables needs. `_read_each` reads several game ids, passing over
+    those that say nothing (`_SKIPPED_IDS`).
 
     A member assigned `auto()` is a custom id, one the game does not have: the next from `CUSTOM_IDS_FROM` up after
     the custom ids defined before it. Its value depends on its place among them, so a custom id is never written down
@@ -42,6 +43,10 @@ class IdEnum(ReadableIntEnum):
     _REMAPPED_IDS = nonmember(MappingProxyType[int, int]({}))
     """Game ids that are no member's own, each with the id of the member it reads as. An enum sets its own where the
     game has such ids."""
+
+    _SKIPPED_IDS = nonmember(frozenset[int]())
+    """Game ids that are no member's own and that `_read_each` passes over, as saying nothing. An enum sets its own
+    where the game reports such ids."""
 
     @staticmethod
     def _generate_next_value_(name: str, start: int, count: int, last_values: Sequence[int]) -> int:
@@ -62,6 +67,12 @@ class IdEnum(ReadableIntEnum):
         if (member := cls._value2member_map_.get(cls._REMAPPED_IDS.get(value, value))) is None:
             raise cls._unknown(value)
         return cast("Self", member)
+
+    @classmethod
+    def _read_each(cls, values: Iterable[int]) -> Iterator[Self]:
+        """The member each of `values` reads as, as `read` gives it, in their order, passing over the skipped ids."""
+        skipped = cls._SKIPPED_IDS
+        return (cls.read(value) for value in values if value not in skipped)
 
     @classmethod
     def get(cls, value: int) -> Self | None:

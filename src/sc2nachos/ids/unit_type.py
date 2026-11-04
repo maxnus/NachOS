@@ -219,6 +219,9 @@ class UnitTypeId(IdEnum):
     OVERLORD_TRANSPORT_COCOON = RawUnitTypeId.TransportOverlordCocoon
     OVERSEER = RawUnitTypeId.Overseer
     OVERSEER_SIEGED = RawUnitTypeId.OverseerSiegeMode
+    # A parasitic bomb that has left its target, where the target was, once the target died or the bomb ran out; until
+    # then the bomb is the target's buff (in game).
+    PARASITIC_BOMB_LEFT_BEHIND = RawUnitTypeId.ParasiticBombDummy
     PHOENIX = RawUnitTypeId.Phoenix
     PHOTON_CANNON = RawUnitTypeId.PhotonCannon
     PLANETARY_FORTRESS = RawUnitTypeId.PlanetaryFortress

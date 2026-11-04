@@ -189,20 +189,34 @@ class _UnitTracker:
                     if report.display_type != _IN_FOG_DISPLAY or report.alliance != _OWN_ALLIANCE:
                         new.append(report)
                     continue
-                if not unit._listed:
-                    del self._unlisted_units[unit._id]
-                    self._record_entered_sight(unit, report)
-                elif unit._tag in self._in_fog_tags:
-                    still_ignored.append(unit._tag)
-                    self._ignore_structure_fog_copy(unit._tag, previous, present)
-                    self._record_entered_sight(unit, report)
-                unit._tag = tag
+                self._observe_under_linked_tag(unit, report, previous, present, still_ignored)
             if (side_or_type_change := unit._update(report, step)) is not None:
                 self._record_side_or_type_change(unit, side_or_type_change)
             present[tag] = unit
         if ignored:
             self._ignored_tags = set(still_ignored)
         return present, new
+
+    def _observe_under_linked_tag(
+        self,
+        unit: Unit[Any],
+        report: raw_pb2.Unit,
+        previous: _UnitsByTag,
+        present: _UnitsByTag,
+        still_ignored: list[int],
+    ) -> None:
+        """Observe `unit` under `report`'s tag, linked to it already, though the last observation did not list it under
+        that tag: a unit back in the observation, or a structure back in sight whose fog copy the last observation
+        listed. That copy is ignored from now on: its tag is dropped from `previous` and `present`, and added to
+        `still_ignored`."""
+        if not unit._listed:
+            del self._unlisted_units[unit._id]
+            self._record_entered_sight(unit, report)
+        elif unit._tag in self._in_fog_tags:
+            still_ignored.append(unit._tag)
+            self._ignore_structure_fog_copy(unit._tag, previous, present)
+            self._record_entered_sight(unit, report)
+        unit._tag = report.tag
 
     def _record_side_or_type_change(self, unit: Unit[Any], side_or_type_change: _SideOrTypeChange) -> None:
         """Record what a report changed of `unit`'s side and type."""

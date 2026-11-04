@@ -107,6 +107,23 @@ class _FogOffPlayback:
                 # reports its owner, though the tile under it may read in sight (in game).
                 units_listed.append(unit)
             # An enemy's placeholder, a structure ordered and not yet placed, is in its own view alone (in game).
+        units_listed.extend(
+            self._remembered_copies_listed(shown_visible, positions_listed, raw_data.map_state.visibility)
+        )
+        del raw_data.units[:]
+        raw_data.units.extend(units_listed)
+        return player_observation
+
+    def _remembered_copies_listed(
+        self,
+        shown_visible: set[int],
+        positions_listed: dict[int, tuple[float, float]],
+        visibility: common_pb2.ImageData,
+    ) -> list[raw_pb2.Unit]:
+        """The copies the player's view lists of the units it remembers in the fog, but those of units the observation
+        shows visible, by tag in `shown_visible`. A unit no longer at its copy's spot, by its position in
+        `positions_listed`, is remembered until `visibility` shows the spot in sight; then its copy is forgotten."""
+        copies_listed: list[raw_pb2.Unit] = []
         tiles_in_sight = None
         for unit_tag, remembered_copy in list(self._copies_by_unit_tag.items()):
             if unit_tag in shown_visible:
@@ -114,14 +131,12 @@ class _FogOffPlayback:
             if positions_listed.get(unit_tag) != (remembered_copy.pos.x, remembered_copy.pos.y):
                 # Gone from its spot, dead or moved off: remembered until the spot is in sight.
                 if tiles_in_sight is None:
-                    tiles_in_sight = _tiles_in_sight(raw_data.map_state.visibility)
+                    tiles_in_sight = _tiles_in_sight(visibility)
                 if tiles_in_sight[remembered_copy.pos.x, remembered_copy.pos.y]:
                     self._forget_copy_of(unit_tag)
                     continue
-            units_listed.append(remembered_copy)
-        del raw_data.units[:]
-        raw_data.units.extend(units_listed)
-        return player_observation
+            copies_listed.append(remembered_copy)
+        return copies_listed
 
     def _remember_copy_of(self, unit: raw_pb2.Unit) -> None:
         """Remember `unit`, gone into the fog, as it is now, as a copy under a tag of its own."""

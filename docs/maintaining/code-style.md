@@ -38,7 +38,10 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **No circular imports.** Where two modules would import each other, move what both need into a module of its own.
   A `TYPE_CHECKING` guard around an import that would be circular is the last resort.
 - **A value derived from a data object is a property on that object**, not a lookup its callers repeat.
-- **Short functions**: extract a named helper rather than growing the caller.
+- **Short functions**: extract a named helper rather than growing the caller. A function in `src` holds at most 30
+  statements, as ruff's `PLR0915` counts them, which `ruff check` enforces; `tests` and `tools` are exempt. In the hot
+  loop, extract the rare path, so that the common one makes no extra call: `Unit._update` calls `_update_alliance`
+  only for a report whose alliance changed.
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
   `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
   (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.

@@ -40,10 +40,20 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   disappears (#25; tested).
 - An undetected cloaked enemy is listed, as `CLOAKED` and `INVISIBLE`. An undetected burrowed enemy zergling is not
   listed at all (#37; tested), but an enemy's burrowed widow mine can be (below).
-- Force fields and reaper grenades are listed as units, not effects; a parasitic bomb adds no unit. Lurker spines are
-  one effect with several positions along a line (#12, #25). A force field is neutral, owner 16, in both players'
-  views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to the other (tool `sweep_timed_life`,
-  build 75689).
+- Force fields and reaper grenades are listed as units, not effects, and so is a parasitic bomb once it leaves its
+  target (below). Lurker spines are one effect with several positions along a line (#12, #25). A force field is
+  neutral, owner 16, in both players' views; a grenade is its reaper's owner's, `Self` to that player and `Enemy` to
+  the other (tool `sweep_timed_life`, build 75689).
+- A parasitic bomb is its target's buff, `ParasiticBomb`, and no effect. As it leaves the target, the game lists a
+  `ParasiticBombDummy` at the target's last position, the viper's player's unit. When the target dies, the dummy is
+  listed from the observation that reports the death to 161 steps after the buff was first listed, however early the
+  target died: 9 of 9 bombs, on void rays, a raven and a medivac, their dummies listed for 8 to 143 steps. On two void
+  rays that lived, the buff stayed 175 steps, and a dummy was then listed for 2. The dummy never moves, reads 1 health
+  of 1, a radius of 0.5, no orders and no timed life, to its own player too, and wears `ParasiticBombUnitKU` and
+  `ParasiticBombSecondaryUnitSearch`; it is reported dead the step after its last listing. The enemy sees it only where
+  it has sight, as any unit: one player saw 7 of the 9 left in its game. Seen in AI Arena matches 4805282 (Protoss
+  against Zerg, on PylonAIE) and 4846375 (Zerg against Terran, on PersephoneAIE), each bomb a single cast, played back
+  every step as each player and with the fog off (2026-11-04, with a probe, build 75689).
 - Map-owned units are owner 16 (stated). An enemy structure built out of sight is not listed (tested).
 
 ## What is reported of a unit
@@ -52,7 +62,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   field's contents, a hidden unit's owner. An undetected enemy listed `INVISIBLE` reports its position and cloak, and no
   health, owner, build progress, buffs, facing or energy (#25; corpus).
 - Orders, cargo, harvesters, rallies, weapon cooldown, the add-on and the engaged target are reported only for this
-  player's own units (#25; corpus).
+  player's own units (#25; corpus); an enemy's attacker shows its position and facing as its owner is shown them
+  ([what the enemy sees of an attack](damage-and-buffs.md#what-the-enemy-sees-of-an-attack)).
 - `buff_duration_remain` and `buff_duration_max` give a unit with a timed life the steps it has left only for this
   player's own: a MULE's counted down from 1441 and from 1443 in two games, against a maximum of 1440, and six
   broodlings' in each of two games from between 128 and 132, against 128, each a step at a time to 0 at its last

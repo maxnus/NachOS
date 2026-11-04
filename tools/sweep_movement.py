@@ -37,6 +37,7 @@ from _sandbox import SUCCESS, Cheat, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
+from sc2nachos.extensions.upgrade_inference._movement_windows import speed_upgrade_by_type
 from sc2nachos.gamedata import Attribute, GameData, Tech
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
@@ -50,8 +51,6 @@ from sc2nachos.run import Installation
 DEFAULT_FINDINGS_PATH = Path("movement.json")
 RACES_BY_NAME = {"terran": Race.TERRAN, "zerg": Race.ZERG, "protoss": Race.PROTOSS}
 
-# The upgrades upgrade inference reads off a buff, whose types the sweep leaves out.
-_READ_OFF_BUFFS = frozenset({UpgradeId.CHARGE})
 # The headings each course is run along, in degrees from the positive x-axis.
 _HEADINGS_DEGREES = (0.0, 45.0, 90.0)
 # The creep course is run along its hatcheries, both ways.
@@ -162,15 +161,12 @@ class MoveFinding:
 
 
 def speed_upgrades_by_type(data: GameData, race: Race) -> dict[UnitTypeId, UpgradeId]:
-    """Each type of `race` that exactly one upgrade speeds up in the rows, with that upgrade, but those whose upgrade
-    upgrade inference reads off a buff, and a type the rows give no speed without one."""
-    speed_upgrades: dict[UnitTypeId, UpgradeId] = {}
-    for unit_type, row in data.units.items():
-        if row.race is not race or row.speed == 0:
-            continue
-        speeding = [upgrade for upgrade in row.upgrades if row.with_upgrades({upgrade}).speed != row.speed]
-        if len(speeding) == 1 and speeding[0] not in _READ_OFF_BUFFS:
-            speed_upgrades[unit_type] = speeding[0]
+    """Each type of `race` that `speed_upgrade_by_type` gives, with its upgrade, in the order of the types' names."""
+    speed_upgrades = {
+        unit_type: upgrade
+        for unit_type, upgrade in speed_upgrade_by_type(data).items()
+        if data.units[unit_type].race is race
+    }
     return dict(sorted(speed_upgrades.items(), key=lambda item: item[0].name))
 
 
