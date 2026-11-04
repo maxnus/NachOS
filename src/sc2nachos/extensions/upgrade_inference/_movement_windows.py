@@ -14,7 +14,7 @@ from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
     from sc2nachos import Api
     from sc2nachos.gamedata import GameData
@@ -65,6 +65,9 @@ class MovementWindow:
     """The step of the window's first observation."""
     end_step: int
     """The step of its last."""
+    covers_its_whole_block: bool
+    """Whether it began at the first observation of its block of steps, rather than where the unit was first seen, or
+    seen again, within the block: only then does it run through the whole block."""
     distance: float
     """How far the unit moved, observation to observation, added up."""
     without_upgrade: float
@@ -109,6 +112,7 @@ class _OpenWindow:
 
     __slots__ = (
         "buffs_worn",
+        "covers_its_whole_block",
         "distance",
         "greatest_step_share",
         "last_position",
@@ -121,8 +125,9 @@ class _OpenWindow:
         "without_upgrade",
     )
 
-    def __init__(self, type_id: UnitTypeId, step: int, position: Point) -> None:
+    def __init__(self, type_id: UnitTypeId, step: int, position: Point, *, covers_its_whole_block: bool) -> None:
         self.type_id = type_id
+        self.covers_its_whole_block = covers_its_whole_block
         self.start_step = step
         self.last_step = step
         self.last_position = position
@@ -165,6 +170,7 @@ class _OpenWindow:
             upgrade,
             self.start_step,
             self.last_step,
+            self.covers_its_whole_block,
             self.distance,
             self.without_upgrade,
             self.with_upgrade,
@@ -179,25 +185,27 @@ class _OpenWindow:
 @final
 class MovementWindows:
     """How far each enemy unit of a type one speed upgrade changes moves over windows of about `window_steps` steps,
-    handed to `on_window` as each window ends.
+    handed to `on_windows` together as they end, once a block of `window_steps` steps.
 
     A unit's window runs while each observation shows it visible, of the type it had when the window began and on the
     side it was first seen on. A unit missing from an observation, as one in a transport is (in game), or not visible
     in it, begins a new window when it is seen again. Windows end on one clock for every unit, at the first observation
     of each block of `window_steps` steps: `window_steps` long where every step is observed, but for a unit's first
-    window, which may be shorter, and as long as the observations fall otherwise. The prediction of each observation's
-    move takes the speed for the ground the unit stood on at the observation before.
+    window, which may be shorter, as one that begins again does, and as long as the observations fall otherwise. The
+    prediction of each observation's move takes the speed for the ground the unit stood on at the observation before.
 
     It reads each turn's observation on `TurnStartEvent` at `EventPriority.HIGHEST`.
     """
 
-    __slots__ = ("_api", "_on_window", "_open", "_previous_step", "_speeds", "_window_steps")
+    __slots__ = ("_api", "_on_windows", "_open", "_previous_step", "_speeds", "_window_steps")
 
-    def __init__(self, api: Api[object], *, window_steps: int, on_window: Callable[[MovementWindow], object]) -> None:
+    def __init__(
+        self, api: Api[object], *, window_steps: int, on_windows: Callable[[Sequence[MovementWindow]], object]
+    ) -> None:
         """Measure the enemy of `api`'s game, which must have started, from its next turn."""
         self._api = api
         self._window_steps = window_steps
-        self._on_window = on_window
+        self._on_windows = on_windows
         self._speeds = self._speeds_by_type(api.data)
         self._open: dict[int, _OpenWindow] = {}
         self._previous_step = -1
@@ -227,6 +235,7 @@ class MovementWindows:
         block_ended = step // self._window_steps != previous_step // self._window_steps
         previously_open = self._open
         still_open: dict[int, _OpenWindow] = {}
+        ended: list[MovementWindow] = []
         for unit in api.units.enemy:
             speeds = self._speeds.get(type_id := unit.type_id)
             # The units are the enemy's, so one first seen on another side has changed sides.
@@ -234,14 +243,16 @@ class MovementWindows:
                 continue
             window = previously_open.get(unit_id := unit.id)
             if window is None or window.last_step != previous_step or window.type_id is not type_id:
-                still_open[unit_id] = _OpenWindow(type_id, step, unit.position)
+                still_open[unit_id] = _OpenWindow(type_id, step, unit.position, covers_its_whole_block=block_ended)
                 continue
             on_creep = speeds.creep_speeds_it_up and api.creep[window.last_position]
             step_speeds = speeds.on_creep if on_creep else speeds.off_creep
             window.add_move(unit.position, step, step_speeds, on_creep=on_creep, buffs=unit.buffs)
             if block_ended:
-                self._on_window(window.ended(unit_id, speeds.upgrade, is_hallucination=unit.is_hallucination))
-                window = _OpenWindow(type_id, step, unit.position)
+                ended.append(window.ended(unit_id, speeds.upgrade, is_hallucination=unit.is_hallucination))
+                window = _OpenWindow(type_id, step, unit.position, covers_its_whole_block=True)
             still_open[unit_id] = window
         self._open = still_open
         self._previous_step = step
+        if block_ended:
+            self._on_windows(ended)

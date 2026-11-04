@@ -32,6 +32,26 @@ _FAST_ZERGLING_STEP = (
 _ZERGLING_TAG = 7
 
 
+def _windows_handed_on(
+    observed: Sequence[Sequence[raw_pb2.Unit]],
+    *,
+    steps_apart: int = 1,
+    creep: common_pb2.ImageData = _NO_CREEP,
+    window_steps: int = 11,
+) -> list[Sequence[MovementWindow]]:
+    """The windows `MovementWindows` hands on together, each time it does, over a game of a turn on each of
+    `observed`, the units each observation lists, `steps_apart` steps apart, with creep where `creep` has it."""
+    observations = [
+        make_observation(index * steps_apart, units=units, creep=creep) for index, units in enumerate([*observed, ()])
+    ]
+    handed_on: list[Sequence[MovementWindow]] = []
+    api: Api[Any] = Api(
+        extensions=lambda api: MovementWindows(api, window_steps=window_steps, on_windows=handed_on.append)
+    )
+    api.play(ScriptedGame(observations, game_info=make_game_info(*_MAP_ROWS), data=shipped_game_data()).joined())
+    return handed_on
+
+
 def _windows_of(
     observed: Sequence[Sequence[raw_pb2.Unit]],
     *,
@@ -39,17 +59,9 @@ def _windows_of(
     creep: common_pb2.ImageData = _NO_CREEP,
     window_steps: int = 11,
 ) -> list[MovementWindow]:
-    """The windows `MovementWindows` hands on over a game of a turn on each of `observed`, the units each observation
-    lists, `steps_apart` steps apart, with creep where `creep` has it."""
-    observations = [
-        make_observation(index * steps_apart, units=units, creep=creep) for index, units in enumerate([*observed, ()])
-    ]
-    windows: list[MovementWindow] = []
-    api: Api[Any] = Api(
-        extensions=lambda api: MovementWindows(api, window_steps=window_steps, on_window=windows.append)
-    )
-    api.play(ScriptedGame(observations, game_info=make_game_info(*_MAP_ROWS), data=shipped_game_data()).joined())
-    return windows
+    """Every window `_windows_handed_on` gives, in the order handed on."""
+    handed_on = _windows_handed_on(observed, steps_apart=steps_apart, creep=creep, window_steps=window_steps)
+    return [window for windows in handed_on for window in windows]
 
 
 def _zergling_at(x: float, **fields: Any) -> raw_pb2.Unit:
@@ -155,10 +167,33 @@ class TestWhereTheDistanceFalls:
 class TestWhenAWindowRuns:
     def test_windows_end_on_one_clock_so_a_units_first_may_be_shorter(self) -> None:
         first_seen_on_step_5 = [[], [], [], [], [], *_zergling_running(_ZERGLING_STEP, 40)[5:]]
-        assert _types_and_steps_of(_windows_of(first_seen_on_step_5)) == [
+        windows = _windows_of(first_seen_on_step_5)
+        assert _types_and_steps_of(windows) == [
             (UnitTypeId.ZERGLING, 5, 11),
             (UnitTypeId.ZERGLING, 11, 22),
             (UnitTypeId.ZERGLING, 22, 33),
+        ]
+        assert [window.covers_its_whole_block for window in windows] == [False, True, True]
+
+    def test_one_first_seen_on_a_blocks_first_observation_covers_its_whole_block(self) -> None:
+        first_seen_on_step_11 = [[]] * 11 + _zergling_running(_ZERGLING_STEP, 23)[11:]
+        windows = _windows_of(first_seen_on_step_11)
+        assert _types_and_steps_of(windows) == [(UnitTypeId.ZERGLING, 11, 22)]
+        assert windows[0].covers_its_whole_block
+
+    def test_the_windows_of_a_block_are_handed_on_together_once_it_ends(self) -> None:
+        observed = [
+            [
+                _zergling_at(2.0 + _ZERGLING_STEP * step),
+                make_unit(1, UnitTypeId.ROACH, at=(2.0 + 0.1 * step, 25.0), alliance=Alliance.ENEMY),
+            ]
+            for step in range(23)
+        ]
+        handed_on = _windows_handed_on(observed)
+        assert [[window.type_id for window in windows] for windows in handed_on] == [
+            [],
+            [UnitTypeId.ZERGLING, UnitTypeId.ROACH],
+            [UnitTypeId.ZERGLING, UnitTypeId.ROACH],
         ]
 
     @pytest.mark.parametrize(
@@ -167,10 +202,9 @@ class TestWhenAWindowRuns:
     def test_a_unit_not_visible_in_an_observation_begins_again(self, unseen: list[raw_pb2.Unit]) -> None:
         observed = _zergling_running(_ZERGLING_STEP, 24)
         observed[6] = unseen
-        assert _types_and_steps_of(_windows_of(observed)) == [
-            (UnitTypeId.ZERGLING, 7, 11),
-            (UnitTypeId.ZERGLING, 11, 22),
-        ]
+        windows = _windows_of(observed)
+        assert _types_and_steps_of(windows) == [(UnitTypeId.ZERGLING, 7, 11), (UnitTypeId.ZERGLING, 11, 22)]
+        assert [window.covers_its_whole_block for window in windows] == [False, True]
 
     def test_a_unit_that_changes_type_begins_again(self) -> None:
         observed = [

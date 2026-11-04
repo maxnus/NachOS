@@ -138,16 +138,28 @@ class ThreatMap:
 - **Upgrade inference**, `sc2nachos.extensions.upgrade_inference.UpgradeInference`: the enemy's upgrades read off
   what only an upgrade can cause, beyond the attack, armor and shield levels NachOS reads into `api.enemy.upgrades`
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
-  unit of the bot's slowed by Concussive Shells or matrixed, and an enemy storm. It adds what it reads with
-  `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed count it. It reads each
-  turn's observation on `TurnStartEvent`, and the one the game ended on, which gets no turn, on `GameEndEvent`, both
-  at `EventPriority.HIGHEST`, before any handler of the bot's. It has no options and nothing to call:
+  unit of the bot's slowed by Concussive Shells or matrixed, an enemy storm, and the speed upgrades enemy units move
+  at. It adds what it reads with `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed
+  count it. It reads each turn's observation on `TurnStartEvent`, and the one the game ended on, which gets no turn,
+  on `GameEndEvent`, both at `EventPriority.HIGHEST`, before any handler of the bot's. It has nothing to call, and one
+  option:
 
   ```python
   class Extensions:
       def __init__(self, api: Api) -> None:
           self.upgrade_inference = UpgradeInference(api)
   ```
+
+  With `include_speed_upgrades`, on unless `UpgradeInference(api, include_speed_upgrades=False)` turns it off, it
+  also reads ten speed upgrades off how fast enemy units move, from Metabolic Boost to Flux Vanes, as its docstring
+  lists. Every 22 steps a unit that moved steadily at its speed with the upgrade votes for it, and one at its speed
+  without against it, and each upgrade keeps the probability that the enemy has it, from a floor of 1%. It assumes
+  the upgrade at 99%, as one block of 22 steps with a vote for it does, and forgets it below 50%, as one with only
+  votes against after that does. It forgets only a speed upgrade it assumed itself: one the bot assumed first stays,
+  but one the bot assumes after it did, it may forget too. The rule was checked over 1,296 playbacks of AI Arena's
+  games observed at every step, with no wrong assumption in the 433 in which one was possible (tool
+  `replay_movement`); a bot that observes fewer steps tells less well a unit that moved steadily from one that stopped
+  and started again. It measures every visible enemy unit of the types those upgrades speed up, every turn.
 
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.

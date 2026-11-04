@@ -123,12 +123,11 @@ class _Recorder:
         self.windows: list[MovementWindow] = []
         self.upgrade_steps: dict[str, int] = {}
         self.last_step = 0
-        MovementWindows(api, window_steps=_WINDOW_STEPS, on_window=self._keep_if_moved)
+        MovementWindows(api, window_steps=_WINDOW_STEPS, on_windows=self._keep_those_that_moved)
         api.on(TurnStartEvent)(self._note_the_turn)
 
-    def _keep_if_moved(self, window: MovementWindow) -> None:
-        if window.distance > 0:
-            self.windows.append(window)
+    def _keep_those_that_moved(self, windows: Sequence[MovementWindow]) -> None:
+        self.windows.extend(window for window in windows if window.distance > 0)
 
     def _note_the_turn(self, *_: object) -> None:
         api = self._api
