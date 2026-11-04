@@ -1005,10 +1005,10 @@ Keep this file current: when a step is done, say so here in the same pull reques
       dies or runs dry, or its base's townhall is gone. A return a worker shows counts as cargo on a hand-over, and a
       collector returning is left to it, since gas from a rich geyser wears no buff. Collectors, like miners, are in no
       move's way. Built in #208.
-    - No move for gas until measured (the owner, over measuring first and over building both at once): a geyser's
-      third worker already waits on it (Liquipedia's 1.02, 2.05 and 2.72 gas a second for one, two and three, in
-      AvocaDOS's `COLLECTOR_RATES`), and ares-sc2's gas boost is off by default, only below three workers a geyser,
-      and marked "currently not working".
+    - No move for gas until measured (the owner, over measuring first and over building both at once; measured and
+      built since, under "Measuring speed-mined gas" below): a geyser's third worker already waits on it
+      (Liquipedia's 1.02, 2.05 and 2.72 gas a second for one, two and three, in AvocaDOS's `COLLECTOR_RATES`), and
+      ares-sc2's gas boost is off by default, only below three workers a geyser, and marked "currently not working".
     - The owner's review of #208, one question a thread:
       - `workers` reads every worker held, miners and collectors, and one `workers_at(field_or_gas_building)` replaces
         `miners_at` and `collectors_at` (the owner, over `workers` alone, which I had recommended, `workers_at` being
@@ -1120,9 +1120,20 @@ Keep this file current: when a step is done, say so here in the same pull reques
   - Games played here on build 75689 give what the `sc2` workflow gives, to the vespene and the step: the lanes,
     waypoints and yielding were measured here, and runs 41861977180 (two collectors) and 41861981124 (one and three)
     measure the lanes there, with replays.
-  - Next: plan with the owner whether and how the move goes into `collect`, perhaps both moves on the line, a
-    collector coming out given its move only once past every collector of its gas building going in on its move. Do
-    not put the findings into speed mining or its docs before that.
+  - With yields, the third worker of a refinery adds 29 vespene a minute at the nearer and 39 at the farther, against
+    41 to 50 over two on plain gathers, and about 60 to 70 minerals a minute it would mine instead; two at the nearer
+    collect 135 a minute against 131 for one at each. On the pool's 97 bases with two geysers, 68 have them at
+    different distances from the townhall's center, 52 of those 7.62 and 8.06; `Expansion.geysers` is nearest first.
+  - Speed collecting (the owner, 2026-11-04, over each of the alternatives, as recommended): built in one pull
+    request from this branch, the sweep its evidence, since both edit this plan. `collect` gives both moves on the
+    line between the centers, a collector's trip read off its order since rich gas shows no cargo, and one coming out
+    given no move, or taken off it, while a collector of its gas building going in on its move has yet to pass it, the
+    units in the way counted as for miners. `_is_mining` and `_is_collecting` are one check, `_is_its_work`. Given no
+    gas building, `collect` fills a base's to two nearest its townhall first, then to three farthest first. The rule
+    holds for every race, measured with SCVs only. The sweep's `collect` variant measures it: what `yield-out` gave, to
+    the vespene, at one, two and three a refinery on both seeds.
+  - Next, apart from this: two miners of a field may meet head on the same way, both on their moves (unmeasured).
+    Then AvocaDOS hands its collectors to speed mining, dropping its own `Expansion._collect_vespene`.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - M6, in the order of section 3.

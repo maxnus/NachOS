@@ -5,10 +5,12 @@ Needs StarCraft II installed. Plays one game on the sandbox's map for each trial
 computer, which keeps the game going, where a game alone ends at once. Every starting SCV is handed to speed mining's
 `mine`; once there are the minerals for it, the miner nearest each geyser of the main is released to build a refinery
 on it, as a refinery made there by debug command took no collector (`sc2` run 41827726722). Once both refineries are
-finished and their builders out of them, `SpeedMining.collect` takes each refinery's builder and the miners nearest it,
-as many as the trial says. A trial is a count of collectors a refinery, a seed, and a variant, by name:
+finished and their builders out of them, each refinery's builder and the miners nearest it, as many as the trial says,
+are its collectors: released from speed mining and sent to gather at it, its cargo handed in first, or in the `collect`
+variant handed to `SpeedMining.collect`. A trial is a count of collectors a refinery, a seed, and a variant, by name:
 
-- `plain` gives no move: speed mining keeps each collector on plain gathers and returns, as `collect` does.
+- `plain` gives no move: each collector is sent to gather once, and the game keeps it on plain gathers and returns.
+- `collect` gives no move of the sweep's: speed mining collects, with the moves `collect` gives.
 - The others also give a collector the move speed mining gives its miners, within 0.75 to `farthest` of where its trip
   ends, 2 unless the variant says otherwise, on the trip to the refinery, the trip back, or both. On the trip to the
   refinery, a collector on its gather at it is given a move ending `gather_inset` past where a worker's circle touches
@@ -125,6 +127,8 @@ class _Variant:
     as the module's docstring says; or `None` for neither."""
     yield_distance: float = 0.0
     """How near each other the two come before one of them yields."""
+    speed_collected: bool = False
+    """Whether the collectors are handed to `SpeedMining.collect` rather than sent to gather once."""
 
     @property
     def gives_moves(self) -> bool:
@@ -136,6 +140,7 @@ _VARIANTS = {
     variant.name: variant
     for variant in (
         _Variant(name="plain"),
+        _Variant(name="collect", speed_collected=True),
         _Variant(name="both", gather_inset=0.0, return_move=True),
         _Variant(name="both-back", gather_inset=0.0, return_move=True, gather_after_return=True),
         _Variant(name="both-early", gather_inset=0.0, return_move=True, farthest=3.0),
@@ -256,6 +261,7 @@ class _TrialGame:
         self._measured = measured
         self._main: Expansion | None = None
         self._builder_by_geyser: dict[Unit[UnitType.AnyVespeneGeyser], OwnUnit[UnitType.Worker]] = {}
+        self._refinery_by_collector: dict[OwnUnit[UnitType.Worker], Unit[UnitType.GasBuilding]] = {}
         self._handed_over_at: GameTime | None = None
         self._measuring_from: GameTime | None = None
         self._measuring_from_step = 0
@@ -362,7 +368,7 @@ class _TrialGame:
 
     def _note_the_collectors_mining(self) -> None:
         """Note each collector on a gather at a mineral field, by its refinery."""
-        for scv, refinery in self.api.extensions.collectors.items():
+        for scv, refinery in self._refinery_by_collector.items():
             current_order = scv.current_order if scv.is_orderable else None
             if current_order is None or current_order.ability is not AbilityId.GATHER:
                 continue
@@ -375,7 +381,7 @@ class _TrialGame:
         """Follow each collector going into its refinery and coming out, and if `record`, note where it was last seen
         before going in and first seen coming out, with the steps it stayed inside and those since it last went in."""
         step = self.api.step
-        for scv, refinery in self.api.extensions.collectors.items():
+        for scv, refinery in self._refinery_by_collector.items():
             trip_log = self._trip_log_by_refinery.setdefault(refinery, _TripLog())
             if scv.is_listed:
                 if (went_in := self._inside_since_by_collector.pop(scv.id, None)) is not None and record:
@@ -394,10 +400,10 @@ class _TrialGame:
                         trip_log.steps_between_entries.append(step - last_entry)
 
     def _hand_over(self, main: Expansion, refineries: Sequence[Unit[UnitType.GasBuilding]]) -> None:
-        """Hand each of `refineries`' builder and the miners nearest it to speed mining to collect, as many as the trial
-        says, and work out where each refinery's trips end, on the line between the centers and on each collector's
-        lane. Raises `RuntimeError` for a worker `collect` refuses, as the time measured would then measure
-        nothing."""
+        """Make each of `refineries`' builder and the miners nearest it its collectors, as many as the trial says, as
+        the module's docstring says, and work out where each refinery's trips end, on the line between the centers and
+        on each collector's lane. Raises `RuntimeError` for a worker `collect` refuses, as the time measured would then
+        measure nothing."""
         speed_mining = self.api.extensions
         variant = self._trial.variant
         gather_inset = variant.gather_inset or 0.0
@@ -407,8 +413,12 @@ class _TrialGame:
                 (scv for scv in speed_mining.miners if scv.is_orderable), key=lambda scv: scv.distance_to(refinery)
             )
             for index, scv in enumerate([builder, *miners[: self._trial.collectors - 1]]):
-                if speed_mining.collect(scv, refinery) is None:
-                    raise RuntimeError(f"collect refused {scv!r} at {refinery!r}")
+                if variant.speed_collected:
+                    if speed_mining.collect(scv, refinery) is None:
+                        raise RuntimeError(f"collect refused {scv!r} at {refinery!r}")
+                else:
+                    self._send_to_gather(scv, refinery)
+                self._refinery_by_collector[scv] = refinery
                 lane_offset = _lane_offset_of_collector(index, variant.lane_spacing)
                 self._trip_ends_by_collector[scv.id] = _trip_ends(main, refinery, gather_inset, lane_offset)
             trip_ends = self._trip_ends_by_refinery[refinery] = _trip_ends(main, refinery, gather_inset, 0.0)
@@ -418,6 +428,17 @@ class _TrialGame:
                 )
         self._handed_over_at = self.api.time
 
+    def _send_to_gather(self, scv: OwnUnit[UnitType.Worker], refinery: Unit[UnitType.GasBuilding]) -> None:
+        """Release `scv` from speed mining and send it to gather at `refinery`, behind a return of any cargo it
+        carries, as `collect` sends a worker."""
+        self.api.extensions.release(scv)
+        order_book = self.api.orders
+        if scv.is_carrying_resource:
+            order_book.issue(scv, AbilityId.RETURN, force=True)
+            order_book.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+        else:
+            order_book.issue(scv, AbilityId.GATHER, target=refinery)
+
     def _give_the_moves(self, main: Expansion) -> None:
         """Give the moves at each refinery, as `_give_the_moves_at` says, and count the collectors that begin to
         yield."""
@@ -425,7 +446,7 @@ class _TrialGame:
         if townhall is None:
             return
         collectors_by_refinery: dict[Unit[UnitType.GasBuilding], list[OwnUnit[UnitType.Worker]]] = {}
-        for scv, refinery in self.api.extensions.collectors.items():
+        for scv, refinery in self._refinery_by_collector.items():
             collectors_by_refinery.setdefault(refinery, []).append(scv)
         yielding_ids: set[int] = set()
         for refinery, collectors in collectors_by_refinery.items():
@@ -563,7 +584,7 @@ class _TrialGame:
                     position=(refinery.position.x, refinery.position.y),
                     distance_to_the_townhall=refinery.distance_to(main.center),
                     radius=refinery.radius,
-                    collectors=len(api.extensions.workers_at(refinery)),
+                    collectors=sum(held_at is refinery for held_at in self._refinery_by_collector.values()),
                     vespene_taken=self._vespene_left_at_the_start[refinery] - refinery.vespene_contents,
                     collectors_seen_mining=len(self._seen_mining_by_refinery.get(refinery, ())),
                     first_seen_mining_at=(

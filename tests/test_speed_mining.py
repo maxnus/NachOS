@@ -40,9 +40,26 @@ _OTHER_FIELD = 101
 _GATHER_POINT = Point((29.675, 24.5)).rounded_down(step=1 / 4096)
 _RETURN_POINT = Point((27.625, 24.5))
 _HANDED_SCV = 10
-# This player's refineries on the main's first geyser, at (31.5, 27.5), and its second, at (20.5, 17.5).
+# This player's refineries on the main's first geyser, at (31.5, 27.5), 7.62 from the townhall's center, and its
+# second, at (20.5, 17.5), 8.06 from it, with a refinery's radius (in game).
 _REFINERY = 121
 _OTHER_REFINERY = 122
+_REFINERY_AT = Point((31.5, 27.5))
+_REFINERY_RADIUS = 1.6875
+# Where the moves of a trip to `_REFINERY` and back end: where a worker's circle touches the refinery's, toward the
+# townhall's center, and 3.125 from the townhall's center, as the game keeps a point.
+_UNKEPT_GAS_GATHER_POINT = _REFINERY_AT.towards(_TOWNHALL_CENTER, _REFINERY_RADIUS + 0.375)
+_GAS_GATHER_POINT = _UNKEPT_GAS_GATHER_POINT.rounded_down(step=1 / 4096)
+_GAS_RETURN_POINT = Point(_TOWNHALL_CENTER).towards(_UNKEPT_GAS_GATHER_POINT, 3.125).rounded_down(step=1 / 4096)
+# Where a collector stands far from where either of a trip's moves to or from `_REFINERY` ends.
+_FAR_FROM_THE_GAS_TRIP_ENDS = (26.0, 30.0)
+
+
+def _between_the_refinery_and_the_townhall(distance_from_the_refinery: float) -> tuple[float, float]:
+    """The point `distance_from_the_refinery` from `_REFINERY`'s center toward the townhall's: its trip's move in ends
+    2.0625 from it, and its trip's move back 4.49."""
+    point = _REFINERY_AT.towards(_TOWNHALL_CENTER, distance_from_the_refinery)
+    return (point.x, point.y)
 
 
 def _pylon_main(
@@ -93,9 +110,9 @@ def _refinery(
 ) -> raw_pb2.Unit:
     """This player's finished refinery on the geyser of the base around a townhall at `at` tagged `tag` - 10, as
     `_pylon_main` tags them: its first geyser for a tag ending in 1, its second for one ending in 2. It has
-    `vespene_contents` left and the rest of what `fields` report."""
+    `vespene_contents` left, a refinery's radius, and the rest of what `fields` report."""
     dx, dy = _GEYSER_OFFSETS[tag % 10 - 1]
-    fields = {"build_progress": 1.0, **fields}
+    fields = {"build_progress": 1.0, "radius": _REFINERY_RADIUS, **fields}
     return make_unit(tag, UnitTypeId.REFINERY, at=(at[0] + dx, at[1] + dy), vespene_contents=vespene_contents, **fields)
 
 
@@ -547,10 +564,14 @@ class TestUnitsInTheWay:
         ]
 
     def test_a_worker_speed_mining_holds_to_collect_is_out_of_its_way(self) -> None:
+        """The collector, near enough `_REFINERY`, is given its own move, the miner out of its way too."""
         near = _reported_scv((28.175, 24.5), _gather_order())
         collector = _reported_scv(_IN_THE_WAY, _gather_order(_REFINERY), tag=20)
         assert _orders_sent([*_pylon_main(), _refinery(), near, collector], collected=[(20, _REFINERY)]) == [
-            _move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD)
+            [
+                *_move_then(AbilityId.GATHER, _GATHER_POINT, _MINED_FIELD),
+                *_move_then(AbilityId.GATHER, _GAS_GATHER_POINT, _REFINERY),
+            ]
         ]
 
 
@@ -816,8 +837,8 @@ def _collectors_held_each_turn(held: list[list[int]]) -> Callable[[Api[SpeedMini
 
 
 class TestCollecting:
-    """A worker handed over with `collect` is kept collecting vespene from its gas building, on plain gathers and
-    returns."""
+    """A worker handed over with `collect` is kept collecting vespene from its gas building, far from where its trips
+    end on plain gathers and returns."""
 
     def test_an_idle_worker_is_sent_to_gather_at_its_gas_building_once(self) -> None:
         """The next turn's orders may not show the gather yet; nothing goes out again."""
@@ -830,9 +851,9 @@ class TestCollecting:
     @pytest.mark.parametrize(
         "collecting",
         [
-            _reported_scv((28.5, 26.0), _gather_order(_REFINERY)),
-            _scv_carrying_vespene((28.5, 26.0), _return_order()),
-            _reported_scv((28.5, 26.0), _return_order()),
+            _reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, _gather_order(_REFINERY)),
+            _scv_carrying_vespene(_FAR_FROM_THE_GAS_TRIP_ENDS, _return_order()),
+            _reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, _return_order()),
         ],
         ids=["gathering", "returning vespene", "returning gas from a rich geyser, which shows no cargo"],
     )
@@ -848,8 +869,8 @@ class TestCollecting:
         ]
 
     def test_a_collector_idle_with_cargo_returns_it_with_the_gather_queued_behind(self) -> None:
-        collecting = [*_pylon_main(), _refinery(), _reported_scv((28.5, 26.0), _gather_order(_REFINERY))]
-        idle_with_vespene = [*_pylon_main(), _refinery(), _scv_carrying_vespene((28.5, 26.0))]
+        collecting = [*_pylon_main(), _refinery(), _reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, _gather_order(_REFINERY))]
+        idle_with_vespene = [*_pylon_main(), _refinery(), _scv_carrying_vespene(_FAR_FROM_THE_GAS_TRIP_ENDS)]
         assert _orders_sent(collecting, idle_with_vespene, assigned=(), collected=[(_HANDED_SCV, _REFINERY)]) == [
             [],
             [(AbilityId.RETURN, None, False), (AbilityId.GATHER, _REFINERY, True)],
@@ -874,7 +895,7 @@ class TestCollecting:
 
     def test_a_collector_the_bot_sends_to_mine_or_build_is_left_alone_until_it_is_idle(self) -> None:
         turns = [
-            [*_pylon_main(), _refinery(), _reported_scv((28.5, 26.0), order)]
+            [*_pylon_main(), _refinery(), _reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, order)]
             for order in (_gather_order(_REFINERY), _gather_order(_MINED_FIELD), _build_order())
         ]
         idle = [*_pylon_main(), _refinery(), _reported_scv((30.0, 33.0))]
@@ -904,6 +925,103 @@ class TestCollecting:
         assert _orders_sent(units, assigned=(), collected=[(_HANDED_SCV, _REFINERY)], started=release) == [[]]
 
 
+class TestSpeedCollecting:
+    """Each trip of a collector ends in a move, as a miner's does, the trip read off its gather or return, and one
+    coming out of its gas building yields to one going in on its move."""
+
+    def test_a_collector_near_its_gas_building_is_given_the_move_with_the_gather_behind_once(self) -> None:
+        """Its orders may not show the move in the next observation; nothing goes out again for it."""
+        near = [
+            *_pylon_main(),
+            _refinery(),
+            _reported_scv(_between_the_refinery_and_the_townhall(3.4), _gather_order(_REFINERY)),
+        ]
+        assert _orders_sent(near, near, assigned=(), collected=[(_HANDED_SCV, _REFINERY)]) == [
+            _move_then(AbilityId.GATHER, _GAS_GATHER_POINT, _REFINERY),
+            [],
+        ]
+
+    @pytest.mark.parametrize(
+        "returning",
+        [
+            _scv_carrying_vespene(_between_the_refinery_and_the_townhall(3.3), _return_order()),
+            _reported_scv(_between_the_refinery_and_the_townhall(3.3), _return_order()),
+        ],
+        ids=["vespene", "gas from a rich geyser, which shows no cargo"],
+    )
+    def test_a_collector_near_the_townhall_returning_is_given_the_move_with_the_return_behind(
+        self, returning: raw_pb2.Unit
+    ) -> None:
+        units = [*_pylon_main(), _refinery(), returning]
+        assert _orders_sent(units, assigned=(), collected=[(_HANDED_SCV, _REFINERY)]) == [
+            _move_then(AbilityId.SMART, _GAS_RETURN_POINT, _COMMAND_CENTER)
+        ]
+
+    @pytest.mark.parametrize("distance_from_the_refinery", [2.5, 4.5])
+    def test_a_collector_too_near_or_too_far_from_where_its_trip_ends_is_left_on_its_gather(
+        self, distance_from_the_refinery: float
+    ) -> None:
+        """0.44 and 2.44 from where the move of its trip ends."""
+        at = _between_the_refinery_and_the_townhall(distance_from_the_refinery)
+        units = [*_pylon_main(), _refinery(), _reported_scv(at, _gather_order(_REFINERY))]
+        assert _orders_sent(units, assigned=(), collected=[(_HANDED_SCV, _REFINERY)]) == [[]]
+
+    def test_a_collector_on_its_way_to_a_field_it_was_handed_before_is_sent_to_its_own_gas_building(self) -> None:
+        on_its_way = _reported_scv((28.175, 24.5), _move_order(_GATHER_POINT), _gather_order())
+        units = [*_pylon_main(), _refinery(), on_its_way]
+        assert _orders_sent(units, assigned=(), collected=[(_HANDED_SCV, _REFINERY)]) == [
+            [(AbilityId.GATHER, _REFINERY, False)]
+        ]
+
+    def test_no_move_is_given_to_a_collector_while_a_unit_stands_in_its_way(self) -> None:
+        near = _reported_scv(_between_the_refinery_and_the_townhall(3.4), _gather_order(_REFINERY))
+        marine = _unit_at(_between_the_refinery_and_the_townhall(2.7), UnitTypeId.MARINE)
+        units = [*_pylon_main(), _refinery(), near, marine]
+        assert _orders_sent(units, assigned=(), collected=[(_HANDED_SCV, _REFINERY)]) == [[]]
+
+    def test_one_coming_out_is_given_no_move_until_one_going_in_on_its_move_has_passed(self) -> None:
+        """SCV 11 goes in on its move, from 3.6 from the refinery's center to 2.5, while `_HANDED_SCV` comes out on
+        its return, from 3.0 to 3.5, both turns near enough the townhall for its move."""
+        going_in = [
+            _reported_scv(
+                _between_the_refinery_and_the_townhall(distance),
+                _move_order(_GAS_GATHER_POINT),
+                _gather_order(_REFINERY),
+                tag=11,
+            )
+            for distance in (3.6, 2.5)
+        ]
+        coming_out = [
+            _scv_carrying_vespene(_between_the_refinery_and_the_townhall(distance), _return_order())
+            for distance in (3.0, 3.5)
+        ]
+        sent = _orders_sent(
+            *([*_pylon_main(), _refinery(), out, into] for out, into in zip(coming_out, going_in, strict=True)),
+            assigned=(),
+            collected=[(_HANDED_SCV, _REFINERY), (11, _REFINERY)],
+        )
+        assert sent == [[], _move_then(AbilityId.SMART, _GAS_RETURN_POINT, _COMMAND_CENTER)]
+
+    def test_one_coming_out_on_its_move_is_given_its_return_back_when_one_going_in_is_given_its_move(self) -> None:
+        """SCV 11, going in, 3.4 from the refinery's center, has yet to pass `_HANDED_SCV`, 3.0 from it."""
+        going_in = _reported_scv(_between_the_refinery_and_the_townhall(3.4), _gather_order(_REFINERY), tag=11)
+        coming_out = _scv_carrying_vespene(
+            _between_the_refinery_and_the_townhall(3.0), _move_order(_GAS_RETURN_POINT), _return_order()
+        )
+        sent = _orders_sent(
+            [*_pylon_main(), _refinery(), coming_out, going_in],
+            assigned=(),
+            collected=[(_HANDED_SCV, _REFINERY), (11, _REFINERY)],
+        )
+        assert sent == [
+            [
+                *_move_then(AbilityId.GATHER, _GAS_GATHER_POINT, _REFINERY),
+                (AbilityId.RETURN, None, False),
+                (AbilityId.GATHER, _REFINERY, True),
+            ]
+        ]
+
+
 class TestLettingGoOfACollector:
     @pytest.mark.parametrize(
         ("second_turn", "dead"),
@@ -920,8 +1038,8 @@ class TestLettingGoOfACollector:
         """The second turn's worker, idle with cargo, would be sent to return it if speed mining held it."""
         held: list[list[int]] = []
         turns = [
-            [*_pylon_main(), _refinery(), _reported_scv((28.5, 26.0), _gather_order(_REFINERY))],
-            [*second_turn, _scv_carrying_vespene((28.5, 26.0))],
+            [*_pylon_main(), _refinery(), _reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, _gather_order(_REFINERY))],
+            [*second_turn, _scv_carrying_vespene(_FAR_FROM_THE_GAS_TRIP_ENDS)],
         ]
         sent = _orders_sent(
             *turns,
@@ -1010,36 +1128,55 @@ class TestHandingOverToCollect:
         assert handed == [(True, False)]
 
     @pytest.mark.parametrize(
-        ("collectors_at_the_nearer", "picked"),
-        [(0, _REFINERY), (3, _OTHER_REFINERY)],
-        ids=["the nearest", "the other once the nearest is full"],
+        ("collectors_at_the_nearer", "collectors_at_the_farther", "picked"),
+        [
+            (0, 0, _REFINERY),
+            (1, 0, _REFINERY),
+            (2, 0, _OTHER_REFINERY),
+            (2, 1, _OTHER_REFINERY),
+            (2, 2, _OTHER_REFINERY),
+            (3, 2, _OTHER_REFINERY),
+            (2, 3, _REFINERY),
+        ],
+        ids=[
+            "the nearer to the townhall",
+            "the nearer to two",
+            "the farther once the nearer has two",
+            "the farther to two",
+            "a third at the farther",
+            "a third at the farther once the nearer is full",
+            "a third at the nearer once the farther is full",
+        ],
     )
-    def test_collect_with_no_gas_building_picks_the_nearest_with_room(
-        self, collectors_at_the_nearer: int, picked: int
+    def test_collect_with_no_gas_building_fills_each_to_two_nearest_the_townhall_first_and_then_to_three_farthest_first(
+        self, collectors_at_the_nearer: int, collectors_at_the_farther: int, picked: int
     ) -> None:
-        """An SCV at (30.0, 26.0), beside `_REFINERY`."""
-        others = [(20 + index, _REFINERY) for index in range(collectors_at_the_nearer)]
-        scvs = [_reported_scv((30.0, 27.0), _gather_order(_REFINERY), tag=tag) for tag, _ in others]
+        """An SCV at (22.0, 19.0), beside `_OTHER_REFINERY`, the farther from the townhall's center."""
+        others = [
+            *((20 + index, _REFINERY) for index in range(collectors_at_the_nearer)),
+            *((30 + index, _OTHER_REFINERY) for index in range(collectors_at_the_farther)),
+        ]
+        scvs = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, tag=tag) for tag, _ in others]
         picked_gas_buildings: list[int | None] = []
 
         def hand_over_with_no_gas_building(api: Api[SpeedMining]) -> None:
             gas_building = api.extensions.collect(_own_unit_of_tag(api, _HANDED_SCV))
             picked_gas_buildings.append(None if gas_building is None else gas_building.tag)
 
-        units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), _reported_scv((30.0, 26.0)), *scvs]
+        units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), _reported_scv((22.0, 19.0)), *scvs]
         _orders_sent(units, assigned=(), collected=others, started=hand_over_with_no_gas_building)
         assert picked_gas_buildings == [picked]
 
     @pytest.mark.parametrize(
         ("collectors_at_the_nearer_base", "picked"),
-        [(0, 222), (6, _REFINERY)],
+        [(0, 221), (6, _REFINERY)],
         ids=["the nearer base", "the other once it is full"],
     )
     def test_collect_with_no_gas_building_picks_the_base_nearest_the_worker_with_room(
         self, collectors_at_the_nearer_base: int, picked: int
     ) -> None:
-        """A second base, its townhall at (56.5, 24.5), its refineries tagged 221 and 222; an SCV at (42.0, 28.0),
-        nearer it, though nearer `_REFINERY` than either of them."""
+        """A second base, its townhall at (56.5, 24.5), its refineries tagged 221, the nearer its townhall, and 222; an
+        SCV at (42.0, 28.0), nearer it, though nearer `_REFINERY` than either of them."""
         others = [(20 + index, 221 + index // 3) for index in range(collectors_at_the_nearer_base)]
         scvs = [_reported_scv((60.0, 27.0), tag=tag) for tag, _ in others]
         picked_gas_buildings: list[int | None] = []
@@ -1191,3 +1328,93 @@ def test_in_a_real_game_speed_mined_scvs_mine_more_than_scvs_sent_to_gather_once
         run_local("PylonAIE_v4", api, opponent, race=Race.TERRAN, time_limit=GameTime(seconds=120), random_seed=1)
 
     assert speed_mined.score.collected.minerals > 1.05 * sent_once.score.collected.minerals
+
+
+# How long the in-game test of collecting gives the main's refineries to be built and their builders to come out, from
+# the start, then the collectors to settle, and then measures for.
+_TIME_TO_BUILD_THE_REFINERIES = GameTime(seconds=90)
+_TIME_TO_SETTLE = GameTime(seconds=20)
+_TIME_MEASURED = GameTime(seconds=120)
+
+
+def _vespene_collected_on_pylons_main(*, speed_collected: bool) -> float:
+    """Play a game on Pylon, its SCVs speed mining its main until two of them have built a refinery on each of its
+    geysers, then two SCVs collecting at each, the builder and the miner nearest, handed to `collect` if
+    `speed_collected`, else sent to gather once, and return the vespene collected over the time measured."""
+    api = Api(extensions=SpeedMining)
+    builder_by_geyser: dict[Point, OwnUnit[Any]] = {}
+    handed_over_at: list[GameTime] = []
+    vespene_at_the_start: list[float] = []
+
+    @api.on(GameStartEvent)
+    def mine(event: GameStartEvent) -> None:
+        for worker in api.units.own.workers:
+            api.extensions.mine(worker)
+
+    @api.on(TurnEvent)
+    def build_then_collect(event: TurnEvent) -> None:
+        if handed_over_at:
+            if not vespene_at_the_start and api.time >= handed_over_at[0] + _TIME_TO_SETTLE:
+                vespene_at_the_start.append(api.score.collected.vespene)
+            return
+        main = api.expansions[0]
+        refinery_by_geyser = {refinery.position: refinery for refinery in api.units.own.gas_buildings}
+        finished = [
+            refinery_by_geyser[geyser.position]
+            for geyser in main.geysers
+            if geyser.position in refinery_by_geyser
+            and refinery_by_geyser[geyser.position].is_complete
+            and builder_by_geyser[geyser.position].is_orderable
+            and not builder_by_geyser[geyser.position].is_constructing
+        ]
+        if len(finished) == len(main.geysers):
+            for refinery in finished:
+                builder = builder_by_geyser[refinery.position]
+                miner = min(
+                    (scv for scv in api.extensions.miners if scv.is_orderable),
+                    key=lambda scv: scv.distance_to(refinery),
+                )
+                for scv in (builder, miner):
+                    if speed_collected:
+                        api.extensions.collect(scv, refinery)
+                    else:
+                        api.extensions.release(scv)
+                        if scv.is_carrying_resource:
+                            api.orders.issue(scv, AbilityId.RETURN, force=True)
+                            api.orders.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+                        else:
+                            api.orders.issue(scv, AbilityId.GATHER, target=refinery)
+            handed_over_at.append(api.time)
+            return
+        minerals = api.resources.minerals
+        cost = api.data.units[UnitTypeId.REFINERY].cost.minerals
+        for geyser in main.geysers:
+            if geyser.position in refinery_by_geyser or geyser.position in builder_by_geyser or minerals < cost:
+                continue
+            builder = min(
+                (scv for scv in api.extensions.miners if scv.is_orderable), key=lambda scv: scv.distance_to(geyser)
+            )
+            api.extensions.release(builder)
+            api.orders.issue(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
+            builder_by_geyser[geyser.position] = builder
+            minerals -= cost
+
+    opponent = Computer(Race.ZERG, Difficulty.VERY_EASY)
+    time_limit = _TIME_TO_BUILD_THE_REFINERIES + _TIME_TO_SETTLE + _TIME_MEASURED
+    run_local("PylonAIE_v4", api, opponent, race=Race.TERRAN, time_limit=time_limit, random_seed=1)
+    assert vespene_at_the_start, "the refineries were not built in time"
+    return api.score.collected.vespene - vespene_at_the_start[0]
+
+
+@pytest.mark.integration
+def test_in_a_real_game_two_scvs_a_refinery_speed_collected_collect_more_than_two_sent_to_gather_once() -> None:
+    """Run with `pytest -m integration`. Plays two games on Pylon, two SCVs collecting at each refinery of its main for
+    two minutes, once they are built: speed collected, they collected 9 to 10% more in
+    `tools/sweep_gas.py`'s games."""
+    try:
+        MapFile.find("PylonAIE_v4")
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+    sent_once = _vespene_collected_on_pylons_main(speed_collected=False)
+    speed_collected = _vespene_collected_on_pylons_main(speed_collected=True)
+    assert speed_collected > 1.05 * sent_once
