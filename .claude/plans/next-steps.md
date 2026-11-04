@@ -25,8 +25,9 @@ As of 2026-11-04:
   `SpeedMining.workers_at` (#229), `Order.units`, and `UnitCommand.units` and `AutocastToggle.units` hand out `Units`,
   where they handed out tuples, which a `Units` never equals; that an extension's handlers take `EventPriority.BEFORE`
   or `AFTER`, and only they (#232): AvocaDOS's turn clock, subscribed among its extensions at `HIGHEST`, moves to
-  `BEFORE`; and that speed mining lets go of a worker the bot orders elsewhere (#231), which no longer comes back to
-  its field by itself.
+  `BEFORE`; that a handler of `AnyUpgradeEvent` is handed upgrade inference's `EnemyUpgradeAssumedEvent` and
+  `EnemyUpgradeForgottenEvent` too (#233); and that speed mining lets go of a worker the bot orders elsewhere (#231),
+  which no longer comes back to its field by itself.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -163,6 +164,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   first. The rule holds for every race, measured with SCVs only.
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
+- **Upgrade inference hands out what it changes in `api.enemy.upgrades`** (the owner, 2026-11-04): an
+  `EnemyUpgradeAssumedEvent` for each upgrade it adds and an `EnemyUpgradeForgottenEvent` for each it takes out, both
+  `AnyUpgradeEvent`s, at once as it reads, and none for what the bot assumes or forgets or for the levels the core
+  reads.
 - **Speed upgrades read off how fast enemy units move**, built in #226 (the owner, 2026-11-04, one question at a
   time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
   loop and with few code paths:
