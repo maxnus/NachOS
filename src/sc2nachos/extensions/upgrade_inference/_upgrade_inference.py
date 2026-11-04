@@ -116,8 +116,9 @@ class UpgradeInference:
     The three thresholds set how much evidence a speed upgrade needs, not what 22 steps of votes weigh, which the
     rule's errors on the replays fix: from 0.1% assuming at 99.9%, two of 22 steps with a vote for it assume it. If the
     weights are right, the chance that an enemy without an upgrade ever has its score reach where it is assumed is at
-    most the floor's odds over the threshold's each time the score leaves its floor, 1 in 9,800 by default, though
-    one group's 22 steps one after another tell less than as many apart. The replays checked the defaults alone.
+    most the floor's odds over the threshold's each time the score leaves its floor, 1 in 9,800 by default; less so
+    where it takes several 22 steps, since one group's 22 steps one after another are not as many chances apart. The
+    replays checked the defaults alone.
 
     Raises `ValueError` unless `0 < speed_upgrade_floor < forget_speed_upgrade_below < assume_speed_upgrade_at < 1`, and
     `NotPlayingError` if built before the game starts. A buff the curated ids leave out, on any visible unit,
