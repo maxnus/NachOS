@@ -1062,6 +1062,45 @@ Keep this file current: when a step is done, say so here in the same pull reques
     `_shared`, which imports nothing else of NachOS; so `check_game_time` is beside `GameTime`.
   - `camera`, `pathing` and `placement` stay packages of their own (above), `protocol` stays the transport's own layer,
     and `testing` and `extensions` stay apart as what a bot opts into.
+- **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
+  time). The rule the owner asked for is the simplest code that is right at least 99.9% of the time, cheap in the hot
+  loop and with few code paths:
+  - An option of `UpgradeInference`, on by default (the owner, over always on and over an extension of its own). Its
+    name is open; `from_movement` was proposed.
+  - The 10 upgrades the rows give a speed: Metabolic Boost, Glial Reconstitution, Centrifugal Hooks, Muscular
+    Augments, Anabolic Synthesis, Pneumatized Carapace (overlord, transport overlord and overseer), Hyperflight Rotors,
+    Gravitic Boosters, Gravitic Drive and Flux Vanes. Charge stays read off its buff. Tunneling Claws waits, with Blink
+    and Shadow Stride (proposed): a burrowed roach has two upgraded speeds, Tunneling Claws alone or with Glial
+    Reconstitution, which would need a second code path.
+  - Each enemy unit of those types keeps a window, where and when it began. It begins again when the unit is not
+    visible, is on another side than when first seen, has no `velocity` after a gap in the observations (a transport, a
+    nydus, out of sight), or wears an acceleration zone's buff.
+  - A window of about a second compares the distance covered with two predictions, without the upgrade and with it,
+    each summed step by step at the speed for the ground the unit stood on: Zerg ground types count creep too (the
+    owner, over measuring off creep only), from a table measured in game, since the rows hold no creep speed. Where the
+    distance falls between the two, as `u`, 0 without and 1 with: within `x` of 1 is a fast vote, within `x` of 0 a slow
+    one, anything else none (the owner: within a small tolerance of the expected upgraded speed, over faster than
+    allowed). With `x` below 0.5 the bands never overlap. A window does not vote where the two predictions are too
+    close for the measured precision to tell apart, as for an ultralisk on creep, which Anabolic Synthesis speeds only
+    off it.
+  - The votes of a slice are one observation for each upgrade, k fast of the n units that voted, with a beta-binomial
+    likelihood whose spread says how often a whole group comes out fast without the upgrade: 20 of 20 is strong, 1 of
+    20 counts against it (the owner: the number of units, their share and the number of observations all count, over
+    each unit alone).
+  - The score is the probability that the enemy has the upgrade, by Bayes' rule on each slice, in [0, 1] (the owner,
+    over a clamped sum). No vote counts before the earliest the upgrade could finish, its researcher's build time plus
+    its research time. After that it starts at a fixed `p0` and moves only with what is seen, `p0` being its floor too,
+    so evidence against it from before the upgrade finished leaves no debt (the owner, over a prior rising with game
+    time, a timing guess that is the bot's to make).
+  - It is assumed at 0.999 and forgotten at a lower threshold of its own, so it does not flip back and forth (the
+    owner, over assuming for good), forgetting only what speed assumed, never what the bot or other evidence did.
+  - Without drift, the evidence is a likelihood ratio, and by Ville's inequality the chance that an enemy without the
+    upgrade ever reaches 0.999 in a game is at most `p0`'s odds over 0.999's, about 1 in 100,000 per upgrade from
+    `p0` = 1%, if the likelihoods are right; each climb off the floor adds about as much. `p0` trades this against how
+    much evidence an assumption needs, and the replays choose it.
+  - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
+    Beam, a hydralisk's lunge and the facing, and a window per type. One comes back only if the replays show the
+    checks miss it.
 
 ## Next
 
@@ -1078,6 +1117,18 @@ Keep this file current: when a step is done, say so here in the same pull reques
   collectors to speed mining, dropping its own `Expansion._collect_vespene`.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
+- **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
+  1. `tools/sweep_movement.py`: each type's speed with and without its upgrade, the Zerg ground types on and off
+     creep, and how exactly a unit running straight keeps to it. It sets `x`, the window and the closest two
+     predictions may be, and its findings go in `docs/reference/game-behavior/units.md`.
+  2. A replay tool playing each replay as the bot's player with the extension and as the enemy, whose own upgrades
+     are the truth. It records every vote with whether the enemy had the upgrade then, fits the beta-binomial and
+     `p0` on some of the replays, and checks on the rest that a probability reads true (of moments at 0.99, about 99%
+     had it), that fewer than 0.1% of games assume an upgrade the enemy lacks, and how late each real one is found.
+     AvocaDOS's games on AI Arena were proposed, since real bots throw grenades, force fields and drops.
+  3. The option, with tests for both bands and a window between them, a creep edge, the floor, a mistake forgotten
+     and an upgrade the bot assumed, which is never forgotten.
+  4. Its cost a turn over the corpus and AvocaDOS's recorded games.
 - M6, in the order of section 3.
 - Beside the migration, **writing a replay's whole game for salsa** (2026-10-25, above), a pull request at a time, in
   the order salsa's plan holds:
