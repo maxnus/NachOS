@@ -91,9 +91,9 @@ class SpeedUpgradesFromMovement:
             elif _moved_steadily_at(window, 0.0):
                 upgrades_voted_against.add(window.upgrade)
         for upgrade in upgrades_voted_for:
-            self._move_the_score(upgrade, _LOG_ODDS_OF_A_SLICE_FOR)
+            self._count_a_slice_for(upgrade)
         for upgrade in upgrades_voted_against - upgrades_voted_for:
-            self._move_the_score(upgrade, -_LOG_ODDS_OF_A_SLICE_AGAINST)
+            self._count_a_slice_against(upgrade)
 
     def _may_vote(self, window: MovementWindow) -> bool:
         """Whether `window` may vote: it ran its whole block, after its upgrade could have finished, with its unit
@@ -105,18 +105,23 @@ class SpeedUpgradesFromMovement:
             and window.with_upgrade - window.without_upgrade >= _LEAST_GAP_AS_SHARE_OF_SPEED * window.without_upgrade
         )
 
-    def _move_the_score(self, upgrade: UpgradeId, log_odds_of_the_slice: float) -> None:
-        """Add `log_odds_of_the_slice` to `upgrade`'s score, no lower than the floor, and assume the upgrade at or above
-        the threshold, or forget it below the other if speed assumed it."""
-        log_odds = max(_FLOOR_LOG_ODDS, self._log_odds_by_upgrade.get(upgrade, _FLOOR_LOG_ODDS) + log_odds_of_the_slice)
+    def _count_a_slice_for(self, upgrade: UpgradeId) -> None:
+        """Raise `upgrade`'s score by a slice with a vote for it, and assume the upgrade if the score reached the
+        threshold and the enemy is not held to have it already: again after the bot forgot one speed assumed."""
+        log_odds = self._log_odds_by_upgrade.get(upgrade, _FLOOR_LOG_ODDS) + _LOG_ODDS_OF_A_SLICE_FOR
         self._log_odds_by_upgrade[upgrade] = log_odds
         enemy = self._api.enemy
-        if log_odds >= _ASSUMED_AT_LOG_ODDS:
-            if upgrade not in enemy.upgrades:
-                enemy.assume_upgrades(upgrade)
-                self._assumed_by_speed.add(upgrade)
-        elif log_odds < _FORGOTTEN_BELOW_LOG_ODDS and upgrade in self._assumed_by_speed:
-            enemy.forget_upgrades(upgrade)
+        if log_odds >= _ASSUMED_AT_LOG_ODDS and upgrade not in enemy.upgrades:
+            enemy.assume_upgrades(upgrade)
+            self._assumed_by_speed.add(upgrade)
+
+    def _count_a_slice_against(self, upgrade: UpgradeId) -> None:
+        """Lower `upgrade`'s score by a slice of only votes against it, no lower than the floor, and forget the upgrade
+        if the score fell below where it is forgotten and speed assumed it."""
+        log_odds = self._log_odds_by_upgrade.get(upgrade, _FLOOR_LOG_ODDS) - _LOG_ODDS_OF_A_SLICE_AGAINST
+        self._log_odds_by_upgrade[upgrade] = max(_FLOOR_LOG_ODDS, log_odds)
+        if log_odds < _FORGOTTEN_BELOW_LOG_ODDS and upgrade in self._assumed_by_speed:
+            self._api.enemy.forget_upgrades(upgrade)
             self._assumed_by_speed.discard(upgrade)
 
 

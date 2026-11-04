@@ -617,7 +617,7 @@ def _api_after_playing_back(path: Path, api: Api) -> Api:
 
 
 # What `UpgradeInference` reads in the recorded games beyond the levels: Metabolic Boost, off zerglings that moved
-# within 1.3% of their boosted speed over 16 and 32 steps, when the computer attacked.
+# within 0.4% of their boosted speed over 16 and 32 steps, when the computer attacked.
 _SPEED_UPGRADES_READ_IN_THE_CORPUS = {
     "IncorporealAIE_v4-PvZ": {UpgradeId.ZERGLING_SPEED},
     "PylonAIE_v4-TvZ": {UpgradeId.ZERGLING_SPEED},

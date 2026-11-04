@@ -96,12 +96,14 @@ class UpgradeInference:
       upgrade could have finished, from a unit wearing a buff that changes its speed, as Time Warp does, or where the
       upgrade adds less than 10% to the unit's speed, as Anabolic Synthesis does on creep. The rule was checked on
       games observed at every step: a bot that observes fewer sees fewer moves in 22 steps, and so tells less well a
-      unit that moved steadily from one that stopped and started again.
+      unit that moved steadily from one that stopped and started again. It reads these off each turn's observation
+      alone, so not off 22 steps that end on the one the game ended on.
 
-    Upgrades are never lost, so what it reads stays, but for a speed upgrade, which it forgets once its score falls
-    below 50%, if it assumed it, and not if the enemy already had it: one 22 steps of only votes against after one of
-    votes for do. It cannot tell an upgrade the bot assumes after it did, which it may then forget too.
-    `Enemy.forget_upgrades` takes one back until it is shown again. In a game with no other player it reads nothing.
+    Upgrades are never lost, so what it reads stays, but for a speed upgrade it assumed, which it forgets once its
+    score falls below 50%, as one 22 steps of only votes against after one of votes for do. It never forgets one
+    `Enemy.upgrades` already held when its score reached 99%, as one the bot assumed first, but cannot tell one the bot
+    assumes after it did, which it may then forget too. `Enemy.forget_upgrades` takes one back until it is shown again,
+    a speed upgrade by 22 steps with a vote for it. In a game with no other player it reads nothing.
 
     Raises `NotPlayingError` if built before the game starts. A buff the curated ids leave out, on any visible unit,
     raises `UncuratedIdError` from its handler, as reading `Unit.buffs` does.

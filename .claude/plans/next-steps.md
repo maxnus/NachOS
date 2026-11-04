@@ -300,9 +300,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      finish, from `api.data`. `MovementWindows` hands over the windows ending at an observation together, once a
      window's steps, each saying whether it covered its whole block; a private `_speed_upgrades.py` turns them into
      votes and the score, and assumes and forgets through `api.enemy`. The corpus now shows Metabolic Boost in its two
-     games where the computer's zerglings attacked, at 1.3% of their boosted speed. It observes every 16 steps, so a
+     games where the computer's zerglings attacked, within 0.4% of their boosted speed. It observes every 16 steps, so a
      window holds one or two moves, and the docs say a bot observing fewer than every step tells a steady unit less
-     well from one that stopped; how often the replays' rule then errs is not measured.
+     well from one that stopped; how often the replays' rule then errs is not measured. `check` now imports the rule
+     and scores each slice as upgrade inference does: over #224's 896 playbacks it gives what the fitted model gave at
+     1% and 99%, no wrong assumption in 433, no wrong forgetting in 203, and 358 of 417 upgrades assumed, a median of
+     3.5 seconds from first sight.
   4. Its cost a turn over the corpus and AvocaDOS's recorded games.
 
   Open, to settle with the owner at the step that needs it (proposed, not decided):
