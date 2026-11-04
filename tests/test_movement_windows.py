@@ -24,6 +24,7 @@ _GAME_DATA = GameData(shipped_game_data())
 _MAP_ROWS = ("#" * 40,) * 40
 _CREEP_EVERYWHERE = make_bits(*_MAP_ROWS)
 _NO_CREEP = make_bits(*_MAP_ROWS, drawn="")
+_CREEP_LEFT_OF_X_10 = make_bits(*(("#" * 10 + "." * 30,) * 40))
 _ZERGLING_STEP = _GAME_DATA.units[UnitTypeId.ZERGLING].speed / STEPS_PER_SECOND
 _FAST_ZERGLING_STEP = (
     _GAME_DATA.units[UnitTypeId.ZERGLING].with_upgrades({UpgradeId.ZERGLING_SPEED}).speed / STEPS_PER_SECOND
@@ -60,7 +61,7 @@ def _zergling_running(distance_a_step: float, steps: int, **fields: Any) -> list
     return [[_zergling_at(2.0 + distance_a_step * step, **fields)] for step in range(steps)]
 
 
-def _spans(windows: Sequence[MovementWindow]) -> list[tuple[UnitTypeId, int, int]]:
+def _types_and_steps_of(windows: Sequence[MovementWindow]) -> list[tuple[UnitTypeId, int, int]]:
     return [(window.type_id, window.start_step, window.end_step) for window in windows]
 
 
@@ -115,6 +116,19 @@ class TestWhereTheDistanceFalls:
         assert window.upgraded_share == pytest.approx(0.0, abs=1e-4)
         assert window.steps_on_creep == 0
 
+    def test_across_a_creep_edge_each_move_takes_the_speed_for_where_it_began(self) -> None:
+        on_creep, off_creep = _CREEP_SPEEDS[UnitTypeId.ZERGLING][0] / STEPS_PER_SECOND, _ZERGLING_STEP
+        positions = [8.5]
+        for _ in range(11):
+            positions.append(positions[-1] + (on_creep if positions[-1] < 10 else off_creep))
+        (window,) = _windows_of([[_zergling_at(x)] for x in positions], creep=_CREEP_LEFT_OF_X_10)
+        assert window.steps_on_creep == sum(1 for x in positions[:-1] if x < 10) == 7
+        assert window.upgraded_share == pytest.approx(0.0, abs=1e-4)
+        assert (window.least_step_share, window.greatest_step_share) == (
+            pytest.approx(0.0, abs=1e-3),
+            pytest.approx(0.0, abs=1e-3),
+        )
+
     def test_observations_steps_apart_predict_each_step_between(self) -> None:
         observed = [[_zergling_at(2.0 + _FAST_ZERGLING_STEP * 2 * index)] for index in range(7)]
         (window,) = _windows_of(observed, steps_apart=2)
@@ -141,7 +155,7 @@ class TestWhereTheDistanceFalls:
 class TestWhenAWindowRuns:
     def test_windows_end_on_one_clock_so_a_units_first_may_be_shorter(self) -> None:
         first_seen_on_step_5 = [[], [], [], [], [], *_zergling_running(_ZERGLING_STEP, 40)[5:]]
-        assert _spans(_windows_of(first_seen_on_step_5)) == [
+        assert _types_and_steps_of(_windows_of(first_seen_on_step_5)) == [
             (UnitTypeId.ZERGLING, 5, 11),
             (UnitTypeId.ZERGLING, 11, 22),
             (UnitTypeId.ZERGLING, 22, 33),
@@ -153,7 +167,10 @@ class TestWhenAWindowRuns:
     def test_a_unit_not_visible_in_an_observation_begins_again(self, unseen: list[raw_pb2.Unit]) -> None:
         observed = _zergling_running(_ZERGLING_STEP, 24)
         observed[6] = unseen
-        assert _spans(_windows_of(observed)) == [(UnitTypeId.ZERGLING, 7, 11), (UnitTypeId.ZERGLING, 11, 22)]
+        assert _types_and_steps_of(_windows_of(observed)) == [
+            (UnitTypeId.ZERGLING, 7, 11),
+            (UnitTypeId.ZERGLING, 11, 22),
+        ]
 
     def test_a_unit_that_changes_type_begins_again(self) -> None:
         observed = [
@@ -167,10 +184,20 @@ class TestWhenAWindowRuns:
             ]
             for step in range(24)
         ]
-        assert _spans(_windows_of(observed)) == [
+        assert _types_and_steps_of(_windows_of(observed)) == [
             (UnitTypeId.OVERLORD_TRANSPORT, 5, 11),
             (UnitTypeId.OVERLORD_TRANSPORT, 11, 22),
         ]
+
+    def test_a_unit_on_another_side_than_first_seen_has_none(self) -> None:
+        # As a zergling of this player's under a neural parasite is reported the enemy's.
+        observed = [
+            [make_unit(_ZERGLING_TAG, UnitTypeId.ZERGLING, at=(2.0 + _ZERGLING_STEP * step, 20.0))]
+            if step == 0
+            else [_zergling_at(2.0 + _ZERGLING_STEP * step)]
+            for step in range(24)
+        ]
+        assert _windows_of(observed) == []
 
     def test_only_enemy_units_of_those_types_have_windows(self) -> None:
         observed = [

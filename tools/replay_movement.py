@@ -4,16 +4,18 @@ which is the truth for the other player's playback.
 
 Needs StarCraft II installed, with the replays' build and maps.
 
-- `play` picks `--games` replays at random from a folder of them, seeded by `--seed`, and plays each back as player 1
-  and as player 2, at every step with the fog on, `--clients` at once. Each playback writes
-  `<out>/<replay>-<player id>.json.gz`: the races, the map, how it ended or failed, how long it took, the step each of
-  the player's upgrades finished, and each window of 11 steps in which an enemy unit moved. A playback already written
-  is not played again, so a run that stopped picks up where it left off.
-- `summarize` reads them back. It pairs each window with whether the enemy had the upgrade throughout it, from the
-  other player's playback, joins windows of one unit into longer ones on one clock, and counts, by upgrade, the fast
-  and slow votes each window length and band would give, against the truth; then the playbacks in which a wrong
-  assumption was possible, an enemy that lacked an upgrade while its units of a type it speeds up voted. Last, how
-  long a playback took.
+- `play` takes the first `--games` replays of a folder of them in an order shuffled by `--seed`, so a larger sample
+  holds a smaller one of the same seed, and plays each back as player 1 and as player 2, at every step with the fog
+  on, `--clients` at once. Each playback writes `<out>/<replay>-<player id>.json.gz`: the races, the map, how it ended
+  or failed, how long it took, the step each of the player's upgrades finished, and each window of 11 steps in which
+  an enemy unit moved. A playback already written is not played again, so a run that stopped picks up where it left
+  off; with `--retry-failed`, one that failed is.
+- `summarize` reads them back, one at a time. It pairs each window with whether the enemy had the upgrade throughout
+  it, from the other player's playback, joins windows of one unit into longer ones on one clock, and counts the fast
+  and slow votes each window length and band would give against the truth, plainly and steadily, a steady vote asking
+  every observation's move to fall in the band too; then, for the proposed window and band, the votes by upgrade, and
+  the playbacks in which a wrong assumption was possible, an enemy lacking an upgrade while its units of a type it
+  speeds up voted. Last, how long a playback took.
 
 Run it as::
 
@@ -31,9 +33,9 @@ import statistics
 import sys
 import time
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -53,9 +55,13 @@ _WINDOWS_JOINED = (1, 2, 4)
 _BAND_WIDTHS = (0.05, 0.1, 0.2)
 # The window and band the plan proposes, for the summary's counts by upgrade and by playback.
 _PROPOSED_WINDOWS_JOINED = 2
-_PROPOSED_BAND_WIDTH = 0.1
+_PROPOSED_BAND_WIDTH = 0.05
 # A window does not vote where the prediction with the upgrade is less than this much further than the one without.
 _LEAST_GAP = 0.1
+_VOTE_RULES = {"plain": False, "steady": True}
+
+# A playback, by its replay's name without the extension and the player it was played as.
+type _PlaybackKey = tuple[str, int]
 
 
 class _Recorder:
@@ -121,6 +127,12 @@ def _playback_path(out_directory: Path, replay: Path, player_id: int) -> Path:
     return out_directory / f"{replay.stem}-{player_id}.json.gz"
 
 
+def _key_of_playback(path: Path) -> _PlaybackKey:
+    """The replay and the player of the playback recorded at `path`, as `_playback_path` names it."""
+    replay, player_part = path.name.rsplit("-", 1)
+    return replay, int(player_part.split(".")[0])
+
+
 def play_back(replay: Path, player_id: int, out_file: Path) -> str:
     """Play `replay` back as `player_id`, write what it recorded to `out_file`, and say how it went."""
     logger.remove()
@@ -157,23 +169,44 @@ def play_back(replay: Path, player_id: int, out_file: Path) -> str:
     return f"{replay.name} as player {player_id}: {failure or result}, {played['seconds']} s"
 
 
-def play(replay_directory: Path, *, games: int, seed: int, clients: int, out_directory: Path) -> None:
-    """Play `games` replays of `replay_directory`, picked at random by `seed`, back as each player, `clients` at once,
-    and write each playback's record to `out_directory`."""
+def _read_playback(path: Path) -> dict[str, Any]:
+    with gzip.open(path, "rt", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def _is_to_play(out_file: Path, *, retry_failed: bool) -> bool:
+    """Whether the playback to be recorded at `out_file` is to be played: not yet recorded, or recorded failing and
+    `retry_failed`."""
+    if not out_file.exists():
+        return True
+    return retry_failed and _read_playback(out_file)["failure"] is not None
+
+
+def play_sample(
+    replay_directory: Path, *, games: int, seed: int, clients: int, out_directory: Path, retry_failed: bool
+) -> None:
+    """Play the first `games` replays of `replay_directory`, in an order shuffled by `seed`, back as each player,
+    `clients` at once, and write each playback's record to `out_directory`."""
     replays = sorted(replay_directory.glob("*.SC2Replay"))
-    picked = random.Random(seed).sample(replays, games)
+    random.Random(seed).shuffle(replays)
     playbacks = [
         (replay, player_id, _playback_path(out_directory, replay, player_id))
-        for replay in picked
+        for replay in replays[:games]
         for player_id in _PLAYER_IDS
     ]
-    left = [playback for playback in playbacks if not playback[2].exists()]
+    left = [playback for playback in playbacks if _is_to_play(playback[2], retry_failed=retry_failed)]
     logger.info("{} of {} playbacks to play, {} at once", len(left), len(playbacks), clients)
     started = time.perf_counter()
     with ProcessPoolExecutor(max_workers=clients) as pool:
-        running = [pool.submit(play_back, *playback) for playback in left]
+        running = {pool.submit(play_back, *playback): playback for playback in left}
         for done, finished in enumerate(as_completed(running), start=1):
-            logger.info("{}/{} after {:.0f} s: {}", done, len(left), time.perf_counter() - started, finished.result())
+            replay, player_id, _ = running[finished]
+            try:
+                outcome = finished.result()
+            except Exception as error:
+                # A worker that died writes nothing, so the playback is played again when the run is.
+                outcome = f"{replay.name} as player {player_id}: its worker failed, {error!r}"
+            logger.info("{}/{} after {:.0f} s: {}", done, len(left), time.perf_counter() - started, outcome)
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,11 +248,6 @@ class _Window:
         return None
 
 
-def _read(path: Path) -> dict[str, Any]:
-    with gzip.open(path, "rt", encoding="utf-8") as file:
-        return json.load(file)
-
-
 def _enemy_had_it(enemy: dict[str, Any] | None, upgrade: str, start: int, end: int) -> bool | None:
     """Whether the enemy, as its own playback `enemy` recorded it, had `upgrade` from `start` to `end`: `None` where
     it finished between them, or its playback is missing or stopped before `end`."""
@@ -252,45 +280,43 @@ def _joined_windows(
             start = columns["start"][index]
             if start % joined_steps != 0:
                 continue
-            run = [by_start.get(start + window_steps * offset) for offset in range(windows_joined)]
-            if any(member is None for member in run):
-                continue
-            members = [member for member in run if member is not None]
-            end = start + joined_steps
-            yield (
-                unit_id,
-                _Window(
-                    upgrade=columns["upgrade"][index],
-                    distance=sum(columns["distance"][member] for member in members),
-                    without_upgrade=sum(columns["without"][member] for member in members),
-                    with_upgrade=sum(columns["with"][member] for member in members),
-                    least_step_share=min(columns["least_step_share"][member] for member in members),
-                    greatest_step_share=max(columns["greatest_step_share"][member] for member in members),
-                    steps_on_creep=sum(columns["creep_steps"][member] for member in members),
-                    steps=joined_steps,
-                    is_hallucination=any(columns["hallucination"][member] for member in members),
-                    buffs=frozenset().union(*(buffs.get(member, frozenset()) for member in members)),
-                    enemy_had_it=_enemy_had_it(enemy, columns["upgrade"][index], start, end),
-                ),
-            )
+            members: list[int] = []
+            for offset in range(windows_joined):
+                if (member := by_start.get(start + window_steps * offset)) is None:
+                    break
+                members.append(member)
+            else:
+                yield (
+                    unit_id,
+                    _Window(
+                        upgrade=columns["upgrade"][index],
+                        distance=sum(columns["distance"][member] for member in members),
+                        without_upgrade=sum(columns["without"][member] for member in members),
+                        with_upgrade=sum(columns["with"][member] for member in members),
+                        least_step_share=min(columns["least_step_share"][member] for member in members),
+                        greatest_step_share=max(columns["greatest_step_share"][member] for member in members),
+                        steps_on_creep=sum(columns["creep_steps"][member] for member in members),
+                        steps=joined_steps,
+                        is_hallucination=any(columns["hallucination"][member] for member in members),
+                        buffs=frozenset().union(*(buffs.get(member, frozenset()) for member in members)),
+                        enemy_had_it=_enemy_had_it(enemy, columns["upgrade"][index], start, end=start + joined_steps),
+                    ),
+                )
 
 
-def _vote_counts(windows: Iterable[_Window], band_width: float) -> dict[str, int]:
-    """How many of `windows` voted fast and slow, and steadily so, by whether the enemy had the upgrade."""
-    counts: Counter[str] = Counter()
-    for window in windows:
-        if window.enemy_had_it is None:
-            continue
-        had = "had" if window.enemy_had_it else "lacked"
-        counts[f"windows, enemy {had} it"] += 1
-        if (vote := window.vote(band_width, steady=False)) is not None:
-            counts[f"{vote}, enemy {had} it"] += 1
-        if (vote := window.vote(band_width, steady=True)) is not None:
-            counts[f"steady {vote}, enemy {had} it"] += 1
-    return dict(sorted(counts.items()))
+def _count_votes(counts: Counter[str], window: _Window, band_width: float) -> None:
+    """Add `window`, and its plain and steady votes, to `counts`, by whether the enemy had the upgrade; nothing for a
+    window whose truth is not known."""
+    if window.enemy_had_it is None:
+        return
+    had = "had" if window.enemy_had_it else "lacked"
+    counts[f"windows, enemy {had} it"] += 1
+    for rule, steady in _VOTE_RULES.items():
+        if (vote := window.vote(band_width, steady=steady)) is not None:
+            counts[f"{rule} {vote}, enemy {had} it"] += 1
 
 
-def _quantiles(values: Sequence[float]) -> dict[str, float]:
+def _median_and_tail(values: Sequence[float]) -> dict[str, float]:
     if len(values) < 2:
         return {"count": len(values)}
     deciles = statistics.quantiles(values, n=10)
@@ -302,94 +328,114 @@ def _quantiles(values: Sequence[float]) -> dict[str, float]:
     }
 
 
-def summarize(out_directory: Path) -> dict[str, Any]:
-    """What the playbacks in `out_directory` show, as the module docstring says."""
-    playbacks = {
-        (path.name.rsplit("-", 1)[0], int(path.name.rsplit("-", 1)[1].split(".")[0])): _read(path)
-        for path in sorted(out_directory.glob("*.json.gz"))
-    }
-    failures = Counter(
-        playback["failure"].split("(")[0] for playback in playbacks.values() if playback["failure"] is not None
-    )
+@dataclass(slots=True)
+class _WrongAssumptionsPossible:
+    """For one vote rule, the votes cast in each playback for each upgrade the enemy lacked, and the units casting a
+    fast one."""
+
+    votes: defaultdict[tuple[_PlaybackKey, str], Counter[str]] = field(default_factory=lambda: defaultdict(Counter))
+    fast_units: defaultdict[tuple[_PlaybackKey, str], set[int]] = field(default_factory=lambda: defaultdict(set))
+
+    def count_the_vote(self, playback: _PlaybackKey, unit_id: int, window: _Window, *, steady: bool) -> None:
+        if window.enemy_had_it is not False or (vote := window.vote(_PROPOSED_BAND_WIDTH, steady=steady)) is None:
+            return
+        self.votes[(playback, window.upgrade)][vote] += 1
+        if vote == "fast":
+            self.fast_units[(playback, window.upgrade)].add(unit_id)
+
+    def as_json(self) -> dict[str, Any]:
+        with_fast_votes = {
+            f"{replay} as {player_id}, {upgrade}": {
+                **counts,
+                "units voting fast": len(self.fast_units[(replay, player_id), upgrade]),
+            }
+            for ((replay, player_id), upgrade), counts in sorted(self.votes.items())
+            if counts["fast"]
+        }
+        return {
+            "playbacks and upgrades": len(self.votes),
+            "playbacks": len({playback for playback, _ in self.votes}),
+            "by upgrade": dict(Counter(upgrade for _, upgrade in self.votes).most_common()),
+            "those with a fast vote": with_fast_votes,
+        }
+
+
+def summarize_playbacks(out_directory: Path) -> dict[str, Any]:
+    """What the playbacks in `out_directory` show, as the module docstring says, holding one playback's windows at a
+    time."""
+    paths = sorted(out_directory.glob("*.json.gz"))
+    # Everything but the windows, which the truth for the other player's playback needs.
+    headers: dict[_PlaybackKey, dict[str, Any]] = {}
+    for path in paths:
+        header = _read_playback(path)
+        header.pop("windows", None)
+        headers[_key_of_playback(path)] = header
     summary: dict[str, Any] = {
-        "playbacks": len(playbacks),
-        "failed": dict(failures),
-        "seconds a playback": _quantiles([playback["seconds"] for playback in playbacks.values()]),
-        "steps a second": _quantiles(
+        "playbacks": len(headers),
+        "failed": dict(
+            Counter(header["failure"].split("(")[0] for header in headers.values() if header["failure"] is not None)
+        ),
+        "seconds a playback": _median_and_tail([header["seconds"] for header in headers.values()]),
+        "steps a second": _median_and_tail(
             [
-                playback["last_step"] / playback["seconds"]
-                for playback in playbacks.values()
-                if playback["failure"] is None and playback.get("last_step")
+                header["last_step"] / header["seconds"]
+                for header in headers.values()
+                if header["failure"] is None and header.get("last_step")
             ]
         ),
         "games by the races, player against enemy": dict(
             Counter(
-                f"{playback.get('player_race')} v {playback.get('enemy_race')}" for playback in playbacks.values()
+                f"{header.get('player_race')} v {header.get('enemy_race')}" for header in headers.values()
             ).most_common()
         ),
-        "recorded windows": sum(len(playback.get("windows", {}).get("start", ())) for playback in playbacks.values()),
     }
-    joined_by_count: dict[int, list[tuple[tuple[str, int], int, _Window]]] = {}
-    for windows_joined in _WINDOWS_JOINED:
-        joined_by_count[windows_joined] = [
-            ((replay, player_id), unit_id, window)
-            for (replay, player_id), playback in playbacks.items()
-            if "windows" in playback
-            for unit_id, window in _joined_windows(playback, playbacks.get((replay, 3 - player_id)), windows_joined)
-        ]
-    summary["votes of every upgrade, by window steps and band width"] = {
-        f"{windows_joined * _WINDOW_STEPS} steps, within {band_width}": _vote_counts(
-            (window for _, _, window in joined), band_width
-        )
-        for windows_joined, joined in joined_by_count.items()
-        for band_width in _BAND_WIDTHS
-    }
-    proposed = joined_by_count[_PROPOSED_WINDOWS_JOINED]
-    by_upgrade: defaultdict[str, list[_Window]] = defaultdict(list)
-    for _, _, window in proposed:
-        by_upgrade[window.upgrade].append(window)
-    summary[f"votes by upgrade, {_PROPOSED_WINDOWS_JOINED * _WINDOW_STEPS} steps within {_PROPOSED_BAND_WIDTH}"] = {
-        upgrade: _vote_counts(windows, _PROPOSED_BAND_WIDTH) for upgrade, windows in sorted(by_upgrade.items())
-    }
-    summary["playbacks in which a wrong assumption was possible"] = _wrong_assumptions_possible(proposed)
-    voting = [window for _, _, window in proposed if window.vote(_PROPOSED_BAND_WIDTH, steady=False) is not None]
-    summary["voting windows of hallucinations"] = sum(window.is_hallucination for window in voting)
-    summary["voting windows partly on creep"] = sum(0 < window.steps_on_creep < window.steps for window in voting)
-    summary["buffs worn in voting windows, by vote and truth"] = dict(
-        Counter(
-            f"{window.vote(_PROPOSED_BAND_WIDTH, steady=False)}, had {window.enemy_had_it}: {buff}"
-            for window in voting
-            for buff in window.buffs
-        ).most_common()
-    )
-    return summary
-
-
-def _wrong_assumptions_possible(joined: Sequence[tuple[tuple[str, int], int, _Window]]) -> dict[str, Any]:
-    """The playbacks and upgrades in which the enemy lacked an upgrade while its units' windows voted, how many there
-    are, and those with a fast vote among them, with the units that cast them."""
-    votes: defaultdict[tuple[tuple[str, int], str], Counter[str]] = defaultdict(Counter)
-    fast_units: defaultdict[tuple[tuple[str, int], str], set[int]] = defaultdict(set)
-    for playback, unit_id, window in joined:
-        if window.enemy_had_it is not False or (vote := window.vote(_PROPOSED_BAND_WIDTH, steady=False)) is None:
+    recorded_windows = 0
+    votes: defaultdict[str, Counter[str]] = defaultdict(Counter)
+    votes_by_upgrade: defaultdict[str, Counter[str]] = defaultdict(Counter)
+    possible = {rule: _WrongAssumptionsPossible() for rule in _VOTE_RULES}
+    hallucinations_voting: Counter[str] = Counter()
+    partly_on_creep_voting: Counter[str] = Counter()
+    buffs_voting: Counter[str] = Counter()
+    for path in paths:
+        playback = _read_playback(path)
+        if "windows" not in playback:
             continue
-        votes[(playback, window.upgrade)][vote] += 1
-        if vote == "fast":
-            fast_units[(playback, window.upgrade)].add(unit_id)
-    with_fast_votes = {
-        f"{replay} as {player_id}, {upgrade}": {
-            **counts,
-            "units voting fast": len(fast_units[(replay, player_id), upgrade]),
-        }
-        for ((replay, player_id), upgrade), counts in sorted(votes.items())
-        if counts["fast"]
+        recorded_windows += len(playback["windows"]["start"])
+        replay, player_id = key = _key_of_playback(path)
+        enemy = headers.get((replay, 3 - player_id))
+        for windows_joined in _WINDOWS_JOINED:
+            proposed = windows_joined == _PROPOSED_WINDOWS_JOINED
+            for unit_id, window in _joined_windows(playback, enemy, windows_joined):
+                for band_width in _BAND_WIDTHS:
+                    _count_votes(
+                        votes[f"{windows_joined * _WINDOW_STEPS} steps, within {band_width}"], window, band_width
+                    )
+                if not proposed:
+                    continue
+                _count_votes(votes_by_upgrade[window.upgrade], window, _PROPOSED_BAND_WIDTH)
+                for rule, steady in _VOTE_RULES.items():
+                    possible[rule].count_the_vote(key, unit_id, window, steady=steady)
+                    if (vote := window.vote(_PROPOSED_BAND_WIDTH, steady=steady)) is None:
+                        continue
+                    hallucinations_voting[rule] += window.is_hallucination
+                    partly_on_creep_voting[rule] += 0 < window.steps_on_creep < window.steps
+                    for buff in window.buffs:
+                        buffs_voting[f"{rule} {vote}, had {window.enemy_had_it}: {buff}"] += 1
+    proposed_name = f"{_PROPOSED_WINDOWS_JOINED * _WINDOW_STEPS} steps within {_PROPOSED_BAND_WIDTH}"
+    summary["recorded windows"] = recorded_windows
+    summary["votes of every upgrade, by window steps and band width"] = {
+        name: dict(sorted(counts.items())) for name, counts in votes.items()
     }
-    return {
-        "playbacks and upgrades": len(votes),
-        "playbacks": len({playback for playback, _ in votes}),
-        "by upgrade": dict(Counter(upgrade for _, upgrade in votes).most_common()),
-        "those with a fast vote": with_fast_votes,
+    summary[f"votes by upgrade, {proposed_name}"] = {
+        upgrade: dict(sorted(counts.items())) for upgrade, counts in sorted(votes_by_upgrade.items())
     }
+    summary[f"playbacks in which a wrong assumption was possible, {proposed_name}, by vote rule"] = {
+        rule: wrong_assumptions.as_json() for rule, wrong_assumptions in possible.items()
+    }
+    summary["voting windows of hallucinations, by vote rule"] = dict(hallucinations_voting)
+    summary["voting windows partly on creep, by vote rule"] = dict(partly_on_creep_voting)
+    summary["buffs worn in voting windows, by vote and truth"] = dict(buffs_voting.most_common())
+    return summary
 
 
 def main() -> None:
@@ -401,20 +447,22 @@ def main() -> None:
     playing.add_argument("--seed", type=int, default=1)
     playing.add_argument("--clients", type=int, default=16)
     playing.add_argument("--out", type=Path, default=DEFAULT_OUT_DIRECTORY)
+    playing.add_argument("--retry-failed", action="store_true", help="play a playback recorded failing again")
     summarizing = commands.add_parser("summarize")
     summarizing.add_argument("playbacks", type=Path, nargs="?", default=DEFAULT_OUT_DIRECTORY)
     summarizing.add_argument("--out", type=Path, default=DEFAULT_SUMMARY_PATH)
     arguments = parser.parse_args()
     if arguments.command == "play":
-        play(
+        play_sample(
             arguments.replays,
             games=arguments.games,
             seed=arguments.seed,
             clients=arguments.clients,
             out_directory=arguments.out,
+            retry_failed=arguments.retry_failed,
         )
     else:
-        summary = summarize(arguments.playbacks)
+        summary = summarize_playbacks(arguments.playbacks)
         arguments.out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
         logger.info("Wrote the summary to {}", arguments.out)
 

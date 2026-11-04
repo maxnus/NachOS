@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Final, final
 from sc2nachos.events import EventPriority, TurnStartEvent
 from sc2nachos.gametime import STEPS_PER_SECOND
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
+from sc2nachos.units import Alliance
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -136,14 +137,15 @@ class _OpenWindow:
 
 @final
 class MovementWindows:
-    """How far each enemy unit of a type one speed upgrade changes moves over windows of `window_steps` steps, handed
-    to `on_window` as each window ends.
+    """How far each enemy unit of a type one speed upgrade changes moves over windows of about `window_steps` steps,
+    handed to `on_window` as each window ends.
 
     A unit's window runs while each observation shows it visible, of the type it had when the window began and on the
-    side it was first seen on. A unit missing from an observation, out of sight, in a transport or a nydus, begins a
-    new window when it is seen again. Windows end on one clock for every unit, at the first observation of each block
-    of `window_steps` steps, so a unit's first window may be shorter. The prediction of each observation's move takes
-    the speed for the ground the unit stood on at the observation before.
+    side it was first seen on. A unit missing from an observation, as one in a transport is (in game), or not visible
+    in it, begins a new window when it is seen again. Windows end on one clock for every unit, at the first observation
+    of each block of `window_steps` steps: `window_steps` long where every step is observed, but for a unit's first
+    window, which may be shorter, and as long as the observations fall otherwise. The prediction of each observation's
+    move takes the speed for the ground the unit stood on at the observation before.
 
     It reads each turn's observation on `TurnStartEvent` at `EventPriority.HIGHEST`.
     """
@@ -188,7 +190,8 @@ class MovementWindows:
         creep: Grid[bool] | None = None
         for unit in api.units.enemy:
             speeds = self._speeds.get(type_id := unit.type_id)
-            if speeds is None or not unit.is_visible or unit.alliance is not unit.first_alliance:
+            # The units are the enemy's, so one first seen on another side has changed sides.
+            if speeds is None or unit.first_alliance is not Alliance.ENEMY or not unit.is_visible:
                 continue
             unit_id = unit.id
             position = unit.position
