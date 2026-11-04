@@ -1183,7 +1183,7 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
-  1. Done in this pull request: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
+  1. Done in #212: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
      the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`
      and `upgrades-and-tables.md`. A ground unit runs at its row's speed from the first step, every window to 0.0001
      a second; a flying unit within 0.15% once up to speed, after 10 to 32 steps; along a diagonal up to 0.6% slower.
@@ -1193,11 +1193,36 @@ Keep this file current: when a step is done, say so here in the same pull reques
      at least 1.8% of the speed for the closest, 18%, against the 0.6% a diagonal costs; a window of 22 steps, which a
      flying unit's speeding up spoils for one or two windows; and no vote where the gap is under 10% of the speed, as
      for an ultralisk on creep, 3%.
-  2. A replay tool playing each replay as the bot's player with the extension and as the enemy, whose own upgrades
-     are the truth. It records every vote with whether the enemy had the upgrade then, fits the beta-binomial and
-     `p0` on some of the replays, and checks on the rest that a probability reads true (of moments at 0.99, about 99%
-     had it), how often a game assumes an upgrade the enemy lacks, and how late each real one is found. No false
-     assumption in n games bounds the rate below about 3/n (95%), so 0.1% a game needs about 3,000 games with none.
+  2. A replay tool, in two pull requests. In the first, this one, `MovementWindows`, private in
+     `sc2nachos/extensions/upgrade_inference/_movement_windows.py` until step 3, upgrade inference having become a
+     package (the owner, review of #214), measures each visible enemy unit of the 12 types over windows of 11 steps on
+     one clock: the distance moved, the two predictions, and the least and the greatest share of the gap a single
+     observation's move came to. `tools/replay_movement.py` plays a random sample of every bot's
+     games of AI Arena's 2026 Season 1 back as each player (the owner, 2026-11-04, over AvocaDOS's games alone, for a
+     wider view), each playback's own upgrades being the truth for the other's, and keeps the windows raw, so the band,
+     the window and the least gap come from the data. Its pilot, on two samples of 100 games played as each player,
+     the first 100 of the shuffled order of seed 1 and the 100 that `random.sample` picked with seed 1 before, proposes,
+     to settle with the owner at step 3:
+     - Steady votes: a window votes only if every single observation's move falls in the band too. Over 22 steps
+       within 0.1, no window voted fast for an enemy that lacked the upgrade, of 189,498 such windows, but 12,783 of
+       the 91,784 slow votes came from an enemy that had it, since an upgraded unit that stops for part of a window
+       covers what one without it does. Steady, 5 votes were wrong, all slow: four zerglings with Metabolic Boost under
+       a mothership's Time Warp, which slows to 0.6, and an upgraded overlord kept at a slower pace.
+     - Within 0.05 of the gap rather than 0.1: steady, none of 63,941 votes was wrong, 90% of the steady votes within
+       0.1.
+     - 22 steps, as proposed at step 1: over 11 steps, 3 steady slow votes within 0.05 were wrong; over 44, none.
+     - No vote while a unit wears a buff that changes its speed, Time Warp among them, as for an acceleration zone: a
+       slow can bring an upgraded unit into the slow band, as Time Warp brings an overseer with Pneumatized Carapace to
+       0.1 of the gap above its speed without.
+     - The Parasitic Bomb's dummy unit, an id the curated unit types left out, stopped 4 playbacks of the second
+       sample (#215).
+
+     In the second, the run the pilot sizes: it fits the beta-binomial and `p0` on some of the games, and checks on
+     the rest that a probability reads true (of moments at 0.99, about 99% had it), how often a game assumes an upgrade
+     the enemy lacks, and how late each real one is found. No false assumption in n playbacks in which one was possible
+     bounds the rate below about 3/n (95%). In 195 of the pilot's 400 the enemy lacked an upgrade while its units of a
+     type it speeds up voted steadily within 0.05, so 3,000 take some 3,100 games: at the pilot's 13 minutes for 200
+     playbacks, 16 at once, about seven hours.
   3. The option, with tests for both bands and a window between them, a creep edge, a gap in the observations, a side
      change, an acceleration zone, the earliest finish, 20 of 20 fast against 1 of 20, the floor, a mistake forgotten
      and an upgrade the bot assumed first, which is never forgotten. The extension's docstring, which says what it
@@ -1212,8 +1237,6 @@ Keep this file current: when a step is done, say so here in the same pull reques
     measurable through, so each unit keeps only its position at the last tick.
   - One pair of beta-binomial parameters for every upgrade, which `u` makes comparable, unless the replays show they
     differ; rare upgrades such as Gravitic Drive have too few votes to fit their own.
-  - Which replays: AvocaDOS's games on AI Arena were proposed, since real bots throw grenades, force fields and drops,
-    and how to reach 3,000 games.
   - Tunneling Claws later, with Blink and Shadow Stride, since a burrowed roach has two upgraded speeds, Tunneling
     Claws alone or with Glial Reconstitution, which would need a second code path.
 - M6, in the order of section 3.

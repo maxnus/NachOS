@@ -81,9 +81,10 @@ class ThreatMap:
 
 - **Take the api as `Api[object]`**, which takes an api of any extensions. Under a type checker's standard mode a bare
   `Api` does too.
-- **Use only what NachOS makes public**: no module, function or attribute whose name starts with an underscore. An
-  extension that does is broken by any release. NachOS's own are held to this by a test, so any of them could move to
-  a package of its own unchanged, and NachOS itself never imports one.
+- **Use only what NachOS makes public**: no module, function or attribute of NachOS's whose name starts with an
+  underscore; an extension's own are its business. An extension that does is broken by any release. NachOS's own are
+  held to this by a test, so any of them could move to a package of its own unchanged, and NachOS itself never imports
+  one.
 - **Keep a value for each unit in a `UnitDict`**, which forgets a unit once it is dead, as speed mining keeps each
   worker's field.
 - **Never order a unit the bot has not handed over.** Speed mining orders only the workers the bot gives it, and leaves

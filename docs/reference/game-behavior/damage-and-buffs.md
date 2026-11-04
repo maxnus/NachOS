@@ -13,6 +13,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   storm buff on its own units too (#34; tested).
 - A liberation zone is drawn for 2 s before it fires, and a time warp slows nothing for its first 1.79 s; each phase
   has its own pending effect id (#5).
+- A time warp slows a unit in it to 0.6 of its speed: zerglings with Metabolic Boost wearing `MOTHERSHIP_TIME_WARP`
+  ran 3.94 a second, against their 6.58, at every step of 11 at a time (tool `replay_movement`, AI Arena's 2026
+  Season 1 replay 4704095 played back as player 2, build 75689).
 - Since 4.12.0 Microbial Shroud needs no research: an infestor with no upgrades is offered it and casts it (#23).
 - A unit under attack that cannot fight back drifts away unless it holds position (tool `sweep_alerts`).
 
