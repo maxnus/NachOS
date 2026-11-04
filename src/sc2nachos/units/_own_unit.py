@@ -35,6 +35,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         reported = self._latest_report.orders
         orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in reported)
         self._orders = _Snapshot(orders, update)
+        self._current_ability = orders[0].ability if orders else None
+        self._current_ability_update = update
         return orders
 
     @property
@@ -59,13 +61,20 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def is_doing(self, abilities: AbilityId | Collection[AbilityId]) -> bool:
         """Whether the unit's `current_order` carries out `abilities`, one ability or any of several. False for an idle
         unit."""
-        # Read off the report: building `orders` to read the first would read every order and look up its target.
-        if not (reported_orders := self._latest_report.orders):
+        update = self._tracker.last_changes.update
+        if self._current_ability_update == update:
+            ability = self._current_ability
+        else:
+            # Read off the report: building `orders` to read the first would read every order and look up its target.
+            reported_orders = self._latest_report.orders
+            ability = AbilityId.read(reported_orders[0].ability_id) if reported_orders else None
+            self._current_ability = ability
+            self._current_ability_update = update
+        if ability is None:
             return False
-        ability_id = AbilityId.read(reported_orders[0].ability_id)
         if isinstance(abilities, AbilityId):
-            return ability_id == abilities
-        return ability_id in abilities
+            return ability == abilities
+        return ability in abilities
 
     @property
     def is_moving(self) -> bool:

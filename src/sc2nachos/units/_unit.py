@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata import UnitTypeData, Weapon
     from sc2nachos.geometry import PointLike
+    from sc2nachos.ids import AbilityId
     from sc2nachos.units._tracking import _Tracker
     from sc2nachos.units._values import UnitOrder
 
@@ -89,6 +90,8 @@ class Unit[K: UnitType.AnyType]:
     # dead unit's entry all game, as the tracker keeps every unit it has seen; a `UnitDict` forgets it.
     __slots__ = (
         "__weakref__",
+        "_current_ability",
+        "_current_ability_update",
         "_damage_taken",
         "_dead",
         "_first_seen",
@@ -152,6 +155,11 @@ class Unit[K: UnitType.AnyType]:
     # `OwnUnit.orders` as last read, with the tracker update it was read at, kept here since `OwnUnit` declares no
     # slots of its own. It holds no report, so it keeps no observation alive.
     _orders: _Snapshot[tuple[UnitOrder, ...]]
+    # The ability of the latest report's first order, `None` for no order, as `OwnUnit.is_doing` or `OwnUnit.orders`
+    # last read it, and the tracker update it was read at. Two slots rather than a `_Snapshot`, whose making would add
+    # half again to the first read in an observation.
+    _current_ability: AbilityId | None
+    _current_ability_update: int
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -176,6 +184,8 @@ class Unit[K: UnitType.AnyType]:
         self._radius_footprint = None
         self._order_targets = None
         self._orders = _Snapshot(())
+        self._current_ability = None
+        self._current_ability_update = -1
         self._update_unit_type(report.unit_type)
 
     def _update(self, report: raw_pb2.Unit, step: int) -> _SideOrTypeChange | None:
