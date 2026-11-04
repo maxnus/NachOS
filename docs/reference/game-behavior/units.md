@@ -161,6 +161,25 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   nova and an uprooted spine or spore crawler**, ordered to move at any angle, though each sets off as the rest do (tool
   `sweep_turning`, build 75689).
 
+## Moving
+
+- **A unit ordered along a straight line moves at its row's speed exactly once it is up to speed, a unit on the ground
+  from the first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for
+  the 12 types a speed upgrade changes, with the upgrade and without: every step of a ground unit's run, and every
+  window of 11, 22 or 44 steps, came within 0.0001 a second of the row's speed, an upgraded ultralisk's from its third
+  step; a flying unit's windows within 0.15% of it, though a single step of an overlord, an overseer or an observer fell
+  up to 1.6% short. A banshee gained 0.0127 a step every step until it reached its speed, 14 steps without Hyperflight
+  Rotors and 19 with; an overlord took 10 steps, 28 with Pneumatized Carapace, and a transport overlord 14 and 32. Along
+  45 degrees every type read up to 0.6% slower, the slowest the most: an overlord 0.8971 a second for its 0.9023, a
+  zergling 4.1299 for 4.1344 (tool `sweep_movement`, build 75689).
+- **Creep makes a Zerg ground unit 1.3 times as fast, to within 0.1%**: a zergling 4.13 a second off it and 5.37 on
+  it, 6.58 and 8.55 with Metabolic Boost; a baneling, a roach, a hydralisk and an ultralisk alike without their speed
+  upgrades, and a baneling and a roach with them. Muscular Augments and Anabolic Synthesis add less on creep
+  ([upgrades](upgrades-and-tables.md)) (tool `sweep_movement`, build 75689).
+- **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
+  and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
+  `sweep_movement`, build 75689).
+
 ## Units coming, changing and going
 
 - A larva stays one unit as it becomes an `EGG`. What hatches comes under new tags, two zerglings as two units, and

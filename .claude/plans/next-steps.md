@@ -1072,9 +1072,9 @@ Keep this file current: when a step is done, say so here in the same pull reques
     Vanes. Tunneling Claws, the twelfth, is open (below).
   - Each enemy unit of the types those ten speed up keeps a window, where and when it began. It begins again when the
     unit is not visible, is on another side than when first seen, has no `velocity` after a gap in the observations (a
-    transport, a nydus, out of sight), or wears an acceleration zone's buff. A burrowed roach and a unit known to be a
-    hallucination do not vote: a burrowed roach's unupgraded speed is 0, so one standing still would vote against Glial
-    Reconstitution, and a hallucination may not move at its owner's speed.
+    transport, a nydus, out of sight), or wears an acceleration zone's buff. A burrowed roach does not vote: its
+    unupgraded speed is 0, so one standing still would vote against Glial Reconstitution. Nor was a unit known to be a
+    hallucination to, as it might not move at its owner's speed; it does, so whether it votes is open (below).
   - A window of about a second compares the distance covered with two predictions, without the upgrade and with it,
     each summed step by step at the speed for the ground the unit stood on: Zerg ground types count creep too (the
     owner, over measuring off creep only), from a table measured in game, since the rows hold no creep speed. Where the
@@ -1119,10 +1119,16 @@ Keep this file current: when a step is done, say so here in the same pull reques
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
-  1. `tools/sweep_movement.py`: each type's speed with and without its upgrade, the Zerg ground types on and off
-     creep, how exactly a unit running straight keeps to it, and whether a hallucination moves at its owner's speed.
-     It sets `x`, the window, and the smallest gap between the two predictions at which a window still votes; its
-     findings go in `docs/reference/game-behavior/units.md`.
+  1. Done in this pull request: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
+     the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`
+     and `upgrades-and-tables.md`. A ground unit runs at its row's speed from the first step, every window to 0.0001
+     a second; a flying unit within 0.15% once up to speed, after 10 to 32 steps; along a diagonal up to 0.6% slower.
+     Creep makes a Zerg ground unit 1.3 times as fast, but Muscular Augments and Anabolic Synthesis add less on it, so
+     the creep table holds both speeds on creep for those two. A hallucination moves at its owner's upgraded speed, so
+     the reason it was not to vote is gone. Proposed from it, to settle with the owner at step 3: `x` 0.1 of the gap,
+     at least 1.8% of the speed for the closest, 18%, against the 0.6% a diagonal costs; a window of 22 steps, which a
+     flying unit's speeding up spoils for one or two windows; and no vote where the gap is under 10% of the speed, as
+     for an ultralisk on creep, 3%.
   2. A replay tool playing each replay as the bot's player with the extension and as the enemy, whose own upgrades
      are the truth. It records every vote with whether the enemy had the upgrade then, fits the beta-binomial and
      `p0` on some of the replays, and checks on the rest that a probability reads true (of moments at 0.99, about 99%
@@ -1136,6 +1142,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
 
   Open, to settle with the owner at the step that needs it (proposed, not decided):
   - The option's name; `from_movement` was proposed.
+  - Whether a hallucination votes: it moves at its owner's speed, upgrades included (tool `sweep_movement`), so leaving
+    it out only drops votes; proposed, it votes as the unit it copies.
   - What a slice is: proposed, fixed ticks of a second on one clock for every unit, a unit voting in a tick it was
     measurable through, so each unit keeps only its position at the last tick.
   - One pair of beta-binomial parameters for every upgrade, which `u` makes comparable, unless the replays show they
