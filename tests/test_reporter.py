@@ -585,6 +585,14 @@ class TestBuffs:
             ("OwnUnitGainedBuffEvent", BuffId.RAVEN_INTERFERENCE_MATRIX)
         ]
 
+    def test_an_enemy_unit_a_stasis_ward_traps_gains_its_buff_and_loses_it_when_freed(self) -> None:
+        free = _worn(alliance=_ENEMY, unit_type=UnitTypeId.ZERGLING)
+        trapped = _worn(alliance=_ENEMY, unit_type=UnitTypeId.ZERGLING, buff_ids=[RawBuffId.OracleStasisTrapTarget])
+        assert self._changes(free, trapped, free) == [
+            ("EnemyUnitGainedBuffEvent", BuffId.STASIS_WARD_TRAPPED),
+            ("EnemyUnitLostBuffEvent", BuffId.STASIS_WARD_TRAPPED),
+        ]
+
     def test_a_buff_a_units_buffs_leave_out_is_neither_gained_nor_lost(self) -> None:
         left_out = RawBuffId.ParasiticBombUnitKU
         assert not self._changes(_worn(), _worn(buff_ids=[left_out]), _worn())
