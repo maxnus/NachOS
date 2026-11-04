@@ -135,7 +135,7 @@ from sc2nachos import open_replay
 
 with open_replay("games/ladder.SC2Replay", player_id=1) as playback:
     print(playback.info.map_name, playback.info.game_duration_loops)
-    names = playback.client.data()
+    game_data = playback.client.game_data()
     while True:
         observation = playback.client.observation()
         ...  # the game's ResponseObservation, as the player saw it
@@ -146,6 +146,7 @@ with open_replay("games/ladder.SC2Replay", player_id=1) as playback:
 
 `open_replay(replay, *, player_id, disable_fog=False, record_to=None, installation=None, window=(1024, 768))` takes
 `run_replay`'s arguments for the replay and the client, and none for an api. Each playback starts a client of its
-own, so one for each player can run at once. The game reports the raw interface, with cloaked units, burrowed units' shadows and the placeholders of
-structures ordered shown, on the whole map, as it does for an api. `open_replay_recording(recording)` gives the same
-from a recording `record_to` made, with no game client, answering what was asked in the order it was asked.
+own, so one for each player can run at once. The game reports the raw interface, with cloaked units, burrowed units'
+shadows and the placeholders of structures ordered shown, on the whole map, as it does for an api.
+`open_replay_recording(recording)` gives the same from a recording `record_to` made, with no game client, answering
+what was asked in the order it was asked.

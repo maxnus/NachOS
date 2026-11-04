@@ -531,6 +531,23 @@ class TestOpeningAReplay:
         assert [request.WhichOneof("request") for request in playing.requests][-2:] == ["leave_game", "quit"]
         assert launched.terminated
 
+    @pytest.mark.parametrize(
+        ("recording", "error"),
+        [("missing/played-back.sc2rec", FileNotFoundError), (".", IsADirectoryError)],
+        ids=["no folder", "a folder"],
+    )
+    def test_a_recording_with_no_file_to_go_in_is_refused_before_a_client_starts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recording: str, error: type[OSError]
+    ) -> None:
+        launched: list[bool] = []
+        monkeypatch.setattr(GameProcess, "launch", lambda installation, **kwargs: launched.append(True))
+        with (
+            pytest.raises(error, match="to record into"),
+            open_replay(tmp_path / "game.SC2Replay", player_id=1, record_to=tmp_path / recording),
+        ):
+            pass
+        assert not launched
+
     def test_its_recording_plays_back_with_no_game_as_it_was_read(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -754,14 +771,17 @@ def test_in_a_real_game_its_replay_plays_back_once_its_map_is_gone_from_where_it
     assert api.step > 0
 
 
-def _observed_to_the_end(client: Client) -> list[sc2api_pb2.ResponseObservation]:
-    """Every observation of the replay `client` plays back, 8 steps apart, to its end."""
+def _observed_to_the_end(playback: ReplayPlayback) -> list[sc2api_pb2.ResponseObservation]:
+    """Every observation of `playback`'s replay, 8 steps apart, to its end. Fails one still running a step past the
+    length its info gives, rather than step on forever."""
     observations: list[sc2api_pb2.ResponseObservation] = []
     while True:
-        observations.append(client.observation())
-        if not client.in_game:
+        observations.append(playback.client.observation())
+        if not playback.client.in_game:
             return observations
-        client.step(8)
+        step = observations[-1].observation.game_loop
+        assert step <= playback.info.game_duration_loops + 8, f"the replay still runs at step {step}, past its end"
+        playback.client.step(8)
 
 
 def _own_unit_owners(observations: list[sc2api_pb2.ResponseObservation]) -> set[int]:
@@ -802,15 +822,15 @@ def test_in_a_real_game_its_replay_opens_as_each_player_at_once_and_reads_to_one
         open_replay(replay, player_id=2) as second,
     ):
         assert first.info == second.info
-        assert first.info.base_build == TECH_TREE.base_build
-        as_the_first = _observed_to_the_end(first.client)
-        as_the_second = _observed_to_the_end(second.client)
+        assert first.info.base_build == Installation.find().build_to_launch()
+        as_the_first = _observed_to_the_end(first)
+        as_the_second = _observed_to_the_end(second)
     assert as_the_first[-1].observation.game_loop == as_the_second[-1].observation.game_loop > 0
     assert (_own_unit_owners(as_the_first), _own_unit_owners(as_the_second)) == ({1}, {2})
 
     with open_replay_recording(record) as again:
         assert again.info == first.info
-        assert _observed_to_the_end(again.client) == as_the_first
+        assert _observed_to_the_end(again) == as_the_first
 
 
 @pytest.mark.integration

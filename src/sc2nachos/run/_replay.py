@@ -9,17 +9,16 @@ from typing import final
 from loguru import logger
 from s2clientprotocol import sc2api_pb2
 
-from sc2nachos._shared.checks import check_output_files
 from sc2nachos.api import Api
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gametime import GameTime
-from sc2nachos.gametime._game_time import check_time_limit
 from sc2nachos.match import Result
 from sc2nachos.protocol import Client, PlaybackTransport, Recording, WebSocketTransport
 from sc2nachos.protocol._connection import connect_client
 from sc2nachos.run._game_process import GameProcess
 from sc2nachos.run._installation import Installation
 from sc2nachos.run._map_file import MapFile, MapNotFoundError
+from sc2nachos.run._runner_checks import check_output_files, check_time_limit
 
 
 def run_replay(

@@ -8,11 +8,9 @@ from pathlib import Path
 
 from loguru import logger
 
-from sc2nachos._shared.checks import check_output_files
 from sc2nachos.api import Api, NoEnemyError, NotPlayingError
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gametime import GameTime
-from sc2nachos.gametime._game_time import check_time_limit
 from sc2nachos.match import Computer, Participant, PlayerSetup, Race, Result
 from sc2nachos.protocol import (
     Client,
@@ -29,6 +27,7 @@ from sc2nachos.run._game_process import GameProcess
 from sc2nachos.run._installation import Installation
 from sc2nachos.run._map_file import MapFile, MapNotFoundError
 from sc2nachos.run._replay import open_replay_recording
+from sc2nachos.run._runner_checks import check_output_files, check_time_limit
 
 
 def run_local(

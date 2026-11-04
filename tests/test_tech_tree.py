@@ -714,6 +714,20 @@ class TestWhatTheSweepFound:
         assert untried == _UNTRIED_CREATIONS
 
 
+class TestTheBuildSwept:
+    def test_a_game_on_another_build_is_warned_of(self, logged: list[str]) -> None:
+        other_build = TECH_TREE.base_build + 1
+        TECH_TREE.warn_if_not_swept_on(other_build)
+        assert logged == [
+            f"Playing build {other_build}, but the tech tree is build {TECH_TREE.base_build}'s: what each ability "
+            "needs, who is offered it, how it takes a unit's orders and what each upgrade changes come from that build"
+        ]
+
+    def test_a_game_on_the_build_swept_is_not(self, logged: list[str]) -> None:
+        TECH_TREE.warn_if_not_swept_on(TECH_TREE.base_build)
+        assert logged == []
+
+
 def _abilities_offered(transport: WebSocketTransport, unit: Unit) -> set[int]:
     query = query_pb2.RequestQuery(abilities=[query_pb2.RequestQueryAvailableAbilities(unit_tag=unit.tag)])
     return {

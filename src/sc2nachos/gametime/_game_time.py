@@ -237,9 +237,3 @@ def check_game_time(value: object, argument_name: str) -> None:
     """Raise `TypeError` unless `value`, given as `argument_name`, is a `GameTime`."""
     if not isinstance(value, GameTime):
         raise TypeError(f"{argument_name} is a GameTime, not {value!r}")
-
-
-def check_time_limit(time_limit: GameTime | None) -> None:
-    """Raise `TypeError`, before a game starts, for a `time_limit` that is not a `GameTime`."""
-    if time_limit is not None:
-        check_game_time(time_limit, "time_limit")

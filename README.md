@@ -139,7 +139,7 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
   playing a bot through a recorded game, with no game client.
 - [Playing back a replay](https://github.com/maxnus/NachOS/blob/main/docs/replays.md): a replay played through an api
   as one of its players saw the game, with every unit besides if the fog is off, and recorded to play again with no
-  game client.
+  game client; or opened with no api, for a tool to read the game's observations itself.
 - [Migrating from python-sc2](https://github.com/maxnus/NachOS/blob/main/docs/migrating-from-python-sc2.md): the same
   bot in both, and where a translation goes wrong;
   [python-sc2 and NachOS](https://github.com/maxnus/NachOS/blob/main/docs/reference/python-sc2.md) has every name and
