@@ -14,9 +14,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   `delay-sped-up`, build 75689).
 - **Why a missile lands later when its attacker is sent off the step before it fires.** A marauder's and a stalker's
   missiles fired a step after a move order landed some 4 steps later than when the attacker stood (tool
-  `sweep_combat`, `move-before-shot`, build 75689). A marauder's, a roach's, a hydralisk's and a stalker's fired before
-  the order, in the observation that showed the shot or up to 2 steps before it, landed when they would have had the
-  attacker stood (tool `sweep_combat`, `enemy-view`, build 75689; the entries in [damage and
+  `sweep_combat`, `move-before-shot`, build 75689). A marauder's, a roach's, a hydralisk's and a stalker's landed when
+  they would have had the attacker stood when the move was ordered after the shot, in the observation that showed it or
+  1 or 2 steps later (tool `sweep_combat`, `enemy-view`, build 75689; the entries in [damage and
   buffs](damage-and-buffs.md)).
 - **Whether the pathing query leaves a pocket shut in by structures.** From inside a ring of eight supply depots it
   answered 22.5 to a point 11 away, the way in reading 0, in three games at one spot on PylonAIE_v4; at two other spots,
