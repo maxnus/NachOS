@@ -1048,8 +1048,8 @@ Keep this file current: when a step is done, say so here in the same pull reques
     public-names test lets an extension read its own private names through `cls` as through `self`; what a unit's
     type needs is read off `unit.type_data`, over a map built up front (2 us more a turn for 100 enemy units,
     against 68 us for the whole read); and the demo bot builds it beside speed mining.
-- **The package layout** (the owner, 2026-11-02): only `__init__.py`, and `__about__.py`, which hatch reads the version
-  from, stand at the top of `src/sc2nachos`. Everything else is in a package, most named for the `Api` attribute whose
+- **The package layout** (the owner, 2026-11-02): only `__init__.py`, and `__about__.py`, which hatch writes the version
+  to, stand at the top of `src/sc2nachos`. Everything else is in a package, most named for the `Api` attribute whose
   type it holds, so that a bot finds the type of `api.x` in the package of that name (over keeping `api.py` and `run.py`
   as files, and over nesting packages, which lengthens a bot's imports).
   - `api` holds `Api` and its errors, with the private `_Game` and the fog-off playback. `run` holds the runners, their
@@ -1279,8 +1279,14 @@ In AvocaDOS's plan, section "M6 — Delete burnysc2". Done: python-sc2 gone from
 whose numeric helpers went back to AvocaDOS (AvocaDOS #71) before nachOS deleted them (#194). AvocaDOS's tests play
 its own games, whole, one a map, and read nothing from nachOS's checkout; CI plays them only in a weekly run (AvocaDOS
 #72). A bot's tests make units through `sc2nachos.testing` (#196), and AvocaDOS's do (AvocaDOS #74), as nachOS's own
-do where they need nothing but units (above), and the README and the API reference are written (above). Next, the
-first release to PyPI, with the owner's permission, and AvocaDOS pinned to it. Before it, the owner switches GitHub
-Pages on, with GitHub Actions as its source, and lets the `github-pages` environment deploy the release tags, `v*`,
-so that the release publishes the reference. A release a workflow makes with its GITHUB_TOKEN starts no other
-workflow, so a release workflow starts `api-reference` on the tag itself, as that workflow's comment says.
+do where they need nothing but units (above), and the README and the API reference are written (above). Publishing a
+GitHub release uploads it to PyPI, its version read from its tag (#213, planned with the owner 2026-11-04, over
+keeping the version in `__about__.py`), and `docs/maintaining/releasing.md` says how. Next:
+1. The owner's setup, once, that `releasing.md` lists: PyPI's trusted publisher, the `pypi` environment, and GitHub
+   Pages with the `github-pages` environment deploying the tags `v*`.
+2. The first release, 0.1.0, with the owner's permission; a pre-release, 0.1.0rc1, tries the workflow out first.
+3. AvocaDOS pinned to it, in an AvocaDOS pull request: `sc2nachos==0.1.0` from PyPI, without the path to `../NachOS`;
+   its ladder zip taking sc2nachos from the installed environment, as it takes `websocket`, not from NachOS's checkout;
+   and its CI checking NachOS out no more, but for the maps its `.github/sc2-games.yml` reads from
+   `../NachOS/sc2maps/AIE`, which need a home. Section 2's rule then becomes running AvocaDOS's tests when it moves to
+   a newer release, not on every nachOS pull request.

@@ -40,14 +40,30 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
+# The version is the git tag: a release is made by tagging, `v0.1.0` building 0.1.0, never by editing a file, and a
+# commit after it builds a dev version of the next. The fallback is for a copy of the source without git.
 [tool.hatch.version]
-path = "src/sc2nachos/__about__.py"
+source = "vcs"
+fallback-version = "0.0.0"
+
+# Written at every build and editable install, and not tracked, so that `sc2nachos.__version__` reads without git.
+[tool.hatch.build.hooks.vcs]
+version-file = "src/sc2nachos/__about__.py"
+template = '''
+# Written by hatch-vcs from the git tag at build time; not tracked.
+__version__ = "{version}"
+'''
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sc2nachos"]
+
+# What builds the wheel and runs the tests, which read data/, tools/ and examples/; without the maps, 33 MB, or what
+# only this repository's CI and agents use.
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/data", "/tools", "/examples", "/docs", "/README.md", "/LICENSE", "/NOTICE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -7,9 +7,8 @@ name: api-reference
 #
 # Publishing needs Pages switched on in the repository's settings, with GitHub Actions as its source, and the
 # `github-pages` environment allowing the release tags, `v*`, to deploy: by default it allows the default branch alone.
-# A release made with a workflow's GITHUB_TOKEN starts no workflow, this one included, so a release workflow publishes
-# the reference by starting this one on the release's tag, which the token may (`gh workflow run api-reference.yml
-# --ref v0.1.0`), or makes its release with another token.
+# A release published on GitHub starts this workflow and the release workflow, which uploads it to PyPI. One made with
+# a workflow's GITHUB_TOKEN would start neither.
 on:
   release:
     types: [released]
@@ -32,6 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # Full history and its tags, because the version the pages show is read from the tag.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install uv

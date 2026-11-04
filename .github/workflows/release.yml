@@ -1,0 +1,88 @@
+name: release
+
+# Publishing a GitHub release puts its tag on PyPI: `v0.1.0` uploads sc2nachos 0.1.0, and a pre-release `v0.2.0rc1`
+# uploads 0.2.0rc1, which pip installs only when asked for it by its version. The build reads the version from the tag,
+# and a tag that is not `v` and the version as PyPI writes it fails before anything is uploaded. The api-reference
+# workflow publishes the reference on the same release, by itself.
+#
+# PyPI takes the upload from this workflow, in the `pypi` environment, alone; the environment is where to require an
+# approval before it. docs/maintaining/releasing.md says how to set both up. PyPI never takes a version twice, even
+# once it is deleted, so a broken release is followed by the next version, never replaced.
+on:
+  release:
+    types: [published]
+
+# Two uploads must not interleave.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history and its tags, because the version is read from the tag.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          # Nothing an earlier run cached goes into what is uploaded.
+          enable-cache: false
+
+      - name: Install
+        run: uv sync --locked --extra dev
+
+      - name: Build
+        run: uv build
+
+      # A tag the build does not read as it is, or a checkout changed since it, gives other file names.
+      - name: Check the version is the tag's
+        run: |
+          version="${TAG#v}"
+          if [ "$version" = "$TAG" ]; then
+            echo "::error::The tag $TAG does not start with v. Name the release's tag v and the version, as v0.1.0."
+            exit 1
+          fi
+          for file in "dist/sc2nachos-$version-py3-none-any.whl" "dist/sc2nachos-$version.tar.gz"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::The tag $TAG built $(ls dist | tr '\n' ' ')rather than $file."
+              exit 1
+            fi
+          done
+
+      - name: Test
+        run: uv run pytest
+
+      - name: Keep the build for the upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/sc2nachos/
+    permissions:
+      # PyPI's trusted publishing takes the upload on this workflow's word, with no token stored.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Upload to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
