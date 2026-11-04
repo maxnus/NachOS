@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class Effect:
     """An effect an ability leaves on the ground for a while, such as a storm or a corrosive bile about to land.
 
-    The game reports force fields and reaper grenades as units, not effects.
+    The game reports force fields, reaper grenades and a parasitic bomb that has left its target as units, not effects.
     """
 
     id: EffectId

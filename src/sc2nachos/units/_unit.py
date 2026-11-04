@@ -369,7 +369,8 @@ class Unit[K: UnitType.AnyType]:
         """Whether this player can order the unit now: the last observation listed it as this player's. Not while it
         is inside a gas building or a transport, nor under a neural parasite, which makes it an enemy `Unit`, nor once
         it is dead. Read it before ordering a unit kept from an earlier observation, or reading what only `OwnUnit`
-        has. It goes by the listing alone, so a reaper's grenade, listed as its thrower's, reads orderable."""
+        has. It goes by the listing alone, so a reaper's grenade and a parasitic bomb left behind, each listed as its
+        caster's, read orderable."""
         return self._listed and self._own
 
     @property
@@ -679,10 +680,11 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def buffs(self) -> frozenset[BuffId]:
-        """The buffs on the unit."""
+        """The buffs on the unit, but those every unit of its type wears for as long as it is listed, which say nothing
+        its type does not: a parasitic bomb left behind reads none."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
-        return frozenset(BuffId.read(buff) for buff in report.buff_ids)
+        return frozenset(BuffId._read_each(report.buff_ids))
 
     def has_buff(self, buff_ids: BuffId | Collection[BuffId]) -> bool:
         """Whether `buff_ids`, one buff or any of several, is among the unit's `buffs`. Raises `NotReportedError` for a

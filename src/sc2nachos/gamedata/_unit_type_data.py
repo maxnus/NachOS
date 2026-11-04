@@ -222,9 +222,9 @@ class UnitTypeData:
     give none, the attacks `tools/sweep_combat.py` measured. An oracle's fires only while its beam is on."""
     creation_ability: AbilityId | None
     """The ability that makes one, or `None` where the tables tie it to no curated ability: for every type of the map's
-    own; for a larva, an egg, a cocoon, a broodling, a force field, an adept's shade, a KD8 charge, a burrowed creep
-    tumor, a flying locust and a bare tech lab or reactor; and for a MULE, an interceptor, a changeling and an archon,
-    though something makes each."""
+    own; for a larva, an egg, a cocoon, a broodling, a force field, an adept's shade, a KD8 charge, a parasitic bomb
+    left behind, a burrowed creep tumor, a flying locust and a bare tech lab or reactor; and for a MULE, an interceptor,
+    a changeling and an archon, though something makes each."""
     producers: frozenset[UnitTypeId]
     """The unit types that make one: a gateway and a warp gate, for a zealot; a high and a dark templar, for an archon.
     Empty for a type nothing is recorded making, such as a larva, a MULE or an interceptor."""

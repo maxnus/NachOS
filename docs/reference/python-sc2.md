@@ -431,10 +431,12 @@ it.
   covers in a real second. NachOS has done that already: a zergling's `speed` is 4.13, not 2.95.
 - **`armor_upgrade_level` is armor, not a count of levels**, where `attack_upgrade_level` is a count
   ([game behavior](game-behavior/units.md#what-is-reported-of-a-unit)).
-- **Reaper grenades and force fields stay units**, and are not in `api.effects`. python-sc2 moves them into
-  `state.effects`; in NachOS a force field is among the map's units as `FORCE_FIELD`, and a grenade among its
-  thrower's as `REAPER_GRENADE`, a structure as the tables have it, so leave them out of an army count and a count of
-  structures ([game behavior](game-behavior/units.md#what-an-observation-lists)).
+- **Reaper grenades, force fields and the parasitic bombs vipers leave behind stay units**, and are not in
+  `api.effects`. python-sc2 moves them into `state.effects`, a bomb as `PARASITICBOMB`; in NachOS a force field is
+  among the map's units as `FORCE_FIELD`, a grenade among its thrower's as `REAPER_GRENADE`, a structure as the tables
+  have it, and a bomb among its viper's player's as `PARASITIC_BOMB_LEFT_BEHIND`, once its target has died or the bomb
+  has run out. Until then a bomb is its target's buff, `VIPER_PARASITIC_BOMB`. Leave them all out of an army count and
+  a count of structures ([game behavior](game-behavior/units.md#what-an-observation-lists)).
 - **Blips and placeholders are not units.** Neither has a tag. python-sc2 has `bot.blips` and puts placeholders in
   `all_units`; NachOS has neither yet.
 - **`life` is health and shield together.** The protocol calls health alone life; NachOS does not.

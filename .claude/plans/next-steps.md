@@ -36,6 +36,12 @@ Keep this file current: when a step is done, say so here in the same pull reques
   replace would leave a structure idle for a turn (#43).
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read
   from the state, never written into `api.data`.
+- **A buff every unit of one type wears for as long as it is listed is left out of a unit's buffs, not curated** (the
+  owner, review of #215, 2026-11-04, over curating names that say nothing the type does not, and over reading both of a
+  pair as one member): `BuffId._SKIPPED_IDS`, declared on `IdEnum` beside `_REMAPPED_IDS` and passed over by
+  `IdEnum._read_each`, which `Unit.buffs` and the buff events read through (the owner, review of #215, over a `_SKIPPED`
+  member the ids would remap to, which iterating the enum would list). The parasitic bomb's dummy's two buffs are the
+  first.
 - **A unit type names what makes it, not what the tables alias it to** (#75; the owner, 2026-09-26 and 2026-10-19).
   `UnitTypeData.producers` holds every type that makes one, from the tech tree, with the archon's templar written by
   hand, since the sweep never saw a templar offered the merge. `base_type`, the game's `unit_alias`, is gone: the
@@ -1219,6 +1225,19 @@ Keep this file current: when a step is done, say so here in the same pull reques
   2. Starting a replay on its own build with its map, public, for salsa's writer.
 - Apart from salsa, and not waited on by it: an action's target on a copy the fog-off view never lists reads as not
   reported (2026-10-25, above).
+- **Ids AI Arena's replays report that the curated ids leave out**, found playing back matches 4805282 and 4846375
+  raw while curating the parasitic bomb's dummy, and 40 more of the season with the fog off, 4 steps a turn
+  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: buff 59,
+  `ViperConsumeStructure`, worn by the hive a viper consumed, from step 14,132 and 15,245; ability 1662,
+  `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by itself, which `OwnUnit.orders` raises on
+  for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42 (17 of the 42), each worn by every collapsible
+  tower of one kind, in the fog, in the first observation of a playback with the fog off, and never again, nor ever
+  in either player's own view: `CollapsibleRockTowerConjoinedSearch` by `CollapsibleRockTower`,
+  `CollapsibleRockTowerRampDiagonalConjoinedSearch` by `CollapsibleRockTowerDiagonal`,
+  `CollapsibleTerranTowerConjoinedSearch` by `CollapsibleTerranTower` and
+  `CollapsibleTerranTowerRampDiagonalConjoinedSearch` by `CollapsibleTerranTowerDiagonal` (4686890 and 4750796, on
+  MagannathaAIE, every 2 steps). `Api.all_units` shows that first report visible, so its towers' `buffs` raise in the
+  first turn. The 40 reported no unit type the curated ids leave out.
 
 ## 1. Waiting until something needs them
 

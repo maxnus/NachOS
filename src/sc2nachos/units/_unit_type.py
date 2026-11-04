@@ -863,6 +863,9 @@ class UnitType:
     class OverseerSieged(AnyOverseer):
         id = UnitTypeId.OVERSEER_SIEGED
 
+    class ParasiticBombLeftBehind(Zerg):
+        id = UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND
+
     class Phoenix(Protoss):
         id = UnitTypeId.PHOENIX
 

@@ -52,7 +52,8 @@ class _UnitComparer:
         invisible. Buffs are compared for a unit visible in both, since an invisible enemy unit shows none (in game).
         Loss is compared for a unit visible in both and of the same type.
 
-        Raises `UncuratedIdError` for a buff the curated ids leave out. Such a buff belongs among them.
+        Raises `UncuratedIdError` for a buff the curated ids leave out, but those in `BuffId._SKIPPED_IDS`, which it
+        passes over. Such a buff belongs among them.
         """
         tracker = self._tracker
         changes = tracker.last_changes
@@ -115,5 +116,5 @@ class _UnitComparer:
         if only is not None:
             gained = [buff for buff in gained if buff in only]
             lost = [buff for buff in lost if buff in only]
-        side.gained_buff.extend((unit, BuffId.read(buff)) for buff in gained)
-        side.lost_buff.extend((unit, BuffId.read(buff)) for buff in lost)
+        side.gained_buff.extend((unit, buff) for buff in BuffId._read_each(gained))
+        side.lost_buff.extend((unit, buff) for buff in BuffId._read_each(lost))
