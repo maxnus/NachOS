@@ -212,21 +212,14 @@ class Unit[K: UnitType.AnyType]:
             # Just stopped being visible: the last sighting must outlive the observation it came in.
             self._latest_visible_report = _copy(self._latest_report)
             self._last_seen = last_step
-        previous_alliance = None
-        if (alliance := report.alliance) != self._raw_alliance:
-            if (alliance == _OWN_ALLIANCE) is not self._own:
-                previous_alliance = _ALLIANCES[self._raw_alliance]
-                self._update_alliance()
-            self._raw_alliance = alliance
+        previous_alliance = None if report.alliance == self._raw_alliance else self._update_alliance(report.alliance)
         # The game reports orders for this player's units alone.
         if self._own and (orders := self._latest_report.orders):
             self._remember_order_targets(orders)
         self._latest_report = report
         if report.unit_type == self._raw_type:
             return None if previous_alliance is None else _SideOrTypeChange(previous_alliance, None)
-        previous_type = self._type_id
-        self._update_unit_type(report.unit_type)
-        return _SideOrTypeChange(previous_alliance, previous_type)
+        return _SideOrTypeChange(previous_alliance, self._morph_into(report.unit_type))
 
     def _remember_order_targets(self, orders: Iterable[raw_pb2.UnitOrder]) -> None:
         """Keep, by ability, the unit each of `orders`, the latest report's, names under a tag the game has reported."""
@@ -269,14 +262,29 @@ class Unit[K: UnitType.AnyType]:
         self._raw_type = raw_type
         self._type_id = UnitTypeId.read(raw_type)
 
-    def _update_alliance(self) -> None:
-        """Change sides, and with them class, to `OwnUnit` or back, as when a neural parasite takes a unit over or
-        lets it go."""
-        from sc2nachos.units._own_unit import OwnUnit
+    def _morph_into(self, raw_type: int) -> UnitTypeId:
+        """Set the unit's type to `raw_type`, a report's other than the last. Returns the type before."""
+        previous_type = self._type_id
+        self._update_unit_type(raw_type)
+        return previous_type
 
-        self._own = not self._own
-        # Assigning `self.__class__` directly type-checks only for a class of `Self`.
-        object.__setattr__(self, "__class__", OwnUnit if self._own else Unit)
+    def _update_alliance(self, raw_alliance: int) -> Alliance | None:
+        """Set the unit's alliance to `raw_alliance`, a report's other than the last, as the protocol numbers it.
+        Returns the alliance before if the unit changed sides, to or from this player's, or `None` if it did not.
+
+        A unit that changes sides changes class with them, to `OwnUnit` or back, as when a neural parasite takes it
+        over or lets it go.
+        """
+        previous_alliance = None
+        if (raw_alliance == _OWN_ALLIANCE) is not self._own:
+            from sc2nachos.units._own_unit import OwnUnit
+
+            previous_alliance = _ALLIANCES[self._raw_alliance]
+            self._own = not self._own
+            # Assigning `self.__class__` directly type-checks only for a class of `Self`.
+            object.__setattr__(self, "__class__", OwnUnit if self._own else Unit)
+        self._raw_alliance = raw_alliance
+        return previous_alliance
 
     def _never_seen_error(self, what: str) -> NotReportedError:
         """The error for reading `what` from a unit the game has never shown visible."""
