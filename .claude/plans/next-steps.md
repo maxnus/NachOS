@@ -249,13 +249,17 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
        finish too).
      - The fit: with no wrong vote to learn the spread from, it takes the most clustered tried, 0.99, so a slice counts
        about as one vote, one fast slice taking 1% to 99.8%, and a slice of fast and slow votes counts for little
-       either way, as the one wrong vote's did.
+       either way, as the one wrong vote's did. Each mean then comes to about half a vote over the slices fitted on,
+       so how strongly a fast slice counts, about 41,000 to 1, follows from the 20,351 slices of enemies that lacked an
+       upgrade, not from an error seen: constants for step 3 fitted so would grow with the games fitted on.
      - No wrong assumption in the 433 playbacks in which one was possible, below 0.7% a playback (95%), and no wrong
-       forgetting in 209, at each setting. Every one of 24,046 readings at 0.99 or more was of an enemy that had it.
-     - From 1%, assuming at 99%, as from 5% or 14% at 99.9%, since only the odds between floor and threshold decide:
-       358 of 417 finished upgrades assumed, a median of 3.5 seconds from first sight, 90% within 54. Of the other
-       59, 29 had no unit seen moving after it finished and 30 none moving steadily at full speed. From 1% at 99.9%,
-       338, a median of 9.0 seconds, 90% within 83, as two slices are needed.
+       forgetting in the 203 in which a slice followed an assumption, at each setting. Every one of 24,046 readings
+       at 0.99 or more was of an enemy that had it.
+     - From 1%, assuming at 99%, as from 5% or 14% at 99.9%: their odds between floor and threshold differ, about
+       9,800, 19,000 and 6,100 to 1, but one fast slice clears each. 358 of 417 finished upgrades were assumed, a
+       median of 3.5 seconds from first sight of one of its units in a window it moved in, 90% within 54. Of the
+       other 59, 29 had no unit seen moving after it finished and 30 none moving steadily at full speed. From 1% at
+       99.9%, whose 99,000 to 1 takes two slices, 338, a median of 9.0 seconds, 90% within 83.
 
      Proposed, to settle at step 3: a floor of 1% and assuming at 99%, the owner's symmetric defaults "but of course
      the data should decide" (2026-11-04), which they support; forgetting below 0.5, which no playback reached
