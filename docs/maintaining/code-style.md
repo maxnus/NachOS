@@ -28,6 +28,9 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Keyword-only args**: use `*` in signatures liberally.
 - **Type hints** on all parameters and return types.
 - **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
+- **Several units handed to a bot are a `Units`**, the established public interface, unless there is a good reason
+  for another type (the owner, review of #229): `SpeedMining.workers_at` and its releases return one, where they
+  returned tuples. Inside, a list built up or sorted is wrapped where it is handed out.
 - **A parameter a function never reads is named `_`**, and `*_` takes any number of them: `def macro(_: TurnEvent)`
   in the demo bot, and `UpgradeInference._assume_the_upgrades_shown(self, *_: object)`, the handler of two events,
   over a second method that only forwards to it.

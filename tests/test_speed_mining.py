@@ -15,7 +15,7 @@ from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId
 from sc2nachos.match import Computer, Difficulty, Race
 from sc2nachos.run import MapFile, MapNotFoundError
-from sc2nachos.units import Alliance, OwnUnit, Unit
+from sc2nachos.units import Alliance, OwnUnit, Unit, Units
 from support import ScriptedGame, make_game_info, make_observation, make_unit, shipped_game_data
 
 # Pylon's main base, by each resource's offset from where its townhall stands (corpus), around a townhall at the center
@@ -1219,16 +1219,28 @@ class TestHandingOverToCollect:
         assert picked_gas_buildings == [picked]
 
     @pytest.mark.parametrize(
-        ("collectors_at_the_nearer_base", "picked"),
-        [(0, 221), (6, _REFINERY)],
-        ids=["the nearer base", "the other once it is full"],
+        ("collectors_by_refinery", "picked"),
+        [
+            ({_REFINERY: 0, 221: 0, 222: 0}, 221),
+            ({_REFINERY: 0, 221: 3, 222: 3}, _REFINERY),
+            ({_REFINERY: 0, 221: 2, 222: 2}, _REFINERY),
+            ({_OTHER_REFINERY: 2, 221: 2}, 221),
+        ],
+        ids=[
+            "the nearer base",
+            "the other once it is full",
+            "one under two at the other before a third",
+            "a third base by base",
+        ],
     )
-    def test_collect_with_no_gas_building_picks_the_base_nearest_the_worker_with_room(
-        self, collectors_at_the_nearer_base: int, picked: int
+    def test_collect_with_no_gas_building_fills_each_base_to_two_the_one_nearest_the_worker_first_before_a_third(
+        self, collectors_by_refinery: dict[int, int], picked: int
     ) -> None:
         """A second base, its townhall at (56.5, 24.5), its refineries tagged 221, the nearer its townhall, and 222; an
-        SCV at (42.0, 28.0), nearer it, though nearer `_REFINERY` than either of them."""
-        others = [(20 + index, 221 + index // 3) for index in range(collectors_at_the_nearer_base)]
+        SCV at (42.0, 28.0), nearer it, though nearer `_REFINERY` than either of them. A third goes to the nearer
+        base's 221 though `_OTHER_REFINERY` stands farther from its townhall, 8.06 against 7.62."""
+        held_at = [refinery for refinery, count in collectors_by_refinery.items() for _ in range(count)]
+        others = [(20 + index, refinery) for index, refinery in enumerate(held_at)]
         scvs = [_reported_scv((60.0, 27.0), tag=tag) for tag, _ in others]
         picked_gas_buildings: list[int | None] = []
 
@@ -1236,11 +1248,11 @@ class TestHandingOverToCollect:
             gas_building = api.extensions.collect(_own_unit_of_tag(api, _HANDED_SCV))
             picked_gas_buildings.append(None if gas_building is None else gas_building.tag)
 
-        second_base = [
-            *_pylon_main(at=(56.5, 24.5), tags_from=200),
-            *(_refinery(tag, at=(56.5, 24.5)) for tag in (221, 222)),
+        refineries = [
+            _refinery(tag, at=(56.5, 24.5) if tag > 200 else _TOWNHALL_CENTER) for tag in collectors_by_refinery
         ]
-        units = [*_pylon_main(), _refinery(), *second_base, _reported_scv((42.0, 28.0)), *scvs]
+        bases = [*_pylon_main(), *_pylon_main(at=(56.5, 24.5), tags_from=200), *refineries]
+        units = [*bases, _reported_scv((42.0, 28.0)), *scvs]
         _orders_sent(units, assigned=(), collected=others, started=hand_over_with_no_gas_building, map_width=80)
         assert picked_gas_buildings == [picked]
 
@@ -1343,6 +1355,162 @@ class TestHandingOverToCollect:
             dead=lambda step: [11] * (step == 1),
         )
         assert read == [[(_HANDED_SCV, _MINED_FIELD), (11, _REFINERY)], [(_HANDED_SCV, _MINED_FIELD)]]
+
+
+def _released_and_kept(
+    release: Callable[[Api[SpeedMining]], Units[OwnUnit[Any]]],
+    read: list[tuple[list[int], list[int]]],
+) -> Callable[[Api[SpeedMining]], object]:
+    """What `_orders_sent` runs as the game starts to `release` workers and append to `read` the tags released, in the
+    order returned, and those of the workers speed mining still holds."""
+
+    def release_and_read(api: Api[SpeedMining]) -> None:
+        released = release(api)
+        read.append(([worker.tag for worker in released], sorted(worker.tag for worker in api.extensions.workers)))
+
+    return release_and_read
+
+
+class TestReleasing:
+    @pytest.mark.parametrize(
+        ("count", "released"),
+        [
+            (0, []),
+            (1, [22]),
+            (2, [22, 32]),
+            (3, [22, 32, 31]),
+            (4, [22, 32, 31, 30]),
+            (6, [22, 32, 31, 30, 21, 20]),
+            (7, [22, 32, 31, 30, 21, 20]),
+        ],
+        ids=[
+            "none",
+            "the third at the nearer",
+            "the third at the farther next",
+            "then the farther's others",
+            "the farther's last",
+            "then the nearer's",
+            "all where it holds fewer",
+        ],
+    )
+    def test_release_collectors_releases_thirds_nearest_first_then_the_others_farthest_first(
+        self, count: int, released: list[int]
+    ) -> None:
+        """Three collect from `_REFINERY`, the nearer the townhall, handed over as 20, 21 and 22, and three from
+        `_OTHER_REFINERY`, as 30, 31 and 32."""
+        others = [
+            *((20 + index, _REFINERY) for index in range(3)),
+            *((30 + index, _OTHER_REFINERY) for index in range(3)),
+        ]
+        scvs = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, tag=tag) for tag, _ in others]
+        read: list[tuple[list[int], list[int]]] = []
+        units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), *scvs]
+        release = _released_and_kept(lambda api: api.extensions.release_collectors(count), read)
+        _orders_sent(units, assigned=(), collected=others, started=release)
+        assert read == [(released, sorted(tag for tag, _ in others if tag not in released))]
+
+    def test_release_collectors_releases_the_one_handed_over_last_of_those_alike(self) -> None:
+        """Two collect from `_REFINERY`, handed over as 20 and 21, and two from the second base's 221, as far from its
+        townhall, as 30 and 31: the second base's go first, as handed over later."""
+        others = [(20, _REFINERY), (21, _REFINERY), (30, 221), (31, 221)]
+        scvs = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, tag=tag) for tag, _ in others]
+        read: list[tuple[list[int], list[int]]] = []
+        second_base = [*_pylon_main(at=(56.5, 24.5), tags_from=200), _refinery(221, at=(56.5, 24.5))]
+        units = [*_pylon_main(), _refinery(), *second_base, *scvs]
+        release = _released_and_kept(lambda api: api.extensions.release_collectors(3), read)
+        _orders_sent(units, assigned=(), collected=others, started=release, map_width=80)
+        assert read == [([31, 30, 21], [20])]
+
+    def test_release_collectors_releases_one_speed_mining_would_let_go_first(self) -> None:
+        """`_OTHER_REFINERY` has no vespene left in the second turn, when the bot releases a collector before speed
+        mining's turn lets its collector go: that one, 30, leaves before the third at `_REFINERY`, 22."""
+        others = [*((20 + index, _REFINERY) for index in range(3)), (30, _OTHER_REFINERY)]
+        scvs = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, tag=tag) for tag, _ in others]
+        released: list[list[int]] = []
+
+        def release_in_the_second_turn(api: Api[SpeedMining]) -> None:
+            @api.on(TurnEvent, priority=EventPriority.HIGH)
+            def release(event: TurnEvent) -> None:
+                if event.time.steps == 1:
+                    released.append([worker.tag for worker in api.extensions.release_collectors(1)])
+
+        refineries = [_refinery(), _refinery(_OTHER_REFINERY)]
+        mined_out = [_refinery(), _refinery(_OTHER_REFINERY, vespene_contents=0)]
+        _orders_sent(
+            [*_pylon_main(), *refineries, *scvs],
+            [*_pylon_main(), *mined_out, *scvs],
+            assigned=(),
+            collected=others,
+            started=release_in_the_second_turn,
+        )
+        assert released == [[30]]
+
+    @pytest.mark.parametrize(
+        ("count", "released"),
+        [(1, [23]), (2, [23, 21]), (3, [23, 21, 22]), (5, [23, 21, 22, 20])],
+        ids=["the last at a far field", "the other at a far field", "then the last at a near field", "all"],
+    )
+    def test_release_miners_releases_those_at_the_farther_half_of_the_fields_first(
+        self, count: int, released: list[int]
+    ) -> None:
+        """Miners handed over as 20 at near field 102, 21 at far field 107, 22 at near field 104 and 23 at far field
+        108, the main's fields nearest its townhall's center being 101 to 104."""
+        assigned = [(20, 102), (21, 107), (22, 104), (23, 108)]
+        scvs = [_reported_scv((25.0, 30.0), tag=tag) for tag, _ in assigned]
+        read: list[tuple[list[int], list[int]]] = []
+        release = _released_and_kept(lambda api: api.extensions.release_miners(count), read)
+        _orders_sent([*_pylon_main(), *scvs], assigned=assigned, started=release)
+        assert read == [(released, sorted(tag for tag, _ in assigned if tag not in released))]
+
+    def test_a_count_below_zero_raises(self) -> None:
+        refused: list[str] = []
+
+        def release_fewer_than_none(api: Api[SpeedMining]) -> None:
+            for release in (api.extensions.release_miners, api.extensions.release_collectors):
+                with pytest.raises(ValueError) as raised:
+                    release(-1)
+                refused.append(str(raised.value))
+
+        _orders_sent([*_pylon_main(), _reported_scv((25.0, 30.0))], started=release_fewer_than_none)
+        assert refused == ["speed mining releases no fewer than none, not -1"] * 2
+
+    def test_a_miner_handed_over_again_counts_as_handed_over_last(self) -> None:
+        """20 and 21 mine `_MINED_FIELD`, handed over in that order; 20, handed over to another field and back, comes
+        after 21, and is the first `release_miners` releases."""
+        read: list[tuple[list[int], list[int]]] = []
+
+        def hand_over_again(api: Api[SpeedMining]) -> None:
+            worker = _own_unit_of_tag(api, 20)
+            api.extensions.mine(worker, _unit_of_tag(api, _OTHER_FIELD))
+            api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD))
+            at_the_field = api.extensions.workers_at(_unit_of_tag(api, _MINED_FIELD))
+            released = api.extensions.release_miners(1)
+            read.append(([worker.tag for worker in at_the_field], [worker.tag for worker in released]))
+
+        scvs = [_reported_scv((25.0, 30.0), tag=tag) for tag in (20, 21)]
+        _orders_sent(
+            [*_pylon_main(), *scvs], assigned=[(20, _MINED_FIELD), (21, _MINED_FIELD)], started=hand_over_again
+        )
+        assert read == [([21, 20], [20])]
+
+    def test_a_collector_handed_over_again_counts_as_handed_over_last(self) -> None:
+        """20 and 21 collect from `_REFINERY`, handed over in that order; 20, handed over to `_OTHER_REFINERY` and back,
+        comes after 21, and is the first `release_collectors` releases."""
+        read: list[tuple[list[int], list[int]]] = []
+
+        def hand_over_again(api: Api[SpeedMining]) -> None:
+            worker = _own_unit_of_tag(api, 20)
+            api.extensions.collect(worker, _unit_of_tag(api, _OTHER_REFINERY))
+            api.extensions.collect(worker, _unit_of_tag(api, _REFINERY))
+            at_the_refinery = api.extensions.workers_at(_unit_of_tag(api, _REFINERY))
+            released = api.extensions.release_collectors(1)
+            read.append(([worker.tag for worker in at_the_refinery], [worker.tag for worker in released]))
+
+        scvs = [_reported_scv(_FAR_FROM_THE_GAS_TRIP_ENDS, tag=tag) for tag in (20, 21)]
+        units = [*_pylon_main(), _refinery(), _refinery(_OTHER_REFINERY), *scvs]
+        collected = [(20, _REFINERY), (21, _REFINERY)]
+        _orders_sent(units, assigned=(), collected=collected, started=hand_over_again)
+        assert read == [([21, 20], [20])]
 
 
 def _workers_on_the_main(api: Api[object]) -> list[tuple[OwnUnit[Any], Unit[Any]]]:

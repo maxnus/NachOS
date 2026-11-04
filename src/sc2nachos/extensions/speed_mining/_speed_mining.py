@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, MutableMapping
 
     from sc2nachos import Api
+    from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.gamemap import Expansion
     from sc2nachos.geometry import Point
     from sc2nachos.units import UnitOrder
@@ -32,9 +33,9 @@ if TYPE_CHECKING:
 _MOST_MINERS_AT_A_FIELD = 2
 # The most workers speed mining holds at one gas building: the ideal a refinery reports (corpus).
 _MOST_COLLECTORS_AT_A_GAS_BUILDING = 3
-# How many collectors `collect`, picking a gas building itself, puts at each of a base's, nearest its townhall first,
-# before a third at any, farthest first: two speed collected each collect as much as one alone, and a third adds the
-# most where the trip is longest, its gas building taking one worker at a time (in game).
+# How many collectors `collect`, picking a gas building itself, puts at each of every base's, nearest its townhall
+# first, before a third at any, farthest first: two speed collected each collect as much as one alone, and a third adds
+# the most where the trip is longest, its gas building taking one worker at a time (in game).
 _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD = 2
 
 
@@ -60,13 +61,14 @@ class SpeedMining:
     api = Api(extensions=Extensions)
     ```
 
-    Which worker mines which field, and which collects from which gas building, stays the bot's: `mine` hands one over
-    to mine, two at a field at most, at a field of an expansion with a finished townhall of this player's at its center,
-    which it picks among the fields it is given or among all. `collect` hands one over to collect, three at a gas
-    building at most, at a finished gas building of this player's with vespene left on a geyser of such an expansion,
-    which it picks alike. Each sends the worker there at once unless it is at that work already, but takes none it
-    cannot send, building, burrowed or out of reach of orders, and holds a worker at one field or gas building at a
-    time. `release` takes one or several back, and `miners`, `collectors`, `workers` and `workers_at` read them. On
+    How many workers mine and how many collect stays the bot's, and which field or gas building each works may be:
+    `mine` hands one over to mine, two at a field at most, at a field of an expansion with a finished townhall of this
+    player's at its center, which it picks among the fields it is given or among all. `collect` hands one over to
+    collect, three at a gas building at most, at a finished gas building of this player's with vespene left on a geyser
+    of such an expansion, which it picks alike. Each sends the worker there at once unless it is at that work already,
+    but takes none it cannot send, building, burrowed or out of reach of orders, and holds a worker at one field or gas
+    building at a time. `release` takes one or several back, `release_miners` and `release_collectors` a number of
+    them, those whose leaving costs the least, and `miners`, `collectors`, `workers` and `workers_at` read them. On
     each `TurnEvent`, at `EventPriority.LOW`, speed mining orders each worker it holds:
 
     - A miner idle, gathering minerals, returning minerals, or on speed mining's own move, is kept mining its field:
@@ -154,12 +156,12 @@ class SpeedMining:
         )
         return MappingProxyType(ChainMap(miners, collectors))
 
-    def workers_at(self, resource: Unit[UnitType.AnyResource]) -> tuple[OwnUnit[UnitType.Worker], ...]:
+    def workers_at(self, resource: Unit[UnitType.AnyResource]) -> Units[OwnUnit[UnitType.Worker]]:
         """The workers speed mining holds at `resource`, a mineral field or a gas building, in the order they were
         handed over."""
         if UnitType.AnyMineralField.includes(resource):
-            return tuple(worker for worker, field in self._field_by_worker.items() if field is resource)
-        return tuple(
+            return Units(worker for worker, field in self._field_by_worker.items() if field is resource)
+        return Units(
             worker for worker, gas_building in self._gas_building_by_worker.items() if gas_building is resource
         )
 
@@ -193,7 +195,8 @@ class SpeedMining:
         field = self._nearest_field_with_room(worker, only_fields)
         if field is None or not self._send_to_gather_at(worker, field, mining=True):
             return None
-        self._gas_building_by_worker.pop(worker, None)
+        # Released first, so that it counts as handed over last wherever it was held.
+        self.release(worker)
         self._field_by_worker[worker] = field
         return field
 
@@ -208,10 +211,11 @@ class SpeedMining:
 
         Speed mining picks the gas building among the finished ones of this player's with vespene left, standing on a
         geyser of an expansion with a finished townhall of this player's at its center, and only among
-        `gas_buildings`, one or several, if given: at the expansion nearest `worker` with a gas building fewer than
-        three other workers collect from, the nearest the expansion's center of those fewer than two others collect
-        from, or, where none is, the farthest from it. Where there is none, `collect` returns `None` and leaves
-        `worker` as it was, held where it was, if anywhere.
+        `gas_buildings`, one or several, if given: at the expansion nearest `worker` with a gas building fewer than two
+        other workers collect from, the one of those nearest the expansion's center, before a third at any; where every
+        one has two, at the expansion nearest `worker` with one fewer than three others collect from, the one of those
+        farthest from its center. Where there is none, `collect` returns `None` and leaves `worker` as it was, held
+        where it was, if anywhere.
 
         Handed over, `worker` is sent to the gas building at once, as `mine` sends a worker to its field: a gather at
         it, behind a return of any cargo it carries. Nothing is sent to a worker collecting vespene already, nor again
@@ -229,7 +233,8 @@ class SpeedMining:
         self._trip_end_points.work_out_gas_building(gas_building)
         if not self._send_to_gather_at(worker, gas_building, mining=False):
             return None
-        self._field_by_worker.pop(worker, None)
+        # Released first, so that it counts as handed over last wherever it was held.
+        self.release(worker)
         self._gas_building_by_worker[worker] = gas_building
         return gas_building
 
@@ -239,6 +244,96 @@ class SpeedMining:
         for worker in _tuple_of_units(workers):
             self._field_by_worker.pop(worker, None)
             self._gas_building_by_worker.pop(worker, None)
+
+    def release_miners(self, count: int) -> Units[OwnUnit[UnitType.Worker]]:
+        """Release `count` of the miners speed mining holds, as `release` does, those whose leaving costs the least
+        first, and return them in that order, or all of them where it holds fewer: the reverse of how `mine` picks a
+        field. One speed mining would let go this turn leaves first, then one at a field of the farther half of its
+        expansion's fields, then one of the nearer half; of those alike, the one handed over last, the likeliest to
+        have mined nothing yet.
+
+        Raises `ValueError` for a `count` below zero."""
+        return self._release_the_first(self._miners_cheapest_to_release_first(), count)
+
+    def release_collectors(self, count: int) -> Units[OwnUnit[UnitType.Worker]]:
+        """Release `count` of the collectors speed mining holds, as `release` does, those whose leaving costs the least
+        vespene first, and return them in that order, or all of them where it holds fewer: the reverse of how
+        `collect` fills gas buildings. One speed mining would let go this turn leaves first, then a gas building's
+        third collector, at the gas building nearest its expansion's center first, where a third adds the least, and
+        then a gas building's others, at the one farthest from its expansion's center first; of those alike, the one
+        handed over last, the likeliest to have collected nothing yet.
+
+        Raises `ValueError` for a `count` below zero."""
+        return self._release_the_first(self._collectors_cheapest_to_release_first(), count)
+
+    def _release_the_first(
+        self, workers_cheapest_first: list[OwnUnit[UnitType.Worker]], count: int
+    ) -> Units[OwnUnit[UnitType.Worker]]:
+        """Release the first `count` of `workers_cheapest_first`, or all of them where there are fewer, and return
+        them. Raises `ValueError` for a `count` below zero."""
+        if count < 0:
+            raise ValueError(f"speed mining releases no fewer than none, not {count}")
+        leaving = Units(workers_cheapest_first[:count])
+        self.release(leaving)
+        return leaving
+
+    def _miners_cheapest_to_release_first(self) -> list[OwnUnit[UnitType.Worker]]:
+        """The miners held, those whose leaving costs the least first, as `release_miners` says."""
+        townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None] = {}
+        handed_over_place = {miner: place for place, miner in enumerate(self._field_by_worker)}
+        cost_of_leaving: dict[OwnUnit[UnitType.Worker], tuple[int, int]] = {}
+        for field, miners in _workers_by_resource(self._field_by_worker).items():
+            trip_to_it = self._trip_to_a_field(field, townhall_by_center)
+            # 0 for one let go this turn, 1 at a field of the farther half, 2 of the nearer.
+            if trip_to_it is None:
+                leaving_rank = 0
+            else:
+                alive_fields = [
+                    expansion_field
+                    for expansion_field in trip_to_it[0].expansion.mineral_fields
+                    if expansion_field.is_alive
+                ]
+                leaving_rank = 1 if _is_of_the_farther_half(alive_fields.index(field), len(alive_fields)) else 2
+            for miner in miners:
+                cost_of_leaving[miner] = (leaving_rank, -handed_over_place[miner])
+        return sorted(cost_of_leaving, key=cost_of_leaving.__getitem__)
+
+    def _collectors_cheapest_to_release_first(self) -> list[OwnUnit[UnitType.Worker]]:
+        """The collectors held, those whose leaving costs the least first, as `release_collectors` says."""
+        townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None] = {}
+        handed_over_place = {collector: place for place, collector in enumerate(self._gas_building_by_worker)}
+        cost_of_leaving: dict[OwnUnit[UnitType.Worker], tuple[int, float, int]] = {}
+        for gas_building, collectors in _workers_by_resource(self._gas_building_by_worker).items():
+            trip_to_it = self._trip_to_a_gas_building(gas_building, townhall_by_center)
+            from_its_center = 0.0 if trip_to_it is None else gas_building.distance_to(trip_to_it[0].expansion.center)
+            for place_at_the_gas_building, collector in enumerate(collectors, start=1):
+                # 0 for one let go this turn, 1 for a third, the nearer its center first, 2 for the others, the
+                # farther first.
+                if trip_to_it is None:
+                    leaving_rank, distance_order = 0, 0.0
+                elif place_at_the_gas_building > _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD:
+                    leaving_rank, distance_order = 1, from_its_center
+                else:
+                    leaving_rank, distance_order = 2, -from_its_center
+                cost_of_leaving[collector] = (leaving_rank, distance_order, -handed_over_place[collector])
+        return sorted(cost_of_leaving, key=cost_of_leaving.__getitem__)
+
+    def _trip_to_a_field(
+        self, field: Unit[UnitType.AnyMineralField], townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None]
+    ) -> tuple[TripEndPoints, Unit[UnitType.Townhall]] | None:
+        """The end points of the trips to `field` with the townhall taking their cargo, or `None` where speed mining
+        lets its miners go: once it is dead, or no expansion holding it has a finished townhall of this player's at its
+        center. Each expansion's townhall is read once a turn, kept in `townhall_by_center`."""
+        return None if field.is_dead else self._trip_end_points.of_field(field, townhall_by_center)
+
+    def _trip_to_a_gas_building(
+        self, gas_building: Unit[UnitType.GasBuilding], townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None]
+    ) -> tuple[TripEndPoints, Unit[UnitType.Townhall]] | None:
+        """The end points of the trips to `gas_building` with the townhall taking their cargo, or `None` where speed
+        mining lets its collectors go: once it is dead or has no vespene left, as `_trip_to_a_field` says otherwise."""
+        if gas_building.is_dead or gas_building.vespene_contents == 0:
+            return None
+        return self._trip_end_points.of_gas_building(gas_building, townhall_by_center)
 
     def _send_to_gather_at(
         self, worker: OwnUnit[UnitType.Worker], resource: Unit[UnitType.AnyResource], *, mining: bool
@@ -271,9 +366,8 @@ class SpeedMining:
         miner_counts = _counts_of_the_others(self._field_by_worker, worker)
         for expansion in self._expansions_with_a_finished_townhall_nearest(worker):
             fields = [field for field in expansion.mineral_fields if field.is_alive]
-            nearer_half = math.ceil(len(fields) / 2)
             with_room = [
-                (index >= nearer_half, worker.distance_to(field), field)
+                (_is_of_the_farther_half(index, len(fields)), worker.distance_to(field), field)
                 for index, field in enumerate(fields)
                 if miner_counts[field] < _MOST_MINERS_AT_A_FIELD and (only_fields is None or field in only_fields)
             ]
@@ -297,23 +391,27 @@ class SpeedMining:
         }
         if not with_room_by_position:
             return None
-        for expansion in self._expansions_with_a_finished_townhall_nearest(worker):
-            # Nearest the expansion's center first, as its geysers are.
-            at_the_expansion = [
+        # Each expansion's, nearest its center first, as its geysers are, the expansion nearest `worker` first.
+        with_room_at_each_expansion = [
+            [
                 with_room_by_position[geyser.position]
                 for geyser in expansion.geysers
                 if geyser.position in with_room_by_position
             ]
-            if at_the_expansion:
-                return next(
-                    (
-                        gas_building
-                        for gas_building in at_the_expansion
-                        if collector_counts[gas_building] < _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD
-                    ),
-                    at_the_expansion[-1],
-                )
-        return None
+            for expansion in self._expansions_with_a_finished_townhall_nearest(worker)
+        ]
+        for with_room_at_the_expansion in with_room_at_each_expansion:
+            for gas_building in with_room_at_the_expansion:
+                if collector_counts[gas_building] < _COLLECTORS_AT_EACH_GAS_BUILDING_BEFORE_A_THIRD:
+                    return gas_building
+        return next(
+            (
+                with_room_at_the_expansion[-1]
+                for with_room_at_the_expansion in with_room_at_each_expansion
+                if with_room_at_the_expansion
+            ),
+            None,
+        )
 
     def _expansions_with_a_finished_townhall_nearest(self, worker: OwnUnit[UnitType.Worker]) -> Iterator[Expansion]:
         """The expansions with a finished townhall of this player's at their center, nearest `worker` first."""
@@ -326,18 +424,9 @@ class SpeedMining:
         building by gas building, once the workers of the fields and gas buildings no longer mined or collected from
         are let go, since they count among the units in a move's way."""
         townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None] = {}
-        trip_end_points = self._trip_end_points
-        mined_fields = _still_worked(
-            self._field_by_worker,
-            lambda field: None if field.is_dead else trip_end_points.of_field(field, townhall_by_center),
-        )
+        mined_fields = _still_worked(self._field_by_worker, self._trip_to_a_field, townhall_by_center)
         collected_gas_buildings = _still_worked(
-            self._gas_building_by_worker,
-            lambda gas_building: (
-                None
-                if gas_building.is_dead or gas_building.vespene_contents == 0
-                else trip_end_points.of_gas_building(gas_building, townhall_by_center)
-            ),
+            self._gas_building_by_worker, self._trip_to_a_gas_building, townhall_by_center
         )
         units_in_the_way: Units[Unit[Any]] | None = None
         units_near_each_trip_end: dict[Point, Units[Unit[Any]]] = {}
@@ -429,21 +518,37 @@ def _given[R: UnitType.AnyType](
 
 
 def _still_worked[R: Unit[Any], T](
-    resource_by_worker: UnitDict[OwnUnit[UnitType.Worker], R], worked_as: Callable[[R], T | None]
+    resource_by_worker: UnitDict[OwnUnit[UnitType.Worker], R],
+    worked_as: Callable[[R, dict[Point, Unit[UnitType.Townhall] | None]], T | None],
+    townhall_by_center: dict[Point, Unit[UnitType.Townhall] | None],
 ) -> list[tuple[R, list[OwnUnit[UnitType.Worker]], T]]:
     """Each value of `resource_by_worker` with its workers, in the order they were handed over, and what `worked_as`
-    reads of it, once the workers of each it reads `None` for are let go."""
-    workers_by_resource: dict[R, list[OwnUnit[UnitType.Worker]]] = {}
-    for worker, resource in resource_by_worker.items():
-        workers_by_resource.setdefault(resource, []).append(worker)
+    reads of it with `townhall_by_center`, once the workers of each it reads `None` for are let go. One call each, the
+    townhalls passed along rather than closed over, as this runs every turn."""
     still_worked: list[tuple[R, list[OwnUnit[UnitType.Worker]], T]] = []
-    for resource, workers in workers_by_resource.items():
-        if (worked := worked_as(resource)) is None:
+    for resource, workers in _workers_by_resource(resource_by_worker).items():
+        if (worked := worked_as(resource, townhall_by_center)) is None:
             for worker in workers:
                 del resource_by_worker[worker]
         else:
             still_worked.append((resource, workers, worked))
     return still_worked
+
+
+def _workers_by_resource[R: Unit[Any]](
+    resource_by_worker: UnitDict[OwnUnit[UnitType.Worker], R],
+) -> dict[R, list[OwnUnit[UnitType.Worker]]]:
+    """Each value of `resource_by_worker` with its workers, in the order they were handed over."""
+    workers_by_resource: dict[R, list[OwnUnit[UnitType.Worker]]] = {}
+    for worker, resource in resource_by_worker.items():
+        workers_by_resource.setdefault(resource, []).append(worker)
+    return workers_by_resource
+
+
+def _is_of_the_farther_half(place: int, field_count: int) -> bool:
+    """Whether the field at `place`, counted from 0, of an expansion's `field_count` alive fields, nearest its center
+    first, is of the farther half, as `mine` reads them: the farther holds one fewer of an odd count."""
+    return place >= math.ceil(field_count / 2)
 
 
 def _counts_of_the_others[R: Unit[Any]](
