@@ -16,14 +16,16 @@ Needs StarCraft II installed, with the replays' build and maps.
   every observation's move to fall in the band too; then, for the proposed window and band, the votes by upgrade, and
   the playbacks in which a wrong assumption was possible, an enemy lacking an upgrade while its units of a type it
   speeds up voted. Last, how long a playback took.
-- `check` scores the playbacks as upgrade inference is to, by the rule the pilot proposes: windows of 22 steps,
-  steady votes within 0.05 of the gap, and none from a unit wearing a buff that changes its speed, or before the
-  upgrade could have finished. The votes of each upgrade in one window's steps are a slice, k fast of n, whose
-  likelihood is a beta-binomial for an enemy that has the upgrade and another for one that lacks it, fitted on the
-  playbacks of `--fit`. On the rest it runs the score from each floor `p0` and threshold of assuming of
-  `_SCORE_SETTINGS`, forgetting below 0.5, and counts the playbacks that assume an upgrade the enemy lacks and those
-  that forget one it has; how long each one it has takes to be assumed, after it finished and after one of its units
-  was first seen moving, a unit that does not move in a window not being recorded; and how often a score reads true.
+- `check` scores the playbacks as upgrade inference does, by the rule it ships with, which it imports: windows of 22
+  steps, steady votes within 0.05 of the gap, and none from a unit wearing a buff that changes its speed, or before
+  the upgrade could have finished. The votes of each upgrade in one window's steps are a slice, k fast of n. It
+  scores each slice as upgrade inference does, a slice with a fast vote for the upgrade and one of only slow votes
+  against, from a floor of 1% and assuming at 99%; and, to compare, by a beta-binomial for an enemy that has the
+  upgrade and another for one that lacks it, fitted on the playbacks of `--fit`, from each floor `p0` and threshold of
+  assuming of `_SCORE_SETTINGS`. On the playbacks not fitted on, forgetting below 0.5, it counts the playbacks that
+  assume an upgrade the enemy lacks and those that forget one it has; how long each one it has takes to be assumed,
+  after it finished and after one of its units was first seen in a window it moved in, a unit that does not move in a
+  window not being recorded; and how often a score reads true.
 
 Run it as::
 
@@ -53,13 +55,20 @@ from loguru import logger
 
 from sc2nachos import Api, run_replay
 from sc2nachos.events import TurnStartEvent
-from sc2nachos.extensions.upgrade_inference._movement_windows import (
-    MovementWindow,
-    MovementWindows,
-    speed_upgrade_by_type,
+from sc2nachos.extensions.upgrade_inference._movement_windows import MovementWindow, MovementWindows
+from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
+    _DEFAULT_ASSUMED_AT,
+    _DEFAULT_FLOOR,
+    _DEFAULT_FORGOTTEN_BELOW,
+    _LEAST_GAP_AS_SHARE_OF_SPEED,
+    _LOG_ODDS_OF_A_SLICE_AGAINST,
+    _LOG_ODDS_OF_A_SLICE_FOR,
+    _SPEED_CHANGING_BUFFS,
+    _VOTE_BAND_AS_SHARE_OF_GAP,
+    _earliest_finish_steps,
 )
+from sc2nachos.extensions.upgrade_inference._speed_upgrades import _WINDOW_STEPS as _VOTING_WINDOW_STEPS
 from sc2nachos.gametime import STEPS_PER_SECOND
-from sc2nachos.ids import UnitTypeId
 from sc2nachos.testing import load_game_data
 
 DEFAULT_OUT_DIRECTORY = Path("replay-movement")
@@ -71,33 +80,18 @@ _PLAYER_IDS = (1, 2)
 # around 0 and 1, as shares of the gap between the two predictions.
 _WINDOWS_JOINED = (1, 2, 4)
 _BAND_WIDTHS = (0.05, 0.1, 0.2)
-# The window and band the plan proposes, for the summary's counts by upgrade and by playback.
-_PROPOSED_WINDOWS_JOINED = 2
-_PROPOSED_BAND_WIDTH = 0.05
+# The window and band upgrade inference votes by, for the summary's counts by upgrade and by playback.
+_PROPOSED_WINDOWS_JOINED = _VOTING_WINDOW_STEPS // _WINDOW_STEPS
+_PROPOSED_BAND_WIDTH = _VOTE_BAND_AS_SHARE_OF_GAP
 # A window does not vote where the prediction with the upgrade is less than this much further than the one without.
-_LEAST_GAP = 0.1
+_LEAST_GAP = _LEAST_GAP_AS_SHARE_OF_SPEED
 _VOTE_RULES = {"plain": False, "steady": True}
-# The buffs that change a unit's speed, under which `check` counts no vote: Time Warp's slow is measured
-# (`docs/reference/game-behavior/damage-and-buffs.md`); the others are taken from what their names say, unmeasured.
-_SPEED_CHANGING_BUFFS = frozenset(
-    {
-        "ACCELERATION_ZONE",
-        "ACCELERATION_ZONE_FLYING",
-        "HYDRALISK_LUNGE",
-        "INFESTOR_FUNGAL_GROWTH",
-        "INHIBITOR_ZONE",
-        "INHIBITOR_ZONE_FLYING",
-        "MARAUDER_CONCUSSIVE_SHELLS_SLOW",
-        "MOTHERSHIP_TIME_WARP",
-        "PHOENIX_GRAVITON_BEAM",
-        "VOID_RAY_PRISMATIC_ALIGNMENT",
-    }
-)
-# The structures a player starts with, which the earliest finish of an upgrade they research waits for no building of.
-_STARTING_STRUCTURES = frozenset({UnitTypeId.COMMAND_CENTER, UnitTypeId.HATCHERY, UnitTypeId.NEXUS})
-# The floors `check` runs the score from, each with the score at which it assumes an upgrade, and where it forgets one.
+# The buffs under which upgrade inference counts no vote, by name, as a playback records them.
+_SPEED_CHANGING_BUFF_NAMES = frozenset(buff.name for buff in _SPEED_CHANGING_BUFFS)
+# The floors `check` runs the fitted beta-binomial's score from, each with the score at which it assumes an upgrade,
+# and where it forgets one, as upgrade inference does.
 _SCORE_SETTINGS = ((0.01, 0.99), (0.01, 0.999), (0.05, 0.999), (0.14, 0.999))
-_FORGOTTEN_BELOW = 0.5
+_FORGOTTEN_BELOW = _DEFAULT_FORGOTTEN_BELOW
 # The beta-binomial spreads `check` fits over, as the correlation of two votes of one slice, and the number of means,
 # spaced evenly in their logarithm from `_LEAST_MEAN` to 0.5.
 _SPREADS_FITTED_OVER = (0.0, 1e-4, 1e-3, 0.01, 0.03, 0.1, 0.3, 0.6, 0.9, 0.99)
@@ -123,12 +117,11 @@ class _Recorder:
         self.windows: list[MovementWindow] = []
         self.upgrade_steps: dict[str, int] = {}
         self.last_step = 0
-        MovementWindows(api, window_steps=_WINDOW_STEPS, on_window=self._keep_if_moved)
+        MovementWindows(api, window_steps=_WINDOW_STEPS, on_windows=self._keep_those_that_moved)
         api.on(TurnStartEvent)(self._note_the_turn)
 
-    def _keep_if_moved(self, window: MovementWindow) -> None:
-        if window.distance > 0:
-            self.windows.append(window)
+    def _keep_those_that_moved(self, windows: Sequence[MovementWindow]) -> None:
+        self.windows.extend(window for window in windows if window.distance > 0)
 
     def _note_the_turn(self, *_: object) -> None:
         api = self._api
@@ -507,25 +500,15 @@ class _VoteSlice:
         return self.fast_votes + self.slow_votes
 
 
-def _earliest_finish_steps() -> dict[str, int]:
-    """The earliest step each speed upgrade could finish: its research time, after the quickest of its researchers to
-    build, but for a researcher a player starts with."""
-    game_data = load_game_data()
-    earliest_steps: dict[str, int] = {}
-    for upgrade in set(speed_upgrade_by_type(game_data).values()):
-        upgrade_data = game_data.upgrades[upgrade]
-        researcher_steps = min(
-            0 if researcher in _STARTING_STRUCTURES else round(game_data.units[researcher].cost.time.steps)
-            for researcher in upgrade_data.researchers
-        )
-        earliest_steps[upgrade.name] = researcher_steps + round(upgrade_data.cost.time.steps)
-    return earliest_steps
+def _earliest_finish_steps_by_name() -> dict[str, int]:
+    """The earliest step each speed upgrade could finish, as upgrade inference reckons it, by the upgrade's name."""
+    return {upgrade.name: steps for upgrade, steps in _earliest_finish_steps(load_game_data()).items()}
 
 
 def _proposed_vote(window: _Window) -> str | None:
     """The window's vote by the rule `check` scores: steady within the proposed band, and none under a buff that changes
     the unit's speed."""
-    if window.buffs & _SPEED_CHANGING_BUFFS:
+    if window.buffs & _SPEED_CHANGING_BUFF_NAMES:
         return None
     return window.vote(_PROPOSED_BAND_WIDTH, steady=True)
 
@@ -626,6 +609,18 @@ class _VoteModel:
         return self.had_it.log_probability(slow_votes, votes) - self.lacked_it.log_probability(fast_votes, votes)
 
 
+@dataclass(frozen=True, slots=True)
+class _SliceCountModel:
+    """How upgrade inference scores a slice: one with a fast vote for the upgrade, and one of only slow votes against
+    it."""
+
+    def log_likelihood_ratio(self, fast_votes: int, slow_votes: int) -> float:
+        """How much likelier the votes are from an enemy that has the upgrade, as a logarithm."""
+        if fast_votes:
+            return _LOG_ODDS_OF_A_SLICE_FOR
+        return -_LOG_ODDS_OF_A_SLICE_AGAINST if slow_votes else 0.0
+
+
 def _log_odds_of_probability(probability: float) -> float:
     return math.log(probability / (1 - probability))
 
@@ -640,8 +635,11 @@ def _score_bin(score: float) -> int:
 
 @dataclass(slots=True)
 class _ScoreCheck:
-    """What the score did over the checked playbacks, from one floor and assuming at one score."""
+    """What the score did over the checked playbacks, by one model of a slice, from one floor and assuming at one
+    score."""
 
+    model_name: str
+    model: _VoteModel | _SliceCountModel
     floor: float
     assumed_at: float
     wrongly_assumed: list[str] = field(default_factory=list)
@@ -660,7 +658,6 @@ class _ScoreCheck:
         finished: int | None,
         first_seen_moving: int | None,
         slices: Sequence[_VoteSlice],
-        model: _VoteModel,
     ) -> None:
         """Run the score of `upgrade` over its `slices` in `playback`, the enemy having finished it at `finished`, and
         one of the units it speeds up having first been seen moving after that at `first_seen_moving`."""
@@ -672,7 +669,7 @@ class _ScoreCheck:
             if is_assumed and vote_slice.enemy_had_it is True:
                 self.playbacks_with_a_wrong_forgetting_possible.add(playback)
             log_odds = max(
-                floor_log_odds, log_odds + model.log_likelihood_ratio(vote_slice.fast_votes, vote_slice.slow_votes)
+                floor_log_odds, log_odds + self.model.log_likelihood_ratio(vote_slice.fast_votes, vote_slice.slow_votes)
             )
             score = _probability_of_log_odds(log_odds)
             if vote_slice.enemy_had_it is not None:
@@ -718,8 +715,9 @@ class _ScoreCheck:
                     "share the enemy had it": round(had_it / (had_it + lacked_it), 5),
                 }
         return {
-            "floor": self.floor,
-            "assumed at": self.assumed_at,
+            "model": self.model_name,
+            "floor": round(self.floor, 6),
+            "assumed at": round(self.assumed_at, 6),
             "playbacks in which a wrong assumption was possible": assumption_possible,
             "wrong assumptions": self.wrongly_assumed,
             "a bound on wrong assumptions a playback, 95%": _rule_of_three(
@@ -813,7 +811,7 @@ def _fit_vote_model(
 def check_playbacks(out_directory: Path, fit_directories: Sequence[Path]) -> dict[str, Any]:
     """Fit the vote model on the playbacks in `fit_directories` and check the score on those in `out_directory` of
     other replays, as the module docstring says."""
-    earliest_finish_steps = _earliest_finish_steps()
+    earliest_finish_steps = _earliest_finish_steps_by_name()
     # By playback, so that a playback copied into two of the folders is fitted on once.
     fit_paths_by_playback = {
         _key_of_playback(path): path for directory in fit_directories for path in directory.glob("*.json.gz")
@@ -823,7 +821,10 @@ def check_playbacks(out_directory: Path, fit_directories: Sequence[Path]) -> dic
     fit_replays = {_key_of_playback(path)[0] for path in fit_paths}
     paths = [path for path in sorted(out_directory.glob("*.json.gz")) if _key_of_playback(path)[0] not in fit_replays]
     headers = _headers_of(paths)
-    score_checks = [_ScoreCheck(floor, assumed_at) for floor, assumed_at in _SCORE_SETTINGS]
+    score_checks = [
+        _ScoreCheck("upgrade inference's", _SliceCountModel(), _DEFAULT_FLOOR, _DEFAULT_ASSUMED_AT),
+        *(_ScoreCheck("fitted", model, floor, assumed_at) for floor, assumed_at in _SCORE_SETTINGS),
+    ]
     playbacks_checked = 0
     for path in paths:
         replay, player_id = key = _key_of_playback(path)
@@ -848,7 +849,6 @@ def check_playbacks(out_directory: Path, fit_directories: Sequence[Path]) -> dic
                     finished_steps.get(upgrade),
                     first_seen_moving.get(upgrade),
                     by_upgrade[upgrade],
-                    model,
                 )
     return {
         "earliest finish, in steps": dict(sorted(earliest_finish_steps.items())),

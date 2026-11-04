@@ -7,6 +7,13 @@ from typing import TYPE_CHECKING, Any, Final, final
 
 from sc2nachos import NoEnemyError
 from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
+from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
+    _DEFAULT_ASSUMED_AT,
+    _DEFAULT_FLOOR,
+    _DEFAULT_FORGOTTEN_BELOW,
+    SpeedUpgradesFromMovement,
+    check_the_thresholds,
+)
 from sc2nachos.ids import BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance, Visibility
 
@@ -83,18 +90,59 @@ class UpgradeInference:
     - An enemy storm, Psionic Storm.
     - A unit the enemy holds with a neural parasite shows Neural Parasite, and nothing of the player it was taken from.
       One on another side than when first seen shows nothing by its type.
+    - With `include_speed_upgrades`, as by default, how fast its units move shows ten speed upgrades: Metabolic Boost,
+      Centrifugal Hooks, Glial Reconstitution, Muscular Augments, Anabolic Synthesis, Pneumatized Carapace, Hyperflight
+      Rotors, Gravitic Boosters, Gravitic Drive and Flux Vanes. Every 22 steps it measures each visible enemy unit of a
+      type one of them speeds up that was in sight throughout, and on the side it was first seen on: one that moved at
+      its speed with the upgrade at every observation, within 5% of the difference between its speeds without the
+      upgrade and with it, votes for the upgrade, and one at its speed without against it; a Zerg ground unit at its
+      speeds on creep where it stood on creep. Each upgrade has a score, the probability that the enemy has it, from a
+      floor, `speed_upgrade_floor`, 1% by default: 22 steps with a vote for it multiply its odds by 23,000, and 22 steps
+      with only votes against divide them by 11,000. It assumes the upgrade at `assume_speed_upgrade_at`, 99% by
+      default, as one such 22 steps do. No vote counts before the upgrade could have finished, from a unit wearing a
+      buff that changes its speed, as Time Warp does, or where the upgrade adds less than 10% to the unit's speed, as
+      Anabolic Synthesis does on creep. The rule was checked on games observed at every step: a bot that observes fewer
+      sees fewer moves in 22 steps, and so tells less well a unit that moved steadily from one that stopped and started
+      again. It reads these off each turn's observation alone, so not off 22 steps that end on the one the game ended
+      on.
 
-    Upgrades are never lost, so what it reads stays; `Enemy.forget_upgrades` takes one back until it is shown again.
-    In a game with no other player it reads nothing.
+    Upgrades are never lost, so what it reads stays, but for a speed upgrade it assumed, which it forgets once its
+    score falls below `forget_speed_upgrade_below`, 50% by default, as one 22 steps of only votes against after one of
+    votes for do. It never forgets one `Enemy.upgrades` already held when its score reached where it is assumed, as one
+    the bot assumed first, but cannot tell one the bot assumes after it did, which it may then forget too.
+    `Enemy.forget_upgrades` takes one back until it is shown again, a speed upgrade by 22 steps with a vote for it. In a
+    game with no other player it reads nothing.
 
-    Raises `NotPlayingError` if built before the game starts. A buff the curated ids leave out, on any visible unit,
+    The three thresholds set how much evidence a speed upgrade needs, not what 22 steps of votes weigh, which the
+    rule's errors on the replays fix: from 0.1% assuming at 99.9%, two of 22 steps with a vote for it assume it. If the
+    weights are right, the chance that an enemy without an upgrade ever has its score reach where it is assumed is at
+    most the floor's odds over the threshold's each time the score leaves its floor, 1 in 9,800 by default; less so
+    where it takes several 22 steps, since one group's 22 steps one after another are not as many chances apart. The
+    replays checked the defaults alone.
+
+    Raises `ValueError` unless `0 < speed_upgrade_floor < forget_speed_upgrade_below < assume_speed_upgrade_at < 1`, and
+    `NotPlayingError` if built before the game starts. A buff the curated ids leave out, on any visible unit,
     raises `UncuratedIdError` from its handler, as reading `Unit.buffs` does.
     """
 
     __slots__ = ("_api",)
 
-    def __init__(self, api: Api[object]) -> None:
-        """Upgrade inference for the enemy of `api`'s game, from its first turn."""
+    def __init__(
+        self,
+        api: Api[object],
+        *,
+        include_speed_upgrades: bool = True,
+        speed_upgrade_floor: float = _DEFAULT_FLOOR,
+        assume_speed_upgrade_at: float = _DEFAULT_ASSUMED_AT,
+        forget_speed_upgrade_below: float = _DEFAULT_FORGOTTEN_BELOW,
+    ) -> None:
+        """Upgrade inference for the enemy of `api`'s game, from its first turn, reading the speed upgrades too if
+        `include_speed_upgrades`, by the three thresholds that follow."""
+        check_the_thresholds(
+            floor_probability=speed_upgrade_floor,
+            assumed_at_probability=assume_speed_upgrade_at,
+            forgotten_below_probability=forget_speed_upgrade_below,
+        )
         self._api = api
         try:
             _ = api.enemy
@@ -102,6 +150,13 @@ class UpgradeInference:
             return
         api.on(TurnStartEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
         api.on(GameEndEvent, priority=EventPriority.HIGHEST)(self._assume_the_upgrades_shown)
+        if include_speed_upgrades:
+            SpeedUpgradesFromMovement(
+                api,
+                floor_probability=speed_upgrade_floor,
+                assumed_at_probability=assume_speed_upgrade_at,
+                forgotten_below_probability=forget_speed_upgrade_below,
+            )
 
     def _assume_the_upgrades_shown(self, *_: object) -> None:
         """Assume the enemy has the upgrades the last observation shows."""

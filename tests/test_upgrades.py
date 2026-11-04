@@ -1,6 +1,6 @@
 """The upgrade tables: what the sweep's findings generate, what the tables then say, and the levels units reveal."""
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from contextlib import closing
 from pathlib import Path
 from types import MappingProxyType, ModuleType
@@ -616,14 +616,32 @@ def _api_after_playing_back(path: Path, api: Api) -> Api:
     return api
 
 
-@pytest.mark.parametrize(
-    "build_api", [Api, lambda: Api(extensions=UpgradeInference)], ids=["plain", "with-upgrade-inference"]
-)
+# What `UpgradeInference` reads in the recorded games beyond the levels: Metabolic Boost, off zerglings that moved
+# within 0.4% of their boosted speed over 16 and 32 steps, when the computer attacked.
+_SPEED_UPGRADES_READ_IN_THE_CORPUS = {
+    "IncorporealAIE_v4-PvZ": {UpgradeId.ZERGLING_SPEED},
+    "PylonAIE_v4-TvZ": {UpgradeId.ZERGLING_SPEED},
+}
+
+
 @pytest.mark.parametrize("path", _CORPUS_GAMES, ids=lambda path: path.stem)
-def test_a_recorded_game_shows_what_its_enemy_researched(path: Path, build_api: Callable[[], Api[object]]) -> None:
-    """The computer researches during a corpus game, and its units carry the levels NachOS reads. They reveal nothing
-    more to `UpgradeInference`, since none of this player's units leaves its base to see it."""
-    assert _api_after_playing_back(path, build_api()).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+def test_a_recorded_game_shows_what_its_enemy_researched(path: Path) -> None:
+    """The computer researches during a corpus game, and its units carry the levels NachOS reads."""
+    assert _api_after_playing_back(path, Api()).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
+
+
+@pytest.mark.parametrize("path", _CORPUS_GAMES, ids=lambda path: path.stem)
+def test_upgrade_inference_reads_only_the_speed_upgrades_more_in_a_recorded_game(path: Path) -> None:
+    """None of this player's units leaves its base to see the computer's, so they show `UpgradeInference` nothing
+    more but how fast the computer's units move when it attacks."""
+    upgrades = _api_after_playing_back(path, Api(extensions=UpgradeInference)).enemy.upgrades
+    assert upgrades == _LEARNED_IN_THE_CORPUS[path.stem] | _SPEED_UPGRADES_READ_IN_THE_CORPUS.get(path.stem, set())
+
+
+@pytest.mark.parametrize("path", _CORPUS_GAMES, ids=lambda path: path.stem)
+def test_without_the_speed_upgrades_upgrade_inference_reads_nothing_more_in_a_recorded_game(path: Path) -> None:
+    upgrade_inference_alone = Api(extensions=lambda api: UpgradeInference(api, include_speed_upgrades=False))
+    assert _api_after_playing_back(path, upgrade_inference_alone).enemy.upgrades == _LEARNED_IN_THE_CORPUS[path.stem]
 
 
 def _values_upgrades_change(row: UnitTypeData) -> list[float]:

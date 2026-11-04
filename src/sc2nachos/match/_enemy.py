@@ -171,8 +171,9 @@ class Enemy:
         The game never reports an enemy upgrade outright. NachOS adds here the attack, armor and shield levels each
         visible enemy unit reports, as levels of its type's own upgrade lines: a marine at attack level 2 shows the
         first two Terran Infantry Weapons. What only an upgrade can cause, such as a burrowed zergling or a stimmed
-        marine, `sc2nachos.extensions.upgrade_inference.UpgradeInference` adds, if the bot builds it. Anything else,
-        such as Grooved Spines or Metabolic Boost, the bot adds with `assume_upgrades` when it works it out.
+        marine, and the speed upgrades enemy units move at, such as Metabolic Boost,
+        `sc2nachos.extensions.upgrade_inference.UpgradeInference` adds, if the bot builds it. Anything else, such as
+        Grooved Spines, the bot adds with `assume_upgrades` when it works it out.
 
         Every enemy unit, in sight or not, counts what is held here. It never holds an upgrade without those the game's
         tables say it needs researched first, as level 2 of a line needs level 1.
