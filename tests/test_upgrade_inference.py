@@ -199,14 +199,15 @@ class TestWhenAGameLearnsIt:
         _api_after_playing((), (_BURROWED_ZERGLING,), started=watch)
         assert known_each_turn == [frozenset(), {UpgradeId.BURROW}]
 
-    def test_what_only_the_observation_the_game_ended_on_shows_is_known_as_it_ends(self) -> None:
+    def test_the_observation_the_game_ended_on_is_not_read_but_for_the_levels_nachos_reads(self) -> None:
         known_at_end: list[frozenset[UpgradeId]] = []
 
         def watch(api: Api[Any]) -> None:
             api.on(GameEndEvent)(lambda _: known_at_end.append(api.enemy.upgrades))
 
-        _api_after_playing((), ended_on=(_BURROWED_ZERGLING,), started=watch)
-        assert known_at_end == [{UpgradeId.BURROW}]
+        marine = make_unit(2, alliance=Alliance.ENEMY, attack_upgrade_level=1)
+        _api_after_playing((), ended_on=(_BURROWED_ZERGLING, marine), started=watch)
+        assert known_at_end == [{UpgradeId.TERRAN_INFANTRY_WEAPONS_1}]
 
     def test_a_buff_the_curated_ids_leave_out_ends_the_game_from_its_handler(self) -> None:
         slowed = make_unit(1, alliance=Alliance.ENEMY, buff_ids=[RawBuffId.DutchMarauderSlow])
@@ -282,17 +283,15 @@ class TestTheEventsItHandsOut:
         _api_after_playing((_BURROWED_ZERGLING,), started=watch)
         assert handed_out == [EnemyUpgradeAssumedEvent, TurnStartEvent]
 
-    def test_what_only_the_observation_the_game_ended_on_shows_comes_before_the_bots_handlers_of_its_end(
-        self,
-    ) -> None:
+    def test_what_only_the_observation_the_game_ended_on_shows_comes_as_no_event(self) -> None:
         handed_out: list[type[object]] = []
 
         def watch(api: Api[Any]) -> None:
-            api.on(GameEndEvent, priority=EventPriority.HIGHEST)(lambda event: handed_out.append(type(event)))
+            api.on(GameEndEvent)(lambda event: handed_out.append(type(event)))
             api.on(EnemyUpgradeAssumedEvent)(lambda event: handed_out.append(type(event)))
 
         _api_after_playing((), ended_on=(_BURROWED_ZERGLING,), started=watch)
-        assert handed_out == [EnemyUpgradeAssumedEvent, GameEndEvent]
+        assert handed_out == [GameEndEvent]
 
     def test_only_selects_by_the_upgrade(self) -> None:
         handed_out: list[UpgradeId] = []

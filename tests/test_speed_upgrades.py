@@ -1,5 +1,5 @@
-"""Upgrade inference's speed upgrades, read off how fast enemy units move: what shows one, over what windows, and when
-it is assumed, in made-up games."""
+"""Upgrade inference's speed upgrades, read off how fast enemy units move: what shows one, over what windows and within
+what tolerance, and when it is assumed, in made-up games."""
 
 import itertools
 from collections.abc import Callable, Sequence
@@ -257,7 +257,7 @@ class TestTheEventsItHandsOut:
         assert [upgrade for _, upgrade, _ in handed_out] == [UpgradeId.ROACH_SPEED, UpgradeId.ZERGLING_SPEED]
 
 
-class TestTheSpeedWindow:
+class TestTheSpeedArguments:
     def test_a_shorter_window_shows_an_upgrade_a_unit_moved_at_for_part_of_a_block_of_22(self) -> None:
         boosted_then_still = _unit_moving([_BOOSTED_ZERGLING_STEP] * 11 + [0.0] * 11)
         assert _upgrades_at_block_ends(boosted_then_still) == [_NO_UPGRADES]
@@ -278,3 +278,13 @@ class TestTheSpeedWindow:
     def test_a_window_not_a_game_time_raises(self) -> None:
         with pytest.raises(TypeError, match="is a GameTime, not 22"):
             UpgradeInference(Api(), speed_window=22)  # pyright: ignore[reportArgumentType]
+
+    def test_a_wider_tolerance_shows_an_upgrade_a_unit_moved_a_tenth_of_the_gap_short_of(self) -> None:
+        short_of_boosted = _block_at(_ZERGLING_STEP + 0.9 * (_BOOSTED_ZERGLING_STEP - _ZERGLING_STEP))
+        assert _upgrades_at_block_ends(_unit_moving(short_of_boosted)) == [_NO_UPGRADES]
+        assert _upgrades_at_block_ends(_unit_moving(short_of_boosted), speed_tolerance=0.15) == [_METABOLIC_BOOST]
+
+    @pytest.mark.parametrize("tolerance", [0.0, -0.05, 0.5, 1.0])
+    def test_a_tolerance_not_above_0_and_below_0_5_raises(self, tolerance: float) -> None:
+        with pytest.raises(ValueError, match="must lie above 0 and below 0.5"):
+            UpgradeInference(Api(), speed_tolerance=tolerance)

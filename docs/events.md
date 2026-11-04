@@ -186,9 +186,8 @@ from `sc2nachos.extensions.upgrade_inference`:
 |---|---|---|---|
 | `EnemyUpgradeAssumedEvent` | `upgrade` | `only(*upgrades)` | upgrade inference adds an upgrade to `api.enemy.upgrades`, which did not hold it |
 
-It comes at once, as upgrade inference reads the observation, so before any of the bot's handlers of
-`TurnStartEvent`, or of `GameEndEvent` for the observation the game ended on, which gets no turn. Several of one
-observation come in id order, those read off how fast units move after the rest.
+It comes at once, as upgrade inference reads a turn's observation, so before any of the bot's handlers of
+`TurnStartEvent`. Several of one observation come in id order, those read off how fast units move after the rest.
 
 ### What units went through
 

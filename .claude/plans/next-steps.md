@@ -164,6 +164,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   first. The rule holds for every race, measured with SCVs only.
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
+- **Upgrade inference reads each turn's observation on `TurnStartEvent`, and not the one the game ended on** (the
+  owner, review of #234, over reading that one on `GameEndEvent` too, as #206 did): `api.enemy.upgrades` at the end
+  holds what the turns showed, and the levels the core read off the last observation.
 - **Upgrade inference hands out what it adds to `api.enemy.upgrades`** (the owner, 2026-11-04): an
   `EnemyUpgradeAssumedEvent` for each upgrade, an `AnyUpgradeEvent`, at once as it reads, and none for what the bot
   assumes or for the levels the core reads.
@@ -203,7 +206,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
     with slower units, as the one wrong vote of #224 did beside two fast ones, while one without it never moved
     steadily at the faster speed. A bot that wants one gone calls `Enemy.forget_upgrades`.
   - The window's length is an argument of `UpgradeInference`, `speed_window`, a `GameTime` of 22 steps by default
-    (the owner, 2026-11-04, over `speed_window_steps`), which the replays checked alone.
+    (the owner, 2026-11-04, over `speed_window_steps`), and so is the band, `speed_tolerance`, 0.05 of the gap by
+    default (the owner, review of #234), above 0 and below 0.5 so that a unit counts only nearer its speed with the
+    upgrade: the replays checked these defaults alone.
   - Left out, as the checks above cover them: guards for a reaper's grenade, a force field, a falling tower, Graviton
     Beam, a hydralisk's lunge and the facing. One comes back only if the replays show the checks miss it.
 

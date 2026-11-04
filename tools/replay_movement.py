@@ -16,8 +16,8 @@ Needs StarCraft II installed, with the replays' build and maps.
   every observation's move to fall in the band too; then, for the proposed window and band, the votes by upgrade, and
   the playbacks in which a wrong assumption was possible, an enemy lacking an upgrade while its units of a type it
   speeds up voted. Last, how long a playback took.
-- `check` runs upgrade inference's rule over the playbacks, by what it imports of it: windows of 22 steps, the
-  default, steady votes within 0.05 of the gap, and none from a unit wearing a buff that changes its speed. The votes
+- `check` runs upgrade inference's rule over the playbacks, by what it imports of it: windows of 22 steps and steady
+  votes within 0.05 of the gap, the defaults, and none from a unit wearing a buff that changes its speed. The votes
   of each upgrade in one window's steps are a slice, and the first slice with a fast vote assumes the upgrade for
   good, from the game's first step. It counts the playbacks in which a wrong assumption was possible, an enemy
   lacking an upgrade while its units of a type it speeds up voted, and those that assume an upgrade the enemy lacks,
@@ -58,10 +58,10 @@ from sc2nachos.extensions.upgrade_inference._movement_windows import (
     speed_upgrade_by_type,
 )
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
+    _DEFAULT_TOLERANCE,
     _DEFAULT_WINDOW,
     _LEAST_GAP_AS_SHARE_OF_SPEED,
     _SPEED_CHANGING_BUFFS,
-    _VOTE_BAND_AS_SHARE_OF_GAP,
 )
 from sc2nachos.gametime import STEPS_PER_SECOND
 from sc2nachos.testing import load_game_data
@@ -77,7 +77,7 @@ _WINDOWS_JOINED = (1, 2, 4)
 _BAND_WIDTHS = (0.05, 0.1, 0.2)
 # The window and band upgrade inference votes by, for the summary's counts by upgrade and by playback.
 _PROPOSED_WINDOWS_JOINED = int(_DEFAULT_WINDOW.steps) // _WINDOW_STEPS
-_PROPOSED_BAND_WIDTH = _VOTE_BAND_AS_SHARE_OF_GAP
+_PROPOSED_BAND_WIDTH = _DEFAULT_TOLERANCE
 # A window does not vote where the prediction with the upgrade is less than this much further than the one without.
 _LEAST_GAP = _LEAST_GAP_AS_SHARE_OF_SPEED
 _VOTE_RULES = {"plain": False, "steady": True}

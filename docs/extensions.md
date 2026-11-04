@@ -159,9 +159,9 @@ class ThreatMap:
   itself: an enemy warp gate or burrowed unit, a stimmed, charging, lunging or cloaked enemy, a marine at 55 health, a
   unit of the bot's slowed by Concussive Shells or matrixed, an enemy storm, and the speed upgrades enemy units move
   at. It adds what it reads with `api.enemy.assume_upgrades`, as a bot would, so every enemy unit's weapons and speed
-  count it. It reads each turn's observation on `TurnStartEvent`, and the one the game ended on, which gets no turn,
-  on `GameEndEvent`, both at `EventPriority.BEFORE`, before any handler of the bot's. It has nothing to call, and
-  options for its speed upgrades alone:
+  count it. It reads each turn's observation on `TurnStartEvent`, at `EventPriority.BEFORE`, before any handler of the
+  bot's, and not the one the game ended on, which gets no turn. It has nothing to call, and options for its speed
+  upgrades alone:
 
   ```python
   class Extensions:
@@ -172,8 +172,10 @@ class ThreatMap:
   With `include_speed_upgrades`, on unless `UpgradeInference(api, include_speed_upgrades=False)` turns it off, it also
   reads ten speed upgrades off how fast enemy units move, from Metabolic Boost to Flux Vanes, as its docstring lists.
   A unit that moved steadily at its speed with the upgrade through one window shows it, and one window that shows it
-  assumes the upgrade for good, from the game's first step. The windows are 22 steps long, or as long as
-  `speed_window`, a `GameTime`, says; the replays checked 22 steps alone. The rule was checked over 1,296 playbacks of
+  assumes the upgrade for good, from the game's first step. Steadily means within 5% of the difference between its
+  speeds without the upgrade and with it at every observation, or within `speed_tolerance`, and the windows are 22
+  steps long, or as long as `speed_window`, a `GameTime`, says; the replays checked these defaults alone. The rule was
+  checked over 1,296 playbacks of
   AI Arena's games observed at every step, with no wrong assumption in the 433 in which one was possible (tool
   `replay_movement`), counting only from the earliest each upgrade could finish, so a game's first minutes went
   unchecked; a bot that observes fewer steps tells less well a unit that moved steadily from one that stopped and
@@ -191,8 +193,7 @@ class ThreatMap:
   ```
 
   It does not come for what the bot assumes itself, nor for a level NachOS reads off the enemy's units, and comes at
-  once, as upgrade inference reads, so before any of the bot's handlers of `TurnStartEvent`, or of `GameEndEvent` for
-  the observation the game ended on.
+  once, as upgrade inference reads, so before any of the bot's handlers of `TurnStartEvent`.
 
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.

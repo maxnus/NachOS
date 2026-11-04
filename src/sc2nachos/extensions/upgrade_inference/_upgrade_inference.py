@@ -6,12 +6,13 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final, final
 
 from sc2nachos import NoEnemyError
-from sc2nachos.events import EventPriority, GameEndEvent, TurnStartEvent
+from sc2nachos.events import EventPriority, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference._events import assume_and_emit_events
 from sc2nachos.extensions.upgrade_inference._speed_upgrades import (
+    _DEFAULT_TOLERANCE,
     _DEFAULT_WINDOW,
     SpeedUpgradesFromMovement,
-    check_the_window,
+    check_the_speed_arguments,
 )
 from sc2nachos.ids import BuffId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance, Visibility
@@ -78,9 +79,8 @@ class UpgradeInference:
     api = Api(extensions=Extensions)
     ```
 
-    It reads each turn's observation on its `TurnStartEvent`, and the one the game ended on, which gets no turn, on
-    `GameEndEvent`, both at `EventPriority.BEFORE`, before any handler of the bot's, so every handler sees what it
-    read:
+    It reads each turn's observation on its `TurnStartEvent`, at `EventPriority.BEFORE`, before any handler of the
+    bot's, so every handler sees what it read; not the one the game ended on, which gets no turn:
 
     - An enemy unit of a type nothing makes without an upgrade, in sight or remembered: a burrowed unit shows Burrow,
       but a lurker, a widow mine or a creep tumor, which burrow without it, and a warp gate shows Warp Gate.
@@ -95,23 +95,23 @@ class UpgradeInference:
       Rotors, Gravitic Boosters, Gravitic Drive and Flux Vanes. Over windows of `speed_window`, 22 steps by default, on
       one clock, it measures each visible enemy unit of a type one of them speeds up that was in sight throughout, and
       on the side it was first seen on: one that moved at its speed with the upgrade at every observation of a window,
-      within 5% of the difference between its speeds without the upgrade and with it, shows the upgrade; a Zerg ground
-      unit at its speeds on creep where it stood on creep. None shows one while wearing a buff that changes its speed,
-      as Time Warp does, or where the upgrade adds less than 10% to its speed, as Anabolic Synthesis does on creep. The
-      rule was checked on games observed at every step, over windows of 22 steps: a bot that observes fewer sees fewer
-      moves in a window, and so tells less well a unit that moved steadily from one that stopped and started again. It
-      reads these off each turn's observation alone, so not off a window that ends on the one the game ended on.
+      within `speed_tolerance` of the difference between its speeds without the upgrade and with it, 5% by default,
+      shows the upgrade; a Zerg ground unit at its speeds on creep where it stood on creep. None shows one while
+      wearing a buff that changes its speed, as Time Warp does, or where the upgrade adds less than 10% to its speed, as
+      Anabolic Synthesis does on creep. The rule was checked on games observed at every step, over windows of 22 steps
+      within 5%: a bot that observes fewer sees fewer moves in a window, and so tells less well a unit that moved
+      steadily from one that stopped and started again.
 
     Upgrades are never lost, so what it reads stays. `Enemy.forget_upgrades` takes one back until it is shown again. In
     a game with no other player it reads nothing.
 
     Each upgrade it adds to `Enemy.upgrades` comes as an `EnemyUpgradeAssumedEvent`, an `AnyUpgradeEvent`, which `only`
-    selects by the upgrade. It comes at once, as it reads, so before any of the bot's handlers of `TurnStartEvent` or
-    `GameEndEvent`.
+    selects by the upgrade. It comes at once, as it reads, so before any of the bot's handlers of `TurnStartEvent`.
 
-    Raises `TypeError` unless `speed_window` is a `GameTime`, `ValueError` unless it is longer than 0, and
-    `NotPlayingError` if built before the game starts. A buff the curated ids leave out, on any visible unit,
-    raises `UncuratedIdError` from its handler, as reading `Unit.buffs` does.
+    Raises `TypeError` unless `speed_window` is a `GameTime`, `ValueError` unless it is longer than 0 and
+    `speed_tolerance` lies above 0 and below 0.5, and `NotPlayingError` if built before the game starts. A buff the
+    curated ids leave out, on any visible unit, raises `UncuratedIdError` from its handler, as reading `Unit.buffs`
+    does.
     """
 
     __slots__ = ("_api",)
@@ -122,21 +122,21 @@ class UpgradeInference:
         *,
         include_speed_upgrades: bool = True,
         speed_window: GameTime = _DEFAULT_WINDOW,
+        speed_tolerance: float = _DEFAULT_TOLERANCE,
     ) -> None:
         """Upgrade inference for the enemy of `api`'s game, from its first turn, reading the speed upgrades too if
-        `include_speed_upgrades`, over windows of `speed_window`."""
-        check_the_window(speed_window)
+        `include_speed_upgrades`, over windows of `speed_window`, within `speed_tolerance`."""
+        check_the_speed_arguments(window=speed_window, tolerance=speed_tolerance)
         self._api = api
         try:
             _ = api.enemy
         except NoEnemyError:
             return
         api.on(TurnStartEvent, priority=EventPriority.BEFORE)(self._assume_the_upgrades_shown)
-        api.on(GameEndEvent, priority=EventPriority.BEFORE)(self._assume_the_upgrades_shown)
         if include_speed_upgrades:
-            SpeedUpgradesFromMovement(api, window=speed_window)
+            SpeedUpgradesFromMovement(api, window=speed_window, tolerance=speed_tolerance)
 
-    def _assume_the_upgrades_shown(self, *_: object) -> None:
+    def _assume_the_upgrades_shown(self, _: TurnStartEvent) -> None:
         """Assume the enemy has the upgrades the last observation shows, handing out an event for each new one."""
         api = self._api
         assume_and_emit_events(api, self._enemy_upgrades_shown(api.units, api.effects))

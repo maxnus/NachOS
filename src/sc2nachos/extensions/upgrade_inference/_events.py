@@ -19,9 +19,8 @@ class EnemyUpgradeAssumedEvent(AnyUpgradeEvent):
     upgrade can cause, or off how fast the enemy's units move. Not for one the bot assumes, nor for a level NachOS
     reads off the enemy's units. One the bot forgot comes again once it is shown again.
 
-    It comes at once, while upgrade inference handles `TurnStartEvent`, or `GameEndEvent` for the observation the game
-    ended on, so before any of the bot's handlers of either. Several of one observation come in id order, those read off
-    movement after the rest.
+    It comes at once, while upgrade inference handles `TurnStartEvent`, so before any of the bot's handlers of it.
+    Several of one observation come in id order, those read off movement after the rest.
     """
 
 
