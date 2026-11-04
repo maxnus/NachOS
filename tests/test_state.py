@@ -639,7 +639,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         game.turn(1)
         (command,) = game.state.actions
         assert isinstance(command, UnitCommand)
-        assert (command.ability, command.units) == (AbilityId.MOVE, (drone,))
+        assert (command.ability, command.units) == (AbilityId.MOVE, Units([drone]))
         # The game sends points in single precision.
         assert command.target == pytest.approx(out_there, abs=1e-3)
 
