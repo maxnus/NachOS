@@ -175,8 +175,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **Creep makes a Zerg ground unit 1.3 times as fast, to within 0.1%, but for what Muscular Augments and Anabolic
   Synthesis add**: a zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a
   roach, a hydralisk and an ultralisk alike without their speed upgrades, and a baneling and a roach with them. Muscular
-  Augments and Anabolic Synthesis add less on creep ([upgrades](upgrades-and-tables.md)) (tool `sweep_movement`, build
-  75689).
+  Augments and Anabolic Synthesis add less on creep ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries'
+  creep had stopped spreading, on a course every step of which ended on creep at least 3.3 from ground without it, and
+  off creep with none within 8 of any step; a course laid as soon as creep covered it, 1.5 inside its edge, gave the
+  same speeds (tool `sweep_movement`, build 75689).
 - **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
   and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
   `sweep_movement`, build 75689).

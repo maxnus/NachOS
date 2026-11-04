@@ -7,17 +7,19 @@ zealot. A burrowed roach, which the rows give two, is left out.
 
 Each trial makes one unit at one end of a straight course on open ground and orders it to move to the other end,
 along each of `_HEADINGS_DEGREES`, recording where it stood at every step. A Zerg ground type runs again on creep,
-between four hatcheries made beside a course of its own, once their creep covers it. As Protoss, a sentry's
-hallucinations of the types it can hallucinate run too. Then the sweep researches each of the race's speed upgrades,
-at researchers it makes with whatever they need, and runs every trial again::
+between four hatcheries made beside a course of its own, once their creep has stopped spreading, every point of it
+`_CREEP_MARGIN` or more from ground without creep. As Protoss, a sentry's hallucinations of the types it can
+hallucinate run too. Then the sweep researches each of the race's speed upgrades, at researchers it makes with whatever
+they need, and runs every trial again::
 
     uv run python tools/sweep_movement.py
     uv run python tools/sweep_movement.py zerg --out movement-zerg.json
 
 Each trial records the row's speed, the steps until the unit moved and until it cruised, at 98% of its fastest step or
 more, its fastest, median and slowest step while cruising, and the most and least a window of each of
-`_WINDOW_STEPS` steps took it while cruising, all in distance per second, as `Unit.velocity` reads; and how far it moved
-in each step. It writes `movement.json`, or the file `--out` names. A trial the game would not set up is recorded as its
+`_WINDOW_STEPS` steps took it while cruising, all in distance per second, as `Unit.velocity` reads; how far it moved in
+each step; and for a unit on the ground, how many steps it ended on creep and how near it came to ground of the other
+kind. It writes `movement.json`, or the file `--out` names. A trial the game would not set up is recorded as its
 error.
 """
 
@@ -39,7 +41,7 @@ from sc2nachos.gamedata import Attribute, GameData, Tech
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.gametime import STEPS_PER_SECOND
-from sc2nachos.geometry import Grid, Point
+from sc2nachos.geometry import Grid, Point, Rectangle
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Race
@@ -68,14 +70,21 @@ _COURSE_END_INSET = 1.5
 _CLEAR_CHECK_SPACING = 0.5
 # The creep course lies in the free square this wide nearest the point this share of the way from this player's start
 # to the map's center, between four hatcheries made in it on tile centers, as a 5x5 structure stands. It runs along
-# the x-axis through the square's center, as far as creep covers clear ground, once creep covers this far either side.
+# the x-axis through the square's center once the creep within the radius below has stopped spreading, the same tiles
+# for that many looks in a row, as far as creep covers clear ground this far to either side, and ends that far inside
+# where it stops. It is laid only if each half is at least as long as the least below.
 _CREEP_SQUARE_HALF_SIZE = 7
 _CREEP_COURSE_ALONG = 0.35
 _CREEP_HATCHERY_OFFSETS = ((-4.0, 5.0), (4.0, 5.0), (-4.0, -5.0), (4.0, -5.0))
+_CREEP_SETTLING_RADIUS = 20.0
+_CREEP_SETTLED_CHECKS = 20
+_CREEP_MARGIN = 3.0
 _CREEP_COURSE_LEAST_HALF_LENGTH = 5.0
-# How often, and for how long, the sweep looks for the hatcheries' creep to cover the course.
+# How often, and for how long, the sweep looks at the hatcheries' creep.
 _CREEP_CHECK_STEPS = 22
-_CREEP_WAIT_STEPS = 6720
+_CREEP_WAIT_STEPS = 13440
+# How far around each point a unit on the ground stood the sweep looks for ground of the other kind than its course's.
+_OTHER_GROUND_SEARCH_RADIUS = 8
 # The steps a unit made by debug command is waited for, and those it is given to settle once made.
 _MAKING_STEPS = 16
 _SETTLING_STEPS = 8
@@ -139,6 +148,12 @@ class MoveFinding:
     median_cruising_speed: float | None = None
     slowest_cruising_speed: float | None = None
     """The slowest step from the first to the last it cruised in."""
+    steps_on_creep: int | None = None
+    """For a unit on the ground, how many of the steps after the order it ended on a tile of creep."""
+    least_distance_to_other_ground: float | None = None
+    """For a unit on the ground, the least distance from where it stood after any step to a tile of the other kind than
+    its course's: without creep on the creep course and with it off; None if there was none within
+    `_OTHER_GROUND_SEARCH_RADIUS`."""
     window_speeds: dict[str, tuple[float, float]] = field(default_factory=dict)
     """The least and the most distance a window of each of `_WINDOW_STEPS` steps took it while cruising, from where it
     stood at the window's start to where it stood at its end, by the window's steps."""
@@ -290,7 +305,8 @@ class MovementSweep:
             logger.warning("{}: {}", conditions, error)
             return {**conditions, "error": str(error)}
         logger.info(
-            "{} {}{}{} at {} degrees: cruised at {} a second against the row's {}, windows {}",
+            "{} {}{}{} at {} degrees: cruised at {} a second against the row's {}, windows {}, {} of {} steps on creep,"
+            " {} from ground of the other kind",
             unit_type.name,
             "upgraded" if upgraded else "unupgraded",
             " on creep" if on_creep else "",
@@ -299,6 +315,9 @@ class MovementSweep:
             finding.median_cruising_speed,
             finding.row_speed,
             finding.window_speeds.get(str(_WINDOW_STEPS[1])),
+            finding.steps_on_creep,
+            len(finding.step_distances),
+            finding.least_distance_to_other_ground,
         )
         return asdict(finding)
 
@@ -346,6 +365,12 @@ class MovementSweep:
             round(row_speed, 4),
         )
         _measure_into(finding, positions)
+        if not mover.is_flying:
+            creep = self._creep()
+            finding.steps_on_creep = sum(1 for position in positions[1:] if creep[position])
+            finding.least_distance_to_other_ground = _least_distance_to_tile_of(
+                creep, positions[1:], has_creep=not on_creep
+            )
         return finding
 
     def _watched_moving(self, tag: int, course: Course, slower_row_speed: float) -> list[Point]:
@@ -387,7 +412,9 @@ class MovementSweep:
                 center = Point((x + 0.5, y + 0.5))
                 if any(center.distance_to(other) < _GROUND_COURSE_DISTANCE_FROM_OTHERS for other in away_from):
                     continue
-                half_length = _clear_half_length(center, heading_degrees, lambda point: pathing[point])
+                half_length = _clear_half_length(
+                    center, heading_degrees, lambda point: pathing[point], clearance=_GROUND_CLEARANCE
+                )
                 if half_length > best_half_length:
                     best_center, best_half_length = center, half_length
         if best_center is None or best_half_length <= _COURSE_END_INSET:
@@ -403,20 +430,31 @@ class MovementSweep:
             self._creep_half_length = self._awaited_creep_half_length(self._creep_center)
             logger.info("The creep course runs {:.1f} through {}", 2 * self._creep_half_length, self._creep_center)
         if self._creep_half_length <= 0:
-            raise RuntimeError(f"the hatcheries' creep did not cover the course within {_CREEP_WAIT_STEPS} steps")
+            raise RuntimeError(f"the hatcheries' creep did not settle over a course within {_CREEP_WAIT_STEPS} steps")
         return Course.through(self._creep_center, heading_degrees, self._creep_half_length)
 
     def _awaited_creep_half_length(self, center: Point) -> float:
-        """Step until creep covers clear ground `_CREEP_COURSE_LEAST_HALF_LENGTH` either side of `center` along the
-        x-axis, and return the creep course's half length, or 0 if creep never did in time."""
+        """Step until the creep within `_CREEP_SETTLING_RADIUS` of `center` has stopped spreading, and return the creep
+        course's half length along the x-axis through `center`, or 0 if creep did not stop in time or covers too
+        little."""
         pathing = self._map.pathing
+        settling_area = Rectangle.from_center(center, 2 * _CREEP_SETTLING_RADIUS, 2 * _CREEP_SETTLING_RADIUS)
+        creep_tiles_before, looks_unchanged = -1, 0
         for _ in range(_CREEP_WAIT_STEPS // _CREEP_CHECK_STEPS):
             creep = self._creep()
-            covered_half_length = _clear_half_length(
-                center, 0.0, lambda point, creep_now=creep: pathing[point] and creep_now[point]
-            )
-            if covered_half_length >= _CREEP_COURSE_LEAST_HALF_LENGTH:
-                return covered_half_length - _COURSE_END_INSET
+            creep_tiles = int(creep[settling_area].sum())
+            looks_unchanged = looks_unchanged + 1 if creep_tiles == creep_tiles_before else 0
+            creep_tiles_before = creep_tiles
+            if looks_unchanged >= _CREEP_SETTLED_CHECKS:
+                covered_half_length = _clear_half_length(
+                    center,
+                    0.0,
+                    lambda point, creep_now=creep: pathing[point] and creep_now[point],
+                    clearance=_CREEP_MARGIN,
+                )
+                half_length = covered_half_length - _CREEP_MARGIN
+                logger.info("The creep stopped spreading at {} tiles near the creep course", creep_tiles)
+                return half_length if half_length >= _CREEP_COURSE_LEAST_HALF_LENGTH else 0.0
             self._client.step(_CREEP_CHECK_STEPS)
         return 0.0
 
@@ -576,20 +614,42 @@ class MovementSweep:
         return unit
 
 
-def _clear_half_length(center: Point, heading_degrees: float, is_clear: Callable[[Point], bool]) -> float:
+def _clear_half_length(
+    center: Point, heading_degrees: float, is_clear: Callable[[Point], bool], *, clearance: float
+) -> float:
     """How far a line through `center` along `heading_degrees` runs either way, up to `_LONGEST_COURSE_HALF_LENGTH`,
-    with every point on it and `_GROUND_CLEARANCE` to either side clear, as `is_clear` reads; 0 if `center` is not."""
+    with every point on it and `clearance` to either side clear, as `is_clear` reads; 0 if `center` is not."""
     heading = math.radians(heading_degrees)
     across = heading + math.pi / 2
     distance = 0.0
     while distance < _LONGEST_COURSE_HALF_LENGTH:
         for direction in (heading, heading + math.pi):
             on_line = _point_toward(center, direction, distance)
-            for side in (-_GROUND_CLEARANCE, 0.0, _GROUND_CLEARANCE):
+            for side in (-clearance, 0.0, clearance):
                 if not is_clear(_point_toward(on_line, across, side)):
                     return distance
         distance += _CLEAR_CHECK_SPACING
     return distance
+
+
+def _least_distance_to_tile_of(grid: Grid[bool], points: Sequence[Point], *, has_creep: bool) -> float | None:
+    """The least distance from any of `points` to a tile `grid` reads `has_creep` for, looked for within
+    `_OTHER_GROUND_SEARCH_RADIUS` tiles of each, or None if there is none so near. A tile beyond the grid reads no
+    creep."""
+    reach = _OTHER_GROUND_SEARCH_RADIUS
+    least_distance: float | None = None
+    for point in points:
+        for tile_x in range(int(point.x) - reach, int(point.x) + reach + 1):
+            for tile_y in range(int(point.y) - reach, int(point.y) + reach + 1):
+                if grid[(tile_x + 0.5, tile_y + 0.5)] != has_creep:
+                    continue
+                # How far the point is from the tile's square, 0 inside it.
+                off_x = max(tile_x - point.x, 0.0, point.x - (tile_x + 1))
+                off_y = max(tile_y - point.y, 0.0, point.y - (tile_y + 1))
+                distance = math.hypot(off_x, off_y)
+                if least_distance is None or distance < least_distance:
+                    least_distance = distance
+    return None if least_distance is None else round(least_distance, 2)
 
 
 def _measure_into(finding: MoveFinding, positions: Sequence[Point]) -> None:
