@@ -16,12 +16,15 @@ As of 2026-11-04:
 
 - **M4 is done** but for slice 7, typed order methods on `OwnUnit`, which is deferred (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
-  on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, M5), is open.
+  on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
+  open.
 - **M6 is done**: AvocaDOS pins NachOS's releases from PyPI, 0.1.0 first (AvocaDOS #87, 2026-11-04), then 0.2.0,
   which speed collects (AvocaDOS #90). A release is made as `docs/maintaining/releasing.md` says.
+- **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
+  64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
-  `docs/plans/archive/nachOS-plan.md` the milestone plan (M1 to M6) with every nachOS PR it took. It has no
+  `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
   python-sc2 left (AvocaDOS #68), its game map searches run on `Grid` (AvocaDOS #70), and its expansions and start
   locations (AvocaDOS #84) and speed mining (AvocaDOS #76, #85) are NachOS's.
 
@@ -136,13 +139,13 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   handlers run before the bot's of the same priority.
 - **Speed mining takes workers only through `mine`, `collect` and `release`** (#202, #208), and only at a base with a
   finished townhall of this player's at the expansion's center: no long-distance mining, and no taking over a bot's
-  plain gathers by itself, which the bot's own gathers could undo. Gas got its moves once measured (#222).
+  plain gathers by itself, which the bot's own gathers could undo.
 - **Speed collecting** (#222) gives a collector both moves on the line between the centers, its trip read off its
   order, since rich gas shows no cargo. One coming out stays on its plain return until past every collector of its gas
   building going in on its move, and is taken off a move it was sent lately (the owner, review of #222): lanes,
-  waypoints, the one going in yielding, and moves by the count of collectors each collected less. Given several gas
-  buildings or none, `collect` fills a base's to two nearest its townhall first, then to three farthest first. The rule
-  holds for every race, measured with SCVs only.
+  waypoints, the one going in yielding, and moves by the count of collectors were each measured to collect less. Given
+  several gas buildings or none, `collect` fills a base's to two nearest its townhall first, then to three farthest
+  first. The rule holds for every race, measured with SCVs only.
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
 - **Speed upgrades read off how fast enemy units move**, planned, not built (the owner, 2026-11-04, one question at a
@@ -376,7 +379,9 @@ be planned with the owner. Keeping the selections still waits on M5's exit gate.
   would then have to go out as a performer's own id, which needs a link the game's rows do not give (raised with the
   owner in #104, not decided).
 
-## 2. After a release
+## 2. Around a release
 
-AvocaDOS takes it in a pull request of its own, which bumps its pin and `.github/sc2-games.yml`'s NachOS ref and
-runs its tests on it, as its `AGENTS.md` says; a nachOS pull request is recorded there no more.
+Before it, run AvocaDOS's tests against the commit to release, `uv run --extra dev --with-editable <this checkout>
+python -m pytest` in AvocaDOS, so that its notes say what a bot has to change. After it, AvocaDOS takes it in a pull
+request of its own, which bumps its pin and `.github/sc2-games.yml`'s NachOS ref, as its `AGENTS.md` says, and runs
+its tests on it; a nachOS pull request is recorded there no more.
