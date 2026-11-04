@@ -6,9 +6,10 @@
 `s2clientprotocol`. It replaces `python-sc2` as the client interface for the bot
 [AvocaDOS](https://github.com/maxnus/AvocaDOS), and is meant to be published for other bot authors.
 
-The migration plan is in the AvocaDOS repo at `docs/plans/nachOS-plan.md`, with its rationale in
-`docs/plans/nachOS-initial-prompt.md`. The README's "Documentation" lists this repo's docs, and `docs/maintaining/`
-holds how to curate the game's ids, the code style, what reviews keep finding and how to make a release.
+The migration plan, done, is in the AvocaDOS repo at `docs/plans/archive/nachOS-plan.md`, with its rationale in
+`docs/plans/archive/nachOS-initial-prompt.md`. The README's "Documentation" lists this repo's docs, and
+`docs/maintaining/` holds how to curate the game's ids, the code style, what reviews keep finding and how to make a
+release.
 
 ## Keep this file small
 
