@@ -10,7 +10,7 @@ name: match
 #                                 # (NachOS's member names: ZERG, VERY_EASY, RANDOM), --Map, --TimeLimit,
 #                                 # --ResultFile and --ReplayFile
 #   install: uv sync              # optional, the default
-#   maps: sc2maps/AIE             # optional, copied into the client's maps/<folder name>
+#   maps: sc2maps/AIE             # optional, its maps copied straight into the client's maps
 #   checkouts:                    # optional, repositories placed next to the bot's own checkout
 #     - repository: maxnus/nachOS
 #       path: nachOS

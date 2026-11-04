@@ -65,9 +65,10 @@ checkouts:                    # optional, repositories placed next to yours
     path: your-library
 ```
 
-`maps` is copied into the client's `maps/<folder name>`, `maps/AIE` here, where `MapFile.find` and python-sc2 find a
-map by its name alone. NachOS's own [`sc2maps/AIE`](../sc2maps/AIE) holds the AIE ladder pool, if you want a
-copy.
+The maps in `maps` are copied straight into the client's `maps` folder, where `MapFile.find` and python-sc2 find a
+map by its name alone, and a replay saved there names the bare map file, as AI Arena's do, so it opens with the map at
+the top of a viewer's `Maps`. Two folders holding a map of the same file name fail the step. NachOS's own
+[`sc2maps/AIE`](../sc2maps/AIE) holds the AIE ladder pool, if you want a copy.
 
 ### 3. A workflow
 
@@ -184,7 +185,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: maxnus/NachOS/.github/actions/setup-sc2@main
         with:
-          maps: sc2maps/AIE        # optional, one folder per line
+          maps: sc2maps/AIE        # optional, one folder per line, their maps copied into the client's maps
       - uses: astral-sh/setup-uv@v7
       - run: uv sync && uv run python tools/my_tool.py
 ```
