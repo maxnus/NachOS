@@ -16,7 +16,16 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Circle, Footprint, Point, Rectangle
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
 from sc2nachos.match import AIBuild, Computer, Difficulty, Race, Result
-from sc2nachos.run import run_from_command_line, run_ladder, run_local, run_recording, run_replay
+from sc2nachos.run import (
+    ReplayPlayback,
+    open_replay,
+    open_replay_recording,
+    run_from_command_line,
+    run_ladder,
+    run_local,
+    run_recording,
+    run_replay,
+)
 from sc2nachos.units import OwnUnit, Unit, UnitDict, Units, UnitType
 
 __all__ = [
@@ -39,6 +48,7 @@ __all__ = [
     "Point",
     "Race",
     "Rectangle",
+    "ReplayPlayback",
     "Resources",
     "Result",
     "StartLocation",
@@ -49,6 +59,8 @@ __all__ = [
     "Units",
     "UpgradeId",
     "__version__",
+    "open_replay",
+    "open_replay_recording",
     "run_from_command_line",
     "run_ladder",
     "run_local",

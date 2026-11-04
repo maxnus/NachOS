@@ -190,6 +190,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - **Speed mining's `_is_returning(order)` stays** (#208), over `OwnUnit.is_returning`, some 8 times slower.
 - **The fog-off view has no guard against `id_provider` giving an id a unit already holds**, since no path to it was
   found, and copies each fog-off observation whole (#163).
+- **`playback` names a `ReplayPlayback`, and `game` a `GameProcess`** (the owner, #176, 2026-11-04), over
+  `replay_playback` and `game_process`, which the rule that a name follows its class would give.
 
 ## Next
 
@@ -304,7 +306,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - Beside the migration, **writing a replay's whole game for salsa**, a pull request at a time, in the order salsa's
   plan holds. salsa, `maxnus/salsa`, holds the `.salsa` format whole and depends on sc2nachos, its writer reading the
   protocol through NachOS's launch and protocol layers alone (maxnus/salsa#3). Next: starting a replay on its own
-  build with its map, public, for salsa's writer (#176, open since 2026-10-25).
+  build with its map, public, for salsa's writer: `open_replay` and `open_replay_recording` (#176, open since
+  2026-10-25).
 - Apart from salsa, and not waited on by it: an action's target on a copy the fog-off view never lists reads as not
   reported, as an order's does (the owner, 2026-10-25, over `None`). A player's order on a structure or mineral field
   it remembers in the fog names the tag of the game's copy, which the game lists only with the fog on, while NachOS's

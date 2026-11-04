@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
+from loguru import logger
+
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._upgrade_data import UpgradeType
 
@@ -101,6 +103,16 @@ class TechTree:
     def upgrade(self, upgrade: UpgradeId) -> TechTreeUpgrade:
         """What it says about `upgrade`: nothing, for an upgrade it holds no record of."""
         return self.upgrades.get(upgrade, _UPGRADE_NOT_IN_THE_TREE)
+
+    def warn_if_not_swept_on(self, base_build: int) -> None:
+        """Log a warning if `base_build`, the build a game plays on, is not the one swept."""
+        if base_build != self.base_build:
+            logger.warning(
+                "Playing build {}, but the tech tree is build {}'s: what each ability needs, who is offered it, how it "
+                "takes a unit's orders and what each upgrade changes come from that build",
+                base_build,
+                self.base_build,
+            )
 
 
 # What the tech tree says about an id it holds no record of.
