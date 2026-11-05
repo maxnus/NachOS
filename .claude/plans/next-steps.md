@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-04:
+As of 2026-11-05:
 
 - **M4 is done** but for slice 7, typed order methods on `OwnUnit`, which is deferred (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
@@ -20,14 +20,13 @@ As of 2026-11-04:
   open.
 - **M6 is done**: AvocaDOS pins NachOS's releases from PyPI, 0.1.0 first (AvocaDOS #87, 2026-11-04), then 0.2.0,
   which speed collects (AvocaDOS #90). A release is made as `docs/maintaining/releasing.md` says.
-- **The next release is 0.3.0**: #227 renames and removes what a bot uses, and merged after 0.2.0 went out from
-  64034d8, though its body names 0.2.0. AvocaDOS moves onto `api.vision` as it takes it. Its notes say too that
-  `SpeedMining.workers_at` (#229), `Order.units`, and `UnitCommand.units` and `AutocastToggle.units` hand out `Units`,
-  where they handed out tuples, which a `Units` never equals; that an extension's handlers take `EventPriority.BEFORE`
-  or `AFTER`, and only they (#232): AvocaDOS's turn clock, subscribed among its extensions at `HIGHEST`, moves to
-  `BEFORE`; that a handler of `AnyUpgradeEvent` is handed upgrade inference's `EnemyUpgradeAssumedEvent` too (#233);
-  and that speed mining lets go of a worker the bot orders elsewhere (#231), which no longer comes back to its field by
-  itself.
+- **0.3.0 is out** (2026-11-05, from 4c82513), with #226 to #235. Its notes say what a bot has to change: the `Vision`
+  renames (#227), an extension's handlers at `EventPriority.BEFORE` or `AFTER` alone (#232), `Units` where there were
+  tuples (#229, #230), speed mining letting go of a worker the bot orders elsewhere (#231), and a handler of
+  `AnyUpgradeEvent` handed upgrade inference's `EnemyUpgradeAssumedEvent` (#233). AvocaDOS #91 takes it, its turn clock
+  starting at `BEFORE` and ending at `AFTER`, after speed mining, so that its step time stays the whole turn. What is
+  left of it is AvocaDOS's, in its plan: keeping a number of collectors with `release_collectors`, and its own stamp of
+  the tiles in sight beside `api.vision.last_in_sight`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -143,6 +142,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   and makes units through `sc2nachos.testing`, importing nothing of s2clientprotocol (#196).
 - **The API reference is pdoc's**, from the docstrings, over MkDocs, which links no name in plain backticks, and is
   published at each release, not at each merge (#198).
+- **The tests run on several workers when asked** (#235): `-n 8` for the in-game tests and `-n auto` for the unit
+  suite, as AGENTS.md says, and `-n 4` in CI and the release (the owner, over making it the default and over keeping
+  CI serial). Each worker's in-game clients take ports of a block of its own (the owner, review of #235, over leaving
+  `free_port`'s window and over a fix in the library).
 
 ### Extensions
 
@@ -159,9 +162,19 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **Speed collecting** (#222) gives a collector both moves on the line between the centers, its trip read off its
   order, since rich gas shows no cargo. One coming out stays on its plain return until past every collector of its gas
   building going in on its move, and is taken off a move it was sent lately (the owner, review of #222): lanes,
-  waypoints, the one going in yielding, and moves by the count of collectors were each measured to collect less. Given
-  several gas buildings or none, `collect` fills a base's to two nearest its townhall first, then to three farthest
-  first. The rule holds for every race, measured with SCVs only.
+  waypoints, the one going in yielding, and moves by the count of collectors were each measured to collect less. The
+  rule holds for every race, measured with SCVs only.
+- **Speed mining picks every gas building, and releases the workers costing least** (the owner, 2026-11-04, #229), so
+  that a bot holds only how many mine and how many collect. `collect` fills gas buildings to two, at the expansion
+  nearest the worker, nearest its center first, before a third at any, which goes to the expansion nearest the worker,
+  farthest from its center (the owner, over the farthest from its townhall at any base). `release_collectors(count)` and
+  `release_miners(count)` release in the reverse of the picks, one the bot has ordered first (the owner, over a count to
+  keep and over a read the bot passes to `release`).
+- **Speed mining lets a worker go once the bot orders it elsewhere** (#231), in that turn, reversing #201 (the owner,
+  review of #229, over keeping such a worker and ranking it first in the releases), so that a number kept is true. Run
+  after the bot, it reads only the orders issued to a worker in the turn, telling its hand-overs' gathers and returns
+  by their kind (the owner, review of #231, over marking its orders through `Order.data`); a refused order lets the
+  worker go too, as documented (the owner, over reading the refusals).
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
 - **Upgrade inference reads each turn's observation on `TurnStartEvent`, and not the one the game ended on** (the
@@ -231,19 +244,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- **Speed mining picks every resource, and releases the workers costing least** (the owner, 2026-11-04), so that a
-  bot holds only how many mine and how many collect, which stays its own; in 0.3.0. Built in #229, the picks and
-  `release_collectors(count)` and `release_miners(count)`, and in #231, which lets a worker go once the bot orders it
-  elsewhere, reversing #201 (the owner, review of #229, over keeping such workers and ranking them first in the
-  releases), so that a number kept is true. The releases put one the bot has ordered first too, with those let go
-  that turn, so that a bot ordering a worker and releasing one in the same turn loses one. Run after the bot (#232),
-  speed mining reads only the orders issued to a worker in the turn, all the bot's but the hand-overs' gathers and
-  returns, which it tells by their kind (the owner, review of #231, over marking its orders through `Order.data`); a
-  refused order lets the worker go too, as documented (the owner, over reading the refusals). What is left is
-  AvocaDOS's: it drops its caps a refinery (`max_collectors`) and keeps a number of collectors, handing a worker to
-  `collect`, naming no gas building, while it holds fewer, and calling `release_collectors` when it wants fewer (the
-  owner, 2026-11-04). It takes 0.3.0 after its pull request moving onto `api.vision` (#227), and releases its builders
-  itself already.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
