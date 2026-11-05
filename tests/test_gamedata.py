@@ -1075,6 +1075,18 @@ class TestARecordedGamesTables:
         ):
             assert data.abilities[ability].multi_unit, ability.name
 
+    def test_orders_given_apart_join_for_what_every_unit_carries_out_but_an_archon_s_merge_and_a_load_all(
+        self, path: Path
+    ) -> None:
+        """An archon's merge merges the two templar each of its orders names (in game), and one load-all naming two
+        command centers took in the workers of one of them in one run (tool `sweep_orders`)."""
+        data = _tables(path)
+        kept_to_their_orders = {AbilityId.MORPH_ARCHON, AbilityId.LOAD_ALL}
+        for row in data.abilities.values():
+            assert row.joins_other_orders == (row.multi_unit and row.id not in kept_to_their_orders), row.id.name
+        assert data.abilities[AbilityId.MOVE].joins_other_orders
+        assert not any(data.abilities[ability].joins_other_orders for ability in kept_to_their_orders)
+
     def test_every_research_time_is_a_whole_number_of_steps(self, path: Path) -> None:
         assert all(upgrade.research_time == round(upgrade.research_time) for upgrade in _answer(path).upgrades)
 

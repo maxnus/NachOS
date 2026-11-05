@@ -11,8 +11,9 @@ from s2clientprotocol import data_pb2
 
 from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
-from sc2nachos.gamedata._sent_as import SentAs
+from sc2nachos.gamedata._sent_as import SENT_UNCHANGED, SentAs
 from sc2nachos.gamedata._techtree._overrides import (
+    ABILITIES_JOINING_OTHER_ORDERS,
     ABILITIES_PLACING_AT_THE_TARGET,
     ABILITIES_SENT_AS_ANOTHER,
     COST_OVERRIDES,
@@ -246,7 +247,13 @@ class AbilityData:
     command: a move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`).
     Any other ability one unit of a command carries out, and `issue` gives it to each unit in a command of its own:
     what costs minerals or vespene, a build, an add-on, a train, a research or a morph (in game); every spell but a
-    toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out."""
+    toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out. Orders of it
+    given apart may go out as one command too, as `joins_other_orders` says."""
+    joins_other_orders: bool
+    """Whether orders of it given apart in one turn go out as one command where they are aimed at the same unit, or at
+    the same point as the game keeps it, and queued alike, as one order to all their units would: every ability that is
+    `multi_unit` but an archon's merge, which merges the two templar each of its orders names, and a load-all, which
+    one command naming two command centers was seen to carry out for one of them (tool `sweep_orders`)."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -304,9 +311,10 @@ class AbilityData:
             products=tech_tree.ability(ability).products,
             cost=costs.get(ability, _FREE),
             multi_unit=ability in MULTI_UNIT_ABILITIES,
+            joins_other_orders=ability in ABILITIES_JOINING_OTHER_ORDERS,
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
-            sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED),
+            sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, SENT_UNCHANGED),
             _behaviors_by_performer=behavior.by_type,
         )
 
@@ -334,6 +342,7 @@ class AbilityData:
             products=tech_tree.ability(ability).products,
             cost=costs.get(ability, _FREE),
             multi_unit=ability in MULTI_UNIT_ABILITIES,
+            joins_other_orders=ability in ABILITIES_JOINING_OTHER_ORDERS,
             cancelled_by=cancels.get(ability),
             order_behavior=behavior.own,
             sent_as=sent_as,
@@ -341,16 +350,12 @@ class AbilityData:
         )
 
 
-# What an ability goes out as where no type is sent another: itself, for every type.
-_SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
-
-
 def _performers_including_sent_as(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
     """The unit types offered `ability`, the off half of a toggle taking its on half's as `_performers_of` does, and
     those offered the ability it goes out to them as: a medivac is offered the unload at a point that `UNLOAD` goes
     out to it as."""
     offered_to = _performers_of(ability, tech_tree)
-    sent_as_by_type = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
+    sent_as_by_type = ABILITIES_SENT_AS_ANOTHER.get(ability, SENT_UNCHANGED)
     return offered_to | {
         unit_type
         for unit_type, type_sent_as in sent_as_by_type.items()

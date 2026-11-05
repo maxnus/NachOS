@@ -27,8 +27,9 @@ api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 - **`units`** is one unit or any number of them, and each carries the order out; a unit given twice counts once. An
   ability every unit of a command carries out goes out as one command naming them all: a move, an attack, a burrow, a
   lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
-  The game spreads such a group around the target point, where ordering each separately stacks them on the point. Any
-  other ability goes out as a command to each unit, since one command naming several has only one of them carry it
+  The game spreads such a group around the target point, where a command to each stacks them on the point, and orders of
+  such an ability given apart to one target go out as one command too ([orders sent together](#orders-sent-together)).
+  Any other ability goes out as a command to each unit, since one command naming several has only one of them carry it
   out: three barracks given a marine train three, and two orbital commands given a MULE at one field call down two. A
   research given to several units raises `ValueError`, and so does what puts something at its target, a build, an
   add-on, a landing, a rooting or a warp-in, given to several aimed at one point or geyser, which only one of them can
@@ -88,9 +89,10 @@ takes a point, its zone, and only one of two liberators given one carries it out
 `AbilityId.is_custom` tells one from the game's.
 
 An order goes out as one command for each ability it is sent as, or one per unit where the ability is not one every
-unit of a command carries out, or where it is aimed at the unit itself. A command the game refuses is listed in
-`api.action_failures` once for each unit it named, under the id ordered. An unload at a point aimed at one of the
-transports ordered raises `TypeError`, naming `UNLOAD`.
+unit of a command carries out, or where it is aimed at the unit itself, and such a command may join another order's
+([orders sent together](#orders-sent-together)). A command the game refuses is listed in `api.action_failures` once
+for each unit it named, under the id ordered. An unload at a point aimed at one of the transports ordered raises
+`TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -139,6 +141,34 @@ with a reactor, answering the rest `QueueIsFull`. A bot that wants one at a time
 and that `issued_to(unit, include_sent=True)` shows nothing sent to. A morph or an add-on given to a structure making
 something is refused `NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in
 game): give it again once the structure is idle on the ground.
+
+## Orders sent together
+
+Orders given apart go out as one command where they could have been one order: of an ability that joins other orders
+(`api.data.abilities[ability].joins_other_orders`), aimed at the same unit or at the same point as the game keeps it,
+sent as the same one of the game's abilities and queued alike. A squad moved to one point a marine at a time goes out
+as one move, and the game spreads it around the point as it would one order to them all:
+
+```python
+for marine in squad:
+    api.orders.issue(marine, AbilityId.MOVE, target=rally)  # one command naming every marine
+```
+
+An order joins the last such command before it unless one of its units is named in that command or a later one. So
+each unit's commands go out in the order it was given them, a queued one behind the unqueued one before it, and no
+command names a unit twice; another unit's commands may go out ahead of commands given before them. A command aimed
+at one of its own units joins nothing, and nothing joins it: a medivac unloading where it stands is sent its unload at
+a point aimed at itself, which another medivac's unload at that one stays apart from. Every ability that is
+`multi_unit` joins other orders but two: an archon's merge, since each merges the two templar it names, and a
+load-all, which one command naming two command centers was seen to carry out for one of them.
+
+The game answers each command once, and one naming several units `Success` if any of them can take it
+([game behavior](reference/game-behavior/abilities-and-orders.md#one-command-to-several-units)). So a refused command
+is listed in `api.action_failures` once for each unit of every order it carried, under that unit's order's ability.
+A command taken counts as sent for every order it carried: an order whose units could not take it goes unlisted where
+another order's units in the same command could, and the same order given them again is left out as one they are
+carrying out until the observations would show it ([one order a unit a turn](#one-order-a-unit-a-turn)). A single
+order naming several units works the same way.
 
 ## What an order needs
 
