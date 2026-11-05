@@ -3,28 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos.gamedata._sent_as import SentAs
-from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
-from sc2nachos.geometry import POINT_PRECISION, Point
-from sc2nachos.ids import AbilityId
+from sc2nachos.gamedata._sent_as import SENT_UNCHANGED, SentAs
+from sc2nachos.gamedata._techtree import ABILITIES_JOINING_OTHER_ORDERS, ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
+from sc2nachos.geometry import Point
+from sc2nachos.orders._targets import target_as_kept
+from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
 
-    from sc2nachos.ids import UnitTypeId
+    from sc2nachos.ids import AbilityId, UnitTypeId
     from sc2nachos.orders._order import Order
     from sc2nachos.units import OwnUnit, Target
-
-# The abilities whose orders join a command of another order. An archon's merge does not: it merges the two templar it
-# is given to (in game), and what one command naming four does was never seen.
-_JOINING_OTHER_ORDERS = MULTI_UNIT_ABILITIES - {AbilityId.MORPH_ARCHON}
-# What an ability goes out as where no type is sent another.
-SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 
 
 @final
@@ -45,33 +39,48 @@ class UnitCommand:
         return _unit_command_action(self.ability, tags, self.target, queued=self.queued)
 
 
-def unit_commands(orders: Iterable[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]) -> list[UnitCommand]:
+def unit_commands_giving(orders: Iterable[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]) -> list[UnitCommand]:
     """The raw commands giving each of `orders` to the units it goes out to, in the order they go out.
 
     An order of an ability every unit of a command carries out goes out as one command naming its units, or one for
-    each ability it is sent as, and any other order as a command to each unit. A command of an order joins the last
-    command before it of the same game ability, target as the game keeps it and queue flag, unless one of its units is
-    named in that command or in one after it. So a unit's commands go out in the order it was given them, and no
-    command names a unit twice. An archon's merge joins no other order's command.
+    each ability it is sent as, and any other order as a command to each unit. A command of an order of an ability that
+    joins other orders (`ABILITIES_JOINING_OTHER_ORDERS`) joins the last command before it of the same game ability,
+    target as the game keeps it and queue flag, unless one of its units is named in that command or in one after it. So
+    a unit's commands go out in the order it was given them, though another unit's may go out ahead of commands given
+    before them, and no command names a unit twice. A command aimed at one of its own units joins nothing, and nothing
+    joins it.
     """
-    commands: list[UnitCommand] = []
+    unit_commands: list[UnitCommand] = []
     # By game ability, target as the game keeps it and queue flag, the index of the last command an order may join.
     last_joinable: dict[tuple[int, Target | None, bool], int] = {}
     # By unit id, the index of the last command naming the unit.
     last_naming: dict[int, int] = {}
     for order, ability, target, units in _commands_of_each(orders):
-        joins = order.ability in _JOINING_OTHER_ORDERS
-        key = (ability, _target_as_kept(target), order.queued)
-        at = last_joinable.get(key, -1) if joins else -1
+        key = _join_key(order, ability, target, units)
+        at = -1 if key is None else last_joinable.get(key, -1)
         if at < 0 or any(last_naming.get(unit.id, -1) >= at for unit in units):
-            at = len(commands)
-            commands.append(UnitCommand(ability, target, order.queued, []))
-            if joins:
+            at = len(unit_commands)
+            unit_commands.append(UnitCommand(ability, target, order.queued, []))
+            if key is not None:
                 last_joinable[key] = at
-        commands[at].parts.append((order, units))
+        unit_commands[at].parts.append((order, units))
         for unit in units:
             last_naming[unit.id] = at
-    return commands
+    return unit_commands
+
+
+def _join_key(
+    order: Order[Any], ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
+) -> tuple[int, Target | None, bool] | None:
+    """What a command of `order`, giving the game's `ability` at `target` to `units`, shares with each command it may
+    join: the ability, the target as the game keeps it and the queue flag. `None` for a command that joins none and that
+    none joins: of an ability that joins no other order, or aimed at one of its own units, as a transport's unload where
+    it stands is."""
+    if order.ability not in ABILITIES_JOINING_OTHER_ORDERS:
+        return None
+    if isinstance(target, Unit) and any(unit.id == target.id for unit in units):
+        return None
+    return ability, target_as_kept(target), order.queued
 
 
 def _commands_of_each(
@@ -110,14 +119,6 @@ def _commands_giving(
         else:
             commands.append((sending.ability, None, tuple(group)))
     return commands
-
-
-def _target_as_kept(target: Target | None) -> Target | None:
-    """`target` as the game keeps it: a point cut down to `POINT_PRECISION`, so that two targets are `same_target`
-    exactly when these are equal."""
-    if isinstance(target, Point):
-        return target.rounded_down(step=POINT_PRECISION)
-    return target
 
 
 def _unit_command_action(ability: int, tags: list[int], target: Target | None, *, queued: bool) -> sc2api_pb2.Action:

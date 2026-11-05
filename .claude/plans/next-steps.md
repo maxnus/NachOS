@@ -60,8 +60,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
-  archon's merge never joins. The owner chose this over grouping the orders in AvocaDOS's squad micro (2026-11-05),
-  whose order to each unit had sent a ladder game to 22,717 APM.
+  archon's merge and a load-all never join (`ABILITIES_JOINING_OTHER_ORDERS`), nor does a command aimed at one of its
+  own units. The owner chose this over grouping the orders in AvocaDOS's squad micro (2026-11-05), whose order to each
+  unit had sent a ladder game to 22,717 APM.
 
 ### Units and their types
 

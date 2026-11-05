@@ -21,11 +21,12 @@ from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
-from sc2nachos.orders._commands import unit_commands
+from sc2nachos.orders._commands import unit_commands_giving
+from sc2nachos.orders._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
-from sc2nachos.units import Alliance, OwnUnit, Units, UnitType
+from sc2nachos.units import Alliance, OwnUnit, Unit, Units, UnitType
 from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_enemy, make_game_info, make_observation, make_response, make_tables, make_unit
 
@@ -1062,6 +1063,18 @@ class TestAPointAsTheGameReadsIt:
 
         assert order.target == Point((157.123291015625, 3.0))
 
+    def test_two_targets_are_the_same_exactly_when_the_game_keeps_them_as_one(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1), _marine(2))
+        points = [aimed_at((20.0 + shift, 21.0)) for shift in (0.0, POINT_PRECISION / 2, -POINT_PRECISION / 2, 0.5)]
+        targets = [None, game.own(1), game.own(2), *points]
+
+        for one in targets:
+            for other in targets:
+                assert same_target(one, other) == (target_as_kept(one) == target_as_kept(other)), (one, other)
+        assert same_target(points[0], points[1])
+        assert not same_target(points[0], points[2])
+
     def test_an_order_at_it_matches_the_point_the_game_reports(self) -> None:
         game = _Game()
         crossing = 157.123288015625
@@ -1543,31 +1556,92 @@ class TestOrdersGivenApart:
 
         assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1, 2], [1]]
 
+    def test_an_unload_at_a_transport_joins_none_of_that_transport_s_own_unload(self) -> None:
+        """The medivac unloading where it stands is sent its unload at a point aimed at itself, which one command with
+        the other's would aim at one of its own units, as `issue` refuses for one order."""
+        for unload_first in (False, True):
+            game = _Game([ActionResult.SUCCESS] * 2)
+            game.observe(0, _medivac(1), _medivac(2))
+
+            if unload_first:
+                game.book.issue(game.own(2), _UNLOAD)
+            game.book.issue(game.own(1), _UNLOAD_AT, target=game.own(2))
+            if not unload_first:
+                game.book.issue(game.own(2), _UNLOAD)
+
+            sent = [
+                (command.ability_id, list(command.unit_tags), command.target_unit_tag)
+                for command in _commands(game.flush())
+            ]
+            assert sorted(sent) == [(_UNLOAD_AT, [1], 2), (_UNLOAD_AT, [2], 2)]
+
+    def test_a_command_aimed_at_one_of_its_own_units_joins_nothing(self) -> None:
+        game = _Game([ActionResult.SUCCESS] * 3)
+        game.observe(0, _marine(1), _marine(2), _marine(3), _marine(4))
+
+        game.book.issue(game.own(3), _MOVE, target=game.own(2))
+        game.book.issue([game.own(1), game.own(2)], _MOVE, target=game.own(2))
+        game.book.issue(game.own(4), _MOVE, target=game.own(2))
+
+        assert [(list(command.unit_tags), command.target_unit_tag) for command in _commands(game.flush())] == [
+            ([3, 4], 2),
+            ([1, 2], 2),
+        ]
+
+    def test_a_load_all_joins_no_other_order(self) -> None:
+        """One command naming two command centers took in the workers of one of them in one run and of both in the
+        next (tool `sweep_orders`)."""
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, *(make_unit(tag, UnitTypeId.COMMAND_CENTER, at=(12.0 * tag, 12.0)) for tag in (1, 2)))
+
+        game.book.issue(game.own(1), AbilityId.LOAD_ALL)
+        game.book.issue(game.own(2), AbilityId.LOAD_ALL)
+
+        assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1], [2]]
+
     def test_no_unit_s_orders_go_out_in_another_order_than_it_was_given_them(self) -> None:
-        """Turns of orders to four marines, made up at random: a move, an attack or a stim, at one of two points,
-        queued or not, to one to three of them."""
+        """Turns of orders to three marines, two medivacs and a barracks, made up at random: a move or an attack at
+        one of two points, at an enemy or at a marine, a stim, an unload where each medivac stands or at the other
+        medivac, and a train, queued or not."""
         rng = random.Random(7)
         joined = 0
-        for _ in range(300):
+        for _ in range(500):
             game = _Game()
-            game.observe(0, *(_marine(tag) for tag in (1, 2, 3, 4)))
-            marines = [game.own(tag) for tag in (1, 2, 3, 4)]
-            for _ in range(rng.randint(1, 8)):
-                ability = rng.choice([_MOVE, _ATTACK, _STIM])
-                target = None if ability is _STIM else rng.choice([(20.0, 21.0), (30.0, 31.0)])
-                units = rng.sample(marines, rng.randint(1, 3))
-                game.book.issue(units, ability, target=target, queued=rng.random() < 0.5)
+            enemy = make_unit(9, at=(40.0, 40.0), alliance=Alliance.ENEMY)
+            game.observe(0, _marine(1), _marine(2), _marine(3), _medivac(4), _medivac(5), _barracks(6), enemy)
+            marines = [game.own(tag) for tag in (1, 2, 3)]
+            medivacs = [game.own(4), game.own(5)]
+            targets = [(20.0, 21.0), (30.0, 31.0), game.tracker.unit_tracker.by_tag(9), *marines]
+            for _ in range(rng.randint(1, 10)):
+                queued = rng.random() < 0.5
+                match rng.choice(["move", "attack", "stim", "unload", "unload at", "train"]):
+                    case "move" | "attack" as kind:
+                        units = rng.sample([*marines, *medivacs], rng.randint(1, 3))
+                        ability = _MOVE if kind == "move" else _ATTACK
+                        game.book.issue(units, ability, target=rng.choice(targets), queued=queued)
+                    case "stim":
+                        game.book.issue(rng.sample(marines, rng.randint(1, 2)), _STIM, queued=queued)
+                    case "unload":
+                        game.book.issue(rng.sample(medivacs, rng.randint(1, 2)), _UNLOAD, queued=queued)
+                    case "unload at":
+                        one, other = rng.sample(medivacs, 2)
+                        game.book.issue(one, _UNLOAD_AT, target=other, queued=queued)
+                    case _:
+                        game.book.issue(game.own(6), _TRAIN_MARINE, queued=queued)
             sent = list(game.book._orders_to_send(game.book._issued, game.book._forced))
 
-            commands = unit_commands(sent)
+            unit_commands = unit_commands_giving(sent)
 
-            for marine in marines:
-                given = [order for order, units in sent if marine in units]
-                assert [order for command in commands for order, units in command.parts if marine in units] == given
-            for command in commands:
-                tags = [unit.tag for _, units in command.parts for unit in units]
-                assert len(tags) == len(set(tags))
-            joined += sum(len(command.parts) - 1 for command in commands)
+            for unit in (*marines, *medivacs, game.own(6)):
+                given = [order for order, units in sent if unit in units]
+                named_in = [order for command in unit_commands for order, units in command.parts if unit in units]
+                assert named_in == given
+            for unit_command in unit_commands:
+                named = [unit.id for _, units in unit_command.parts for unit in units]
+                assert len(named) == len(set(named))
+                if isinstance(unit_command.target, Unit) and unit_command.target.id in named:
+                    assert len(unit_command.parts) == 1
+            joined += sum(len(unit_command.parts) - 1 for unit_command in unit_commands)
         assert joined > 0
 
     def test_a_refused_command_is_listed_once_for_each_unit_of_each_order_it_carried(self) -> None:

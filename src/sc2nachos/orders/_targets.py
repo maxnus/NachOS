@@ -53,15 +53,28 @@ def check_target(ability: AbilityId, target: Target | None, row: AbilityData | N
         raise TypeError(f"{ability.name} takes {_TARGETS_WANTED[wanted]}, and was given {aimed}")
 
 
+def target_as_kept(target: Target | None) -> Target | None:
+    """`target` as the game keeps it: a point cut down to `POINT_PRECISION`, and a unit or nothing as it is. Two targets
+    are `same_target` exactly when these are equal."""
+    if isinstance(target, Point):
+        return _point_as_kept(target)
+    return target
+
+
 def same_point(target: Point, x: float, y: float) -> bool:
     """Whether a point the game reports is the one ordered. The game keeps a point to `POINT_PRECISION`, rounded
     down."""
-    return target.rounded_down(step=POINT_PRECISION) == Point((x, y)).rounded_down(step=POINT_PRECISION)
+    return _point_as_kept(target) == _point_as_kept(Point((x, y)))
 
 
 def same_target(one: Target | None, other: Target | None) -> bool:
     """Whether two orders are aimed at the same thing: the same unit, the same point as the game keeps it, or
     nothing."""
     if isinstance(one, Point) and isinstance(other, Point):
-        return same_point(one, other.x, other.y)
+        return _point_as_kept(one) == _point_as_kept(other)
     return one is other
+
+
+def _point_as_kept(point: Point) -> Point:
+    """`point` as the game keeps it: cut down to `POINT_PRECISION` on each axis."""
+    return point.rounded_down(step=POINT_PRECISION)

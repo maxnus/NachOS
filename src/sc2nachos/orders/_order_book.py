@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Any, final, overload
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import Cost, OrderBehavior
+from sc2nachos.gamedata._sent_as import SENT_UNCHANGED
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.orders._commands import SENT_UNCHANGED, unit_commands
+from sc2nachos.orders._commands import unit_commands_giving
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
@@ -128,11 +129,15 @@ class OrderBook:
         behind each unit's orders. `data` is the bot's own; NachOS carries it and never reads it. Nothing is
         sent until the turn's handlers have all run.
 
-        Orders of an ability every unit of a command carries out, given apart in one turn, go out as one command where
-        they are aimed at the same unit, or at the same point as the game keeps it, and are queued alike, so units
-        ordered one at a time keep their spacing too. An order joins the last such command before it unless one of its
-        units is named in that command or a later one, so a unit's commands go out in the order it was given them. An
-        archon's merge joins no other order: it merges the two templar it names.
+        Orders of an ability that joins other orders (`AbilityData.joins_other_orders`), given apart in one turn, go out
+        as one command where they are aimed at the same unit, or at the same point as the game keeps it, and are queued
+        alike, so units ordered one at a time keep their spacing too. An order joins the last such command before it
+        unless one of its units is named in that command or a later one, so a unit's commands go out in the order it was
+        given them; another unit's may go out ahead of commands given before them. A command aimed at one of its own
+        units, as a transport's unload where it stands is, joins nothing, and nothing joins it. The game answers a
+        command naming several units `Success` if any of them can take it, so then every order it carries counts as
+        sent: one whose units could not take it is not listed in `api.action_failures`, and the same order given them
+        again is left out as one they are carrying out until the observations would show it.
 
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
@@ -219,18 +224,18 @@ class OrderBook:
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
         self._refusals = ()
-        commands = unit_commands(self._orders_to_send(issued, forced))
-        actions = [*(command.to_action() for command in commands), *then]
+        unit_commands = unit_commands_giving(self._orders_to_send(issued, forced))
+        actions = [*(unit_command.to_action() for unit_command in unit_commands), *then]
         if not actions:
             return
         results = client.act(actions).result
-        if len(results) < len(commands):
-            raise ProtocolError(f"the game answered {len(results)} of the {len(commands)} commands it was sent")
+        if len(results) < len(unit_commands):
+            raise ProtocolError(f"the game answered {len(results)} of the {len(unit_commands)} commands it was sent")
         # What comes after the commands is answered after them, and belongs to no order.
         refusals: list[ActionFailure] = []
-        for command, result in zip(commands, results, strict=False):
+        for unit_command, result in zip(unit_commands, results, strict=False):
             action_result = ActionResult.read(result)
-            for order, units in command.parts:
+            for order, units in unit_command.parts:
                 if action_result is ActionResult.SUCCESS:
                     self._remember_sent(order, units)
                 else:

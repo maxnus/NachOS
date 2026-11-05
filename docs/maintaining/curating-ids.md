@@ -149,6 +149,9 @@ reads; any other ability goes out as a command to each unit. After a patch, `uv 
 group-abilities-terran group-abilities-protoss group-abilities-zerg` gives each ability that costs nothing to two units
 at once: one it classes `both` belongs there, one it classes `one` does not, and one it classes `no trace` or
 differently from run to run needs a closer look. A new ability goes to a group a command each until it is listed.
+`ABILITIES_JOINING_OTHER_ORDERS`, beside it, is the table less those whose orders given apart must stay apart, which
+`AbilityData.joins_other_orders` reads: one whose group is part of what an order does, as an archon's merge's two
+templar are, or that a command naming several was not seen to carry out for each, as a load-all.
 
 The sweep reads everything off `RequestQueryAvailableAbilities`, whose answers are in
 [game behavior](../reference/game-behavior/abilities-and-orders.md#what-a-unit-is-offered). What it does about them:

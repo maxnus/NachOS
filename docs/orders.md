@@ -89,9 +89,10 @@ takes a point, its zone, and only one of two liberators given one carries it out
 `AbilityId.is_custom` tells one from the game's.
 
 An order goes out as one command for each ability it is sent as, or one per unit where the ability is not one every
-unit of a command carries out, or where it is aimed at the unit itself. A command the game refuses is listed in
-`api.action_failures` once for each unit it named, under the id ordered. An unload at a point aimed at one of the
-transports ordered raises `TypeError`, naming `UNLOAD`.
+unit of a command carries out, or where it is aimed at the unit itself, and such a command may join another order's
+([orders sent together](#orders-sent-together)). A command the game refuses is listed in `api.action_failures` once
+for each unit it named, under the id ordered. An unload at a point aimed at one of the transports ordered raises
+`TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
 second train behind the first and charge for it from the step it was ordered, money spent before the structure can
@@ -143,10 +144,10 @@ game): give it again once the structure is idle on the ground.
 
 ## Orders sent together
 
-Orders given apart go out as one command where they could have been one order: of an ability every unit of a command
-carries out, aimed at the same unit or at the same point as the game keeps it, sent as the same one of the game's
-abilities and queued alike. A squad moved to one point a marine at a time goes out as one move, and the game spreads it
-around the point as it would one order to them all:
+Orders given apart go out as one command where they could have been one order: of an ability that joins other orders
+(`api.data.abilities[ability].joins_other_orders`), aimed at the same unit or at the same point as the game keeps it,
+sent as the same one of the game's abilities and queued alike. A squad moved to one point a marine at a time goes out
+as one move, and the game spreads it around the point as it would one order to them all:
 
 ```python
 for marine in squad:
@@ -155,12 +156,19 @@ for marine in squad:
 
 An order joins the last such command before it unless one of its units is named in that command or a later one. So
 each unit's commands go out in the order it was given them, a queued one behind the unqueued one before it, and no
-command names a unit twice. An archon's merge joins no other order: each merges the two templar it names.
+command names a unit twice; another unit's commands may go out ahead of commands given before them. A command aimed
+at one of its own units joins nothing, and nothing joins it: a medivac unloading where it stands is sent its unload at
+a point aimed at itself, which another medivac's unload at that one stays apart from. Every ability that is
+`multi_unit` joins other orders but two: an archon's merge, since each merges the two templar it names, and a
+load-all, which one command naming two command centers was seen to carry out for one of them.
 
 The game answers each command once, and one naming several units `Success` if any of them can take it
 ([game behavior](reference/game-behavior/abilities-and-orders.md#one-command-to-several-units)). So a refused command
-is listed in `api.action_failures` once for each unit of every order it carried, under that unit's order's ability,
-and an order whose units could not take it goes unlisted where another order's units in the same command could.
+is listed in `api.action_failures` once for each unit of every order it carried, under that unit's order's ability.
+A command taken counts as sent for every order it carried: an order whose units could not take it goes unlisted where
+another order's units in the same command could, and the same order given them again is left out as one they are
+carrying out until the observations would show it ([one order a unit a turn](#one-order-a-unit-a-turn)). A single
+order naming several units works the same way.
 
 ## What an order needs
 
