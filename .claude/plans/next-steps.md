@@ -23,10 +23,10 @@ As of 2026-11-05:
 - **0.3.0 is out** (2026-11-05, from 4c82513), with #226 to #235. Its notes say what a bot has to change: the `Vision`
   renames (#227), an extension's handlers at `EventPriority.BEFORE` or `AFTER` alone (#232), `Units` where there were
   tuples (#229, #230), speed mining letting go of a worker the bot orders elsewhere (#231), and a handler of
-  `AnyUpgradeEvent` handed upgrade inference's `EnemyUpgradeAssumedEvent` (#233). AvocaDOS #91 takes it, its turn clock
-  starting at `BEFORE` and ending at `AFTER`, after speed mining, so that its step time stays the whole turn. What is
-  left of it is AvocaDOS's, in its plan: keeping a number of collectors with `release_collectors`, and its own stamp of
-  the tiles in sight beside `api.vision.last_in_sight`.
+  `AnyUpgradeEvent` handed upgrade inference's `EnemyUpgradeAssumedEvent` (#233). AvocaDOS #91, open, takes it, its
+  turn clock starting at `BEFORE` and ending at `AFTER`, after speed mining, so that its step time stays the whole
+  turn. What is left of it is AvocaDOS's, which #91 adds to its plan: keeping a number of collectors with
+  `release_collectors`, and its own stamp of the tiles in sight beside `api.vision.last_in_sight`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -166,10 +166,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   rule holds for every race, measured with SCVs only.
 - **Speed mining picks every gas building, and releases the workers costing least** (the owner, 2026-11-04, #229), so
   that a bot holds only how many mine and how many collect. `collect` fills gas buildings to two, at the expansion
-  nearest the worker, nearest its center first, before a third at any, which goes to the expansion nearest the worker,
-  farthest from its center (the owner, over the farthest from its townhall at any base). `release_collectors(count)` and
-  `release_miners(count)` release in the reverse of the picks, one the bot has ordered first (the owner, over a count to
-  keep and over a read the bot passes to `release`).
+  nearest the worker with one under two, nearest its center first, before a third at any, which goes to the expansion
+  nearest the worker with one under three, farthest from its center (the owner, over the farthest from its townhall at
+  any base). `release_collectors(count)` and `release_miners(count)` release in the reverse of the picks, one the bot
+  has ordered first (the owner, over a count to keep and over a read the bot passes to `release`).
 - **Speed mining lets a worker go once the bot orders it elsewhere** (#231), in that turn, reversing #201 (the owner,
   review of #229, over keeping such a worker and ranking it first in the releases), so that a number kept is true. Run
   after the bot, it reads only the orders issued to a worker in the turn, telling its hand-overs' gathers and returns
