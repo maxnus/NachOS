@@ -23,10 +23,10 @@ As of 2026-11-05:
 - **0.3.0 is out** (2026-11-05, from 4c82513), with #226 to #235. Its notes say what a bot has to change: the `Vision`
   renames (#227), an extension's handlers at `EventPriority.BEFORE` or `AFTER` alone (#232), `Units` where there were
   tuples (#229, #230), speed mining letting go of a worker the bot orders elsewhere (#231), and a handler of
-  `AnyUpgradeEvent` handed upgrade inference's `EnemyUpgradeAssumedEvent` (#233). AvocaDOS #91, open, takes it, its
-  turn clock starting at `BEFORE` and ending at `AFTER`, after speed mining, so that its step time stays the whole
-  turn. What is left of it is AvocaDOS's, which #91 adds to its plan: keeping a number of collectors with
-  `release_collectors`, and its own stamp of the tiles in sight beside `api.vision.last_in_sight`.
+  `AnyUpgradeEvent` handed upgrade inference's `EnemyUpgradeAssumedEvent` (#233). AvocaDOS #91, open, takes it: it keeps
+  a number of collectors, speed mining picking their refineries and `release_collectors` those to let go, reads when
+  each tile was last in sight off `api.vision`, and starts its turn clock at `BEFORE` and ends it at `AFTER`, after
+  speed mining, so that its step time stays the whole turn.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
