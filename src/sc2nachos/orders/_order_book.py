@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, Any, final, overload
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import Cost, OrderBehavior
-from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
+from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.orders._commands import create_unit_command_actions
+from sc2nachos.orders._commands import SENT_UNCHANGED, unit_commands
 from sc2nachos.orders._order import Order
 from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
@@ -44,8 +44,6 @@ _IS_AIMED_AT_ITSELF = MappingProxyType(
         if sending.aimed_at_itself
     }
 )
-# What an ability goes out as where no type is sent another.
-_SENT_UNCHANGED: Mapping[UnitTypeId, SentAs] = MappingProxyType({})
 
 
 @final
@@ -130,6 +128,12 @@ class OrderBook:
         behind each unit's orders. `data` is the bot's own; NachOS carries it and never reads it. Nothing is
         sent until the turn's handlers have all run.
 
+        Orders of an ability every unit of a command carries out, given apart in one turn, go out as one command where
+        they are aimed at the same unit, or at the same point as the game keeps it, and are queued alike, so units
+        ordered one at a time keep their spacing too. An order joins the last such command before it unless one of its
+        units is named in that command or a later one, so a unit's commands go out in the order it was given them. An
+        archon's merge joins no other order: it merges the two templar it names.
+
         An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
         drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
         observation after its turn may not show it yet, and otherwise its first reported order. `force` sends it to
@@ -137,8 +141,8 @@ class OrderBook:
         competes with the turn's other orders like any other.
 
         An ability that goes out as another for some types (`AbilityData.sent_as`) goes out as that one to their units,
-        in commands of its own. A command the game refuses is listed in `api.action_failures` once for each unit it
-        names.
+        in commands of its own, which join other orders' as the ability's own do. A command the game refuses is listed
+        in `api.action_failures` once for each unit it names, under the ability of that unit's order.
 
         Raises `TypeError` for a target the ability cannot be aimed at, for an add-on with no point given to a flying
         structure, and for a transport's unload at a point aimed at one of `units` itself, which is `UNLOAD` for that
@@ -153,7 +157,7 @@ class OrderBook:
         if not given:
             raise ValueError("an order needs a unit to give it to")
         row = self._game_data.abilities.get(ability)
-        sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, _SENT_UNCHANGED)
+        sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, SENT_UNCHANGED)
         if ability.is_custom:
             if row is None:
                 raise ValueError(f"{ability.name} has nothing in this game's tables to be sent as")
@@ -215,14 +219,8 @@ class OrderBook:
         issued, forced = self._issued, self._forced
         self._issued, self._issued_by_unit, self._forced = [], {}, set()
         self._refusals = ()
-        commands: list[tuple[Order[Any], sc2api_pb2.Action, tuple[OwnUnit[Any], ...]]] = []
-        for order, units in self._orders_to_send(issued, forced):
-            sent_as = ABILITIES_SENT_AS_ANOTHER.get(order.ability, _SENT_UNCHANGED)
-            groups = (units,) if order.ability in MULTI_UNIT_ABILITIES else tuple((unit,) for unit in units)
-            for group in groups:
-                actions = create_unit_command_actions(order.ability, group, order.target, sent_as, queued=order.queued)
-                commands += [(order, *command) for command in actions]
-        actions = [*(action for _, action, _ in commands), *then]
+        commands = unit_commands(self._orders_to_send(issued, forced))
+        actions = [*(command.to_action() for command in commands), *then]
         if not actions:
             return
         results = client.act(actions).result
@@ -230,12 +228,13 @@ class OrderBook:
             raise ProtocolError(f"the game answered {len(results)} of the {len(commands)} commands it was sent")
         # What comes after the commands is answered after them, and belongs to no order.
         refusals: list[ActionFailure] = []
-        for (order, _, units), result in zip(commands, results, strict=False):
+        for command, result in zip(commands, results, strict=False):
             action_result = ActionResult.read(result)
-            if action_result is not ActionResult.SUCCESS:
-                refusals += [ActionFailure(self._time, unit, order.ability, action_result) for unit in units]
-            else:
-                self._remember_sent(order, units)
+            for order, units in command.parts:
+                if action_result is ActionResult.SUCCESS:
+                    self._remember_sent(order, units)
+                else:
+                    refusals += [ActionFailure(self._time, unit, order.ability, action_result) for unit in units]
         self._refusals = tuple(refusals)
 
     def _observe(self, time: GameTime, lost: Iterable[Unit[Any]]) -> None:

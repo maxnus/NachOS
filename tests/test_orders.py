@@ -3,6 +3,7 @@
 # Each `type: ignore` below marks a call the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
+import random
 from collections.abc import Sequence
 from contextlib import closing
 from functools import partial
@@ -15,12 +16,13 @@ from sc2nachos import Api, GameTime
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamemap import GameMap
-from sc2nachos.geometry import Point, Point3D
+from sc2nachos.geometry import POINT_PRECISION, Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import Order, OrderBook
-from sc2nachos.protocol import Client, WebSocketTransport
+from sc2nachos.orders._commands import unit_commands
+from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
 from sc2nachos.units import Alliance, OwnUnit, Units, UnitType
@@ -1376,6 +1378,247 @@ class TestAnOrderToSeveralUnits:
 
         assert _sent(game.flush()) == [(_DRONE, [1], None, False)]
         assert [failure.action_result for failure in game.book._refusals] == [ActionResult.NOT_SUPPORTED]
+
+
+class TestOrdersGivenApart:
+    """Orders of an ability every unit of a command carries out, aimed at one target and queued alike, go out as one
+    command, as if one order had named all their units, unless that would send a unit's commands out of the order it
+    was given them."""
+
+    def test_two_units_ordered_apart_to_one_point_go_out_in_one_command(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), _MOVE, target=(20.0, 21.0))
+
+        assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False)]
+        assert game.refused() == []
+
+    def test_points_the_game_keeps_as_one_are_one_target(self) -> None:
+        """The game cuts a point down to `POINT_PRECISION`, so it carries out both moves at the first point."""
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), _MOVE, target=(20.0 + POINT_PRECISION / 2, 21.0))
+
+        assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False)]
+
+    def test_two_units_ordered_apart_at_one_unit_go_out_in_one_command(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2), make_unit(9, at=(20.0, 21.0), alliance=Alliance.ENEMY))
+        enemy = game.tracker.unit_tracker.by_tag(9)
+
+        game.book.issue(game.own(1), _ATTACK, target=enemy)
+        game.book.issue(game.own(2), _ATTACK, target=enemy)
+
+        (command,) = _commands(game.flush())
+        assert (list(command.unit_tags), command.target_unit_tag) == ([1, 2], 9)
+
+    @pytest.mark.parametrize(
+        ("ability", "target", "queued"),
+        [(_MOVE, (20.0, 22.0), False), (_MOVE, (20.0, 21.0), True), (_ATTACK, (20.0, 21.0), False)],
+        ids=["at another point", "queued", "of another ability"],
+    )
+    def test_an_order_that_differs_goes_out_in_a_command_of_its_own(
+        self, ability: AbilityId, target: tuple[float, float], queued: bool
+    ) -> None:
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, _marine(1), _marine(2))
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), ability, target=target, queued=queued)
+
+        assert _sent(game.flush()) == [(_MOVE, [1], (20.0, 21.0), False), (ability, [2], target, queued)]
+
+    def test_orders_at_two_units_go_out_apart(self) -> None:
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, _marine(1), _marine(2), *(make_unit(tag, alliance=Alliance.ENEMY) for tag in (8, 9)))
+
+        game.book.issue(game.own(1), _ATTACK, target=game.tracker.unit_tracker.by_tag(8))
+        game.book.issue(game.own(2), _ATTACK, target=game.tracker.unit_tracker.by_tag(9))
+
+        assert [(list(command.unit_tags), command.target_unit_tag) for command in _commands(game.flush())] == [
+            ([1], 8),
+            ([2], 9),
+        ]
+
+    @pytest.mark.parametrize(
+        ("make", "ability", "target"),
+        [(_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE)],
+        ids=["a train", "a spell at one point"],
+    )
+    def test_an_ability_one_unit_of_a_command_carries_out_goes_to_each_in_a_command_of_its_own(
+        self, make: Any, ability: AbilityId, target: tuple[float, float] | None
+    ) -> None:
+        game = _costing([ActionResult.SUCCESS] * 2)
+        game.observe(0, make(1), make(2))
+
+        game.book.issue(game.own(1), ability, target=target)
+        game.book.issue(game.own(2), ability, target=target)
+
+        assert _sent(game.flush()) == [(ability, [1], target, False), (ability, [2], target, False)]
+
+    def test_two_tanks_sieged_apart_go_out_in_one_siege_mode(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK), make_unit(2, UnitTypeId.SIEGE_TANK))
+
+        game.book.issue(game.own(1), _SIEGE)
+        game.book.issue(game.own(2), _SIEGE)
+
+        assert _sent(game.flush()) == [(RawAbilityId.SiegeMode_SiegeMode, [1, 2], None, False)]
+
+    def test_types_sent_the_ability_as_two_of_the_game_s_go_out_apart(self) -> None:
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, make_unit(1, UnitTypeId.SIEGE_TANK_SIEGED), _sieged_liberator(2))
+
+        game.book.issue(game.own(1), _UNSIEGE)
+        game.book.issue(game.own(2), _UNSIEGE)
+
+        assert _sent(game.flush()) == [
+            (RawAbilityId.Unsiege_Unsiege, [1], None, False),
+            (RawAbilityId.Morph_LiberatorAAMode, [2], None, False),
+        ]
+
+    def test_transports_unloading_where_each_stands_go_out_apart(self) -> None:
+        """Each is sent its unload at a point aimed at itself."""
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, _medivac(1), _medivac(2))
+
+        game.book.issue(game.own(1), _UNLOAD)
+        game.book.issue(game.own(2), _UNLOAD)
+
+        sent = [
+            (command.ability_id, list(command.unit_tags), command.target_unit_tag)
+            for command in _commands(game.flush())
+        ]
+        assert sent == [(_UNLOAD_AT, [1], 1), (_UNLOAD_AT, [2], 2)]
+
+    def test_an_archon_merge_joins_no_other_order(self) -> None:
+        """Each merges the two templar it names (in game)."""
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, *(_templar(tag) for tag in (1, 2, 3, 4)))
+
+        game.book.issue([game.own(1), game.own(2)], AbilityId.MORPH_ARCHON)
+        game.book.issue([game.own(3), game.own(4)], AbilityId.MORPH_ARCHON)
+
+        assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1, 2], [3, 4]]
+
+    def test_an_order_joins_a_command_it_does_not_follow_directly(self) -> None:
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, _marine(1), _marine(2))
+
+        for tag in (1, 2):
+            game.book.issue(game.own(tag), _MOVE, target=(20.0, 21.0))
+            game.book.issue(game.own(tag), _ATTACK, target=(30.0, 31.0), queued=True)
+
+        assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False), (_ATTACK, [1, 2], (30.0, 31.0), True)]
+
+    def test_a_unit_s_queued_order_stays_behind_its_unqueued_one(self) -> None:
+        """Joining the first command would send the second marine's queued move ahead of its move, which would then
+        replace it."""
+        game = _Game([ActionResult.SUCCESS] * 3)
+        game.observe(0, _marine(1), _marine(2))
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), queued=True)
+        game.book.issue(game.own(2), _MOVE, target=(30.0, 31.0))
+        game.book.issue(game.own(2), _MOVE, target=(20.0, 21.0), queued=True)
+
+        assert _sent(game.flush()) == [
+            (_MOVE, [1], (20.0, 21.0), True),
+            (_MOVE, [2], (30.0, 31.0), False),
+            (_MOVE, [2], (20.0, 21.0), True),
+        ]
+
+    def test_a_command_names_a_unit_once(self) -> None:
+        """A stim leaves a marine's orders as they are, so both of its stims go out, in a command each; the game would
+        count its tag once in one command (tool `sweep_orders`)."""
+        game = _Game([ActionResult.SUCCESS] * 2)
+        game.observe(0, _marine(1), _marine(2))
+
+        game.book.issue(game.own(1), _STIM)
+        game.book.issue(game.own(2), _STIM)
+        game.book.issue(game.own(1), _STIM)
+
+        assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1, 2], [1]]
+
+    def test_no_unit_s_orders_go_out_in_another_order_than_it_was_given_them(self) -> None:
+        """Turns of orders to four marines, made up at random: a move, an attack or a stim, at one of two points,
+        queued or not, to one to three of them."""
+        rng = random.Random(7)
+        joined = 0
+        for _ in range(300):
+            game = _Game()
+            game.observe(0, *(_marine(tag) for tag in (1, 2, 3, 4)))
+            marines = [game.own(tag) for tag in (1, 2, 3, 4)]
+            for _ in range(rng.randint(1, 8)):
+                ability = rng.choice([_MOVE, _ATTACK, _STIM])
+                target = None if ability is _STIM else rng.choice([(20.0, 21.0), (30.0, 31.0)])
+                units = rng.sample(marines, rng.randint(1, 3))
+                game.book.issue(units, ability, target=target, queued=rng.random() < 0.5)
+            sent = list(game.book._orders_to_send(game.book._issued, game.book._forced))
+
+            commands = unit_commands(sent)
+
+            for marine in marines:
+                given = [order for order, units in sent if marine in units]
+                assert [order for command in commands for order, units in command.parts if marine in units] == given
+            for command in commands:
+                tags = [unit.tag for _, units in command.parts for unit in units]
+                assert len(tags) == len(set(tags))
+            joined += sum(len(command.parts) - 1 for command in commands)
+        assert joined > 0
+
+    def test_a_refused_command_is_listed_once_for_each_unit_of_each_order_it_carried(self) -> None:
+        game = _Game([ActionResult.ERROR, ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2), _marine(3), _marine(4))
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(4), _STIM)
+        game.book.issue([game.own(2), game.own(3)], _MOVE, target=(20.0, 21.0))
+
+        assert _sent(game.flush()) == [(_MOVE, [1, 2, 3], (20.0, 21.0), False), (_STIM, [4], None, False)]
+        assert game.refused() == [
+            (1, _MOVE, ActionResult.ERROR),
+            (2, _MOVE, ActionResult.ERROR),
+            (3, _MOVE, ActionResult.ERROR),
+        ]
+
+    def test_each_order_of_a_command_the_game_took_is_sent_to_its_own_units(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2), _marine(3))
+        first = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), data="first")
+        second = game.book.issue([game.own(2), game.own(3)], _MOVE, target=(20.0, 21.0), data="second")
+
+        game.flush()
+        game.observe(16, _marine(1), _marine(2), _marine(3))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == (first,)
+        assert game.book.issued_to(game.own(2), include_sent=True) == (second,)
+        assert game.book.issued_to(game.own(3), include_sent=True) == (second,)
+
+    def test_no_order_of_a_refused_command_is_taken_for_what_its_units_are_doing(self) -> None:
+        game = _Game([ActionResult.ERROR], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1), _marine(2))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1), _marine(2))
+
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), _MOVE, target=(20.0, 21.0))
+
+        assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False)]
+
+    def test_a_game_answering_fewer_commands_than_it_was_sent_is_a_protocol_error(self) -> None:
+        game = _Game([])
+        game.observe(0, _marine(1), _marine(2))
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.book.issue(game.own(2), _MOVE, target=(20.0, 21.0))
+
+        with pytest.raises(ProtocolError, match="answered 0 of the 1 commands"):
+            game.flush()
 
 
 class TestWhatTheTurnsOrdersCost:

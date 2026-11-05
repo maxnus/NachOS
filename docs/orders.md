@@ -27,8 +27,9 @@ api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 - **`units`** is one unit or any number of them, and each carries the order out; a unit given twice counts once. An
   ability every unit of a command carries out goes out as one command naming them all: a move, an attack, a burrow, a
   lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
-  The game spreads such a group around the target point, where ordering each separately stacks them on the point. Any
-  other ability goes out as a command to each unit, since one command naming several has only one of them carry it
+  The game spreads such a group around the target point, where a command to each stacks them on the point, and orders of
+  such an ability given apart to one target go out as one command too ([orders sent together](#orders-sent-together)).
+  Any other ability goes out as a command to each unit, since one command naming several has only one of them carry it
   out: three barracks given a marine train three, and two orbital commands given a MULE at one field call down two. A
   research given to several units raises `ValueError`, and so does what puts something at its target, a build, an
   add-on, a landing, a rooting or a warp-in, given to several aimed at one point or geyser, which only one of them can
@@ -139,6 +140,27 @@ with a reactor, answering the rest `QueueIsFull`. A bot that wants one at a time
 and that `issued_to(unit, include_sent=True)` shows nothing sent to. A morph or an add-on given to a structure making
 something is refused `NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in
 game): give it again once the structure is idle on the ground.
+
+## Orders sent together
+
+Orders given apart go out as one command where they could have been one order: of an ability every unit of a command
+carries out, aimed at the same unit or at the same point as the game keeps it, sent as the same one of the game's
+abilities and queued alike. A squad moved to one point a marine at a time goes out as one move, and the game spreads it
+around the point as it would one order to them all:
+
+```python
+for marine in squad:
+    api.orders.issue(marine, AbilityId.MOVE, target=rally)  # one command naming every marine
+```
+
+An order joins the last such command before it unless one of its units is named in that command or a later one. So
+each unit's commands go out in the order it was given them, a queued one behind the unqueued one before it, and no
+command names a unit twice. An archon's merge joins no other order: each merges the two templar it names.
+
+The game answers each command once, and one naming several units `Success` if any of them can take it
+([game behavior](reference/game-behavior/abilities-and-orders.md#one-command-to-several-units)). So a refused command
+is listed in `api.action_failures` once for each unit of every order it carried, under that unit's order's ability,
+and an order whose units could not take it goes unlisted where another order's units in the same command could.
 
 ## What an order needs
 
