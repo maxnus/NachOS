@@ -68,7 +68,7 @@ jobs:
           fi
 
       - name: Test
-        run: uv run pytest
+        run: uv run pytest -n 4
 
       - name: Keep the build for the upload
         uses: actions/upload-artifact@v7

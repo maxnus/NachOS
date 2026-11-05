@@ -133,8 +133,8 @@ the corpus is recorded again. The game's data `sc2nachos.testing` ships is the f
 | Task | Command |
 |---|---|
 | Set up | `uv sync --extra dev` |
-| Run tests | `uv run pytest` |
-| Run the tests that start a game | `uv run pytest -m integration`, which takes minutes |
+| Run tests | `uv run pytest`, with `-n auto` for the whole suite, a worker a core |
+| Run the tests that start a game | `uv run pytest -m integration -n 8`, eight games at once; one at a time, it takes minutes |
 | Lint | `uv run ruff check .` and `uv run ruff format --check .` |
 | Type check | `uv run pyright`, with no path: a path makes it ignore `include` and walk the whole tree |
 

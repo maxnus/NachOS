@@ -34,6 +34,7 @@ Documentation = "https://maxnus.github.io/NachOS/"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-xdist>=3.8",
     "ruff>=0.8",
     "pyright>=1.1.390",
     "pdoc>=15",
