@@ -141,7 +141,7 @@ class Circle(Area):
 
     def _point_in_tile(self, tile: Tile) -> Point:
         """The tile's center where the circle holds it, or else the tile's point nearest the circle's center, moved
-        toward the tile's center as far as keeps it halfway from the circle's edge, and at most halfway."""
+        toward the tile's center by half its distance from the circle's edge, and at most halfway there."""
         tile_center = tile.center
         if tile_center in self:
             return tile_center

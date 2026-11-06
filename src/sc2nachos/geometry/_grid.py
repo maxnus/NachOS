@@ -474,9 +474,9 @@ class Grid[T: float]:
     def argmin(self, *, within: Area) -> Point: ...
 
     def argmin(self, *, within: Area | None = None) -> Tile | Point:
-        """The tile with the smallest value, the lowest address if several tie; or with `within`, a point of the area
-        inside the tile with the smallest value of those it overlaps, as `min` takes them, the lowest address if several
-        tie: the tile's center where the area holds it."""
+        """The tile with the smallest value, the lowest address if several tie. With `within`, a point of the area
+        inside the tile it overlaps with the smallest value, as `min` takes them, the lowest address if several tie:
+        that tile's center where the area holds it, or else another point of the area inside it."""
         if within is None:
             return self._tile_at(int(numpy.argmin(self._data)))
         return self._point_in_extreme_tile(within, largest=False)
