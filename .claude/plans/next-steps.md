@@ -257,12 +257,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 ## Next
 
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
-  1. The `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads `field[point]`,
+  1. Done: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads `field[point]`,
      `max(within=area)`, `min(within=area)` and `gradient_at(point)` (the owner: a value at a point, or the max or
-     min within an area, and gradients). A grid's max and min within an area take every tile the area touches, which
-     is exact for one value per tile, and its gradient is the central difference across the tile's neighbors, per map
-     unit. Proposed, to settle at the step: an area touching no tile of the grid raises `ValueError`; at the edge the
-     difference reads `outside`, or is one-sided where there is none; a boolean field has no gradient.
+     min within an area, and gradients). A grid's max and min within an area read every tile the area overlaps, a tile
+     it only touches at an edge or a corner left out, so a tile's own rectangle reads that tile alone; a tile beyond
+     the grid reads `outside`, and raises `IndexError` without one (the owner, over clipping to the grid, as
+     `grid[area]` does); an empty area raises `ValueError`. Its gradient is the central difference across the tile's
+     neighbors, per map unit; a neighbor beyond the grid reads `outside`, the difference one-sided where there is none
+     (the owner, over raising); a grid of booleans raises `TypeError` (the owner, over reading 0 and 1).
   2. `SourceField`: circles and rectangles (the owner, over circles alone and over any area), each with a value,
      summed where they overlap (the owner, over the largest), or-ed for booleans, and 0 or false beyond every shape.
      A circle holds its value out to `full_within` and falls linearly to 0 at its radius, so a constant circle, a

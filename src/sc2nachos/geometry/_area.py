@@ -64,6 +64,11 @@ class Area(ABC):
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
 
+    @abstractmethod
+    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
+        """Every tile whose inside the area overlaps, a tile it only touches at an edge or a corner left out, as a mask
+        indexed `[x, y]`, and first the tile at its `[0, 0]` entry. An empty area gives a mask with no true entry."""
+
     def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
         """The tiles `tiles` gives that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed
         `[x, y]`, and first the tile at its `[0, 0]` entry, as a grid has its `origin`: entry `[i, j]` is the tile `i`

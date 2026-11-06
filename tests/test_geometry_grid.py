@@ -8,7 +8,20 @@ import re
 import numpy
 import pytest
 
-from sc2nachos.geometry import Area, Circle, Footprint, Grid, Point, Point3D, Rectangle, Tile, TilePath, TileSet
+from sc2nachos.geometry import (
+    Area,
+    Circle,
+    Field,
+    Footprint,
+    Grid,
+    Point,
+    Point3D,
+    PointLike,
+    Rectangle,
+    Tile,
+    TilePath,
+    TileSet,
+)
 from test_geometry_footprint import DIAGONAL, SHAPES
 
 
@@ -656,6 +669,106 @@ class TestSummaries:
     def test_where_refuses_a_condition_that_is_not_a_grid(self) -> None:
         with pytest.raises(TypeError, match="expected a grid"):
             Grid.zeros(3, 3).where(numpy.ones((3, 3), dtype=bool), 0.0)  # pyright: ignore[reportArgumentType]
+
+
+class TestFieldReads:
+    """The largest and the smallest value within an area, which a grid answers as a `Field`."""
+
+    def test_a_grid_is_a_field_of_its_values(self) -> None:
+        def largest_near(field: Field[float], point: PointLike) -> float:
+            return field.max(within=Circle(point, 1.0))
+
+        # The circle overlaps the nine tiles around Tile(8, 9), from (7, 8), 3 * 8 + 2, to (9, 10), 5 * 8 + 4.
+        assert largest_near(playable_grid(), (8.5, 9.5)) == 44.0
+        assert playable_grid().min(within=Circle((8.5, 9.5), 1.0)) == 26.0
+        mask: Field[float] = Grid.zeros(3, 3, dtype=bool)
+        assert mask.max(within=Tile(1, 1)) is False
+
+    def test_an_area_reads_every_tile_it_overlaps_though_it_holds_none_of_their_centers(self) -> None:
+        """A bile's circle at a corner holds no tile's center, so `grid[area]` reads nothing there."""
+        grid = Grid.zeros(6, 6)
+        for value, tile in enumerate((Tile(2, 2), Tile(3, 2), Tile(2, 3), Tile(3, 3)), start=1):
+            grid[tile] = value
+        bile = Circle((3.0, 3.0), 0.5)
+        assert len(grid[bile]) == 0
+        assert (grid.min(within=bile), grid.max(within=bile)) == (1.0, 4.0)
+
+    @pytest.mark.parametrize("area", [Tile(2, 2), Rectangle(2, 2, 1, 1), Circle((2.5, 2.5), 0.5)], ids=repr)
+    def test_a_tile_touched_only_at_an_edge_or_a_corner_is_left_out(self, area: Area) -> None:
+        grid = Grid.zeros(5, 5) + 9.0
+        grid[Tile(2, 2)] = 1.0
+        assert grid.max(within=area) == 1.0
+
+    def test_a_tile_set_reads_its_tiles(self) -> None:
+        grid = playable_grid()
+        tiles = TileSet([Tile(4, 7), Tile(10, 12)])
+        assert (grid.min(within=tiles), grid.max(within=tiles)) == (1.0, 54.0)
+
+    def test_tiles_beyond_the_grid_read_outside(self) -> None:
+        grid = Grid.zeros(4, 4, outside=-1.0)
+        reaching_past = Circle((0.0, 2.0), 1.0)
+        assert (grid.min(within=reaching_past), grid.max(within=reaching_past)) == (-1.0, 0.0)
+        assert grid.max(within=Circle((20.0, 20.0), 1.0)) == -1.0
+
+    def test_tiles_beyond_the_grid_raise_without_outside(self) -> None:
+        with pytest.raises(IndexError, match="reaches past"):
+            Grid.zeros(4, 4).max(within=Circle((0.0, 2.0), 1.0))
+
+    @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1, 1, 0, 2)], ids=repr)
+    def test_an_empty_area_raises(self, area: Area) -> None:
+        with pytest.raises(ValueError, match="empty"):
+            Grid.zeros(4, 4, outside=0.0).min(within=area)
+
+    def test_the_answer_is_a_python_scalar(self) -> None:
+        assert type(playable_grid().max(within=Tile(5, 7))) is float
+        assert type(Grid.zeros(3, 3, dtype=bool).min(within=Tile(1, 1))) is bool
+
+
+def _rising_grid() -> Grid[float]:
+    """A grid whose values rise by 2 a tile east and fall by 1 a tile north: `2 * x - y` at Tile(x, y)."""
+    xs = numpy.arange(3, 9)[:, None]
+    ys = numpy.arange(4, 9)[None, :]
+    return Grid((2 * xs - ys).astype(float), origin=Tile(3, 4))
+
+
+class TestGradient:
+    def test_the_gradient_is_the_rise_per_map_unit(self) -> None:
+        gradient = _rising_grid().gradient_at((5.2, 6.7))
+        assert type(gradient) is Point
+        assert gradient == Point((2.0, -1.0))
+
+    def test_every_point_of_a_tile_shares_its_gradient(self) -> None:
+        grid = Grid(numpy.array([[0.0, 1.0, 5.0], [2.0, 3.0, 7.0], [9.0, 4.0, 6.0]]))
+        assert grid.gradient_at((1.01, 1.01)) == grid.gradient_at((1.99, 1.5)) == Point(((4.0 - 1.0) / 2, (7 - 2) / 2))
+
+    def test_at_the_edge_without_outside_the_difference_is_one_sided(self) -> None:
+        grid = Grid(numpy.array([[0.0], [1.0], [4.0]]))
+        assert [grid.gradient_at((x + 0.5, 0.5)) for x in range(3)] == [
+            Point((1.0, 0.0)),
+            Point((2.0, 0.0)),
+            Point((3.0, 0.0)),
+        ]
+        assert _rising_grid().gradient_at((3.5, 4.5)) == Point((2.0, -1.0))
+
+    def test_at_the_edge_a_neighbor_beyond_reads_outside(self) -> None:
+        grid = Grid(numpy.array([[5.0], [1.0], [4.0]]), outside=0.0)
+        assert grid.gradient_at((0.5, 0.5)) == Point((0.5, 0.0))
+        assert grid.gradient_at((2.5, 0.5)) == Point((-0.5, 0.0))
+        assert grid.gradient_at((-0.5, 0.5)) == Point((2.5, 0.0))
+
+    def test_a_point_beyond_the_grid_raises_without_outside(self) -> None:
+        with pytest.raises(IndexError):
+            _rising_grid().gradient_at((0.5, 0.5))
+
+    def test_an_integer_grid_has_one(self) -> None:
+        grid = Grid(numpy.array([[0], [1], [3]]))
+        gradient = grid.gradient_at((1.5, 0.5))
+        assert gradient == Point((1.5, 0.0))
+        assert all(type(component) is float for component in gradient)
+
+    def test_a_grid_of_booleans_has_none(self) -> None:
+        with pytest.raises(TypeError, match="booleans"):
+            Grid.zeros(3, 3, dtype=bool).gradient_at((1.5, 1.5))
 
 
 class TestReadOnly:

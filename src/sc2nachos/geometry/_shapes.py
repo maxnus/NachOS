@@ -125,6 +125,10 @@ class Tile(Area):
         """A set of this tile alone."""
         return TileSet._from_addresses([(self.x, self.y)])
 
+    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
+        """The tile alone."""
+        return self, numpy.ones((1, 1), dtype=bool)
+
     def __repr__(self) -> str:
         return f"Tile({self.x}, {self.y})"
 
@@ -331,6 +335,16 @@ class Rectangle(Area):
         x_range, y_range = self.tile_range()
         return TileSet._from_addresses((x, y) for x in x_range for y in y_range)
 
+    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
+        """Every tile whose inside the rectangle overlaps."""
+        first_x = math.floor(self.x)
+        first_y = math.floor(self.y)
+        if self._is_empty:
+            return Tile(first_x, first_y), numpy.zeros((0, 0), dtype=bool)
+        columns = math.ceil(self.right) - first_x
+        rows = math.ceil(self.top) - first_y
+        return Tile(first_x, first_y), numpy.ones((columns, rows), dtype=bool)
+
 
 def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[Tile, ndarray]:
     """The tiles at `xs` and `ys` as a mask indexed `[x, y]` over their bounding rectangle, and first the tile at its
@@ -463,6 +477,10 @@ class TileSet(Area):
         right, top = left + int(within.width), bottom + int(within.height)
         kept = (xs >= left) & (xs < right) & (ys >= bottom) & (ys < top)
         return _mask_of_addresses(xs[kept], ys[kept])
+
+    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
+        """The covered tiles."""
+        return self._mask_over_bounds
 
     def _lies_within(self, within: Rectangle) -> bool:
         """Whether every covered tile lies within `within`, a rectangle on whole tiles. The set is not empty."""

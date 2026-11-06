@@ -742,6 +742,40 @@ class TestAreaAgreement:
         masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
         assert masked == {tile for tile in area.tiles() if tile.center in within}
 
+    @pytest.mark.parametrize(
+        "area",
+        [
+            *EVERY_SHAPE,
+            Circle((3.0, 3.0), 0.5),  # holds no tile's center, yet overlaps four tiles
+            Circle((3.0, 3.0), 1.0),  # touches four more tiles at the middle of an edge
+            Circle((5.0, 5.0), 5.0),  # touches tiles such as Tile(8, 9) at a corner alone
+            Rectangle(2, 2, 1, 1),  # a tile's own square, touching its eight neighbors
+            Rectangle(1.5, 2, 2, 0.5),
+        ],
+        ids=lambda area: repr(area),
+    )
+    def test_every_shapes_overlapped_tiles_are_those_holding_a_point_of_its_inside(self, area: Area) -> None:
+        """A grid's `max` and `min` within an area read these tiles, so a tile the shape touches only at an edge or a
+        corner is left out, and a tile holding no center of it kept. Checked against a lattice of points 0.02 apart
+        inside each tile."""
+        origin, overlapped = area._overlapped_tile_mask()
+        xs, ys = numpy.nonzero(overlapped)
+        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+        bounds = area.bounding_rectangle()
+        offsets = numpy.arange(0.01, 1, 0.02).tolist()
+        holding = {
+            Tile(x, y)
+            for x in range(math.floor(bounds.left) - 1, math.ceil(bounds.right) + 1)
+            for y in range(math.floor(bounds.bottom) - 1, math.ceil(bounds.top) + 1)
+            if any((x + dx, y + dy) in area for dx in offsets for dy in offsets)
+        }
+        assert masked == holding
+
+    @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1, 1, 0, 2), Rectangle(1.5, 1, 3, 0)], ids=repr)
+    def test_an_empty_shape_overlaps_no_tile(self, area: Area) -> None:
+        _, overlapped = area._overlapped_tile_mask()
+        assert not overlapped.any()
+
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
         """`tile in rectangle` and `tile in circle` raised, while `tile in tile_set` answered."""

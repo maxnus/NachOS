@@ -13,6 +13,7 @@ import semita
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
+from sc2nachos.geometry._point import Point
 from sc2nachos.geometry._shapes import Rectangle, Tile
 from sc2nachos.geometry._tile_path import TilePath
 
@@ -447,13 +448,59 @@ class Grid[T: float]:
 
     # --- Summaries
 
-    def min(self) -> T:
-        """The smallest value."""
-        return self._data.min().item()
+    def min(self, *, within: Area | None = None) -> T:
+        """The smallest value, or with `within`, the smallest of every tile the area overlaps, a tile it only touches at
+        an edge or a corner left out. A tile beyond the grid reads `outside`, and raises `IndexError` if that is
+        `None`. Raises `ValueError` for an empty area."""
+        if within is None:
+            return self._data.min().item()
+        return self._values_overlapped_by(within).min().item()
 
-    def max(self) -> T:
-        """The largest value."""
-        return self._data.max().item()
+    def max(self, *, within: Area | None = None) -> T:
+        """The largest value, or with `within`, the largest of every tile the area overlaps, as `min` takes them."""
+        if within is None:
+            return self._data.max().item()
+        return self._values_overlapped_by(within).max().item()
+
+    def _values_overlapped_by(self, area: Area) -> ndarray:
+        """The values of every tile `area` overlaps, with `outside` among them where it reaches beyond the grid. Raises
+        `IndexError` there if `outside` is `None`, and `ValueError` for an empty area."""
+        origin, overlapped = area._overlapped_tile_mask()
+        grid_slices, mask_slices = self._slices_for_mask(origin.x, origin.y, overlapped.shape)
+        values = self._data[grid_slices][overlapped[mask_slices]]
+        if len(values) < numpy.count_nonzero(overlapped):
+            if self._outside is None:
+                raise IndexError(f"{area!r} reaches past {self.bounds!r}")
+            return numpy.append(values, self._outside)
+        if not len(values):
+            raise ValueError(f"{area!r} is empty, so it has no smallest or largest value")
+        return values
+
+    def gradient_at(self, point: PointLike) -> Point:
+        """How fast the values rise at `point`, per map unit, pointing the way they rise fastest: along each axis, the
+        difference between the neighbors on either side of the tile holding it, over the two units between them. A
+        neighbor beyond the grid reads `outside`; where that is `None`, the difference is taken on the side the grid
+        holds, over one unit, and is 0 along an axis the grid is one tile across. Raises `IndexError` for a point
+        beyond the grid when `outside` is `None`, and `TypeError` for a grid of booleans."""
+        if self._data.dtype == bool:
+            raise TypeError(f"{self!r} holds booleans, which have no gradient")
+        value_here = self._value_at(point)
+        tile_x, tile_y = Tile._address_at(point)
+        slope_x = _slope_across(
+            self._value_or_outside_at(tile_x - 1, tile_y), value_here, self._value_or_outside_at(tile_x + 1, tile_y)
+        )
+        slope_y = _slope_across(
+            self._value_or_outside_at(tile_x, tile_y - 1), value_here, self._value_or_outside_at(tile_x, tile_y + 1)
+        )
+        return Point((slope_x, slope_y))
+
+    def _value_or_outside_at(self, tile_x: int, tile_y: int) -> T | None:
+        """The value of the tile at `tile_x` and `tile_y`, or `outside` beyond the grid, which may be `None`."""
+        x = tile_x - self._origin.x
+        y = tile_y - self._origin.y
+        if 0 <= x < self._data.shape[0] and 0 <= y < self._data.shape[1]:
+            return self._data.item(x, y)
+        return self._outside
 
     @overload
     def sum(self: Grid[bool]) -> int: ...
@@ -618,6 +665,18 @@ class CheapestPaths:
         """
         found = self._found.path_to(self.costs.index_of(end))
         return None if found is None else _semita_path_to_tile_path(found, self.costs.origin)
+
+
+def _slope_across(value_before: float | None, value_here: float, value_after: float | None) -> float:
+    """The slope from `value_before` to `value_after`, two units apart, with `value_here` between them; from or to
+    `value_here`, one unit away, where one of them is `None`, and 0 where both are."""
+    if value_before is not None and value_after is not None:
+        return (value_after - value_before) / 2
+    if value_after is not None:
+        return float(value_after - value_here)
+    if value_before is not None:
+        return float(value_here - value_before)
+    return 0.0
 
 
 def _semita_path_to_tile_path(found: semita.Path, origin: Tile) -> TilePath:

@@ -120,6 +120,26 @@ class Circle(Area):
         tiles_in_circle = offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
         return Tile(first_x, first_y), tiles_in_circle
 
+    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
+        """Every tile whose inside the circle overlaps: those whose nearest point lies nearer the center than the
+        radius."""
+        center_x, center_y = self._center[0], self._center[1]
+        radius = self._radius
+        first_x = math.floor(center_x - radius)
+        first_y = math.floor(center_y - radius)
+        columns = math.ceil(center_x + radius) - first_x
+        overlapped = numpy.zeros((columns, math.ceil(center_y + radius) - first_y), dtype=bool)
+        # Column by column, a run of rows: up to a radius of about 10, faster than numpy over the whole box.
+        for column in range(columns):
+            left = first_x + column
+            gap_x = max(left - center_x, center_x - left - 1, 0.0)
+            reach_squared = radius * radius - gap_x * gap_x
+            if reach_squared > 0:
+                reach = math.sqrt(reach_squared)
+                lowest_row = math.floor(center_y - reach) - first_y
+                overlapped[column, lowest_row : math.ceil(center_y + reach) - first_y] = True
+        return Tile(first_x, first_y), overlapped
+
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
         """The points where the two boundaries cross: two, one where the circles touch, none otherwise.
 
