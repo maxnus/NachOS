@@ -10,22 +10,30 @@ if TYPE_CHECKING:
 
 
 class Field[T: float](Protocol):
-    """A value at every position on the map, such as a threat or a mask: read at a point, as the largest or the
-    smallest over an area, or as its slope. `Grid` holds one value per tile.
+    """A value at every position on the map, such as a threat or a mask: read at a point, as the smallest or the
+    largest over an area and where it lies, or as its slope. `Grid` holds one value per tile.
 
-    A point or an area the field does not cover raises `IndexError`.
+    A point or an area the field does not cover raises `IndexError`, and an empty area `ValueError`.
     """
 
-    def __getitem__(self, point: PointLike, /) -> T:
+    def value_at(self, point: PointLike) -> T:
         """The value at `point`."""
         ...
 
-    def max(self, *, within: Area) -> T:
-        """The largest value anywhere in `within`. Raises `ValueError` for an empty area."""
+    def min(self, *, within: Area) -> T:
+        """The smallest value anywhere in `within`."""
         ...
 
-    def min(self, *, within: Area) -> T:
-        """The smallest value anywhere in `within`. Raises `ValueError` for an empty area."""
+    def max(self, *, within: Area) -> T:
+        """The largest value anywhere in `within`."""
+        ...
+
+    def argmin(self, *, within: Area) -> Point:
+        """A point of `within` where the value is smallest."""
+        ...
+
+    def argmax(self, *, within: Area) -> Point:
+        """A point of `within` where the value is largest."""
         ...
 
     def gradient_at(self, point: PointLike) -> Point:

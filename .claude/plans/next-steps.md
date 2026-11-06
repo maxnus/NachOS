@@ -257,14 +257,20 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 ## Next
 
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
-  1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads `field[point]`,
-     `max(within=area)`, `min(within=area)` and `gradient_at(point)` (the owner: a value at a point, or the max or
-     min within an area, and gradients). A grid's max and min within an area read every tile the area overlaps, a tile
-     it only touches at an edge or a corner left out, so a tile's own rectangle reads that tile alone; a tile beyond
-     the grid reads `outside`, and raises `IndexError` without one (the owner, over clipping to the grid, as
-     `grid[area]` does); an empty area raises `ValueError`. Its gradient is the central difference across the tile's
-     neighbors, per map unit; a neighbor beyond the grid reads `outside`, the difference one-sided where there is none
-     (the owner, over raising); a grid of booleans raises `TypeError` (the owner, over reading 0 and 1).
+  1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
+     `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
+     owner: a value at a point, or the max or min within an area, and gradients; `value_at` over `__getitem__`, and
+     `argmin` and `argmax` in #238 over later, review of #238). `grid[point]` stays beside `grid.value_at(point)`. A
+     grid's max and min within an area read every tile the area overlaps, a tile it only touches at an edge or a corner
+     left out, so a tile's own rectangle reads that tile alone; a tile beyond the grid reads `outside`, and raises
+     `IndexError` without one (the owner, over clipping to the grid, as `grid[area]` does); an empty area raises
+     `ValueError`. `argmin` and `argmax` within an area answer a point of the area inside the extreme tile, the tile's
+     center where the area holds it, the lowest address on a tie; without one they still answer a `Tile`. Its gradient
+     is the central difference across the tile's neighbors, per map unit; a neighbor beyond the grid reads `outside`,
+     the difference one-sided where there is none (the owner, over raising); a grid of booleans raises `TypeError` (the
+     owner, over reading 0 and 1), at run time only: a self type ruling booleans out would make a boolean grid no
+     `Field` at all, or need a second protocol for the gradient (the owner, review of #238, over both and over a
+     deprecated overload).
   2. `SourceField`: circles and rectangles (the owner, over circles alone and over any area), each with a value,
      summed where they overlap (the owner, over the largest), or-ed for booleans, and 0 or false beyond every shape.
      A circle holds its value out to `full_within` and falls linearly to 0 at its radius, so a constant circle, a
@@ -277,8 +283,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   3. AvocaDOS takes them after a release: its effect threat and splash zone as `SourceField`s, a unit reading the max
      within its own circle.
 
-  Later, when a bot needs it: a `SourceField` drawn onto a `Grid`, for paths and grid arithmetic; where in an area the
-  max or min lies; and `values_at`, many points in one numpy pass. For 100 points and 10 circles that was 52 µs against
+  Later, when a bot needs it: a `SourceField` drawn onto a `Grid`, for paths and grid arithmetic; and `values_at`,
+  many points in one numpy pass. For 100 points and 10 circles that was 52 µs against
   423 µs for a Python loop, but on a grid it is no faster than looping `grid[point]` unless the points already are an
   array: 44 µs looped, 10 µs from an array (2026-11-06).
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222

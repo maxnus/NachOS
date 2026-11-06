@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.geometry._footprint import Footprint, Margin
     from sc2nachos.geometry._point import PointLike
+    from sc2nachos.geometry._tile_mask import TileMask
 
 _ORIGIN = Tile(0, 0)
 
@@ -152,8 +153,9 @@ class Grid[T: float]:
         """
         return Grid(self._data, origin=self._origin, outside=value, readonly=self._readonly)
 
-    def _value_at(self, point: PointLike | Tile) -> T:
-        """The value at `point`, or `outside` for a point the grid does not cover."""
+    def value_at(self, point: PointLike | Tile) -> T:
+        """The value at `point`, a tile reading as itself, or `outside` beyond the grid, which raises `IndexError` if
+        that is `None`."""
         if (index := self._index_if_covered(point)) is not None:
             return self._data.item(index)
         if self._outside is None:
@@ -186,7 +188,7 @@ class Grid[T: float]:
         # Points first, checked as tuples, then a tile, which addresses a single tile like any point. A miss here is
         # cheap; a miss against an `Area` subclass is not.
         if isinstance(key, tuple) or type(key) is Tile:
-            return self._value_at(key)
+            return self.value_at(key)
         if isinstance(key, Rectangle):
             view = self._data[self._slices(key)]
             if self._readonly:
@@ -197,7 +199,7 @@ class Grid[T: float]:
             return self._data[grid_slices][area_mask_on_grid]
         if isinstance(key, Grid):
             return self._data[self._mask(key)]
-        return self._value_at(key)
+        return self.value_at(key)
 
     def __setitem__(self, key: PointLike | Area | Grid[bool], value: T | ndarray) -> None:
         """Writes a value at a point, over an area, or over the tiles a mask selects."""
@@ -261,9 +263,13 @@ class Grid[T: float]:
     def _slices_and_mask_for_area(self, area: Area) -> tuple[tuple[slice, slice], ndarray]:
         """The slices of the grid's values over the tiles `area` covers, clipped to the grid, and the mask of those
         tiles over the same slices."""
-        origin, area_mask = area._tile_mask(self.bounds)
-        grid_slices, mask_slices = self._slices_for_mask(origin.x, origin.y, area_mask.shape)
-        return grid_slices, area_mask[mask_slices]
+        area_tiles = area._tile_mask(self.bounds)
+        grid_slices, mask_slices = self._slices_for_tile_mask(area_tiles)
+        return grid_slices, area_tiles.mask[mask_slices]
+
+    def _slices_for_tile_mask(self, tiles: TileMask) -> tuple[tuple[slice, slice], tuple[slice, slice]]:
+        """The slices that line `tiles` up with the grid, as `_slices_for_mask` gives them."""
+        return self._slices_for_mask(tiles.origin.x, tiles.origin.y, tiles.mask.shape)
 
     def _slices_for_mask(
         self, left: int, bottom: int, shape: tuple[int, ...]
@@ -454,27 +460,75 @@ class Grid[T: float]:
         `None`. Raises `ValueError` for an empty area."""
         if within is None:
             return self._data.min().item()
-        return self._values_overlapped_by(within).min().item()
+        return self._values_of_tiles_held(within._overlapped_tile_mask(), within).min().item()
 
     def max(self, *, within: Area | None = None) -> T:
         """The largest value, or with `within`, the largest of every tile the area overlaps, as `min` takes them."""
         if within is None:
             return self._data.max().item()
-        return self._values_overlapped_by(within).max().item()
+        return self._values_of_tiles_held(within._overlapped_tile_mask(), within).max().item()
 
-    def _values_overlapped_by(self, area: Area) -> ndarray:
-        """The values of every tile `area` overlaps, with `outside` among them where it reaches beyond the grid. Raises
-        `IndexError` there if `outside` is `None`, and `ValueError` for an empty area."""
-        origin, overlapped = area._overlapped_tile_mask()
-        grid_slices, mask_slices = self._slices_for_mask(origin.x, origin.y, overlapped.shape)
-        values = self._data[grid_slices][overlapped[mask_slices]]
-        if len(values) < numpy.count_nonzero(overlapped):
-            if self._outside is None:
-                raise IndexError(f"{area!r} reaches past {self.bounds!r}")
-            return numpy.append(values, self._outside)
+    @overload
+    def argmin(self) -> Tile: ...
+    @overload
+    def argmin(self, *, within: Area) -> Point: ...
+
+    def argmin(self, *, within: Area | None = None) -> Tile | Point:
+        """The tile with the smallest value, the lowest address if several tie; or with `within`, a point of the area
+        inside the tile with the smallest value of those it overlaps, as `min` takes them, the lowest address if several
+        tie: the tile's center where the area holds it."""
+        if within is None:
+            return self._tile_at(int(numpy.argmin(self._data)))
+        return self._point_in_extreme_tile(within, largest=False)
+
+    @overload
+    def argmax(self) -> Tile: ...
+    @overload
+    def argmax(self, *, within: Area) -> Point: ...
+
+    def argmax(self, *, within: Area | None = None) -> Tile | Point:
+        """The tile with the largest value, the lowest address if several tie; or with `within`, a point of the area
+        inside the tile with the largest value of those it overlaps, as `argmin` picks one."""
+        if within is None:
+            return self._tile_at(int(numpy.argmax(self._data)))
+        return self._point_in_extreme_tile(within, largest=True)
+
+    def _point_in_extreme_tile(self, area: Area, *, largest: bool) -> Point:
+        """A point of `area` inside the tile it overlaps with the largest value, or the smallest, the lowest address if
+        several tie."""
+        overlapped = area._overlapped_tile_mask()
+        values = self._values_of_tiles_held(overlapped, area)
+        picked = numpy.argmax(values) if largest else numpy.argmin(values)
+        x, y = numpy.unravel_index(int(numpy.flatnonzero(overlapped.mask)[picked]), overlapped.mask.shape)
+        return area._point_in_tile(overlapped.origin.shifted(int(x), int(y)))
+
+    def _values_of_tiles_held(self, tiles: TileMask, area: Area) -> ndarray:
+        """The values of the tiles `tiles` holds, by ascending x, then y, `outside` for one beyond the grid. Raises
+        `IndexError` for one beyond the grid if `outside` is `None`, and `ValueError` if it holds none, naming `area`,
+        whose tiles they are."""
+        grid_slices, mask_slices = self._slices_for_tile_mask(tiles)
+        under_mask = self._data[grid_slices]
+        if under_mask.shape != tiles.mask.shape:
+            under_mask = self._padded_with_outside(under_mask, tiles.mask, mask_slices, area)
+        values = under_mask[tiles.mask]
         if not len(values):
             raise ValueError(f"{area!r} is empty, so it has no smallest or largest value")
         return values
+
+    def _padded_with_outside(
+        self, on_grid: ndarray, mask: ndarray, mask_slices: tuple[slice, slice], area: Area
+    ) -> ndarray:
+        """`on_grid`, the values under the part of `mask` on the grid, laid out over the whole of `mask`, `outside`
+        beyond the grid. Raises `IndexError` where `mask` holds a tile beyond the grid and `outside` is `None`."""
+        if self._outside is None:
+            if numpy.count_nonzero(mask[mask_slices]) < numpy.count_nonzero(mask):
+                raise IndexError(f"{area!r} reaches past {self.bounds!r}")
+            # Beyond the grid, the mask holds no tile, so these zeros are never read.
+            padded = numpy.zeros(mask.shape, dtype=self._data.dtype)
+        else:
+            padded = numpy.full(mask.shape, self._outside, dtype=self._data.dtype)
+        padded[mask_slices] = on_grid
+        return padded
 
     def gradient_at(self, point: PointLike) -> Point:
         """How fast the values rise at `point`, per map unit, pointing the way they rise fastest: along each axis, the
@@ -484,12 +538,12 @@ class Grid[T: float]:
         beyond the grid when `outside` is `None`, and `TypeError` for a grid of booleans."""
         if self._data.dtype == bool:
             raise TypeError(f"{self!r} holds booleans, which have no gradient")
-        value_here = self._value_at(point)
+        value_here = self.value_at(point)
         tile_x, tile_y = Tile._address_at(point)
-        slope_x = _slope_across(
+        slope_x = _finite_difference(
             self._value_or_outside_at(tile_x - 1, tile_y), value_here, self._value_or_outside_at(tile_x + 1, tile_y)
         )
-        slope_y = _slope_across(
+        slope_y = _finite_difference(
             self._value_or_outside_at(tile_x, tile_y - 1), value_here, self._value_or_outside_at(tile_x, tile_y + 1)
         )
         return Point((slope_x, slope_y))
@@ -510,14 +564,6 @@ class Grid[T: float]:
     def sum(self) -> T | int:
         """The total over every tile; for a boolean grid, the number of true ones."""
         return self._data.sum().item()
-
-    def argmin(self) -> Tile:
-        """The tile with the smallest value; the lowest address if several tie."""
-        return self._tile_at(int(numpy.argmin(self._data)))
-
-    def argmax(self) -> Tile:
-        """The tile with the largest value; the lowest address if several tie."""
-        return self._tile_at(int(numpy.argmax(self._data)))
 
     def _tile_at(self, flat_index: int) -> Tile:
         """The tile addressed by a flat index into the grid."""
@@ -667,9 +713,9 @@ class CheapestPaths:
         return None if found is None else _semita_path_to_tile_path(found, self.costs.origin)
 
 
-def _slope_across(value_before: float | None, value_here: float, value_after: float | None) -> float:
-    """The slope from `value_before` to `value_after`, two units apart, with `value_here` between them; from or to
-    `value_here`, one unit away, where one of them is `None`, and 0 where both are."""
+def _finite_difference(value_before: float | None, value_here: float, value_after: float | None) -> float:
+    """The slope across `value_here` by finite differences: from `value_before` to `value_after`, two units apart,
+    or from or to `value_here`, one unit away, where one of them is `None`, and 0 where both are."""
     if value_before is not None and value_after is not None:
         return (value_after - value_before) / 2
     if value_after is not None:

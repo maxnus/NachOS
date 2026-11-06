@@ -11,10 +11,9 @@ import numpy
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._point import Point, checked_ground_offset
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_tile_center
+from sc2nachos.geometry._tile_mask import TileMask
 
 if TYPE_CHECKING:
-    from numpy import ndarray
-
     from sc2nachos.geometry._point import PointLike
 
 
@@ -98,12 +97,12 @@ class Circle(Area):
 
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the circle."""
-        origin, tiles_in_circle = self._tile_mask()
-        return TileSet._from_mask(origin, tiles_in_circle)
+        tiles_in_circle = self._tile_mask()
+        return TileSet._from_mask(tiles_in_circle.origin, tiles_in_circle.mask)
 
-    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
-        """The tiles whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is given,
-        as a mask indexed `[x, y]`, and first the tile at its `[0, 0]` entry."""
+    def _tile_mask(self, within: Rectangle | None = None) -> TileMask:
+        """The tiles whose center lies in the circle and that lie `within` a rectangle on whole tiles, if one is
+        given."""
         # Derived from the circle, not from its bounding rectangle: that rectangle is half-open, so it would
         # drop a tile center sitting exactly on the circle's rightmost or topmost point.
         center_x, center_y = self._center[0], self._center[1]
@@ -118,9 +117,9 @@ class Circle(Area):
         offsets_x = numpy.arange(first_x, last_x + 1) + 0.5 - center_x
         offsets_y = numpy.arange(first_y, last_y + 1) + 0.5 - center_y
         tiles_in_circle = offsets_x[:, None] ** 2 + offsets_y[None, :] ** 2 <= self._radius**2
-        return Tile(first_x, first_y), tiles_in_circle
+        return TileMask(Tile(first_x, first_y), tiles_in_circle)
 
-    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
+    def _overlapped_tile_mask(self) -> TileMask:
         """Every tile whose inside the circle overlaps: those whose nearest point lies nearer the center than the
         radius."""
         center_x, center_y = self._center[0], self._center[1]
@@ -138,7 +137,24 @@ class Circle(Area):
                 reach = math.sqrt(reach_squared)
                 lowest_row = math.floor(center_y - reach) - first_y
                 overlapped[column, lowest_row : math.ceil(center_y + reach) - first_y] = True
-        return Tile(first_x, first_y), overlapped
+        return TileMask(Tile(first_x, first_y), overlapped)
+
+    def _point_in_tile(self, tile: Tile) -> Point:
+        """The tile's center where the circle holds it, or else the tile's point nearest the circle's center, moved
+        toward the tile's center as far as keeps it halfway from the circle's edge, and at most halfway."""
+        tile_center = tile.center
+        if tile_center in self:
+            return tile_center
+        nearest = Point(
+            (
+                min(max(self._center[0], tile.x), tile.x + 1),
+                min(max(self._center[1], tile.y), tile.y + 1),
+            )
+        )
+        toward_tile_center = tile_center - nearest
+        room_inside = self._radius - nearest.distance_to(self._center)
+        share = min(0.5, room_inside / (2 * toward_tile_center.length))
+        return nearest + toward_tile_center * share
 
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
         """The points where the two boundaries cross: two, one where the circles touch, none otherwise.

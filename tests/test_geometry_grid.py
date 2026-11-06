@@ -672,17 +672,26 @@ class TestSummaries:
 
 
 class TestFieldReads:
-    """The largest and the smallest value within an area, which a grid answers as a `Field`."""
+    """A grid read as a `Field`: the value at a point, and the smallest and the largest within an area, and where."""
 
     def test_a_grid_is_a_field_of_its_values(self) -> None:
-        def largest_near(field: Field[float], point: PointLike) -> float:
-            return field.max(within=Circle(point, 1.0))
+        def largest_near(field: Field[float], point: PointLike) -> tuple[float, Point]:
+            return field.max(within=Circle(point, 1.0)), field.argmax(within=Circle(point, 1.0))
 
         # The circle overlaps the nine tiles around Tile(8, 9), from (7, 8), 3 * 8 + 2, to (9, 10), 5 * 8 + 4.
-        assert largest_near(playable_grid(), (8.5, 9.5)) == 44.0
+        largest, where = largest_near(playable_grid(), (8.5, 9.5))
+        assert (largest, Tile.at(where)) == (44.0, Tile(9, 10))
         assert playable_grid().min(within=Circle((8.5, 9.5), 1.0)) == 26.0
         mask: Field[float] = Grid.zeros(3, 3, dtype=bool)
         assert mask.max(within=Tile(1, 1)) is False
+        assert mask.value_at((1.5, 1.5)) is False
+
+    def test_value_at_reads_as_indexing_a_point_does(self) -> None:
+        grid = playable_grid()
+        assert grid.value_at((8.7, 9.2)) == grid[(8.7, 9.2)] == grid.value_at(Tile(8, 9)) == 4 * 8 + 3
+        assert Grid.zeros(2, 2, outside=-1.0).value_at((5.0, 5.0)) == -1.0
+        with pytest.raises(IndexError):
+            Grid.zeros(2, 2).value_at((5.0, 5.0))
 
     def test_an_area_reads_every_tile_it_overlaps_though_it_holds_none_of_their_centers(self) -> None:
         """A bile's circle at a corner holds no tile's center, so `grid[area]` reads nothing there."""
@@ -722,6 +731,59 @@ class TestFieldReads:
     def test_the_answer_is_a_python_scalar(self) -> None:
         assert type(playable_grid().max(within=Tile(5, 7))) is float
         assert type(Grid.zeros(3, 3, dtype=bool).min(within=Tile(1, 1))) is bool
+
+    @pytest.mark.parametrize(
+        "area",
+        [
+            Circle((8.5, 9.5), 1.0),
+            Circle((9.0, 11.0), 0.5),  # holds no tile's center
+            Circle((9.3, 10.6), 2.7),
+            Rectangle(5, 7, 3, 2),
+            Rectangle(6.2, 8.9, 0.3, 2.4),
+            Tile(7, 11),
+            TileSet([Tile(5, 7), Tile(12, 10), Tile(9, 13)]),
+        ],
+        ids=repr,
+    )
+    def test_argmin_and_argmax_answer_a_point_of_the_area_reading_the_extreme(self, area: Area) -> None:
+        values = numpy.random.default_rng(3).random((10, 8))
+        grid = Grid(values, origin=Tile(4, 6))
+        for where, extreme in (
+            (grid.argmin(within=area), grid.min(within=area)),
+            (grid.argmax(within=area), grid.max(within=area)),
+        ):
+            assert type(where) is Point
+            assert where in area
+            assert grid.value_at(where) == extreme
+
+    def test_argmin_and_argmax_answer_the_tile_center_where_the_area_holds_it(self) -> None:
+        grid = playable_grid()
+        assert grid.argmax(within=Rectangle(5, 7, 3, 2)) == Point((7.5, 8.5))
+        assert grid.argmin(within=Circle((8.5, 9.5), 0.4)) == Point((8.5, 9.5))
+
+    def test_argmin_inside_a_tile_whose_center_lies_outside(self) -> None:
+        grid = Grid.zeros(6, 6)
+        for value, tile in enumerate((Tile(2, 2), Tile(3, 2), Tile(2, 3), Tile(3, 3)), start=1):
+            grid[tile] = value
+        bile = Circle((3.0, 3.0), 0.5)
+        lowest = grid.argmin(within=bile)
+        assert lowest in bile and Tile.at(lowest) == Tile(2, 2)
+        assert Tile.at(grid.argmax(within=bile)) == Tile(3, 3)
+
+    def test_argmin_and_argmax_pick_the_lowest_address_on_a_tie(self) -> None:
+        grid = Grid.zeros(4, 4)
+        assert (
+            grid.argmin(within=Rectangle(1, 1, 2, 2)) == grid.argmax(within=Rectangle(1, 1, 2, 2)) == Point((1.5, 1.5))
+        )
+
+    def test_argmin_reaches_a_tile_beyond_the_grid_reading_outside(self) -> None:
+        reaching_past = Circle((0.0, 2.0), 1.0)
+        lowest = Grid.zeros(4, 4, outside=-1.0).argmin(within=reaching_past)
+        assert lowest in reaching_past and Tile.at(lowest) == Tile(-1, 1)
+        with pytest.raises(IndexError, match="reaches past"):
+            Grid.zeros(4, 4).argmax(within=reaching_past)
+        with pytest.raises(ValueError, match="empty"):
+            Grid.zeros(4, 4).argmin(within=TileSet([]))
 
 
 def _rising_grid() -> Grid[float]:

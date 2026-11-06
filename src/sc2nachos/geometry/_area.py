@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING, Self
 if TYPE_CHECKING:
     import random
 
-    from numpy import ndarray
-
     from sc2nachos.geometry._point import Point, PointLike
     from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
+    from sc2nachos.geometry._tile_mask import TileMask
 
 
 class Area(ABC):
@@ -65,12 +64,14 @@ class Area(ABC):
         """Every tile whose center lies in the area."""
 
     @abstractmethod
-    def _overlapped_tile_mask(self) -> tuple[Tile, ndarray]:
-        """Every tile whose inside the area overlaps, a tile it only touches at an edge or a corner left out, as a mask
-        indexed `[x, y]`, and first the tile at its `[0, 0]` entry. An empty area gives a mask with no true entry."""
+    def _overlapped_tile_mask(self) -> TileMask:
+        """Every tile whose inside the area overlaps, a tile it only touches at an edge or a corner left out. An empty
+        area holds none."""
 
-    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
-        """The tiles `tiles` gives that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed
-        `[x, y]`, and first the tile at its `[0, 0]` entry, as a grid has its `origin`: entry `[i, j]` is the tile `i`
-        across and `j` up from it."""
+    @abstractmethod
+    def _point_in_tile(self, tile: Tile) -> Point:
+        """A point of the area inside `tile`, which it must overlap: the tile's center where the area holds it."""
+
+    def _tile_mask(self, within: Rectangle | None = None) -> TileMask:
+        """The tiles `tiles` gives that lie `within` a rectangle on whole tiles, if one is given."""
         return self.tiles()._tile_mask(within)
