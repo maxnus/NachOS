@@ -284,9 +284,17 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      within its own circle.
 
   Later, when a bot needs it: a `SourceField` drawn onto a `Grid`, for paths and grid arithmetic; and `values_at`,
-  many points in one numpy pass. For 100 points and 10 circles that was 52 µs against
-  423 µs for a Python loop, but on a grid it is no faster than looping `grid[point]` unless the points already are an
-  array: 44 µs looped, 10 µs from an array (2026-11-06).
+  many points in one numpy pass. For 100 points and 10 circles that was 52 µs against 423 µs for a Python loop, but on
+  a grid it is no faster than looping `grid[point]` unless the points already are an array: 44 µs looped, 10 µs from
+  an array (2026-11-06).
+
+  Also later, only if a bot reads scattered tile sets often (the owner, review of #238): a grid reading a `TileSet` by
+  its addresses rather than its cached mask. It pays only where the set fills little of its bounding box and that box
+  lies on the grid, so it needs a second read path, chosen by fill, and addresses sorted by x, then y. Measured
+  2026-11-06 on a 160 x 140 grid, mask against addresses: 16 scattered tiles 7.2 against 2.8 µs, 200 scattered 10.6
+  against 5.2, two clumps far apart 7.1 against 2.9; but 134 compact tiles 3.5 against 3.6, 1,000 compact 5.5
+  against 7.9, a block of 5,000 7.5 against 26.7. Checking each tile against the grid's bounds, which a set reaching
+  past it needs, takes the gain away.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
