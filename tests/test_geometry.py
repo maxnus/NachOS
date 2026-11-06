@@ -756,8 +756,8 @@ class TestAreaAgreement:
     )
     def test_every_shapes_overlapped_tiles_are_those_holding_a_point_of_its_inside(self, area: Area) -> None:
         """A grid's `max` and `min` within an area read these tiles, so a tile the shape touches only at an edge or a
-        corner is left out, and a tile holding no center of it kept. Checked against a lattice of points 0.02 apart
-        inside each tile."""
+        corner is left out, and a tile it overlaps is kept though its center lies outside. Checked against a lattice of
+        points 0.02 apart inside each tile."""
         origin, overlapped = area._overlapped_tile_mask()
         xs, ys = numpy.nonzero(overlapped)
         masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}

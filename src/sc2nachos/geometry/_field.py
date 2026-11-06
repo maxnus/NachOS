@@ -21,13 +21,14 @@ class Field[T: float](Protocol):
         ...
 
     def max(self, *, within: Area) -> T:
-        """The largest value within `within`. Raises `ValueError` for an empty area."""
+        """The largest value anywhere in `within`. Raises `ValueError` for an empty area."""
         ...
 
     def min(self, *, within: Area) -> T:
-        """The smallest value within `within`. Raises `ValueError` for an empty area."""
+        """The smallest value anywhere in `within`. Raises `ValueError` for an empty area."""
         ...
 
     def gradient_at(self, point: PointLike) -> Point:
-        """How fast the value rises at `point`, per map unit, pointing the way it rises fastest."""
+        """How fast the value rises at `point`, per map unit, pointing the way it rises fastest. Raises `TypeError` for a
+        field of booleans."""
         ...

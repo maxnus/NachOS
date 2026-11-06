@@ -257,7 +257,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 ## Next
 
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
-  1. Done: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads `field[point]`,
+  1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads `field[point]`,
      `max(within=area)`, `min(within=area)` and `gradient_at(point)` (the owner: a value at a point, or the max or
      min within an area, and gradients). A grid's max and min within an area read every tile the area overlaps, a tile
      it only touches at an edge or a corner left out, so a tile's own rectangle reads that tile alone; a tile beyond
