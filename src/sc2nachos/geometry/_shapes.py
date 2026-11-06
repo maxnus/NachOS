@@ -14,6 +14,7 @@ from scipy.spatial import KDTree
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._point import Point, checked_ground_offset, not_a_point_error
+from sc2nachos.geometry._tile_mask import TileMask
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -124,6 +125,14 @@ class Tile(Area):
     def tiles(self) -> TileSet:
         """A set of this tile alone."""
         return TileSet._from_addresses([(self.x, self.y)])
+
+    def _overlapped_tile_mask(self) -> TileMask:
+        """The tile alone."""
+        return TileMask(self, numpy.ones((1, 1), dtype=bool))
+
+    def _point_in_tile(self, tile: Tile) -> Point:
+        """The tile's center."""
+        return tile.center
 
     def __repr__(self) -> str:
         return f"Tile({self.x}, {self.y})"
@@ -331,16 +340,36 @@ class Rectangle(Area):
         x_range, y_range = self.tile_range()
         return TileSet._from_addresses((x, y) for x in x_range for y in y_range)
 
+    def _overlapped_tile_mask(self) -> TileMask:
+        """Every tile whose inside the rectangle overlaps."""
+        first_x = math.floor(self.x)
+        first_y = math.floor(self.y)
+        if self._is_empty:
+            return TileMask(Tile(first_x, first_y), numpy.zeros((0, 0), dtype=bool))
+        columns = math.ceil(self.right) - first_x
+        rows = math.ceil(self.top) - first_y
+        return TileMask(Tile(first_x, first_y), numpy.ones((columns, rows), dtype=bool))
 
-def _mask_of_addresses(xs: ndarray, ys: ndarray) -> tuple[Tile, ndarray]:
-    """The tiles at `xs` and `ys` as a mask indexed `[x, y]` over their bounding rectangle, and first the tile at its
-    `[0, 0]` entry: an empty mask at `Tile(0, 0)` for none."""
+    def _point_in_tile(self, tile: Tile) -> Point:
+        """The tile's center where the rectangle holds it, or else the center of the part of the tile it covers."""
+        tile_center = tile.center
+        if tile_center in self:
+            return tile_center
+        left = max(self.x, tile.x)
+        bottom = max(self.y, tile.y)
+        right = min(self.right, tile.x + 1)
+        top = min(self.top, tile.y + 1)
+        return Point(((left + right) / 2, (bottom + top) / 2))
+
+
+def _mask_of_addresses(xs: ndarray, ys: ndarray) -> TileMask:
+    """The tiles at `xs` and `ys`, masked over their bounding rectangle: an empty mask at `Tile(0, 0)` for none."""
     if not len(xs):
-        return Tile(0, 0), numpy.zeros((0, 0), dtype=bool)
+        return TileMask(Tile(0, 0), numpy.zeros((0, 0), dtype=bool))
     lowest_x, lowest_y = int(xs.min()), int(ys.min())
     covered_tiles = numpy.zeros((int(xs.max()) - lowest_x + 1, int(ys.max()) - lowest_y + 1), dtype=bool)
     covered_tiles[xs - lowest_x, ys - lowest_y] = True
-    return Tile(lowest_x, lowest_y), covered_tiles
+    return TileMask(Tile(lowest_x, lowest_y), covered_tiles)
 
 
 @final
@@ -451,10 +480,9 @@ class TileSet(Area):
         """The tile set itself."""
         return self
 
-    def _tile_mask(self, within: Rectangle | None = None) -> tuple[Tile, ndarray]:
-        """The covered tiles that lie `within` a rectangle on whole tiles, if one is given, as a mask indexed `[x, y]`
-        over their bounding rectangle, and first the tile at its `[0, 0]` entry: an empty mask at `Tile(0, 0)` for
-        none."""
+    def _tile_mask(self, within: Rectangle | None = None) -> TileMask:
+        """The covered tiles that lie `within` a rectangle on whole tiles, if one is given, masked over their bounding
+        rectangle: an empty mask at `Tile(0, 0)` for none."""
         xs, ys = self._address_arrays
         if within is None or not len(xs) or self._lies_within(within):
             # Kept once built: its size is at most that of `within`, or of the set's own bounds if none was given.
@@ -463,6 +491,14 @@ class TileSet(Area):
         right, top = left + int(within.width), bottom + int(within.height)
         kept = (xs >= left) & (xs < right) & (ys >= bottom) & (ys < top)
         return _mask_of_addresses(xs[kept], ys[kept])
+
+    def _overlapped_tile_mask(self) -> TileMask:
+        """The covered tiles."""
+        return self._mask_over_bounds
+
+    def _point_in_tile(self, tile: Tile) -> Point:
+        """The tile's center."""
+        return tile.center
 
     def _lies_within(self, within: Rectangle) -> bool:
         """Whether every covered tile lies within `within`, a rectangle on whole tiles. The set is not empty."""
@@ -489,11 +525,11 @@ class TileSet(Area):
         return address_rows[:, 0], address_rows[:, 1]
 
     @cached_property
-    def _mask_over_bounds(self) -> tuple[Tile, ndarray]:
+    def _mask_over_bounds(self) -> TileMask:
         """What `_tile_mask` returns for every covered tile, built on first use."""
-        origin, covered_tiles = _mask_of_addresses(*self._address_arrays)
-        covered_tiles.flags.writeable = False
-        return origin, covered_tiles
+        covered_tiles = _mask_of_addresses(*self._address_arrays)
+        covered_tiles.mask.flags.writeable = False
+        return covered_tiles
 
     def translated(self, offset: PointLike) -> TileSet:
         """The tiles shifted by `offset`, snapped back onto the tile grid, as `Tile.translated` shifts each. Raises

@@ -10,6 +10,7 @@ import numpy
 import pytest
 
 from sc2nachos.geometry import POINT_PRECISION, Area, Circle, Direction, Point, Point3D, Rectangle, Tile, TileSet
+from sc2nachos.geometry._tile_mask import TileMask
 
 
 class TestPoint2:
@@ -648,6 +649,23 @@ class TestAreaLayout:
 
 EVERY_SHAPE = (Tile(3, 1), Rectangle(1.3, 2.7, 4.2, 3.1), Circle((4.3, 2.8), 3.5), TileSet([Tile(0, 0), Tile(2, 1)]))
 
+# Shapes whose edges fall on the tiles' edges and corners, beside a lattice of them, as a grid's area reads meet them.
+OVERLAP_PROBES = (
+    *EVERY_SHAPE,
+    Circle((3.0, 3.0), 0.5),  # holds no tile's center, yet overlaps four tiles
+    Circle((3.0, 3.0), 1.0),  # touches four more tiles at the middle of an edge
+    Circle((5.0, 5.0), 5.0),  # touches tiles such as Tile(8, 9) at a corner alone
+    Circle((7.9, 2.2), 0.15),  # holds no tile's center, within one tile
+    Rectangle(2, 2, 1, 1),  # a tile's own square, touching its eight neighbors
+    Rectangle(1.5, 2, 2, 0.5),
+)
+
+
+def _tiles_held(tiles: TileMask) -> set[Tile]:
+    """The tiles a mask holds."""
+    xs, ys = numpy.nonzero(tiles.mask)
+    return {tiles.origin.shifted(x, y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
+
 
 class TestAreaAgreement:
     """The same ground must answer the same way however it is wrapped."""
@@ -728,19 +746,44 @@ class TestAreaAgreement:
     )
     def test_every_shapes_tile_mask_holds_its_tiles(self, area: Area) -> None:
         """A grid reads an area through its mask, so the mask must hold exactly the tiles `tiles` gives."""
-        origin, tiles_mask = area._tile_mask()
-        xs, ys = numpy.nonzero(tiles_mask)
-        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
-        assert masked == set(area.tiles())
+        assert _tiles_held(area._tile_mask()) == set(area.tiles())
 
     @pytest.mark.parametrize("area", [*EVERY_SHAPE, TileSet([Tile(1, 2), Tile(40, 40)])], ids=lambda area: repr(area))
     @pytest.mark.parametrize("within", [Rectangle(1, 1, 3, 2), Rectangle(-5, -5, 4, 4), Rectangle(0, 0, 50, 50)])
     def test_every_shapes_tile_mask_within_a_window_holds_its_tiles_there(self, area: Area, within: Rectangle) -> None:
         """A grid asks for the mask within its own bounds, so a mask never outgrows the grid it is read on."""
-        origin, tiles_mask = area._tile_mask(within)
-        xs, ys = numpy.nonzero(tiles_mask)
-        masked = {Tile(origin.x + x, origin.y + y) for x, y in zip(xs.tolist(), ys.tolist(), strict=True)}
-        assert masked == {tile for tile in area.tiles() if tile.center in within}
+        assert _tiles_held(area._tile_mask(within)) == {tile for tile in area.tiles() if tile.center in within}
+
+    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=lambda area: repr(area))
+    def test_every_shapes_overlapped_tiles_are_those_holding_a_point_of_its_inside(self, area: Area) -> None:
+        """A grid's `max` and `min` within an area read these tiles, so a tile the shape touches only at an edge or a
+        corner is left out, and a tile it overlaps is kept though its center lies outside. Checked against a lattice of
+        points 0.02 apart inside each tile."""
+        bounds = area.bounding_rectangle()
+        offsets = numpy.arange(0.01, 1, 0.02).tolist()
+        holding = {
+            Tile(x, y)
+            for x in range(math.floor(bounds.left) - 1, math.ceil(bounds.right) + 1)
+            for y in range(math.floor(bounds.bottom) - 1, math.ceil(bounds.top) + 1)
+            if any((x + dx, y + dy) in area for dx in offsets for dy in offsets)
+        }
+        assert _tiles_held(area._overlapped_tile_mask()) == holding
+
+    @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1, 1, 0, 2), Rectangle(1.5, 1, 3, 0)], ids=repr)
+    def test_an_empty_shape_overlaps_no_tile(self, area: Area) -> None:
+        assert not area._overlapped_tile_mask().mask.any()
+
+    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=lambda area: repr(area))
+    def test_every_shape_gives_a_point_of_itself_inside_each_tile_it_overlaps(self, area: Area) -> None:
+        """A grid's `argmin` and `argmax` within an area answer with this point, which must read the tile it was asked
+        for: strictly inside it, not on an edge it shares with a neighbor, and the tile's center wherever the shape
+        holds that."""
+        for tile in _tiles_held(area._overlapped_tile_mask()):
+            point = area._point_in_tile(tile)
+            assert point in area, (tile, point)
+            assert tile.x < point[0] < tile.x + 1 and tile.y < point[1] < tile.y + 1, (tile, point)
+            if tile.center in area:
+                assert point == tile.center, tile
 
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:

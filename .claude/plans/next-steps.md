@@ -131,6 +131,12 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   -1 for a tile never in sight, and one read, `time_unseen`, a length of time over a tile or an area,
   `GameTime.INFINITE` for one never in sight, over `None`. Not an extension, no aliases for the old grids, and
   `api.creep` stays out.
+- **A value at every map position is a `Field`** (#18, the owner, 2026-11-06): a protocol that `Grid`, one value per
+  tile, and `SourceField`, circles and rectangles, both satisfy, over a cell size on `Grid` (#18's own proposal) and over
+  a second grid class, either of which would make `Grid` do too many things. A protocol, not a base class: the two
+  share no code. Named over `Layer`, `Surface` and `ScalarField`, though "field" also names a mineral field;
+  `SourceField`, each shape a source, the sources adding up, over `ShapeField`, `AreaField`, `KernelField` and others
+  (the owner: snappy but accurate).
 
 ### Running, recordings and replays
 
@@ -250,6 +256,45 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
+  1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
+     `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
+     owner: a value at a point, or the max or min within an area, and gradients; `value_at` over `__getitem__`, and
+     `argmin` and `argmax` in #238 over later, review of #238). `grid[point]` stays beside `grid.value_at(point)`. A
+     grid's max and min within an area read every tile the area overlaps, a tile it only touches at an edge or a corner
+     left out, so a tile's own rectangle reads that tile alone; a tile beyond the grid reads `outside`, and raises
+     `IndexError` without one (the owner, over clipping to the grid, as `grid[area]` does); an empty area raises
+     `ValueError`. `argmin` and `argmax` within an area answer a point of the area inside the extreme tile, the tile's
+     center where the area holds it, the lowest address on a tie; without one they still answer a `Tile`. Its gradient
+     is the central difference across the tile's neighbors, per map unit; a neighbor beyond the grid reads `outside`,
+     the difference one-sided where there is none (the owner, over raising); a grid of booleans raises `TypeError` (the
+     owner, over reading 0 and 1), at run time only: a self type ruling booleans out would make a boolean grid no
+     `Field` at all, or need a second protocol for the gradient (the owner, review of #238, over both and over a
+     deprecated overload).
+  2. `SourceField`: circles and rectangles (the owner, over circles alone and over any area), each with a value,
+     summed where they overlap (the owner, over the largest), or-ed for booleans, and 0 or false beyond every shape.
+     A circle holds its value out to `full_within` and falls linearly to 0 at its radius, so a constant circle, a
+     cone and a threat fading past its range are one code path; a rectangle and a boolean stay constant (the owner,
+     over two kinds of circle). Its gradient is exact. Its max and min within an area are read at points `spacing`
+     apart over the area, set on the field, 0.25 by default (the owner, over a keyword on each read), and at the
+     area's point nearest each touching shape's center: exact for booleans and for one shape, and off by up to the
+     spacing where sloped shapes overlap. Proposed, to settle at the step: built by `add(shape, value, *,
+     full_within=None)`, rather than from tuples.
+  3. AvocaDOS takes them after a release: its effect threat and splash zone as `SourceField`s, a unit reading the max
+     within its own circle.
+
+  Later, when a bot needs it: a `SourceField` drawn onto a `Grid`, for paths and grid arithmetic; and `values_at`,
+  many points in one numpy pass. For 100 points and 10 circles that was 52 µs against 423 µs for a Python loop, but on
+  a grid it is no faster than looping `grid[point]` unless the points already are an array: 44 µs looped, 10 µs from
+  an array (2026-11-06).
+
+  Also later, only if a bot reads scattered tile sets often (the owner, review of #238): a grid reading a `TileSet` by
+  its addresses rather than its cached mask. It pays only where the set fills little of its bounding box and that box
+  lies on the grid, so it needs a second read path, chosen by fill, and addresses sorted by x, then y. Measured
+  2026-11-06 on a 160 x 140 grid, mask against addresses: 16 scattered tiles 7.2 against 2.8 µs, 200 scattered 10.6
+  against 5.2, two clumps far apart 7.1 against 2.9; but 134 compact tiles 3.5 against 3.6, 1,000 compact 5.5
+  against 7.9, a block of 5,000 7.5 against 26.7. Checking each tile against the grid's bounds, which a set reaching
+  past it needs, takes the gain away.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
