@@ -29,6 +29,6 @@ class Field[T: float](Protocol):
         ...
 
     def gradient_at(self, point: PointLike) -> Point:
-        """How fast the value rises at `point`, per map unit, pointing the way it rises fastest. Raises `TypeError` for a
-        field of booleans."""
+        """How fast the value rises at `point`, per map unit, pointing the way it rises fastest. Raises `TypeError` for
+        a field of booleans."""
         ...
