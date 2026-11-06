@@ -131,6 +131,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   -1 for a tile never in sight, and one read, `time_unseen`, a length of time over a tile or an area,
   `GameTime.INFINITE` for one never in sight, over `None`. Not an extension, no aliases for the old grids, and
   `api.creep` stays out.
+- **A value at every map position is a `Field`** (#18, the owner, 2026-11-06): a protocol that `Grid`, one value per
+  tile, and `ShapeField`, circles and rectangles, both satisfy, over a cell size on `Grid` (#18's own proposal) and over
+  a second grid class, either of which would make `Grid` do too many things. A protocol, not a base class: the two
+  share no code. Named over `Layer`, `Surface` and `ScalarField`, though "field" also names a mineral field.
 
 ### Running, recordings and replays
 
@@ -250,6 +254,29 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
+  1. The `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads `field[point]`,
+     `max(within=area)`, `min(within=area)` and `gradient_at(point)` (the owner: a value at a point, or the max or
+     min within an area, and gradients). A grid's max and min within an area take every tile the area touches, which
+     is exact for one value per tile, and its gradient is the central difference across the tile's neighbors, per map
+     unit. Proposed, to settle at the step: an area touching no tile of the grid raises `ValueError`; at the edge the
+     difference reads `outside`, or is one-sided where there is none; a boolean field has no gradient.
+  2. `ShapeField`: circles and rectangles (the owner, over circles alone and over any area), each with a value,
+     summed where they overlap (the owner, over the largest), or-ed for booleans, and 0 or false beyond every shape.
+     A circle holds its value out to `full_within` and falls linearly to 0 at its radius, so a constant circle, a
+     cone and a threat fading past its range are one code path; a rectangle and a boolean stay constant (the owner,
+     over two kinds of circle). Its gradient is exact. Its max and min within an area are read at points `spacing`
+     apart over the area, set on the field, 0.25 by default (the owner, over a keyword on each read), and at the
+     area's point nearest each touching shape's center: exact for booleans and for one shape, and off by up to the
+     spacing where sloped shapes overlap. Proposed, to settle at the step: built by `add(shape, value, *,
+     full_within=None)`, rather than from tuples.
+  3. AvocaDOS takes them after a release: its effect threat and splash zone as `ShapeField`s, a unit reading the max
+     within its own circle.
+
+  Later, when a bot needs it: a `ShapeField` drawn onto a `Grid`, for paths and grid arithmetic; where in an area the
+  max or min lies; and `values_at`, many points in one numpy pass. For 100 points and 10 circles that was 52 µs against
+  423 µs for a Python loop, but on a grid it is no faster than looping `grid[point]` unless the points already are an
+  array: 44 µs looped, 10 µs from an array (2026-11-06).
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
