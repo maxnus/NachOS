@@ -197,3 +197,46 @@ class ThreatMap:
 
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.
+- **The build planner**, `sc2nachos.extensions.planner.Planner`, for Terran: given a reward, a horizon and the state of
+  the game, what to make and when, as a list of items in order, each with the time it is expected to start. It solves a
+  mixed-integer linear program over a grid of time buckets, which scipy's HiGHS solves, so whether to expand or make
+  marines now follows from the economy it models, not from a rule. The objective stays the bot's: it hands the planner a
+  `Reward` and never the other way round.
+
+  ```python
+  from sc2nachos.extensions.planner import CurveSegment, Planner, Reward
+
+
+  class Extensions:
+      def __init__(self, api: Api) -> None:
+          self.planner = Planner(api)
+
+
+  @api.on(TurnEvent)
+  def replan(event: TurnEvent) -> None:
+      if api.step % 448 == 0:
+          marines = [CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.3)]
+          reward = Reward(curves={UnitTypeId.MARINE: marines}, half_life=GameTime(seconds=240))
+          plan = api.extensions.planner.plan_now(reward, horizon=GameTime(seconds=600))
+  ```
+
+  What the bot supplies is the reward, summed a second at a time over the horizon and discounted by its `half_life`:
+  what each unit alive is worth, a weight for each type or a concave curve of pieces over its count, so that a plan
+  buys a mix rather than only the best type for its cost; what each upgrade done is worth; enemy units covered, each
+  kind a `Coverage` of how many the bot expects from when, how much of one each own type covers and what one covered is
+  worth; counts wanted at least, each a `Floor` with what a unit short costs; how long the state at the horizon counts
+  for after it; and a bonus for each item of the previous plan the new one keeps to. `plan_now` takes the horizon and
+  the share of each unit type the bot expects lost a second, so that only what is expected to survive counts.
+
+  What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
+  to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and what
+  the planner expects at each of its `times`: the `minerals` and `vespene` in stock, and the `counts` of each unit type
+  alive. `planner.plan` holds the last one. The planner orders nothing and holds no unit: where a structure goes, which
+  SCV builds it, and what to drop once the game moves on stay the bot's.
+
+  `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that
+  much longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a
+  plan the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the
+  items from the game's data, pruned to what the reward needs, worker income measured with speed mining, the SCV away
+  from the walk to a structure through the build to the walk back, and starts on the first second of a bucket of its
+  `TimeGrid`, 2 seconds long at first and doubling every time the time from the plan's start doubles from 45 seconds.

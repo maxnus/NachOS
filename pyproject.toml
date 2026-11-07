@@ -81,8 +81,9 @@ filterwarnings = [
 
 [tool.pyright]
 include = ["src", "tests", "tools", "examples", ".github/match"]
-# Pyright's default skips every folder named with a dot, .github/match among them; this keeps the rest of the default.
-exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git"]
+# Pyright's default skips every folder named with a dot, .github/match among them; this keeps the rest of the default,
+# and leaves out the planner's toy, kept as it was measured.
+exclude = ["**/node_modules", "**/__pycache__", ".venv", ".git", "tools/planner_toy"]
 pythonVersion = "3.12"
 # protobuf ships type stubs without inline source; nothing to fix on our side.
 reportMissingModuleSource = false
@@ -90,6 +91,8 @@ reportMissingModuleSource = false
 [tool.ruff]
 line-length = 120
 src = ["src", "tests"]
+# The planner's toy, kept as it was measured.
+extend-exclude = ["tools/planner_toy"]
 
 [tool.ruff.format]
 # Laid out by `tools/generate_tech_tree.py`, which keeps a mapping's brace beside its parenthesis.
