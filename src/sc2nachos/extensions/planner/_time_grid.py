@@ -58,7 +58,8 @@ class TimeGrid:
         whole_until: GameTime = GameTime(seconds=90),
     ) -> Self:
         """A grid whose buckets double in length each time the time from the plan's start doubles, from
-        `first_bucket` until `first_doubling` to `longest_bucket`, which runs on to any horizon: by default, 2 seconds
+        `first_bucket` until `first_doubling` to the longest doubling of it not above `longest_bucket`, which runs on to
+        any horizon: by default, 2 seconds
         until 0:45, 4 until 1:30, 8 until 3:00, 16 until 6:00, and 32 after, 63 buckets to a 10-minute horizon.
 
         Raises `ValueError` unless `first_bucket` and `first_doubling` are longer than 0 and `longest_bucket` is at

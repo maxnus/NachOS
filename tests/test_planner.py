@@ -315,13 +315,16 @@ class TestReward:
         [
             [],
             [CurveSegment(slope=1.0, up_to=10), CurveSegment(slope=2.0)],
-            [CurveSegment(slope=1.0, up_to=10), CurveSegment(slope=0.5, up_to=5)],
+            [CurveSegment(slope=1.0, up_to=10), CurveSegment(slope=0.5, up_to=5), CurveSegment(slope=0.0)],
         ],
         ids=["no segments", "a slope rising", "a count falling"],
     )
     def test_a_curve_that_is_not_concave_raises(self, segments: list[CurveSegment]) -> None:
         with pytest.raises(ValueError, match="MARINE"):
             Reward(curves={UnitTypeId.MARINE: segments})
+
+    def test_the_last_segments_count_is_ignored(self) -> None:
+        Reward(curves={UnitTypeId.MARINE: [CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.0, up_to=0)]})
 
     def test_counts_not_in_order_of_time_raise(self) -> None:
         later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]
@@ -546,6 +549,25 @@ class TestSnapshot:
         assert snapshot.free_expansions == 1
         assert snapshot.walk_seconds[UnitTypeId.COMMAND_CENTER] == pytest.approx(28 / scv_speed, rel=0.05)
         assert snapshot.walk_seconds[UnitTypeId.BARRACKS] == 6.0
+
+    def test_a_command_center_an_scv_walks_to_build_takes_its_expansion(self) -> None:
+        observation = _main_base_at(0)
+        observation.observation.raw_data.units.append(
+            make_unit(
+                11,
+                UnitTypeId.SCV,
+                at=(24.0, 40.0),
+                build_progress=1.0,
+                orders=[_unit_order(RawAbilityId.TerranBuild_CommandCenter, at=_NATURAL_CENTER)],
+            )
+        )
+        (snapshot,) = _snapshots_of(observation)
+
+        assert snapshot.free_expansions == 0
+        assert (
+            UnitTypeId.COMMAND_CENTER,
+            pytest.approx(snapshot.walk_seconds[UnitTypeId.COMMAND_CENTER] + 71.43, abs=0.05),
+        ) in snapshot.unit_completions
 
     def test_a_command_centers_morph_counts_down_from_when_the_planner_first_saw_it(self) -> None:
         """The game reports no progress for it: seen at 0, 10 and 20 seconds, it has 5 of its 25 left at the last."""

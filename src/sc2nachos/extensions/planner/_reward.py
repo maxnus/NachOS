@@ -140,13 +140,13 @@ def check_in_order_of_time(counts: Sequence[tuple[GameTime, float]], name: str) 
 
 
 def _check_concave(unit_type: UnitTypeId, segments: Sequence[CurveSegment]) -> None:
-    """Raise `ValueError` unless `segments` is concave: slopes not rising, and counts rising."""
+    """Raise `ValueError` unless `segments` is concave: slopes not rising, and counts rising but the last's."""
     if not segments:
         raise ValueError(f"the curve of {unit_type.name} has no segments")
-    for earlier, later in zip(segments, segments[1:], strict=False):
+    for position, (earlier, later) in enumerate(zip(segments, segments[1:], strict=False), start=1):
         if later.slope > earlier.slope:
             raise ValueError(
                 f"the curve of {unit_type.name} is not concave: a slope of {later.slope} after {earlier.slope}"
             )
-        if later.up_to <= earlier.up_to:
+        if position < len(segments) - 1 and later.up_to <= earlier.up_to:
             raise ValueError(f"the curve of {unit_type.name} must count up: {later.up_to} after {earlier.up_to}")

@@ -66,9 +66,11 @@ class Snapshot:
     refineries_with_vespene: int = 0
     """This player's finished refineries with vespene left."""
     free_geysers: int = 0
-    """The geysers without a gas building at bases with a finished townhall of this player's."""
+    """The geysers without a gas building at bases with a finished townhall of this player's, less one for each refinery
+    an SCV is on its way to build."""
     free_expansions: int = 0
-    """The expansions with no townhall on them, in sight or remembered."""
+    """The expansions with no townhall on them, in sight or remembered, that an SCV can walk to from this player's
+    start, less one for each command center an SCV is on its way to build."""
     walk_seconds: Mapping[UnitTypeId, float] = field(default_factory=dict)
     """The seconds an SCV walks to build each structure, and walks back after: to the nearest free expansion for a
     command center."""
@@ -97,6 +99,7 @@ class Snapshot:
             if item.is_built_by_worker
         }
         unit_completions, occupations, builders = _production_of(api, model, morph_starts, walk_seconds)
+        not_begun = _builds_not_begun(api, model)
         upgrade_completions, research_occupations = _researches_of(api, model)
         return cls(
             time=api.time,
@@ -112,8 +115,8 @@ class Snapshot:
             builders_free_after=tuple(builders),
             mineral_fields=fields,
             refineries_with_vespene=refineries_with_vespene,
-            free_geysers=free_geysers,
-            free_expansions=free_expansions,
+            free_geysers=max(free_geysers - not_begun.get(UnitTypeId.REFINERY, 0), 0),
+            free_expansions=max(free_expansions - not_begun.get(UnitTypeId.COMMAND_CENTER, 0), 0),
             walk_seconds=walk_seconds,
             loss_rates={model.usual_form(unit_type): rate for unit_type, rate in loss_rates.items()},
         )
@@ -136,7 +139,8 @@ def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[Uni
 
 def _bases_of(api: Api[object]) -> tuple[int, int, int, float]:
     """The mineral fields left and the geysers free at bases with a finished townhall of this player's, the expansions
-    with no townhall, and the seconds an SCV walks from this player's start to the nearest of those, 0 with none."""
+    with no townhall that an SCV can walk to from this player's start, and the seconds it walks to the nearest of those,
+    0 with none."""
     gas_building_positions = {building.position for building in api.units.gas_buildings}
     fields = 0
     free_geysers = 0
@@ -151,9 +155,10 @@ def _bases_of(api: Api[object]) -> tuple[int, int, int, float]:
     if not free:
         return fields, free_geysers, 0, 0.0
     distances = api.pathing.cheapest_paths_from(api.player.start_location.center).distances
-    nearest = min(distances[expansion.center] for expansion in free)
-    scv_speed = api.data.units[UnitTypeId.SCV].speed
-    return fields, free_geysers, len(free), nearest / scv_speed if math.isfinite(nearest) else 0.0
+    reachable = [distance for expansion in free if math.isfinite(distance := distances[expansion.center])]
+    if not reachable:
+        return fields, free_geysers, 0, 0.0
+    return fields, free_geysers, len(reachable), min(reachable) / api.data.units[UnitTypeId.SCV].speed
 
 
 def _production_of(
@@ -163,7 +168,8 @@ def _production_of(
     walk_seconds: Mapping[UnitTypeId, float],
 ) -> tuple[list[tuple[UnitTypeId, float]], list[Occupation], list[float]]:
     """Each unit in production with the seconds until it is done, what keeps each producer busy, and the seconds until
-    each SCV building or walking to build is back at work."""
+    each SCV building or walking to build is back at work. A structure not begun, or going up with no SCV building it,
+    waits for an SCV's walk there."""
     completions: list[tuple[UnitTypeId, float]] = []
     builders: list[float] = []
     by_producer: dict[int, list[InProduction]] = {}
@@ -175,10 +181,9 @@ def _production_of(
         if item.is_built_by_worker:
             walk = walk_seconds.get(unit_type, 0.0)
             done_after = _seconds_left(in_production, item.build_seconds, morph_starts, api.time)
-            done_after += walk if in_production.unit is None else 0.0
+            done_after += walk if in_production.unit is None or producer is None else 0.0
             completions.append((unit_type, done_after))
-            if producer is not None:
-                builders.append(done_after + walk)
+            builders.append(done_after + walk)
         elif producer is None:
             completions.append((unit_type, _seconds_left(in_production, item.build_seconds, morph_starts, api.time)))
         else:
@@ -204,6 +209,16 @@ def _production_of(
                 )
             )
     return completions, occupations, builders
+
+
+def _builds_not_begun(api: Api[object], model: TerranModel) -> dict[UnitTypeId, int]:
+    """How many structures of each type, in its usual form, an SCV is on its way to build."""
+    not_begun: dict[UnitTypeId, int] = {}
+    for in_production in api.in_production(model.forms_of_items):
+        unit_type = model.usual_form(in_production.type_id)
+        if in_production.unit is None and model.unit_items[unit_type].is_built_by_worker:
+            not_begun[unit_type] = not_begun.get(unit_type, 0) + 1
+    return not_begun
 
 
 def _seconds_left(
