@@ -20,10 +20,12 @@ class InProduction(Progress[UnitTypeId]):
     `fraction` is 0 for a queued train, and for a build or an add-on not begun yet, and a structure's morph and a
     cocoon's, whose progress the game does not report, are at their producer's `Unit.morph_progress`. `total_time` is
     the tables' build time rounded up, as `UnitTypeData` gives it (in game), but for a warp-in, which takes 256 steps or
-    81 as where it warps in decides, told apart by how fast it goes up (in game). `time_left` is exact at the normal
-    rate (in game), and a cocoon's to within a step: a chrono boost makes it sooner, and a Terran structure whose SCV
-    has left stops, its time left with it. A train queued behind another has all its time left and waits for the one
-    ahead first, and a build or an add-on not begun waits for its worker or its host.
+    81 as where it warps in decides, told apart by how far it has gone up since the observation before the one that
+    first listed it (in game): in a realtime game, or on the ladder, a fast one can read slow for its first two
+    observations. `time_left` is exact at the normal rate (in game), and a cocoon's to within a step: a chrono boost
+    makes it sooner, and a Terran structure whose SCV has left stops, its time left with it. A train queued behind
+    another has all its time left and waits for the one ahead first, and a build or an add-on not begun waits for its
+    worker or its host.
     """
 
     producer: OwnUnit[Any] | None
