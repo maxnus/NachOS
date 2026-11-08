@@ -122,17 +122,17 @@ it.
 | `bot.do(action)`, `await bot._do_actions(...)` | `unit.issue(...)` or `api.orders.issue(...)`, sent once the turn's handlers have run |
 | nothing | `unit.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `unit.issue(..., queued=True)` |
-| `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
+| `unit.orders`, `unit.is_idle` | the same, each order an `Order`, which python-sc2 calls a `UnitOrder` |
 | `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
 | `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
 | `unit.is_using_ability(a)`, `is_collecting` | `unit.is_doing(a)`, one ability or several: `is_doing({AbilityId.GATHER, AbilityId.RETURN})`, each one id whatever the unit's type |
 | `order.target`, a tag or a point | `order.target`, the unit or the point, raising `NotReportedError` for a unit the game names by a tag it never reports, and `order.known_target`, `None` there |
-| nothing | `order.data`, `order.withdraw()` |
+| nothing | `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
-- **An order is something you hold on to until it is sent.** `issue` returns an `Order` that carries the bot's own
-  `data` and can be withdrawn while the turn's handlers run; python-sc2 returns nothing. What the game refused shows
-  in `api.action_failures` on the next turn, and what a unit then did, in its orders and in events.
+- **An order is something you hold on to until it is sent.** `issue` returns an `IssuedOrder` that can be withdrawn
+  while the turn's handlers run; python-sc2 returns nothing. What the game refused shows in `api.action_failures` on the
+  next turn, and what a unit then did, in its orders and in events.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game. A
   structure is no exception: of two trains given in a turn only the last goes out, and a reactor's second marine

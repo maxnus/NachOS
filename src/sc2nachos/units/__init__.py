@@ -11,10 +11,10 @@ from sc2nachos.units._units import Units
 from sc2nachos.units._values import (
     Alliance,
     CloakState,
+    Order,
     Passenger,
     RallyTarget,
     Target,
-    UnitOrder,
     Visibility,
     VitalType,
 )
@@ -24,6 +24,7 @@ __all__ = [
     "CloakState",
     "UnitType",
     "NotReportedError",
+    "Order",
     "OwnUnit",
     "Passenger",
     "Progress",
@@ -32,7 +33,6 @@ __all__ = [
     "Unit",
     "UnitDict",
     "UnitIdsExhaustedError",
-    "UnitOrder",
     "Units",
     "UnknownTagError",
     "Visibility",

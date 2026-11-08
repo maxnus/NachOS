@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-05:
+As of 2026-11-08:
 
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
@@ -27,6 +27,10 @@ As of 2026-11-05:
   a number of collectors, speed mining picking their refineries and `release_collectors` those to let go, reads when
   each tile was last in sight off `api.vision`, and starts its turn clock at `BEFORE` and ends it at `AFTER`, after
   speed mining, so that its step time stays the whole turn.
+- **Since 0.3.0**, on main: #237, #240, #241 and #242. The next release, 0.4.0 since #241 and #242 remove and rename
+  what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its own
+  data per unit in a `UnitDict`; and the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was an
+  `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -43,10 +47,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   judge and the bot's to budget, and `api.action_failures` lists what the game refused. No budget, no `can_afford`,
   no `api.orders.cancel`: a built version with all of that was dropped as too complicated for what it bought.
 - **No order priority, no hold and no order state.** A unit takes the last order a turn gives it, a structure's train
-  included, and a bot that ranks its orders puts the rank in the order's `data`. NachOS never holds an order until a
-  unit can start it (#126, reversing #115 to #120): that belongs in the bot, or in a layer above the order book.
-  Nothing follows an order once sent (#69, #115): the `Order` is a handle, and the bot reads its units, events and
-  `api.action_failures`.
+  included, and a bot that ranks its orders keeps the rank itself, in a `UnitDict` it empties at each turn's start.
+  NachOS never holds an order until a unit can start it (#126, reversing #115 to #120): that belongs in the bot, or in a
+  layer above the order book. Nothing follows an order once sent (#69, #115): the `IssuedOrder` is a handle, and the bot
+  reads its units, events and `api.action_failures`.
 - **An unqueued order a unit is already carrying out is not sent to it** (#68), though a train or a research always
   is. `force=True` sends it anyway, dropping the unit's queue, so there is no `clear_queue` (#77). A production
   order gets no "replace": a cancel frees no queue slot and no minerals in the same step (#43).
@@ -63,6 +67,15 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   `MadeUpUnits` has its own, `orders`, which sends nothing and so holds every order its units were given (the owner,
   review of #240, over raising for its units, and over emptying it at each observation, code the order book would
   carry for a test helper alone).
+- **An order carries nothing of the bot's** (the owner, review of #240; #241): no `data`, so `IssuedOrder` takes no
+  type parameter. Nothing read it, not the demo bot, the extensions (speed mining chose not to, review of #231) or
+  AvocaDOS, and a bot keeps its own data per unit in a `UnitDict` (#200).
+- **The order a bot gave is an `IssuedOrder`, and what a unit reports doing an `Order`** (the owner, 2026-11-08,
+  #242), over `Order` and `UnitOrder`, which said nothing of how they differ; over `PendingOrder`, since a sent order
+  stays the same handle and `api.orders.pending` holds the unsent alone; and over `ReportedOrder`, the name
+  `sc2nachos.testing` gives the tuple a test makes a unit's order from. The reported one stays in `sc2nachos.units`, so
+  a bot's old `from sc2nachos.orders import Order` fails at import, or in the type checker where it is imported under
+  `TYPE_CHECKING`, rather than meaning the other; `test_package.py` checks that `sc2nachos.orders` names no `Order`.
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
@@ -271,11 +284,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   zealot with `GATEWAY_TRAIN_ZEALOT` and a warp gate warps one in with `WARP_GATE_WARP_IN_ZEALOT` at a point, so the
   translation reads each ability's products by performer in the tech tree. To settle: whether `train` covers a
   larva's morphs, a morph such as an orbital or a baneling, and a warp-in, and whether `build` joins it.
-- **Drop `data` from orders** (the owner, review of #240), in a pull request of its own after #240: from
-  `api.orders.issue` and `unit.issue`, so that `Order` loses its type parameter, and from the decision above that a bot
-  ranks its orders in `data`. Nothing reads it: not the demo bot, not the extensions (speed mining chose not to, review
-  of #231), not AvocaDOS. A bot keeps its own data per unit in a `UnitDict` (#200). A bot may have to change for it,
-  so its release notes say so.
 - **`InProduction` and `Research` onto `Progress`** (#109, the owner, 2026-11-08), the second of its plan's pull
   requests: each subclasses `Progress`, over an optional `producer` on it, `type_id` and `upgrade` becoming `product`
   and `progress` `fraction`. Its times are required, over `None` for a warp-in, so the archon gets a build-time override

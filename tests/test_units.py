@@ -22,12 +22,12 @@ from sc2nachos.units import (
     Alliance,
     CloakState,
     NotReportedError,
+    Order,
     OwnUnit,
     Passenger,
     RallyTarget,
     Unit,
     UnitIdsExhaustedError,
-    UnitOrder,
     UnknownTagError,
     Visibility,
 )
@@ -1226,9 +1226,9 @@ class TestOwnUnits:
         marine, _ = game.observe(0, make_unit(1, orders=orders), make_unit(9, alliance=_ENEMY))
         assert isinstance(marine, OwnUnit)
         assert marine.orders == (
-            UnitOrder(AbilityId.MOVE, Point((5.0, 6.0)), 0.0),
-            UnitOrder(AbilityId.ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
-            UnitOrder(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
+            Order(AbilityId.MOVE, Point((5.0, 6.0)), 0.0),
+            Order(AbilityId.ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
+            Order(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
         )
         assert not marine.is_idle
 

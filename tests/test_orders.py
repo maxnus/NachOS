@@ -21,7 +21,7 @@ from sc2nachos.geometry import POINT_PRECISION, Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.orders import Order, OrderBook
+from sc2nachos.orders import IssuedOrder, OrderBook
 from sc2nachos.orders._commands import unit_commands_giving
 from sc2nachos.orders._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
@@ -217,19 +217,6 @@ class TestGivingAnOrder:
 
         assert command.queue_command
 
-    def test_an_order_carries_the_bots_own_data(self) -> None:
-        game = _Game([ActionResult.SUCCESS])
-        game.observe(0, _marine(1))
-
-        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), data="scouting")
-        plain = game.book.issue(game.own(1), _STIM)
-
-        assert order.data == "scouting"
-        assert order.data.upper() == "SCOUTING"  # An `Order[str]`, so the type checker knows what `data` is.
-        assert plain.data is None
-        _: Order[None] = plain
-        _wrong: Order[int] = order  # type: ignore
-
     def test_an_order_says_what_it_is_in_a_repr(self) -> None:
         game = _Game()
         game.observe(0, _marine(1), _marine(2))
@@ -237,8 +224,8 @@ class TestGivingAnOrder:
         one = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
         both = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
 
-        assert repr(one) == f"Order(MOVE, {game.own(1)!r})"
-        assert repr(both) == "Order(MOVE, 2 units)"
+        assert repr(one) == f"IssuedOrder(MOVE, {game.own(1)!r})"
+        assert repr(both) == "IssuedOrder(MOVE, 2 units)"
 
     def test_an_ability_aimed_at_what_it_cannot_take_is_a_mistake(self) -> None:
         """The three cases the game was seen to answer `ERROR`, which NachOS now rejects itself."""
@@ -297,28 +284,26 @@ class TestOrderingAUnitThroughItself:
         game.observe(0, _marine(1))
         marine = game.own(1)
 
-        order = marine.issue(_MOVE, target=(20.0, 21.0), queued=True, data="rally")
+        order = marine.issue(_MOVE, target=(20.0, 21.0), queued=True)
 
-        assert_type(order, Order[str])
+        assert_type(order, IssuedOrder)
         assert game.book.pending == (order,)
-        assert (order.ability, order.units, order.target, order.queued, order.data) == (
+        assert (order.ability, order.units, order.target, order.queued) == (
             _MOVE,
             Units([marine]),
             Point((20.0, 21.0)),
             True,
-            "rally",
         )
         (command,) = _commands(game.flush())
         assert (command.ability_id, list(command.unit_tags), command.queue_command) == (_MOVE, [1], True)
 
-    def test_an_order_given_no_data_holds_none(self) -> None:
+    def test_an_order_given_only_an_ability_is_aimed_at_nothing_and_not_queued(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))
 
         order = game.own(1).issue(_STIM)
 
-        assert_type(order, Order[None])
-        assert (order.target, order.queued, order.data) == (None, False, None)
+        assert (order.target, order.queued) == (None, False)
 
     def test_force_sends_it_to_a_unit_already_carrying_it_out(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -459,10 +444,9 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         game = _Game()
         game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
-        order = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), data="again")
+        game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
 
         assert game.flush() is None
-        assert order.data == "again"
 
     def test_it_counts_as_issued_until_the_turn_is_sent(self) -> None:
         game = _Game()
@@ -1716,8 +1700,8 @@ class TestOrdersGivenApart:
     def test_each_order_of_a_command_the_game_took_is_sent_to_its_own_units(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2), _marine(3))
-        first = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0), data="first")
-        second = game.book.issue([game.own(2), game.own(3)], _MOVE, target=(20.0, 21.0), data="second")
+        first = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        second = game.book.issue([game.own(2), game.own(3)], _MOVE, target=(20.0, 21.0))
 
         game.flush()
         game.observe(16, _marine(1), _marine(2), _marine(3))
@@ -1824,10 +1808,10 @@ class _OrderingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.moved: Order[str] | None = None
-        self.stim: Order[None] | None = None
-        self.stimmed_move: Order[None] | None = None
-        self.at_a_dead_tag: Order[None] | None = None
+        self.moved: IssuedOrder | None = None
+        self.stim: IssuedOrder | None = None
+        self.stimmed_move: IssuedOrder | None = None
+        self.at_a_dead_tag: IssuedOrder | None = None
         self.killed: OwnUnit[Any] | None = None
 
     def turn(self, event: TurnEvent) -> None:
@@ -1841,7 +1825,7 @@ class _OrderingBot:
             return
         if self.moved is None and len(marines) >= 2:
             first, second = marines[0], marines[1]
-            self.moved = api.orders.issue(first, _MOVE, target=middle + (6.0, 0.0), data="scouting")
+            self.moved = api.orders.issue(first, _MOVE, target=middle + (6.0, 0.0))
             self.stim = api.orders.issue(second, _HOLD_FIRE)
             self.stimmed_move = api.orders.issue(second, _MOVE, target=middle + (0.0, 6.0))
             return
@@ -1864,9 +1848,9 @@ class _UnloadingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.loads: list[Order[None]] = []
-        self.move: Order[None] | None = None
-        self.unload: Order[None] | None = None
+        self.loads: list[IssuedOrder] = []
+        self.move: IssuedOrder | None = None
+        self.unload: IssuedOrder | None = None
         self.unloaded_at: dict[int, Point] = {}
         self.reported: list[tuple[float, list[str]]] = []
 
@@ -1910,7 +1894,7 @@ class _SiegingBot:
         self.api = api
         self.player = player
         self.zone: Point | None = None
-        self.sieges: list[Order[None]] = []
+        self.sieges: list[IssuedOrder] = []
         self.reported: list[tuple[int, UnitTypeId, list[tuple[AbilityId, bool]]]] = []
 
     def turn(self, event: TurnEvent) -> None:
@@ -1941,8 +1925,8 @@ class _GroupSiegingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.siege: Order[None] | None = None
-        self.unsiege: Order[None] | None = None
+        self.siege: IssuedOrder | None = None
+        self.unsiege: IssuedOrder | None = None
         self.sieged: list[UnitTypeId] = []
 
     def turn(self, event: TurnEvent) -> None:
@@ -1974,8 +1958,8 @@ class _GroupUnloadingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.loads: list[Order[None]] = []
-        self.unload: Order[None] | None = None
+        self.loads: list[IssuedOrder] = []
+        self.unload: IssuedOrder | None = None
         self.marines_left_out = 0
 
     def turn(self, event: TurnEvent) -> None:
@@ -2113,7 +2097,6 @@ class TestAgainstTheRealGame:
         bot, failures = _play_a_minute(_OrderingBot)
 
         assert bot.moved is not None
-        assert bot.moved.data == "scouting"
         # Hold fire and a move to the same ghost both go out; neither overrides the other.
         assert bot.stim is not None and bot.stimmed_move is not None
         # An order to a dead unit's tag is refused (in game), and nothing else is.
