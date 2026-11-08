@@ -6,9 +6,10 @@ from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
+from sc2nachos.extensions.planner._economy import Economy
 from sc2nachos.extensions.planner._errors import NoPlanFoundError
+from sc2nachos.extensions.planner._game_state import GameState, read_game_state
 from sc2nachos.extensions.planner._plan_program import PlanProgram
-from sc2nachos.extensions.planner._snapshot import Snapshot
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import TimeGrid
 from sc2nachos.gametime import GameTime
@@ -48,16 +49,17 @@ class Planner:
     api = Api(extensions=Extensions)
     ```
 
-    It reads the game as `plan_now` is called. The model of the game:
+    It plans from the `GameState` `game_state` reads as `plan_now` is called, unless handed another. The model of the
+    game:
 
     - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
       from the game's data; an item is pruned unless the reward values it or it is needed for one that does, or it is
       the economy: SCVs, supply depots, command centers, orbital commands and refineries.
-    - Workers mine two a field at the rate twelve SCVs speed mined a main's eight fields, a third a field at half that,
-      collect three a refinery, and each orbital command adds a MULE's income. A new command center goes to the nearest
-      free expansion, which brings eight fields and two geysers.
-    - An SCV is away from its work from the walk to a structure through the build to the walk back: `walk_time` each
-      way, or for a command center the walk from this player's start to the nearest free expansion.
+    - What workers mine and collect, what each orbital command's MULEs add, what a new command center brings, and how
+      far an SCV walks to build: the `Economy` handed to `plan_now`. The workers are pooled over every field and
+      refinery, as if each could work anywhere at once.
+    - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
+      each way.
     - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a
       tech lab makes the units that need one and researches on its own.
     - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
@@ -74,8 +76,8 @@ class Planner:
     The solve stops at `time_limit` seconds of wall-clock time, or after `node_limit` nodes of branching, each
     unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
 
-    Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, or a
-    negative `walk_time`; and `NotPlayingError` if built before the game starts.
+    Raises `ValueError` for a player of a race other than Terran, or a `time_limit` or `node_limit` not above 0; and
+    `NotPlayingError` if built before the game starts.
     """
 
     __slots__ = (
@@ -85,7 +87,6 @@ class Planner:
         "_node_limit",
         "_plan",
         "_time_limit",
-        "_walk_time",
         "_whole_until",
     )
 
@@ -96,7 +97,6 @@ class Planner:
         grid: TimeGrid | None = None,
         time_limit: float | None = 3.0,
         node_limit: int | None = None,
-        walk_time: GameTime = GameTime(seconds=6),
         whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
     ) -> None:
         if api.player.race != Race.TERRAN:
@@ -105,13 +105,10 @@ class Planner:
             raise ValueError(f"a time limit must be above 0 seconds, not {time_limit}")
         if node_limit is not None and node_limit <= 0:
             raise ValueError(f"a node limit must be above 0, not {node_limit}")
-        if walk_time < GameTime.ZERO:
-            raise ValueError(f"walk_time must not be negative, not {walk_time}")
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._time_limit = time_limit
         self._node_limit = node_limit
-        self._walk_time = walk_time
         self._whole_until = whole_until
         self._model = TerranModel(api.data)
         self._plan: Plan | None = None
@@ -126,35 +123,46 @@ class Planner:
         """The plan `plan_now` returned last, or `None` before it has."""
         return self._plan
 
+    def game_state(self) -> GameState:
+        """The state of the game now, as the planner reads it: what `plan_now` plans from unless handed another."""
+        return read_game_state(self._api, model=self._model)
+
     def plan_now(
-        self, reward: Reward, *, horizon: GameTime, loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES
+        self,
+        reward: Reward,
+        *,
+        horizon: GameTime,
+        state: GameState | None = None,
+        economy: Economy = Economy(),
+        loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
+        free_expansions: int | None = None,
     ) -> Plan:
-        """The plan worth the most by `reward` over `horizon` from now, which `plan` holds from then on. A unit of a
-        type in `loss_rates` is expected lost at that share a second, those alive now and those the plan makes, so
-        that only the share expected alive counts. It solves within the planner's limits, before it returns.
+        """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
+        `game_state()` now if `None`, and its time is the plan's start. The plan's workers mine, collect and walk as
+        `economy` says. A unit of a type in `loss_rates` is expected lost at that share a second, those alive now and
+        those the plan makes, so that only the share expected alive counts. At most `free_expansions` command centers
+        start, any number if `None`. It solves within the planner's limits, before it returns.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate, or a negative time from `whole_until`; and `NoPlanFoundError` if the solver finds
-        no plan within its limits.
+        than 0, a negative loss rate or `free_expansions`, or a negative time from `whole_until` or from `economy`'s
+        `walk_time`; and `NoPlanFoundError` if the solver finds no plan within its limits.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
+        if free_expansions is not None and free_expansions < 0:
+            raise ValueError(f"free_expansions must not be negative, not {free_expansions}")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
-        whole_until_seconds = whole_until_seconds_of(items, whole_until=self._whole_until)
-        snapshot = Snapshot.from_api(
-            self._api,
-            model=self._model,
-            walk_time=self._walk_time,
-            loss_rates=loss_rates,
-        )
         program = PlanProgram(
             items=items,
             model=self._model,
             edges=edges,
-            snapshot=snapshot,
+            state=self.game_state() if state is None else state,
             reward=reward,
-            whole_until_seconds=whole_until_seconds,
+            economy=economy,
+            loss_rates=loss_rates,
+            free_expansions=free_expansions,
+            whole_until_seconds=whole_until_seconds_of(items, whole_until=self._whole_until),
         )
         plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)
         if plan is None:

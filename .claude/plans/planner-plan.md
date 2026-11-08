@@ -63,8 +63,10 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    production after, lost workers replaced.
 7. **The builder is an occupancy interval per race, and walks shift it.** Terran's SCV is away from the walk there
    through the build to the walk back; Protoss's probe for the two walks only; Zerg's drone walks there and is gone.
-   Walk times are per structure and intended location, from the map's path distance over the worker's speed; a
-   structure cannot start before its walk unless a worker is already on its way. Walks cost Terran 2% and two SCVs.
+   Walk times are per structure, and the bot's (decision 11): `Economy.walk_time`, by default 10 seconds to a command
+   center, about the walk from a main's mineral line to its natural on every map of the pool (corpus), and 6 to any
+   other structure; the planner reads no path for them. A structure cannot start before its walk unless a worker is
+   already on its way. Walks cost Terran 2% and two SCVs.
 8. **A plan is executed as an order, not a timetable.** The next item starts when affordable; the predicted times
    are for monitoring and the debug overlay. In AvocaDOS the order maps onto the priorities of the production,
    construction and research objectives, so placement, workers and cancellation stay where they are.
@@ -75,8 +77,15 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    warm start from the shifted previous plan or by re-scoring it, and only with the hysteresis; both are required.
    A synchronous mode with a node limit is deterministic for tests and recordings.
 10. **No caps on production structures.** Their number is bounded by the economics; the physical bounds stay: the
-    map's expansions, two refineries a base, one add-on a barracks, one of each upgrade, supply 200, and room to
-    build near a base once the map supplies it.
+    free expansions the bot passes, none by default, two refineries a base, one add-on a barracks, one of each
+    upgrade, supply 200, and room to build near a base once the map supplies it.
+11. **Every input is visible and the bot's to change** (the owner, review of #239). What the game shows is a public
+    `GameState`, which `Planner.game_state` reads and `plan_now(state=...)` takes back changed, a base about to fall
+    left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `Economy`
+    handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
+    worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and
+    `free_expansions` beside it. The constructor keeps only how to solve: the grid, the limits and the windows.
+    Workers stay pooled over every field and refinery (Open 10).
 
 ## Measurements
 
@@ -118,10 +127,11 @@ class Extensions:
   item set is pruned to what the reward names, their prerequisites, producers, supply, workers, expansions and
   refineries.
 - `_grid.py`: bucket edges from segments. Each item's integrality window comes from its cost, or from the bot.
-- `_snapshot.py`: the state as numbers, taken from the api in a `TurnStartEvent` handler at `EventPriority.BEFORE`:
-  resources, supply, the alive count of each type, each item in production with its time left, workers mining,
-  collecting, building and walking, upgrades done and researching, the expansions free with their walk times from
-  `api.pathing`, and the constants the bot supplies: enemy counts per bucket, loss rates, floors.
+- `_game_state.py`: the state as numbers, `GameState`, read from the api when `plan_now` asks: resources, supply,
+  the alive count of each type, each item in production with its time left, each structure an SCV builds and whether
+  one walks there first, upgrades done and researching, and the fields, refineries and free geysers at the bot's
+  bases. A bot may change it and hand it back.
+- `_economy.py`: `Economy`, what the bot assumes of its economy (decision 11), with defaults measured in game.
 - `_reward.py`: the reward as data the matrix builder reads, and the extension's public interface: per-type weights
   or concave segments, coverage (effectiveness, enemy counts per bucket, values), floors, the discount half-life, the
   terminal value, the hysteresis bonus and the plan it favours. The bot builds it; the planner never guesses it.
@@ -133,9 +143,8 @@ class Extensions:
   process must coexist and NachOS keeps no module-level state; the interval, the triggers the bot raises, and
   re-anchoring a plan on arrival.
 
-The planner orders nothing. It never touches a unit, and it holds nothing a `UnitDict` should, since a snapshot is
-numbers. Its handlers run at the extension priorities, the snapshot before the bot's handlers, so that the bot reads a
-plan of the turn's state.
+The planner orders nothing. It never touches a unit, and it holds nothing a `UnitDict` should, since a game state is
+numbers. It handles no event: it reads the game when `plan_now` asks.
 
 In AvocaDOS, `Extensions` in `core/api.py` builds the planner, and a `PlanManager` extending `BotManager` builds
 the reward from the strategy, raises the triggers, keeps the current plan, sets the priorities of the next items'
@@ -220,6 +229,12 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    start sits on a bucket's first second: an SCV every 14 seconds on 2-second buckets and every 16 on 4-second ones,
    against 12.14 in game. The toy's 12-second SCV hid it. Phase 6's simulator, or starts queued behind the build ahead,
    would answer it.
+10. **Workers per base** (the owner, review of #239: to come back to). The planner pools workers over every field
+    and refinery, so a new SCV mines from when it is done, even one that has to walk to another base, about 10
+    minerals too many each, and a new base's fields count from when its command center is done. Separate workers per
+    base, with transfers, would roughly double the reference program's 1388 variables and add some 125 integers to its
+    419, whether each future base stands yet, with the solver already short of optimal at 3 seconds; unmeasured. A
+    cheaper middle way, a delay the `Economy` sets before each new SCV mines, was left for this discussion.
 
 ## Risks
 

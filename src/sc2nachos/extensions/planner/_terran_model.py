@@ -16,20 +16,6 @@ from sc2nachos.units import UnitType
 if TYPE_CHECKING:
     from sc2nachos.gamedata import GameData, UnitTypeData
 
-# Twelve SCVs speed mined Pylon's main's eight fields for 2315 minerals in three minutes (in game, build 75689): each
-# of the first two workers a field mines this much a second.
-MINERALS_PER_MINER_SECOND: Final = 2315 / 180 / 12
-# A third worker a field mines at half the rate of the first two (assumed, not measured).
-MINERALS_PER_THIRD_MINER_SECOND: Final = MINERALS_PER_MINER_SECOND / 2
-# Three SCVs a refinery collected 163 to 164 vespene a minute (in game, build 75689).
-VESPENE_PER_COLLECTOR_SECOND: Final = 163.5 / 60 / 3
-COLLECTORS_PER_REFINERY: Final = 3
-# A MULE mines 225 minerals in its life, and an orbital command's energy, 0.7875 a second, calls one every 50
-# (stated, not measured).
-MULE_MINERALS_PER_ORBITAL_SECOND: Final = 225 / (50 / 0.7875)
-# What a townhall built at a new base brings, a full base, as every main and natural of the pool has (corpus).
-MINERAL_FIELDS_PER_NEW_BASE: Final = 8
-GEYSERS_PER_NEW_BASE: Final = 2
 # The game's supply limit.
 SUPPLY_LIMIT: Final = 200
 # What the economy needs whatever the reward: workers, supply, expansions, orbital commands and refineries.

@@ -14,16 +14,20 @@ from sc2nachos.events import TurnEvent
 from sc2nachos.extensions.planner import (
     Coverage,
     CurveSegment,
+    Economy,
     Floor,
+    GameState,
+    Occupation,
     Plan,
     PlannedItem,
     Planner,
     Reward,
     TimeGrid,
+    WorkerBuild,
 )
+from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._planner import whole_until_seconds_of
-from sc2nachos.extensions.planner._snapshot import Occupation, Snapshot
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
@@ -35,13 +39,14 @@ _TERRAN_MODEL = TerranModel(load_game_data())
 _TWO_SECOND_BUCKETS = TimeGrid.uniform(GameTime(seconds=2))
 # Enough branching for every tiny game here to be proven best, the same on every machine.
 _NODE_LIMIT = 20_000
+# The economy the known plans are worked out with: the default, but an SCV walking 6 seconds to every structure.
+_WALKING_6_SECONDS_TO_EVERY_STRUCTURE = Economy(walk_time=lambda _: GameTime(seconds=6))
 
 
-def _game_start(*, walk_seconds: float = 6.0, **changes: Any) -> Snapshot:
+def _game_start(**changes: Any) -> GameState:
     """The state a game starts in: twelve SCVs mining a main's eight fields beside its command center, its two geysers
-    free, 50 minerals, 12 of 15 supply, three free expansions, and SCVs walking `walk_seconds` to every structure,
-    then what `changes` says."""
-    snapshot = Snapshot(
+    free, 50 minerals and 12 of 15 supply, then what `changes` says."""
+    state = GameState(
         time=GameTime.ZERO,
         minerals=50.0,
         vespene=0.0,
@@ -50,31 +55,33 @@ def _game_start(*, walk_seconds: float = 6.0, **changes: Any) -> Snapshot:
         counts={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1},
         mineral_fields=8,
         free_geysers=2,
-        free_expansions=3,
-        walk_seconds={
-            unit_type: walk_seconds for unit_type, item in _TERRAN_MODEL.unit_items.items() if item.is_built_by_worker
-        },
     )
-    return dataclasses.replace(snapshot, **changes)
+    return dataclasses.replace(state, **changes)
 
 
 def _best_plan(
-    snapshot: Snapshot,
+    state: GameState,
     reward: Reward,
     *,
     horizon_seconds: float,
     grid: TimeGrid = _TWO_SECOND_BUCKETS,
     whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
+    economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
+    loss_rates: dict[UnitTypeId, float] | None = None,
+    free_expansions: int | None = None,
 ) -> Plan:
-    """The best plan for `reward` from `snapshot`, over `horizon_seconds` on `grid` with the windows of `whole_until`,
-    proven best."""
+    """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `whole_until`, by
+    `economy`, with `loss_rates` and `free_expansions`, proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
         items=items,
         model=_TERRAN_MODEL,
         edges=grid.edges(GameTime(seconds=horizon_seconds)),
-        snapshot=snapshot,
+        state=state,
         reward=reward,
+        economy=economy,
+        loss_rates=loss_rates or {},
+        free_expansions=free_expansions,
         whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
     )
     plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT)
@@ -213,14 +220,14 @@ class TestKnownPlans:
     ) -> None:
         """With no SCV to build more, and too little time for a reactor to pay, over a minute: a marine started later
         would not be done by its end, and so be worth nothing."""
-        snapshot = _game_start(
+        state = _game_start(
             minerals=1000.0,
             supply_used=0.0,
             supply_cap=100.0,
             counts={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: reactors},
             mineral_fields=0,
         )
-        plan = _best_plan(snapshot, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=60)
+        plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=60)
         assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
 
     def test_a_command_center_starts_at_48_seconds_after_uninterrupted_scv_production(self) -> None:
@@ -234,9 +241,9 @@ class TestKnownPlans:
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER)[0] == 48.0
         assert _start_seconds(plan, UnitTypeId.SCV)[:5] == [0.0, 14.0, 28.0, 42.0, 56.0]
 
-    def test_the_plans_curves_start_from_the_snapshot_and_its_times_at_the_grids_edges(self) -> None:
-        snapshot = _game_start(time=GameTime(seconds=30))
-        plan = _best_plan(snapshot, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+    def test_the_plans_curves_start_from_the_state_and_its_times_at_the_grids_edges(self) -> None:
+        state = _game_start(time=GameTime(seconds=30))
+        plan = _best_plan(state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
 
         assert plan.made_at == GameTime(seconds=30)
         assert plan.times == tuple(GameTime(seconds=seconds) for seconds in range(30, 45, 2))
@@ -247,14 +254,16 @@ class TestKnownPlans:
 
     def test_a_unit_counts_as_it_survives_its_loss_rate(self) -> None:
         """No barracks, so no marine is made."""
-        snapshot = _game_start(counts={UnitTypeId.MARINE: 10}, loss_rates={UnitTypeId.MARINE: 0.01})
-        plan = _best_plan(snapshot, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=10)
+        state = _game_start(counts={UnitTypeId.MARINE: 10})
+        plan = _best_plan(
+            state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=10, loss_rates={UnitTypeId.MARINE: 0.01}
+        )
         assert plan.counts[UnitTypeId.MARINE] == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(6)])
 
     def test_covering_air_buys_marines_not_marauders(self) -> None:
         """Marauders, which cannot shoot up, cover none of it. Two barracks with tech labs make two at a time, and over
         40 seconds those started at 36 would not be done."""
-        snapshot = _game_start(
+        state = _game_start(
             minerals=2000.0,
             vespene=1000.0,
             supply_used=0.0,
@@ -267,24 +276,24 @@ class TestKnownPlans:
             effectiveness={UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 0.0},
             value=1.0,
         )
-        plan = _best_plan(snapshot, Reward(coverages=[air], weights={UnitTypeId.MARAUDER: 0.01}), horizon_seconds=40)
+        plan = _best_plan(state, Reward(coverages=[air], weights={UnitTypeId.MARAUDER: 0.01}), horizon_seconds=40)
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0, 0.0, 18.0, 18.0]
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == []
 
     def test_a_floor_buys_what_it_wants_by_its_time(self) -> None:
-        snapshot = _game_start(
+        state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, counts={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
         floor = Floor(unit_type=UnitTypeId.MARINE, counts=[(GameTime(seconds=36), 2.0)], penalty=10.0)
 
-        without = _best_plan(snapshot, Reward(weights={UnitTypeId.SUPPLY_DEPOT: 1.0}), horizon_seconds=40)
-        held = _best_plan(snapshot, Reward(weights={UnitTypeId.SUPPLY_DEPOT: 1.0}, floors=[floor]), horizon_seconds=40)
+        without = _best_plan(state, Reward(weights={UnitTypeId.SUPPLY_DEPOT: 1.0}), horizon_seconds=40)
+        held = _best_plan(state, Reward(weights={UnitTypeId.SUPPLY_DEPOT: 1.0}, floors=[floor]), horizon_seconds=40)
 
         assert _start_seconds(without, UnitTypeId.MARINE) == []
         assert _start_seconds(held, UnitTypeId.MARINE) == [0.0, 18.0]
 
     def test_a_concave_curve_buys_up_to_where_its_slope_falls_below_nothing(self) -> None:
-        snapshot = _game_start(
+        state = _game_start(
             minerals=1000.0,
             supply_used=0.0,
             supply_cap=100.0,
@@ -292,7 +301,7 @@ class TestKnownPlans:
             mineral_fields=0,
         )
         curve = [CurveSegment(slope=1.0, up_to=3), CurveSegment(slope=-0.1)]
-        plan = _best_plan(snapshot, Reward(curves={UnitTypeId.MARINE: curve}), horizon_seconds=40)
+        plan = _best_plan(state, Reward(curves={UnitTypeId.MARINE: curve}), horizon_seconds=40)
         assert len(_start_seconds(plan, UnitTypeId.MARINE)) == 3
 
     def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
@@ -310,12 +319,12 @@ class TestKnownPlans:
             is_optimal=True,
             solve_seconds=0.0,
         )
-        snapshot = _game_start(minerals=500.0, supply_cap=23.0, counts={UnitTypeId.SCV: 12, UnitTypeId.SUPPLY_DEPOT: 1})
+        state = _game_start(minerals=500.0, supply_cap=23.0, counts={UnitTypeId.SCV: 12, UnitTypeId.SUPPLY_DEPOT: 1})
         reward = Reward(weights={UnitTypeId.SCV: 1.0})
 
-        without = _best_plan(snapshot, reward, horizon_seconds=40)
+        without = _best_plan(state, reward, horizon_seconds=40)
         kept = _best_plan(
-            snapshot, dataclasses.replace(reward, previous_plan=previous, hysteresis_bonus=100.0), horizon_seconds=40
+            state, dataclasses.replace(reward, previous_plan=previous, hysteresis_bonus=100.0), horizon_seconds=40
         )
 
         assert _start_seconds(without, UnitTypeId.BARRACKS) == []
@@ -359,8 +368,11 @@ class TestWholeUntil:
                 items=items,
                 model=_TERRAN_MODEL,
                 edges=_TWO_SECOND_BUCKETS.edges(GameTime(seconds=60)),
-                snapshot=_game_start(),
+                state=_game_start(),
                 reward=reward,
+                economy=Economy(),
+                loss_rates={},
+                free_expansions=None,
                 whole_until_seconds=[whole_until.seconds] * len(items),
             )
             return program.linear_program.integral_count
@@ -368,6 +380,141 @@ class TestWholeUntil:
         assert whole_numbers(GameTime.ZERO) == 0
         assert whole_numbers(GameTime(seconds=10)) == 5 * len(items)
         assert whole_numbers(GameTime.INFINITE) == 30 * len(items)
+
+
+class TestEconomy:
+    @pytest.mark.parametrize(
+        "arguments",
+        [
+            {"minerals_per_miner_second": (1.0, 1.1)},
+            {"vespene_per_collector_second": (-0.1,)},
+            {"mule_minerals_per_orbital_second": -1.0},
+            {"mineral_fields_per_new_base": -1},
+            {"geysers_per_new_base": -1},
+        ],
+        ids=[
+            "a rate above the one before",
+            "a negative rate",
+            "a negative MULE rate",
+            "negative fields",
+            "negative geysers",
+        ],
+    )
+    def test_a_rate_above_the_one_before_or_a_negative_number_raises(self, arguments: dict[str, Any]) -> None:
+        with pytest.raises(ValueError):
+            Economy(**arguments)
+
+    def test_rates_become_tiers_of_equal_rates_above_0(self) -> None:
+        assert rate_tiers((1.0, 1.0, 0.5, 0.0)) == ((2, 1.0), (1, 0.5))
+
+    def test_an_scv_walks_10_seconds_to_a_command_center_and_6_to_any_other_structure_or_what_walk_time_returns(
+        self,
+    ) -> None:
+        unit_types = (UnitTypeId.COMMAND_CENTER, UnitTypeId.SUPPLY_DEPOT, UnitTypeId.BARRACKS)
+        assert walk_seconds_of(Economy(), unit_types) == {
+            UnitTypeId.COMMAND_CENTER: 10.0,
+            UnitTypeId.SUPPLY_DEPOT: 6.0,
+            UnitTypeId.BARRACKS: 6.0,
+        }
+        depots_near = Economy(walk_time=lambda t: GameTime(seconds=3) if t == UnitTypeId.SUPPLY_DEPOT else None)
+        assert walk_seconds_of(depots_near, unit_types)[UnitTypeId.SUPPLY_DEPOT] == 3.0
+        assert walk_seconds_of(depots_near, unit_types)[UnitTypeId.COMMAND_CENTER] == 10.0
+
+    def test_a_negative_walk_raises(self) -> None:
+        with pytest.raises(ValueError, match="BARRACKS"):
+            walk_seconds_of(Economy(walk_time=lambda _: GameTime(seconds=-1)), [UnitTypeId.BARRACKS])
+
+    @pytest.mark.parametrize(
+        ("rates", "marine_start"),
+        [((1.0718, 1.0718, 0.5359), 2.0), ((1.0718, 1.0718), 3.0), ((1.0718,), 6.0)],
+        ids=["three a field", "two a field", "one a field"],
+    )
+    def test_a_worker_past_the_mining_rates_mines_nothing(self, rates: tuple[float, ...], marine_start: float) -> None:
+        """24 SCVs on 8 fields and no minerals, on 1-second buckets: a start pays from the stock at its bucket's start
+        and half the bucket's income, so the marine's 50 minerals come at 2, 3 and 6 seconds, mined at 21.4, 17.1 and
+        8.6 a second."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=24.0,
+            supply_cap=30.0,
+            counts={UnitTypeId.SCV: 24, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=30,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=Economy(minerals_per_miner_second=rates),
+        )
+        assert _start_seconds(plan, UnitTypeId.MARINE) == [marine_start]
+
+    @pytest.mark.parametrize(
+        ("rates", "marauder_start"),
+        [((0.9083, 0.9083, 0.9083), 9.0), ((0.9083, 0.9083), 14.0)],
+        ids=["three a refinery", "two a refinery"],
+    )
+    def test_a_worker_past_the_collecting_rates_collects_nothing(
+        self, rates: tuple[float, ...], marauder_start: float
+    ) -> None:
+        """No vespene and one refinery, on 1-second buckets: the marauder's 25 vespene come at 9 and 14 seconds,
+        collected at 2.7 and 1.8 a second."""
+        state = _game_start(
+            minerals=500.0,
+            counts={
+                UnitTypeId.SCV: 12,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.BARRACKS: 1,
+                UnitTypeId.TECH_LAB_BARRACKS: 1,
+                UnitTypeId.REFINERY: 1,
+            },
+            refineries_with_vespene=1,
+            free_geysers=1,
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARAUDER: 1.0}),
+            horizon_seconds=40,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=Economy(vespene_per_collector_second=rates),
+        )
+        assert _start_seconds(plan, UnitTypeId.MARAUDER) == [marauder_start]
+
+    @pytest.mark.parametrize(
+        ("mule_rate", "marine_starts"), [(225 / (50 / 0.7875), [14.0]), (0.0, [])], ids=["MULEs", "no MULEs"]
+    )
+    def test_an_orbital_commands_mules_mine_what_the_economy_says(
+        self, mule_rate: float, marine_starts: list[float]
+    ) -> None:
+        """No SCV and no minerals, on 1-second buckets: the MULEs' 3.5 minerals a second pay for a marine at 14 seconds,
+        and with none, nothing pays for one."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=0.0,
+            counts={UnitTypeId.ORBITAL_COMMAND: 1, UnitTypeId.BARRACKS: 1},
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=40,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=dataclasses.replace(
+                _WALKING_6_SECONDS_TO_EVERY_STRUCTURE, mule_minerals_per_orbital_second=mule_rate
+            ),
+        )
+        assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
+
+    def test_with_no_free_expansion_no_command_center_starts(self) -> None:
+        """The known plan that starts one at 48 seconds."""
+        reward = Reward(weights={UnitTypeId.SCV: 2.0, UnitTypeId.COMMAND_CENTER: 1.0})
+        plan = _best_plan(
+            _game_start(),
+            reward,
+            horizon_seconds=150,
+            grid=TimeGrid.doubling(),
+            whole_until=_whole_over_any_horizon,
+            free_expansions=0,
+        )
+        assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER) == []
 
 
 class TestReward:
@@ -522,30 +669,35 @@ def _main_base_at(step: int, *, morphing: bool = False) -> sc2api_pb2.ResponseOb
     return make_observation(step, units=units, common=common)
 
 
-def _snapshots_of(*observations: sc2api_pb2.ResponseObservation) -> list[Snapshot]:
-    """The snapshot of each turn of a game of `observations` on a map of open ground, its planner noting the morphs."""
+def _states_of(*observations: sc2api_pb2.ResponseObservation) -> list[GameState]:
+    """The state of each turn of a game of `observations` on a map of open ground, as its planner reads it."""
     game = ScriptedGame(
         [*observations, make_observation(observations[-1].observation.game_loop + 1)],
         game_info=make_game_info(*["#" * 48] * 64),
         data=shipped_game_data(),
     )
     api = Api(extensions=Planner)
-    snapshots: list[Snapshot] = []
+    states: list[GameState] = []
 
     @api.on(TurnEvent)
-    def take_snapshot(_: TurnEvent) -> None:
-        snapshots.append(Snapshot.from_api(api, model=_TERRAN_MODEL, walk_time=GameTime(seconds=6), loss_rates={}))
+    def read_state(_: TurnEvent) -> None:
+        states.append(api.extensions.game_state())
 
     api.play(game.joined())
-    return snapshots[: len(observations)]
+    return states[: len(observations)]
 
 
-class TestSnapshot:
+def _worker_builds_rounded(state: GameState) -> list[WorkerBuild]:
+    """`state`'s worker builds, each one's seconds left rounded to a hundredth."""
+    return [dataclasses.replace(build, seconds_left=round(build.seconds_left, 2)) for build in state.worker_builds]
+
+
+class TestGameState:
     def test_it_reads_stock_supply_and_finished_units_by_their_usual_form(self) -> None:
-        (snapshot,) = _snapshots_of(_main_base_at(0))
+        (state,) = _states_of(_main_base_at(0))
 
-        assert (snapshot.minerals, snapshot.vespene, snapshot.supply_used, snapshot.supply_cap) == (200, 25, 15, 23)
-        assert snapshot.counts == {
+        assert (state.minerals, state.vespene, state.supply_used, state.supply_cap) == (200, 25, 15, 23)
+        assert state.counts == {
             UnitTypeId.SCV: 12,
             UnitTypeId.COMMAND_CENTER: 1,
             UnitTypeId.BARRACKS: 1,
@@ -554,29 +706,30 @@ class TestSnapshot:
         }
 
     def test_it_reads_what_is_in_production_with_the_seconds_until_done_and_what_keeps_each_producer_busy(self) -> None:
-        """A marine queued behind a marauder waits for it; the SCV walking to build its depot walks 6 seconds, builds,
-        and walks back."""
-        (snapshot,) = _snapshots_of(_main_base_at(0))
+        """A marine queued behind a marauder waits for it; the depot an SCV walks to build waits for its walk, which the
+        state leaves to the economy."""
+        (state,) = _states_of(_main_base_at(0))
         scv = _TERRAN_MODEL.unit_items[UnitTypeId.SCV].build_seconds
         marauder = _TERRAN_MODEL.unit_items[UnitTypeId.MARAUDER].build_seconds
         marine = _TERRAN_MODEL.unit_items[UnitTypeId.MARINE].build_seconds
         depot = _TERRAN_MODEL.unit_items[UnitTypeId.SUPPLY_DEPOT].build_seconds
         stimpack = _TERRAN_MODEL.upgrade_items[UpgradeId.STIMPACK].build_seconds
 
-        assert sorted(snapshot.unit_completions) == pytest.approx(
+        assert sorted(state.unit_completions) == pytest.approx(
             sorted(
                 [
                     (UnitTypeId.SCV, 0.75 * scv),
                     (UnitTypeId.MARAUDER, 0.5 * marauder),
                     (UnitTypeId.MARINE, 0.5 * marauder + marine),
-                    (UnitTypeId.SUPPLY_DEPOT, 6 + depot),
                 ]
             ),
             abs=0.05,
         )
-        assert snapshot.upgrade_completions == {UpgradeId.STIMPACK: pytest.approx(0.75 * stimpack, abs=0.05)}
-        assert snapshot.builders_free_after == pytest.approx((6 + depot + 6,), abs=0.05)
-        assert sorted(snapshot.occupations, key=lambda occupation: occupation.start_seconds) == pytest.approx(
+        assert state.upgrade_completions == {UpgradeId.STIMPACK: pytest.approx(0.75 * stimpack, abs=0.05)}
+        assert _worker_builds_rounded(state) == [
+            WorkerBuild(unit_type=UnitTypeId.SUPPLY_DEPOT, seconds_left=round(depot, 2), builder_walks_there=True)
+        ]
+        assert sorted(state.occupations, key=lambda occupation: occupation.start_seconds) == pytest.approx(
             [
                 Occupation(
                     producer=UnitTypeId.COMMAND_CENTER, start_seconds=0.0, end_seconds=0.75 * scv, needs_tech_lab=False
@@ -599,17 +752,27 @@ class TestSnapshot:
             ]
         )
 
-    def test_it_reads_the_fields_and_free_geysers_of_its_bases_and_the_walk_to_the_nearest_free_expansion(self) -> None:
-        """The natural's center lies 28 from the main's, straight up open ground."""
-        (snapshot,) = _snapshots_of(_main_base_at(0))
-        scv_speed = load_game_data().units[UnitTypeId.SCV].speed
+    def test_it_reads_the_fields_and_free_geysers_of_its_bases_but_not_of_a_free_expansion(self) -> None:
+        (state,) = _states_of(_main_base_at(0))
 
-        assert (snapshot.mineral_fields, snapshot.free_geysers, snapshot.refineries_with_vespene) == (8, 1, 1)
-        assert snapshot.free_expansions == 1
-        assert snapshot.walk_seconds[UnitTypeId.COMMAND_CENTER] == pytest.approx(28 / scv_speed, rel=0.05)
-        assert snapshot.walk_seconds[UnitTypeId.BARRACKS] == 6.0
+        assert (state.mineral_fields, state.free_geysers, state.refineries_with_vespene) == (8, 1, 1)
 
-    def test_a_command_center_an_scv_walks_to_build_takes_its_expansion(self) -> None:
+    def test_a_refinery_an_scv_walks_to_build_takes_its_geyser(self) -> None:
+        observation = _main_base_at(0)
+        free_geyser_tag = 111
+        order = raw_pb2.UnitOrder(ability_id=RawAbilityId.TerranBuild_Refinery, target_unit_tag=free_geyser_tag)
+        observation.observation.raw_data.units.append(
+            make_unit(11, UnitTypeId.SCV, at=(24.0, 30.0), build_progress=1.0, orders=[order])
+        )
+        (state,) = _states_of(observation)
+        refinery = _TERRAN_MODEL.unit_items[UnitTypeId.REFINERY].build_seconds
+
+        assert state.free_geysers == 0
+        assert WorkerBuild(
+            unit_type=UnitTypeId.REFINERY, seconds_left=round(refinery, 2), builder_walks_there=True
+        ) in _worker_builds_rounded(state)
+
+    def test_a_command_center_an_scv_walks_to_build_waits_for_its_walk(self) -> None:
         observation = _main_base_at(0)
         observation.observation.raw_data.units.append(
             make_unit(
@@ -620,31 +783,27 @@ class TestSnapshot:
                 orders=[_unit_order(RawAbilityId.TerranBuild_CommandCenter, at=_NATURAL_CENTER)],
             )
         )
-        (snapshot,) = _snapshots_of(observation)
+        (state,) = _states_of(observation)
 
-        assert snapshot.free_expansions == 0
-        assert (
-            UnitTypeId.COMMAND_CENTER,
-            pytest.approx(snapshot.walk_seconds[UnitTypeId.COMMAND_CENTER] + 71.43, abs=0.05),
-        ) in snapshot.unit_completions
+        assert WorkerBuild(
+            unit_type=UnitTypeId.COMMAND_CENTER, seconds_left=71.43, builder_walks_there=True
+        ) in _worker_builds_rounded(state)
 
     def test_a_command_centers_morph_counts_down_from_the_observation_before_the_first_showing_it(self) -> None:
         """Given after the observation at 0 and seen at 10 and 20 seconds, it has 5 of its 25 left at the last."""
-        snapshots = _snapshots_of(
-            _main_base_at(0), _main_base_at(224, morphing=True), _main_base_at(448, morphing=True)
-        )[1:]
+        states = _states_of(_main_base_at(0), _main_base_at(224, morphing=True), _main_base_at(448, morphing=True))[1:]
         orbital = _TERRAN_MODEL.unit_items[UnitTypeId.ORBITAL_COMMAND].build_seconds
         left = [
             seconds
-            for snapshot in snapshots
-            for unit_type, seconds in snapshot.unit_completions
+            for state in states
+            for unit_type, seconds in state.unit_completions
             if unit_type == UnitTypeId.ORBITAL_COMMAND
         ]
         assert left == pytest.approx([orbital - 10, orbital - 20])
         assert all(
             Occupation(producer=UnitTypeId.COMMAND_CENTER, start_seconds=0.0, end_seconds=seconds, needs_tech_lab=False)
-            in snapshot.occupations
-            for snapshot, seconds in zip(snapshots, left, strict=True)
+            in state.occupations
+            for state, seconds in zip(states, left, strict=True)
         )
 
 
@@ -692,11 +851,9 @@ class TestPlanner:
             Api(extensions=Planner).play(game.joined())
 
     @pytest.mark.parametrize(
-        "arguments",
-        [{"time_limit": 0.0}, {"node_limit": 0}, {"walk_time": GameTime(seconds=-1)}],
-        ids=["a time limit of 0", "a node limit of 0", "a negative walk"],
+        "arguments", [{"time_limit": 0.0}, {"node_limit": 0}], ids=["a time limit of 0", "a node limit of 0"]
     )
-    def test_a_bad_limit_or_walk_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_bad_limit_raises(self, arguments: dict[str, Any]) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)])
         with pytest.raises(ValueError):
             Api(extensions=lambda api: Planner(api, **arguments)).play(game.joined())
@@ -721,4 +878,38 @@ class TestPlanner:
             api.extensions.plan_now(Reward(weights={UnitTypeId.MARINE: 1.0}), horizon=GameTime(seconds=10))
 
         with pytest.raises(ValueError, match="negative time"):
+            api.play(game.joined())
+
+    def test_it_plans_from_a_state_it_is_handed(self) -> None:
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        plans: list[Plan] = []
+
+        @api.on(TurnEvent)
+        def plan_with_nothing_in_stock(_: TurnEvent) -> None:
+            state = dataclasses.replace(api.extensions.game_state(), minerals=0.0)
+            reward = Reward(weights={UnitTypeId.MARINE: 1.0})
+            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), state=state))
+
+        api.play(game.joined())
+
+        ((plan),) = plans
+        assert plan.minerals[0] == 0.0
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [{"free_expansions": -1}, {"economy": Economy(walk_time=lambda _: GameTime(seconds=-1))}],
+        ids=["negative free expansions", "a negative walk"],
+    )
+    def test_a_negative_count_of_free_expansions_or_walk_raises(self, arguments: dict[str, Any]) -> None:
+        game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
+        api = Api(extensions=Planner)
+
+        @api.on(TurnEvent)
+        def plan_marines(_: TurnEvent) -> None:
+            api.extensions.plan_now(Reward(weights={UnitTypeId.MARINE: 1.0}), horizon=GameTime(seconds=10), **arguments)
+
+        with pytest.raises(ValueError):
             api.play(game.joined())

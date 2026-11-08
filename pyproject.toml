@@ -111,6 +111,8 @@ extend-immutable-calls = [
     "sc2nachos.GameTime",
     "sc2nachos.gametime.GameTime",
     "sc2nachos.gametime._game_time.GameTime",
+    "sc2nachos.extensions.planner.Economy",
+    "sc2nachos.extensions.planner._economy.Economy",
 ]
 
 [tool.ruff.lint.per-file-ignores]

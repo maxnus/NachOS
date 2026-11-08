@@ -306,7 +306,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 - **The build planner**, a phase at a time, as [planner-plan.md](planner-plan.md) orders them: after phase 1, playing it
   in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
-  the owner to settle: the 3-second exit, and the count-form cut.
+  the owner to settle: the 3-second exit, the count-form cut, and workers per base, which the owner wants to come back
+  to.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.

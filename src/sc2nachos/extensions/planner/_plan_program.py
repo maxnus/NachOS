@@ -1,78 +1,87 @@
-"""The mixed-integer linear program of one plan: from the items, the grid, the snapshot and the reward, to the plan."""
+"""The mixed-integer linear program of one plan: from the game's state, the economy and the reward, to the plan."""
 
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, final
 
 import numpy as np
 from numpy.typing import NDArray
 
+from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._plan import Plan, PlannedItem
 from sc2nachos.extensions.planner._reward import count_at
-from sc2nachos.extensions.planner._terran_model import (
-    COLLECTORS_PER_REFINERY,
-    GEYSERS_PER_NEW_BASE,
-    MINERAL_FIELDS_PER_NEW_BASE,
-    MINERALS_PER_MINER_SECOND,
-    MINERALS_PER_THIRD_MINER_SECOND,
-    MULE_MINERALS_PER_ORBITAL_SECOND,
-    SUPPLY_LIMIT,
-    VESPENE_PER_COLLECTOR_SECOND,
-)
+from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
+    from sc2nachos.extensions.planner._economy import Economy
+    from sc2nachos.extensions.planner._game_state import GameState
     from sc2nachos.extensions.planner._reward import Coverage, CurveSegment, Floor, Reward
-    from sc2nachos.extensions.planner._snapshot import Snapshot
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
 
 # The most an item without a tighter bound starts in one bucket.
 _MOST_STARTS_IN_A_BUCKET: Final = 100.0
-# How many workers a field takes in the first tier of mining, and in the second.
-_MINERS_PER_FIELD: Final = 2
-_THIRD_MINERS_PER_FIELD: Final = 1
 # A start pays from the stock at its bucket's start and this share of the bucket's income.
 _SHARE_OF_INCOME_SPENT: Final = 0.5
 
 
 @final
+@dataclass(frozen=True, slots=True)
+class _WorkerTier:
+    """One tier of the workers at mineral fields or refineries: how many work in it in each bucket, how many of them a
+    field or refinery takes, and what each brings in a second."""
+
+    block: VariableBlock
+    workers_per_site: int
+    per_worker_second: float
+
+
+@final
 class PlanProgram:
-    """The mixed-integer linear program of one plan over the buckets between `edges`, in seconds from the snapshot.
+    """The mixed-integer linear program of one plan over the buckets between `edges`, in seconds from `state`'s time.
 
     Each item's starts in each bucket are a variable, whole where the bucket starts before the item's time in
     `whole_until_seconds`, one for each item in the order of `items`. A start pays from the stock at its bucket's start
     plus half the bucket's income, keeps its producer busy for its build time over the buckets it spans, its SCV from
     the walk there through the build to the walk back, takes its supply at once, and counts as done from the first edge
-    at or after its end. Workers mine in two tiers, two a field and a third at half the rate, collect three a refinery,
-    or build, and each orbital command adds a MULE's income. A unit counts as it survives its loss rate, for income,
-    supply, the reward and coverage.
+    at or after its end. Workers mine, collect or build, pooled over every field and refinery, in the tiers of
+    `economy`'s rates, and each orbital command adds its MULEs' income. A unit counts as it survives its loss rate in
+    `loss_rates`, for income, supply, the reward and coverage. At most `free_expansions` command centers start, any
+    number if `None`.
 
-    Raises `ValueError` unless `whole_until_seconds` hold one time for each item.
+    Raises `ValueError` unless `whole_until_seconds` hold one time for each item, and for a negative walk from
+    `economy`'s `walk_time`.
     """
 
     __slots__ = (
-        "_collectors",
+        "_builders_free_after",
+        "_collecting",
         "_completion_edges",
+        "_completions",
         "_discounts",
+        "_economy",
         "_edges",
+        "_free_expansions",
         "_index_of_unit_type",
         "_index_of_upgrade",
         "_items",
-        "_miners",
+        "_loss_rates",
         "_minerals",
+        "_mining",
         "_model",
         "_objective",
         "_program",
         "_reward",
-        "_snapshot",
         "_starts",
-        "_third_miners",
+        "_state",
         "_vespene",
+        "_walk_seconds",
         "_whole",
         "_widths",
     )
@@ -83,14 +92,25 @@ class PlanProgram:
         items: Sequence[Item],
         model: TerranModel,
         edges: Sequence[float],
-        snapshot: Snapshot,
+        state: GameState,
         reward: Reward,
+        economy: Economy,
+        loss_rates: Mapping[UnitTypeId, float],
+        free_expansions: int | None,
         whole_until_seconds: Sequence[float],
     ) -> None:
+        if len(whole_until_seconds) != len(items):
+            raise ValueError(f"{len(whole_until_seconds)} windows for {len(items)} items")
         self._items = tuple(items)
         self._model = model
-        self._snapshot = snapshot
+        self._state = state
         self._reward = reward
+        self._economy = economy
+        self._loss_rates = {model.usual_form(unit_type): rate for unit_type, rate in loss_rates.items()}
+        self._free_expansions = free_expansions
+        built_by_worker = (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
+        self._walk_seconds = walk_seconds_of(economy, built_by_worker)
+        self._completions, self._builders_free_after = self._completions_and_builders()
         self._edges: FloatArray = np.asarray(edges, dtype=float)
         self._widths: FloatArray = np.diff(self._edges)
         self._index_of_unit_type = {
@@ -99,22 +119,14 @@ class PlanProgram:
         self._index_of_upgrade = {item.upgrade: i for i, item in enumerate(self._items) if item.upgrade is not None}
         self._program = LinearProgram()
         self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
-        if len(whole_until_seconds) != len(self._items):
-            raise ValueError(f"{len(whole_until_seconds)} windows for {len(self._items)} items")
         self._whole = [self._edges[:-1] < whole_until - SECONDS_TOLERANCE for whole_until in whole_until_seconds]
         self._starts = [self._add_starts(item, whole) for item, whole in zip(self._items, self._whole, strict=True)]
-        self._minerals = self._add_stock(snapshot.minerals)
-        self._vespene = self._add_stock(snapshot.vespene)
-        self._miners = self._program.add_variables(self._bucket_count)
-        self._third_miners = self._program.add_variables(self._bucket_count)
-        self._collectors = self._program.add_variables(self._bucket_count)
+        self._minerals = self._add_stock(state.minerals)
+        self._vespene = self._add_stock(state.vespene)
+        self._mining = self._add_worker_tiers(economy.minerals_per_miner_second)
+        self._collecting = self._add_worker_tiers(economy.vespene_per_collector_second)
         self._discounts = self._discounts_of(reward)
-        self._constrain_resources()
-        self._constrain_workers()
-        self._constrain_supply()
-        self._constrain_producers()
-        self._constrain_counts()
-        self._constrain_prerequisites()
+        self._add_constraints()
         self._objective = self._reward_expression()
 
     @property
@@ -135,9 +147,9 @@ class PlanProgram:
             at_end = self._count_alive(unit_type, at_end=True).value_of(values)[-1]
             counts[unit_type] = (*(float(count) for count in at_starts), float(at_end))
         return Plan(
-            made_at=self._snapshot.time,
+            made_at=self._state.time,
             items=self._planned_items(values),
-            times=tuple(self._snapshot.time + GameTime(seconds=edge) for edge in self._edges),
+            times=tuple(self._state.time + GameTime(seconds=edge) for edge in self._edges),
             minerals=tuple(float(stock) for stock in _values_of(self._minerals, values)),
             vespene=tuple(float(stock) for stock in _values_of(self._vespene, values)),
             counts=counts,
@@ -154,15 +166,27 @@ class PlanProgram:
 
     # The variables.
 
+    def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
+        """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
+        and the seconds until each SCV building, or walking to build, is back at work after its walk back."""
+        completions = list(self._state.unit_completions)
+        builders_free_after: list[float] = []
+        for build in self._state.worker_builds:
+            walk = self._walk_seconds.get(build.unit_type, 0.0)
+            done_after = build.seconds_left + (walk if build.builder_walks_there else 0.0)
+            completions.append((build.unit_type, done_after))
+            builders_free_after.append(done_after + walk)
+        return tuple(completions), tuple(builders_free_after)
+
     def _add_starts(self, item: Item, whole: NDArray[np.bool_]) -> VariableBlock:
         """The variables of `item`'s starts in each bucket: none before an SCV could walk there, and none of an upgrade
         done or being researched."""
         bucket_starts = self._edges[:-1]
         upper = np.full(len(bucket_starts), self._most_starts_in_a_bucket(item))
         if item.unit_type is not None and item.is_built_by_worker:
-            upper[bucket_starts < self._snapshot.walk_seconds.get(item.unit_type, 0.0) - SECONDS_TOLERANCE] = 0.0
+            upper[bucket_starts < self._walk_seconds.get(item.unit_type, 0.0) - SECONDS_TOLERANCE] = 0.0
         if item.upgrade is not None and (
-            item.upgrade in self._snapshot.upgrades or item.upgrade in self._snapshot.upgrade_completions
+            item.upgrade in self._state.upgrades or item.upgrade in self._state.upgrade_completions
         ):
             upper[:] = 0.0
         return self._program.add_variables(len(bucket_starts), upper=upper, integral=whole)
@@ -174,25 +198,34 @@ class PlanProgram:
         lower[0] = upper[0] = initial
         return self._program.add_variables(self._bucket_count + 1, lower=lower, upper=upper)
 
+    def _add_worker_tiers(self, rates: Sequence[float]) -> tuple[_WorkerTier, ...]:
+        """The variables of how many workers work in each tier of `rates`, each worker's at a field or refinery, in each
+        bucket."""
+        return tuple(
+            _WorkerTier(self._program.add_variables(self._bucket_count), workers, rate)
+            for workers, rate in rate_tiers(rates)
+        )
+
     def _most_starts_in_a_bucket(self, item: Item) -> float:
         """The most of `item` that can start in one bucket."""
-        snapshot = self._snapshot
-        townhalls_coming = snapshot.free_expansions + _count_of(snapshot.unit_completions, UnitTypeId.COMMAND_CENTER)
+        state = self._state
+        new_townhalls = _MOST_STARTS_IN_A_BUCKET if self._free_expansions is None else float(self._free_expansions)
+        townhalls_coming = new_townhalls + _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
         if item.upgrade is not None:
             return 1.0
         if item.unit_type == UnitTypeId.COMMAND_CENTER:
-            return float(snapshot.free_expansions)
+            return new_townhalls
         if item.unit_type == UnitTypeId.REFINERY:
-            return float(snapshot.free_geysers + GEYSERS_PER_NEW_BASE * townhalls_coming)
+            return float(state.free_geysers + self._economy.geysers_per_new_base * townhalls_coming)
         if item.morphed_from is not None:
-            return float(snapshot.counts.get(item.morphed_from, 0) + townhalls_coming)
+            return float(state.counts.get(item.morphed_from, 0) + townhalls_coming)
         if item.supply_used > 0:
             return float(math.floor(SUPPLY_LIMIT / item.supply_used))
         return _MOST_STARTS_IN_A_BUCKET
 
     def _discounts_of(self, reward: Reward) -> FloatArray:
-        """What each bucket's seconds count for, discounted from the snapshot, the last bucket's with what the state at
-        the horizon counts for after it."""
+        """What each bucket's seconds count for, discounted from the plan's start, the last bucket's with what the state
+        at the horizon counts for after it."""
         horizon = float(self._edges[-1])
         tail = reward.terminal_time.seconds
         if reward.half_life is None:
@@ -243,11 +276,11 @@ class PlanProgram:
     def _count_alive(self, unit_type: UnitTypeId, *, at_end: bool, survive: bool = True) -> RowExpression:
         """The units of `unit_type` alive at each bucket's start, or its end: those alive now, those in production and
         those the plan starts, less those morphed into another type, each as it survives its loss rate if `survive`."""
-        rate = self._snapshot.loss_rates.get(unit_type, 0.0) if survive else 0.0
+        rate = self._loss_rates.get(unit_type, 0.0) if survive else 0.0
         rows = self._row_edges(at_end=at_end)
         count = RowExpression(len(rows))
-        count.constant = self._snapshot.counts.get(unit_type, 0) * np.exp(-rate * self._edges[rows.astype(int)])
-        for completion_type, seconds in self._snapshot.unit_completions:
+        count.constant = self._state.counts.get(unit_type, 0) * np.exp(-rate * self._edges[rows.astype(int)])
+        for completion_type, seconds in self._completions:
             if completion_type == unit_type:
                 count.constant += self._done_by(seconds, at_end=at_end, rate=rate)
             elif self._model.unit_items[completion_type].morphed_from == unit_type:
@@ -259,10 +292,10 @@ class PlanProgram:
                 count.add_expression(self._starts_done(index, at_end=at_end), -1.0)
         return count
 
-    def _made_since_snapshot(self, unit_type: UnitTypeId) -> RowExpression:
-        """The units of `unit_type` done since the snapshot by each bucket's start, from production or the plan."""
+    def _made_since_start(self, unit_type: UnitTypeId) -> RowExpression:
+        """The units of `unit_type` done since the plan's start by each bucket's start, from production or the plan."""
         made = RowExpression(self._bucket_count)
-        for completion_type, seconds in self._snapshot.unit_completions:
+        for completion_type, seconds in self._completions:
             if completion_type == unit_type:
                 made.constant += self._done_by(seconds, at_end=False)
         if (index := self._index_of_unit_type.get(unit_type)) is not None:
@@ -272,10 +305,10 @@ class PlanProgram:
     def _upgrade_done(self, upgrade: UpgradeId, *, at_end: bool) -> RowExpression:
         """Whether `upgrade` is done by each bucket's start, or its end."""
         done = RowExpression(self._bucket_count)
-        if upgrade in self._snapshot.upgrades:
+        if upgrade in self._state.upgrades:
             done.constant += 1.0
-        elif upgrade in self._snapshot.upgrade_completions:
-            done.constant += self._done_by(self._snapshot.upgrade_completions[upgrade], at_end=at_end)
+        elif upgrade in self._state.upgrade_completions:
+            done.constant += self._done_by(self._state.upgrade_completions[upgrade], at_end=at_end)
         elif (index := self._index_of_upgrade.get(upgrade)) is not None:
             done.add_expression(self._starts_done(index, at_end=at_end))
         return done
@@ -289,7 +322,7 @@ class PlanProgram:
         return np.maximum(overlap_end - overlap_start, 0.0)
 
     def _busy_seconds_until(self, end_seconds: float, *, start_seconds: float = 0.0) -> FloatArray:
-        """The seconds of each bucket within `start_seconds` to `end_seconds` from the snapshot."""
+        """The seconds of each bucket within `start_seconds` to `end_seconds` from the plan's start."""
         overlap_start = np.maximum(self._edges[:-1], start_seconds)
         return np.maximum(np.minimum(self._edges[1:], end_seconds) - overlap_start, 0.0)
 
@@ -310,16 +343,27 @@ class PlanProgram:
 
     # The constraints.
 
+    def _add_constraints(self) -> None:
+        """Every constraint of the program."""
+        self._constrain_resources()
+        self._constrain_workers()
+        self._constrain_supply()
+        self._constrain_producers()
+        self._constrain_counts()
+        self._constrain_prerequisites()
+
     def _constrain_resources(self) -> None:
         """Each bucket's stock of minerals and vespene: the stock before, plus what was mined, less what started; and
         what starts paid from the stock at the bucket's start and half its income."""
         buckets = self._bucket_count
         mineral_income = RowExpression(buckets)
-        mineral_income.add(self._miners, np.eye(buckets) * MINERALS_PER_MINER_SECOND)
-        mineral_income.add(self._third_miners, np.eye(buckets) * MINERALS_PER_THIRD_MINER_SECOND)
-        orbitals = self._count_alive(UnitTypeId.ORBITAL_COMMAND, at_end=False)
-        mineral_income.add_expression(orbitals, MULE_MINERALS_PER_ORBITAL_SECOND)
-        vespene_income = RowExpression(buckets).add(self._collectors, np.eye(buckets) * VESPENE_PER_COLLECTOR_SECOND)
+        for tier in self._mining:
+            mineral_income.add(tier.block, np.eye(buckets) * tier.per_worker_second)
+        if mule_rate := self._economy.mule_minerals_per_orbital_second:
+            mineral_income.add_expression(self._count_alive(UnitTypeId.ORBITAL_COMMAND, at_end=False), mule_rate)
+        vespene_income = RowExpression(buckets)
+        for tier in self._collecting:
+            vespene_income.add(tier.block, np.eye(buckets) * tier.per_worker_second)
         for stock, income, is_minerals in (
             (self._minerals, mineral_income, True),
             (self._vespene, vespene_income, False),
@@ -340,14 +384,14 @@ class PlanProgram:
         walks, the builders counted whole where a bucket is shorter than every build."""
         buckets = self._bucket_count
         working = RowExpression(buckets)
-        for block in (self._miners, self._third_miners, self._collectors):
-            working.add(block, np.eye(buckets))
+        for tier in (*self._mining, *self._collecting):
+            working.add(tier.block, np.eye(buckets))
         builders = RowExpression(buckets)
         built = [(index, item) for index, item in enumerate(self._items) if item.is_built_by_worker]
         for index, item in built:
             walk = self._walk_seconds_of(item)
             builders.add(self._starts[index], self._busy_seconds(item, before=walk, after=walk) / self._widths[:, None])
-        for free_after in self._snapshot.builders_free_after:
+        for free_after in self._builders_free_after:
             builders.constant += self._busy_seconds_until(free_after) / self._widths
         workers = self._count_alive(UnitTypeId.SCV, at_end=False)
         self._constrain_at_most(RowExpression(buckets).add_expression(working).add_expression(builders), workers)
@@ -357,7 +401,7 @@ class PlanProgram:
         builders_whole = RowExpression(buckets).add_expression(working)
         for index, item in built:
             builders_whole.add(self._starts[index], (self._busy_seconds(item) > SECONDS_TOLERANCE).astype(float))
-        for free_after in self._snapshot.builders_free_after:
+        for free_after in self._builders_free_after:
             builders_whole.constant += self._busy_seconds_until(free_after) > SECONDS_TOLERANCE
         self._constrain_at_most(builders_whole.selected(short_and_whole), workers.selected(short_and_whole))
 
@@ -366,18 +410,18 @@ class PlanProgram:
         given back as it is lost, and the cap raised as a supply depot or a command center is done."""
         buckets = self._bucket_count
         used = RowExpression(buckets)
-        used.constant += self._snapshot.supply_used
+        used.constant += self._state.supply_used
         cap = RowExpression(buckets)
-        cap.constant += self._snapshot.supply_cap
+        cap.constant += self._state.supply_cap
         for index, item in enumerate(self._items):
             if item.supply_used:
                 used.add_expression(self._started_so_far(index), item.supply_used)
             if item.supply_provided:
                 cap.add_expression(self._starts_done(index, at_end=False), item.supply_provided)
-        for completion_type, seconds in self._snapshot.unit_completions:
+        for completion_type, seconds in self._completions:
             if provided := self._model.unit_items[completion_type].supply_provided:
                 cap.constant += provided * self._done_by(seconds, at_end=False)
-        for unit_type, rate in self._snapshot.loss_rates.items():
+        for unit_type, rate in self._loss_rates.items():
             supply = self._model.game_data.units[unit_type].supply_used
             if rate and supply:
                 used.add_expression(self._count_alive(unit_type, at_end=False, survive=False), -supply)
@@ -417,7 +461,7 @@ class PlanProgram:
                     lanes.add_expression(self._count_alive(lane_type, at_end=False))
         occupations = [
             occupation
-            for occupation in self._snapshot.occupations
+            for occupation in self._state.occupations
             if occupation.producer in producers and (occupation.needs_tech_lab or not on_tech_labs)
         ]
         busy = RowExpression(buckets)
@@ -436,26 +480,28 @@ class PlanProgram:
             self._constrain_at_most(running.selected(short_and_whole), lanes.selected(short_and_whole))
 
     def _constrain_counts(self) -> None:
-        """What the game's counts bound: workers at the fields and refineries there are, an add-on a host, a morph a
-        townhall, a command center an expansion, a refinery a geyser, and an upgrade once."""
+        """What the game's counts bound: workers at the fields and refineries there are, each tier its share of each, an
+        add-on a host, a morph a townhall, command centers the free expansions, a refinery a geyser, and an upgrade
+        once."""
         buckets = self._bucket_count
-        new_bases = self._made_since_snapshot(UnitTypeId.COMMAND_CENTER)
-        fields = RowExpression(buckets).add_expression(new_bases, MINERAL_FIELDS_PER_NEW_BASE)
-        fields.constant += self._snapshot.mineral_fields
-        for block, per_field in ((self._miners, _MINERS_PER_FIELD), (self._third_miners, _THIRD_MINERS_PER_FIELD)):
-            mining = RowExpression(buckets).add(block, np.eye(buckets))
-            self._constrain_at_most(mining, RowExpression(buckets).add_expression(fields, per_field))
-        refineries = self._made_since_snapshot(UnitTypeId.REFINERY)
-        refineries.constant += self._snapshot.refineries_with_vespene
-        collecting = RowExpression(buckets).add(self._collectors, np.eye(buckets))
-        self._constrain_at_most(collecting, RowExpression(buckets).add_expression(refineries, COLLECTORS_PER_REFINERY))
+        economy = self._economy
+        new_bases = self._made_since_start(UnitTypeId.COMMAND_CENTER)
+        fields = RowExpression(buckets).add_expression(new_bases, economy.mineral_fields_per_new_base)
+        fields.constant += self._state.mineral_fields
+        refineries = self._made_since_start(UnitTypeId.REFINERY)
+        refineries.constant += self._state.refineries_with_vespene
+        for tiers, sites in ((self._mining, fields), (self._collecting, refineries)):
+            for tier in tiers:
+                working = RowExpression(buckets).add(tier.block, np.eye(buckets))
+                self._constrain_at_most(working, RowExpression(buckets).add_expression(sites, tier.workers_per_site))
         self._constrain_add_ons_and_morphs()
-        if (command_center := self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)) is not None:
+        command_center = self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)
+        if command_center is not None and self._free_expansions is not None:
             expansions = RowExpression(1).add(self._starts[command_center], 1.0)
-            self._program.constrain(expansions, upper=float(self._snapshot.free_expansions))
+            self._program.constrain(expansions, upper=float(self._free_expansions))
         if (refinery := self._index_of_unit_type.get(UnitTypeId.REFINERY)) is not None:
-            geysers = RowExpression(buckets).add_expression(new_bases, GEYSERS_PER_NEW_BASE)
-            geysers.constant += self._snapshot.free_geysers
+            geysers = RowExpression(buckets).add_expression(new_bases, economy.geysers_per_new_base)
+            geysers.constant += self._state.free_geysers
             self._constrain_at_most(self._started_so_far(refinery), geysers)
         for index, item in enumerate(self._items):
             if item.upgrade is not None:
@@ -476,11 +522,11 @@ class PlanProgram:
             started = RowExpression(self._bucket_count)
             for index in indices:
                 started.add_expression(self._started_so_far(index))
-            started.constant += sum(unit_type in made_types for unit_type, _ in self._snapshot.unit_completions)
+            started.constant += sum(unit_type in made_types for unit_type, _ in self._completions)
             if self._items[indices[0]].morphed_from is None:
-                started.constant += sum(self._snapshot.counts.get(made, 0) for made in made_types if made is not None)
-            available = self._made_since_snapshot(source)
-            available.constant += self._snapshot.counts.get(source, 0)
+                started.constant += sum(self._state.counts.get(made, 0) for made in made_types if made is not None)
+            available = self._made_since_start(source)
+            available.constant += self._state.counts.get(source, 0)
             self._constrain_at_most(started, available)
 
     def _constrain_prerequisites(self) -> None:
@@ -489,7 +535,7 @@ class PlanProgram:
             needed: list[RowExpression] = []
             for tech in item.techs:
                 granting = self._model.types_granting(tech)
-                if not any(self._snapshot.counts.get(unit_type, 0) for unit_type in granting):
+                if not any(self._state.counts.get(unit_type, 0) for unit_type in granting):
                     granted = RowExpression(self._bucket_count)
                     for unit_type in sorted(granting):
                         granted.add_expression(self._count_alive(unit_type, at_end=False, survive=False))
@@ -497,7 +543,7 @@ class PlanProgram:
             needed += [
                 self._upgrade_done(upgrade, at_end=False)
                 for upgrade in item.upgrades_needed
-                if upgrade not in self._snapshot.upgrades
+                if upgrade not in self._state.upgrades
             ]
             bound = self._most_starts_in_a_bucket(item)
             for done in needed:
@@ -546,7 +592,7 @@ class PlanProgram:
         """How many enemy units of `coverage` are covered at each bucket's end: at most how many are expected, and at
         most what the own units are worth against them."""
         expected = [
-            count_at(coverage.enemy_counts, self._snapshot.time + GameTime(seconds=edge)) for edge in self._edges[1:]
+            count_at(coverage.enemy_counts, self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:]
         ]
         covered = self._program.add_variables(self._bucket_count, upper=np.maximum(np.asarray(expected), 0.0))
         worth = RowExpression(self._bucket_count)
@@ -557,7 +603,7 @@ class PlanProgram:
 
     def _units_short_of(self, floor: Floor) -> VariableBlock:
         """How many units of `floor`'s type fall short of it at each bucket's end."""
-        wanted = [count_at(floor.counts, self._snapshot.time + GameTime(seconds=edge)) for edge in self._edges[1:]]
+        wanted = [count_at(floor.counts, self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:]]
         shortfalls = self._program.add_variables(self._bucket_count)
         short = RowExpression(self._bucket_count).add(shortfalls, -np.eye(self._bucket_count))
         short.add_expression(self._count_alive(self._model.usual_form(floor.unit_type), at_end=True), -1.0)
@@ -571,7 +617,7 @@ class PlanProgram:
         ranks: dict[tuple[bool, int], int] = {}
         for planned in previous.items:
             index = self._index_of(planned)
-            seconds = (planned.start - self._snapshot.time).seconds
+            seconds = (planned.start - self._state.time).seconds
             if index is None or seconds < 0 or seconds >= self._edges[-1]:
                 continue
             key = (isinstance(planned.item, UpgradeId), int(planned.item))
@@ -597,7 +643,7 @@ class PlanProgram:
                 continue
             whole = np.floor(np.cumsum(_values_of(self._starts[index], values)) + 0.5)
             for bucket, count in enumerate(np.diff(whole, prepend=0.0)):
-                start = self._snapshot.time + GameTime(seconds=float(self._edges[bucket]))
+                start = self._state.time + GameTime(seconds=float(self._edges[bucket]))
                 planned += [(bucket, index, PlannedItem(item=made, start=start))] * int(count)
         return tuple(entry for _, _, entry in sorted(planned, key=lambda entry: (entry[0], entry[1])))
 
@@ -609,7 +655,7 @@ class PlanProgram:
 
     def _walk_seconds_of(self, item: Item) -> float:
         """The seconds an SCV walks to build `item`, and back."""
-        return 0.0 if item.unit_type is None else self._snapshot.walk_seconds.get(item.unit_type, 0.0)
+        return 0.0 if item.unit_type is None else self._walk_seconds.get(item.unit_type, 0.0)
 
 
 def _values_of(block: VariableBlock, values: FloatArray) -> FloatArray:

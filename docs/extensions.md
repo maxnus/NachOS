@@ -228,6 +228,26 @@ class ThreatMap:
   for after it; and a bonus for each item of the previous plan the new one keeps to. `plan_now` takes the horizon and
   the share of each unit type the bot expects lost a second, so that only what is expected to survive counts.
 
+  Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `GameState`
+  `plan_now` plans from, plain numbers read off the game: stock, supply, finished units, what is in production and
+  when it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries and
+  free geysers at its bases, pooled, since the planner never knows which base a worker is at. `plan_now(state=...)`
+  plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what each worker at a field or a
+  refinery brings in a second, a list from the first worker on, what each orbital command's MULEs mine, what a new
+  command center brings, and how long an SCV walks to build each structure. Its defaults are the rates measured
+  speed mining, and a walk of 10 seconds to a command center and 6 to anything else. `free_expansions` caps the
+  command centers a plan starts, none by default. A base about to fall, left out, with the MULEs' energy spent on
+  scans:
+
+  ```python
+  planner = api.extensions.planner
+  state = planner.game_state()
+  falling = len(base_under_attack.mineral_fields.alive)
+  state = dataclasses.replace(state, mineral_fields=state.mineral_fields - falling)
+  economy = Economy(mule_minerals_per_orbital_second=0.0)
+  plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy)
+  ```
+
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
   to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and what
   the planner expects at each of its `times`: the `minerals` and `vespene` in stock, and the `counts` of each unit type
@@ -237,9 +257,10 @@ class ThreatMap:
   `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that
   much longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a
   plan the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the
-  items from the game's data, pruned to what the reward needs, worker income measured with speed mining, the SCV away
-  from the walk to a structure through the build to the walk back, and starts on the first second of a bucket of its
-  `TimeGrid`, 2 seconds long at first and doubling every time the time from the plan's start doubles from 45 seconds.
+  items from the game's data, pruned to what the reward needs, the workers pooled over every field and refinery, the
+  SCV away from the walk to a structure through the build to the walk back, and starts on the first second of a bucket
+  of its `TimeGrid`, 2 seconds long at first and doubling every time the time from the plan's start doubles from 45
+  seconds.
 
   An item starts in whole numbers for a time from the plan's start, and in fractions after it: the solver weighs
   fractions far faster, and the bot carries out only the near term before it plans again. By default that time grows

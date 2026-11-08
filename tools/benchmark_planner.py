@@ -24,22 +24,21 @@ toy did, with no walks unless the case says so:
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 
 from sc2nachos import GameTime
-from sc2nachos.extensions.planner import Coverage, CurveSegment, Plan, Reward, TimeGrid
+from sc2nachos.extensions.planner import Coverage, CurveSegment, Economy, GameState, Plan, Reward, TimeGrid
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._planner import whole_until_seconds_of
-from sc2nachos.extensions.planner._snapshot import Snapshot
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.testing import load_game_data
 
 _HORIZON = GameTime(seconds=600)
+_FREE_EXPANSIONS = 3
 _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
@@ -79,6 +78,7 @@ _TOY_WALKS = {
 }
 _REFERENCE_WALK_SECONDS = 6.0
 _NO_WALKS: Mapping[UnitTypeId, float] = MappingProxyType({})
+_NO_LOSSES: Mapping[UnitTypeId, float] = MappingProxyType({})
 # The toy's run8: townhalls, their morphs and the structures that make or research something, whole over the horizon.
 _WHOLE_OVER_THE_HORIZON_IN_THE_TOY = frozenset(
     {
@@ -120,12 +120,9 @@ def main() -> None:
     _CASES[arguments.case](model, arguments.time_limit, half_lives)
 
 
-def _game_start(model: TerranModel, walks: Mapping[UnitTypeId, float] = _NO_WALKS) -> Snapshot:
-    """The state a game starts in, with an SCV's walk to each structure in `walks`, and none to the others."""
-    walk_seconds = {
-        unit_type: walks.get(unit_type, 0.0) for unit_type, item in model.unit_items.items() if item.is_built_by_worker
-    }
-    return Snapshot(
+def _game_start() -> GameState:
+    """The state a game starts in."""
+    return GameState(
         time=GameTime.ZERO,
         minerals=50.0,
         vespene=0.0,
@@ -134,31 +131,39 @@ def _game_start(model: TerranModel, walks: Mapping[UnitTypeId, float] = _NO_WALK
         counts={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1},
         mineral_fields=8,
         free_geysers=2,
-        free_expansions=3,
-        walk_seconds=walk_seconds,
     )
+
+
+def _walking(walks: Mapping[UnitTypeId, float]) -> Economy:
+    """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others."""
+    return Economy(walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)))
 
 
 def _solve_and_print(
     label: str,
     model: TerranModel,
-    snapshot: Snapshot,
     reward: Reward,
     *,
     grid: TimeGrid,
     time_limit: float,
     whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
+    economy: Economy | None = None,
+    loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
 ) -> Plan | None:
-    """Plan for `reward` from `snapshot` on `grid` within `time_limit` seconds, with the windows of whole starts
-    `whole_until` gives, as `Planner` takes it, and print what came of it."""
+    """Plan for `reward` from the game's start on `grid` within `time_limit` seconds, with the windows of whole starts
+    `whole_until` gives, as `Planner` takes it, by `economy`, with no walks if `None`, and `loss_rates`, and print what
+    came of it."""
     items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     started = time.perf_counter()
     program = PlanProgram(
         items=items,
         model=model,
         edges=grid.edges(_HORIZON),
-        snapshot=snapshot,
+        state=_game_start(),
         reward=reward,
+        economy=_walking(_NO_WALKS) if economy is None else economy,
+        loss_rates=loss_rates,
+        free_expansions=_FREE_EXPANSIONS,
         whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
     )
     built = time.perf_counter() - started
@@ -185,9 +190,7 @@ def _run_reference(model: TerranModel, time_limit: float, half_lives: Sequence[G
     for half_life in half_lives:
         reward = Reward(curves=_TOY_CURVES, half_life=half_life)
         label = f"reference, half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
-        _solve_and_print(
-            label, model, _game_start(model, walks), reward, grid=TimeGrid.doubling(), time_limit=time_limit
-        )
+        _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit, economy=_walking(walks))
 
 
 def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
@@ -197,7 +200,6 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
         _solve_and_print(
             f"grid {name}",
             model,
-            _game_start(model),
             reward,
             grid=grid,
             time_limit=time_limit,
@@ -216,7 +218,6 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
         _solve_and_print(
             label,
             model,
-            _game_start(model),
             reward,
             grid=TimeGrid.doubling(),
             time_limit=time_limit,
@@ -227,9 +228,7 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
 def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
     """The linear reward against the concave one."""
     for label, reward in (("linear", Reward(weights=_TOY_WEIGHTS)), ("concave", Reward(curves=_TOY_CURVES))):
-        _solve_and_print(
-            f"{label} reward", model, _game_start(model), reward, grid=TimeGrid.doubling(), time_limit=time_limit
-        )
+        _solve_and_print(f"{label} reward", model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
 
 
 def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
@@ -240,9 +239,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             for kind, counts in scenario.items()
         ]
         reward = Reward(weights=_STANDING_WEIGHTS, coverages=coverages)
-        plan = _solve_and_print(
-            f"enemy {name}", model, _game_start(model), reward, grid=TimeGrid.doubling(), time_limit=time_limit
-        )
+        plan = _solve_and_print(f"enemy {name}", model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
         if plan is not None:
             _print_starts_by_minute(plan, (UnitTypeId.MARINE, UnitTypeId.MARAUDER))
 
@@ -251,9 +248,7 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
     """No walks against the toy's Terran walks."""
     reward = Reward(weights=_TOY_WEIGHTS)
     for label, walks in (("no walks", _NO_WALKS), ("Terran walks", _TOY_WALKS)):
-        _solve_and_print(
-            label, model, _game_start(model, walks), reward, grid=TimeGrid.doubling(), time_limit=time_limit
-        )
+        _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit, economy=_walking(walks))
 
 
 def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
@@ -263,8 +258,7 @@ def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | No
         ("army lost at 0.002/s", dict.fromkeys(_TOY_WEIGHTS, 0.002)),
         ("workers lost at 0.001/s", {UnitTypeId.SCV: 0.001}),
     ):
-        snapshot = dataclasses.replace(_game_start(model), loss_rates=rates)
-        plan = _solve_and_print(label, model, snapshot, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+        plan = _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit, loss_rates=rates)
         if plan is not None:
             _print_starts_by_minute(plan, (UnitTypeId.MARINE, UnitTypeId.MARAUDER, UnitTypeId.BARRACKS, UnitTypeId.SCV))
 
@@ -274,7 +268,7 @@ def _run_discount(model: TerranModel, time_limit: float, half_lives: Sequence[Ga
     for half_life in half_lives:
         reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life)
         label = f"half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
-        _solve_and_print(label, model, _game_start(model), reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+        _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
 
 
 def _whole_for_90_seconds(_: UnitTypeId) -> GameTime:
