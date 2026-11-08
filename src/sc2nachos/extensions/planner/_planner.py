@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, final
+from typing import TYPE_CHECKING, final
 
-from sc2nachos.events import EventPriority, TurnStartEvent
 from sc2nachos.extensions.planner._errors import NoPlanFoundError
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._snapshot import Snapshot
@@ -15,7 +14,6 @@ from sc2nachos.extensions.planner._time_grid import TimeGrid
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Race
-from sc2nachos.units import OwnUnit, UnitDict
 
 if TYPE_CHECKING:
     from sc2nachos import Api
@@ -24,7 +22,6 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._terran_model import Item
 
 _NO_LOSSES: Mapping[UnitTypeId, float] = MappingProxyType({})
-_TOWNHALL_MORPHS = (UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS)
 
 
 @final
@@ -51,8 +48,7 @@ class Planner:
     api = Api(extensions=Extensions)
     ```
 
-    It reads the game as `plan_now` is called, and on each `TurnStartEvent`, at `EventPriority.BEFORE`, notes when it
-    first saw each command center begin a morph, since the game reports no progress for one. The model of the game:
+    It reads the game as `plan_now` is called. The model of the game:
 
     - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
       from the game's data; an item is pruned unless the reward values it or it is needed for one that does, or it is
@@ -86,7 +82,6 @@ class Planner:
         "_api",
         "_grid",
         "_model",
-        "_morph_starts",
         "_node_limit",
         "_plan",
         "_time_limit",
@@ -119,9 +114,7 @@ class Planner:
         self._walk_time = walk_time
         self._whole_until = whole_until
         self._model = TerranModel(api.data)
-        self._morph_starts: UnitDict[OwnUnit[Any], GameTime] = UnitDict()
         self._plan: Plan | None = None
-        api.on(TurnStartEvent, priority=EventPriority.BEFORE)(self._note_morph_starts)
 
     @property
     def grid(self) -> TimeGrid:
@@ -152,7 +145,6 @@ class Planner:
         snapshot = Snapshot.from_api(
             self._api,
             model=self._model,
-            morph_starts=self._morph_starts,
             walk_time=self._walk_time,
             loss_rates=loss_rates,
         )
@@ -169,15 +161,6 @@ class Planner:
             raise NoPlanFoundError(f"the solver found no plan within {self._time_limit} s and {self._node_limit} nodes")
         self._plan = plan
         return plan
-
-    def _note_morph_starts(self, _: TurnStartEvent) -> None:
-        """Note when each command center morphing now was first seen to, and forget those that finished or stopped."""
-        noted = self._morph_starts
-        morphing: UnitDict[OwnUnit[Any], GameTime] = UnitDict()
-        for in_production in self._api.in_production(_TOWNHALL_MORPHS):
-            if (producer := in_production.producer) is not None:
-                morphing[producer] = noted.get(producer, self._api.time)
-        self._morph_starts = morphing
 
 
 def whole_until_seconds_of(

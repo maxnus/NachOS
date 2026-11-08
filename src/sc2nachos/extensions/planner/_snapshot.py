@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._terran_model import TerranModel
     from sc2nachos.gamemap import Expansion
     from sc2nachos.state import InProduction
-    from sc2nachos.units import OwnUnit, UnitDict
+    from sc2nachos.units import OwnUnit
 
 
 @final
@@ -83,14 +83,11 @@ class Snapshot:
         api: Api[object],
         *,
         model: TerranModel,
-        morph_starts: UnitDict[OwnUnit[Any], GameTime],
         walk_time: GameTime,
         loss_rates: Mapping[UnitTypeId, float],
     ) -> Snapshot:
-        """The state of the game `api` plays now, its unit types read by `model`. `morph_starts` holds when each
-        townhall's morph was first seen, since the game reports no progress for one: a morph not held there is taken to
-        have its whole time left. An SCV walks `walk_time` to build any structure but a command center, and a build it
-        has not begun takes that walk first."""
+        """The state of the game `api` plays now, its unit types read by `model`. An SCV walks `walk_time` to build any
+        structure but a command center, and a build it has not begun takes that walk first."""
         counts, refineries_with_vespene = _counts_of_own_units(api, model)
         fields, free_geysers, free_expansions, seconds_to_expansion = _bases_of(api)
         walk_seconds = {
@@ -98,7 +95,7 @@ class Snapshot:
             for unit_type, item in model.unit_items.items()
             if item.is_built_by_worker
         }
-        unit_completions, occupations, builders = _production_of(api, model, morph_starts, walk_seconds)
+        unit_completions, occupations, builders = _production_of(api, model, walk_seconds)
         not_begun = _builds_not_begun(api, model)
         upgrade_completions, research_occupations = _researches_of(api, model)
         return cls(
@@ -164,7 +161,6 @@ def _bases_of(api: Api[object]) -> tuple[int, int, int, float]:
 def _production_of(
     api: Api[object],
     model: TerranModel,
-    morph_starts: UnitDict[OwnUnit[Any], GameTime],
     walk_seconds: Mapping[UnitTypeId, float],
 ) -> tuple[list[tuple[UnitTypeId, float]], list[Occupation], list[float]]:
     """Each unit in production with the seconds until it is done, what keeps each producer busy, and the seconds until
@@ -175,17 +171,17 @@ def _production_of(
     by_producer: dict[int, list[InProduction]] = {}
     producers: dict[int, OwnUnit[Any]] = {}
     for in_production in api.in_production(model.forms_of_items):
-        unit_type = model.usual_form(in_production.type_id)
+        unit_type = model.usual_form(in_production.product)
         item = model.unit_items[unit_type]
         producer = in_production.producer
         if item.is_built_by_worker:
             walk = walk_seconds.get(unit_type, 0.0)
-            done_after = _seconds_left(in_production, item.build_seconds, morph_starts, api.time)
+            done_after = in_production.time_left.seconds
             done_after += walk if in_production.unit is None or producer is None else 0.0
             completions.append((unit_type, done_after))
             builders.append(done_after + walk)
         elif producer is None:
-            completions.append((unit_type, _seconds_left(in_production, item.build_seconds, morph_starts, api.time)))
+            completions.append((unit_type, in_production.time_left.seconds))
         else:
             by_producer.setdefault(producer.id, []).append(in_production)
             producers[producer.id] = producer
@@ -193,12 +189,12 @@ def _production_of(
     for producer_id, queue in by_producer.items():
         producer = producers[producer_id]
         lanes = [0.0] * max(producer.production_capacity, 1)
-        for in_production in sorted(queue, key=lambda queued: queued.progress == 0):
-            unit_type = model.usual_form(in_production.type_id)
+        for in_production in sorted(queue, key=lambda queued: queued.fraction == 0):
+            unit_type = model.usual_form(in_production.product)
             item = model.unit_items[unit_type]
             lane = lanes.index(min(lanes))
             start = lanes[lane]
-            lanes[lane] = start + _seconds_left(in_production, item.build_seconds, morph_starts, api.time)
+            lanes[lane] = start + in_production.time_left.seconds
             completions.append((unit_type, lanes[lane]))
             occupations.append(
                 Occupation(
@@ -215,22 +211,10 @@ def _builds_not_begun(api: Api[object], model: TerranModel) -> dict[UnitTypeId, 
     """How many structures of each type, in its usual form, an SCV is on its way to build."""
     not_begun: dict[UnitTypeId, int] = {}
     for in_production in api.in_production(model.forms_of_items):
-        unit_type = model.usual_form(in_production.type_id)
+        unit_type = model.usual_form(in_production.product)
         if in_production.unit is None and model.unit_items[unit_type].is_built_by_worker:
             not_begun[unit_type] = not_begun.get(unit_type, 0) + 1
     return not_begun
-
-
-def _seconds_left(
-    in_production: InProduction, build_seconds: float, morph_starts: UnitDict[OwnUnit[Any], GameTime], now: GameTime
-) -> float:
-    """The seconds until `in_production` is done once begun: its time left, or for a morph whose progress the game does
-    not report, its build time less the time since `morph_starts` first saw it, the whole build time if never seen."""
-    if in_production.time_left is not None:
-        return in_production.time_left.seconds
-    producer = in_production.producer
-    started = None if producer is None else morph_starts.get(producer)
-    return build_seconds if started is None else max(build_seconds - (now - started).seconds, 0.0)
 
 
 def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId, float], list[Occupation]]:
@@ -239,7 +223,7 @@ def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId
     completions: dict[UpgradeId, float] = {}
     occupations: list[Occupation] = []
     free_after: dict[int, float] = {}
-    researches = sorted(api.researches.items(), key=lambda research: research[1].progress == 0)
+    researches = sorted(api.researches.items(), key=lambda research: research[1].fraction == 0)
     for upgrade, research in researches:
         start = free_after.get(research.unit.id, 0.0)
         end = start + research.time_left.seconds

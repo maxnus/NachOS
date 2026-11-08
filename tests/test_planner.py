@@ -28,7 +28,7 @@ from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.testing import load_game_data
-from sc2nachos.units import Alliance, UnitDict
+from sc2nachos.units import Alliance
 from support import ScriptedGame, make_game_info, make_observation, make_unit, shipped_game_data
 
 _TERRAN_MODEL = TerranModel(load_game_data())
@@ -534,13 +534,7 @@ def _snapshots_of(*observations: sc2api_pb2.ResponseObservation) -> list[Snapsho
 
     @api.on(TurnEvent)
     def take_snapshot(_: TurnEvent) -> None:
-        planner = api.extensions
-        morph_starts: UnitDict[Any, GameTime] = planner._morph_starts  # pyright: ignore[reportPrivateUsage]
-        snapshots.append(
-            Snapshot.from_api(
-                api, model=_TERRAN_MODEL, morph_starts=morph_starts, walk_time=GameTime(seconds=6), loss_rates={}
-            )
-        )
+        snapshots.append(Snapshot.from_api(api, model=_TERRAN_MODEL, walk_time=GameTime(seconds=6), loss_rates={}))
 
     api.play(game.joined())
     return snapshots[: len(observations)]
@@ -634,11 +628,11 @@ class TestSnapshot:
             pytest.approx(snapshot.walk_seconds[UnitTypeId.COMMAND_CENTER] + 71.43, abs=0.05),
         ) in snapshot.unit_completions
 
-    def test_a_command_centers_morph_counts_down_from_when_the_planner_first_saw_it(self) -> None:
-        """The game reports no progress for it: seen at 0, 10 and 20 seconds, it has 5 of its 25 left at the last."""
+    def test_a_command_centers_morph_counts_down_from_the_observation_before_the_first_showing_it(self) -> None:
+        """Given after the observation at 0 and seen at 10 and 20 seconds, it has 5 of its 25 left at the last."""
         snapshots = _snapshots_of(
-            _main_base_at(0, morphing=True), _main_base_at(224, morphing=True), _main_base_at(448, morphing=True)
-        )
+            _main_base_at(0), _main_base_at(224, morphing=True), _main_base_at(448, morphing=True)
+        )[1:]
         orbital = _TERRAN_MODEL.unit_items[UnitTypeId.ORBITAL_COMMAND].build_seconds
         left = [
             seconds
@@ -646,7 +640,7 @@ class TestSnapshot:
             for unit_type, seconds in snapshot.unit_completions
             if unit_type == UnitTypeId.ORBITAL_COMMAND
         ]
-        assert left == pytest.approx([orbital, orbital - 10, orbital - 20])
+        assert left == pytest.approx([orbital - 10, orbital - 20])
         assert all(
             Occupation(producer=UnitTypeId.COMMAND_CENTER, start_seconds=0.0, end_seconds=seconds, needs_tech_lab=False)
             in snapshot.occupations
