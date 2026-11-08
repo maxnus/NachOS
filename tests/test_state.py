@@ -257,18 +257,33 @@ class TestProduction:
         )
         assert _made(standing, UnitTypeId.REACTOR_BARRACKS) == []
 
-    def test_a_structure_morphing_is_what_it_becomes_at_no_known_progress_or_time(self) -> None:
+    def test_a_structure_morphing_is_what_it_becomes_at_its_morph_progress(self) -> None:
+        game = _Game(tables=_MAKING_TABLES)
+        game.observe(0, units=[_done(1, UnitTypeId.COMMAND_CENTER)])
+        morph = _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND)
+        state = game.observe(140, units=[_done(1, UnitTypeId.COMMAND_CENTER, morph)])
+        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None, 0.25)]
+        assert _timed(state, UnitTypeId.ORBITAL_COMMAND) == [(560, 420)]
+
+    def test_a_cocoon_is_what_it_becomes_at_its_morph_progress(self) -> None:
+        game = _Game(tables=_MAKING_TABLES)
+        game.observe(0, units=[_done(1, UnitTypeId.ZERGLING)])
+        morph = _making(AbilityId.ZERGLING_MORPH_BANELING)
+        state = game.observe(80, units=[_done(1, UnitTypeId.BANELING_COCOON, morph)])
+        assert _made(state, UnitTypeId.BANELING) == [(1, None, 0.25)]
+        assert _timed(state, UnitTypeId.BANELING) == [(320, 240)]
+
+    def test_a_morph_under_way_in_the_first_observation_is_at_no_known_progress_or_time(self) -> None:
+        """No game has one, since a game's first observation shows nothing morphing."""
         state = _Game(tables=_MAKING_TABLES).observe(
-            units=[_done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND))]
+            units=[
+                _done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND)),
+                _done(2, UnitTypeId.BANELING_COCOON, _making(AbilityId.ZERGLING_MORPH_BANELING)),
+            ]
         )
         assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None, None)]
         assert _timed(state, UnitTypeId.ORBITAL_COMMAND) == [(None, None)]
-
-    def test_a_cocoon_is_what_it_becomes_at_no_known_progress_or_time(self) -> None:
-        state = _Game(tables=_MAKING_TABLES).observe(
-            units=[_done(1, UnitTypeId.BANELING_COCOON, _making(AbilityId.ZERGLING_MORPH_BANELING))]
-        )
-        assert _made(state, UnitTypeId.BANELING) == [(1, None, None)]
+        assert _made(state, UnitTypeId.BANELING) == [(2, None, None)]
         assert _timed(state, UnitTypeId.BANELING) == [(None, None)]
 
     def test_a_unit_warping_in_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:

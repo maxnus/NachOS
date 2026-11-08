@@ -16,6 +16,7 @@ from sc2nachos.gamedata._techtree import (
     COCOON_PRODUCTS,
     MERGE_SOURCES,
     TECH_TREE,
+    UNIT_TYPE_BUILD_TIME_OVERRIDES,
     UNIT_TYPE_COST_OVERRIDES,
 )
 from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
@@ -54,9 +55,8 @@ class GameData:
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables from the game's answer to `RequestData`."""
         unit_rows = _read_table(data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id)
-        unit_rows = _with_build_times_in_whole_costs(
-            _with_turning(with_missing_attacks(_with_build_times_borrowed(unit_rows, TECH_TREE)))
-        )
+        unit_rows = _with_build_times_corrected(_with_build_times_borrowed(unit_rows, TECH_TREE))
+        unit_rows = _with_build_times_in_whole_costs(_with_turning(with_missing_attacks(unit_rows)))
         step_costs = _step_costs(unit_rows)
         self._units = _with_costs_from_steps(unit_rows, step_costs)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
@@ -136,6 +136,16 @@ def _with_build_times_borrowed(
                 row, build_time=built_as.build_time, _unrounded_build_time=built_as._unrounded_build_time
             )
     return MappingProxyType(rows_with_build_times)
+
+
+def _with_build_times_corrected(units: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
+    """`units`, where a type `UNIT_TYPE_BUILD_TIME_OVERRIDES` names takes the build time it gives, rounded and unrounded
+    alike."""
+    corrected = dict(units)
+    for unit_type, build_time in UNIT_TYPE_BUILD_TIME_OVERRIDES.items():
+        if (row := units.get(unit_type)) is not None:
+            corrected[unit_type] = replace(row, build_time=build_time, _unrounded_build_time=build_time)
+    return MappingProxyType(corrected)
 
 
 # The game turns a unit in 1/4096 of a full turn, `TURN_RATE_UNITS`'s unit.
