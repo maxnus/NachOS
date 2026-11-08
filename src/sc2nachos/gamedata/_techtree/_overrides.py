@@ -256,6 +256,9 @@ derive."""
 
 UNIT_TYPE_BUILD_TIME_OVERRIDES: Final[Mapping[UnitTypeId, GameTime]] = MappingProxyType(
     {
+        # Two high templar merged into one 192 steps after it was first listed, at build progress 0, twice; its row
+        # gives none (probe in #189, build 75689).
+        UnitTypeId.ARCHON: GameTime(steps=192),
         # Two lurkers each hatched 403 steps after the order, against the row's 553.33 (probe in #159, build 75689).
         UnitTypeId.LURKER: GameTime(steps=403),
     }

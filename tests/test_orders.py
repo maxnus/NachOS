@@ -2233,12 +2233,12 @@ class _ProductionBot:
             self.ordered = True
         elif self.ordered:
             research = api.researches.get(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
-            progress = None if research is None else research.progress
+            progress = None if research is None else research.fraction
             marines = api.in_production(UnitType.Marine)
-            self.reads.append((len(marines), progress, marines[0].progress if marines else None))
+            self.reads.append((len(marines), progress, marines[0].fraction if marines else None))
             if research is not None:
                 self.times_left.append((api.step, research.time_left.steps))
-            if len(marines) == 2 and marines[0].time_left is not None:
+            if len(marines) == 2:
                 self.marine_times_left.append((api.step, marines[0].time_left.steps))
             self.marine_producers |= {
                 None if marine.producer is None else marine.producer.type_id for marine in marines

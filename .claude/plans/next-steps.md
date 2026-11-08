@@ -128,7 +128,11 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   step the game reports carrying out its order: from the step of the observation before the first that shows it, so
   that one step a turn is always exact. This player's structures by their order, a cocoon of either side by its type;
   an enemy's structure shows nothing, and raises. `Unit.morph_progress` gives a `Progress[T]`, one generic class for
-  how far making something has got (the owner), and `InProduction` fills its times from it.
+  how far making something has got (the owner), which `InProduction` and `Research` subclass, over an optional
+  `producer` on it, with their times required, over `None` for a warp-in: a warp-in is timed by how fast it rises from
+  the observation before the one that first lists it, 1/256 a step for 256 steps and 1/80 for 81. A morph or a warp-in
+  not seen to begin, which only a scripted first observation has, raises, with no code of its own (the owner, over
+  taking it as just begun).
 - **With the fog off, what the player knew stays as it was** (#163): `api.units`, `Visibility` and every event read
   as with the fog on, and the whole game is `api.all_units`, which raises `FogOnError` with the fog on, over marking
   the unseen in one list.
@@ -140,8 +144,8 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   nothing else of NachOS.
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read from
   the state, never written into `api.data`.
-- **A build time the tables get wrong is corrected in `api.data`** (#109, the owner): the lurker's 403 steps, measured,
-  beside the cost overrides, over leaving its egg's progress unknown.
+- **A build time the tables get wrong is corrected in `api.data`** (#109, the owner): the lurker's 403 steps and the
+  archon's 192, measured, beside the cost overrides, over leaving their progress unknown.
 - **A tile is a frozen dataclass, not a tuple** (#137): as a tuple it passed pyright as a point and indexed numpy as
   an array index. Nothing checks at run time that a point is a point: pyright catches a tile or a unit given as one,
   and only what cannot work otherwise, `in`, a grid's index and `Point`'s arithmetic, raises `not_a_point_error`.
@@ -289,13 +293,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- **`InProduction` and `Research` onto `Progress`** (#109, the owner, 2026-11-08), the second of its plan's pull
-  requests: each subclasses `Progress`, over an optional `producer` on it, `type_id` and `upgrade` becoming `product`
-  and `progress` `fraction`. Its times are required, over `None` for a warp-in, so the archon gets a build-time override
-  of 192 steps, measured twice (#189), and a warp-in is timed by how fast its fraction rises from the observation
-  before the one that first lists it: 1/256 a step takes 256 steps, 1/80 a step 81. A bot has to change for it, so its
-  release notes say so. To settle: what `InProduction` holds for a morph under way in the api's first observation.
-  Then the build planner (#239) drops its own morph timing.
+- The build planner (#239) drops `_note_morph_starts` and `morph_starts` once its branch takes main, which times a
+  command center's morph, and reads `InProduction.product` and `fraction` where it read `type_id` and `progress`.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.

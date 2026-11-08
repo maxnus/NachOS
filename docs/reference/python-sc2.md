@@ -472,8 +472,8 @@ it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction` with its `producer`, its `unit` once it stands, its `progress` and its `time_left` |
-| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `time_left`; once done, `u in api.upgrades` |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
+| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research`, a `Progress` with its `fraction` and `time_left`, and its structure; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]`, the step it was last in sight |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
@@ -590,7 +590,7 @@ it.
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
 | `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
-| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step, and the lurker's the 403 steps it took in game, where python-sc2 reads its row's 553.33; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
+| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step, and the lurker's the 403 steps it took in game, where python-sc2 reads its row's 553.33, and the archon's the 192 it took, where python-sc2 reads its row's none; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_used`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |

@@ -88,6 +88,8 @@ _MAKING_TABLES = make_tables(
     _row(UnitTypeId.SUPPLY_DEPOT, structure=True, minerals=100, build_time=480.0),
     _row(UnitTypeId.COMMAND_CENTER, structure=True, minerals=400, build_time=1590.0),
     _row(UnitTypeId.ORBITAL_COMMAND, structure=True, minerals=550, build_time=560.0),
+    _row(UnitTypeId.HATCHERY, structure=True, minerals=300, build_time=1590.0),
+    _row(UnitTypeId.LAIR, structure=True, minerals=450, build_time=1280.0),
     _row(UnitTypeId.LARVA),
     _row(UnitTypeId.EGG),
     _row(UnitTypeId.DRONE, minerals=50, build_time=272.0),
@@ -112,6 +114,7 @@ _MAKING_TABLES = make_tables(
             ability_id=AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=data_pb2.AbilityData.Target.Point, is_building=True
         ),
         data_pb2.AbilityData(ability_id=AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND),
+        data_pb2.AbilityData(ability_id=AbilityId.HATCHERY_MORPH_LAIR),
         data_pb2.AbilityData(ability_id=AbilityId.LARVA_MORPH_DRONE),
         data_pb2.AbilityData(
             ability_id=AbilityId.DRONE_MORPH_SPAWNING_POOL, target=data_pb2.AbilityData.Target.Point, is_building=True
@@ -145,27 +148,21 @@ def _making(ability: int, progress: float = 0.0, at: tuple[float, float] | None 
     return order
 
 
-def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int | None, int | None, float | None]]:
+def _made(state: _State, unit_type: UnitTypeId) -> list[tuple[int | None, int | None, float]]:
     """For each `unit_type` in production, the tag of what makes it and of the unit itself, and its progress."""
     return [
         (
             None if item.producer is None else item.producer.tag,
             None if item.unit is None else item.unit.tag,
-            item.progress,
+            item.fraction,
         )
         for item in state.production.of_types({unit_type})
     ]
 
 
-def _timed(state: _State, unit_type: UnitTypeId) -> list[tuple[float | None, float | None]]:
+def _timed(state: _State, unit_type: UnitTypeId) -> list[tuple[float, float]]:
     """For each `unit_type` in production, the steps the whole of it takes and the steps it has left."""
-    return [
-        (
-            None if item.total_time is None else item.total_time.steps,
-            None if item.time_left is None else item.time_left.steps,
-        )
-        for item in state.production.of_types({unit_type})
-    ]
+    return [(item.total_time.steps, item.time_left.steps) for item in state.production.of_types({unit_type})]
 
 
 class TestProduction:
@@ -273,33 +270,48 @@ class TestProduction:
         assert _made(state, UnitTypeId.BANELING) == [(1, None, 0.25)]
         assert _timed(state, UnitTypeId.BANELING) == [(320, 240)]
 
-    def test_a_morph_under_way_in_the_first_observation_is_at_no_known_progress_or_time(self) -> None:
+    def test_a_morph_under_way_in_the_first_observation_was_not_seen_to_begin(self) -> None:
         """No game has one, since a game's first observation shows nothing morphing."""
-        state = _Game(tables=_MAKING_TABLES).observe(
-            units=[
-                _done(1, UnitTypeId.COMMAND_CENTER, _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND)),
-                _done(2, UnitTypeId.BANELING_COCOON, _making(AbilityId.ZERGLING_MORPH_BANELING)),
-            ]
-        )
-        assert _made(state, UnitTypeId.ORBITAL_COMMAND) == [(1, None, None)]
-        assert _timed(state, UnitTypeId.ORBITAL_COMMAND) == [(None, None)]
-        assert _made(state, UnitTypeId.BANELING) == [(2, None, None)]
-        assert _timed(state, UnitTypeId.BANELING) == [(None, None)]
+        morph = _making(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND)
+        state = _Game(tables=_MAKING_TABLES).observe(units=[_done(1, UnitTypeId.COMMAND_CENTER, morph)])
+        with pytest.raises(NotReportedError, match="not seen to begin"):
+            _ = state.production
 
-    def test_a_unit_warping_in_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:
+    def test_a_lair_still_showing_its_morph_in_its_last_step_is_one_lair_going_up(self) -> None:
+        """A hatchery reads a lair, unfinished, a step before it is done, and still shows the lair morph (in game)."""
+        morph = _making(AbilityId.HATCHERY_MORPH_LAIR)
+        game = _Game(tables=_MAKING_TABLES)
+        game.observe(0, units=[_done(1, UnitTypeId.HATCHERY)])
+        game.observe(1, units=[_done(1, UnitTypeId.HATCHERY, morph)])
+        state = game.observe(1279, units=[make_unit(1, UnitTypeId.LAIR, orders=[morph], build_progress=1279 / 1280)])
+        assert _made(state, UnitTypeId.LAIR) == [(None, 1, pytest.approx(1279 / 1280))]
+        assert _timed(state, UnitTypeId.LAIR) == [(1280, 1)]
+
+    def test_a_unit_warping_in_is_one_made_by_nothing_slow_or_fast_by_how_far_it_has_risen(self) -> None:
+        """One far from any warp gate rises 1/256 a step and is done after 256 steps; one among warp gates rises 1/80 a
+        step and is done a step after it reads 80/80 (in game). Its row, which a zealot's gives a gateway's time and an
+        adept's none here, plays no part."""
+        game = _Game(tables=_MAKING_TABLES)
+        game.observe(0)
+        slow = make_unit(1, UnitTypeId.ZEALOT, build_progress=10 / 256)
+        fast = make_unit(2, UnitTypeId.ADEPT, build_progress=10 / 80)
+        state = game.observe(10, units=[slow, fast])
+        assert _made(state, UnitTypeId.ZEALOT) == [(None, 1, 10 / 256)]
+        assert _timed(state, UnitTypeId.ZEALOT) == [(256, 246)]
+        assert _made(state, UnitTypeId.ADEPT) == [(None, 2, 10 / 80)]
+        assert _timed(state, UnitTypeId.ADEPT) == [(81, 71)]
+
+    def test_a_unit_warping_in_in_the_first_observation_was_not_seen_to_begin(self) -> None:
+        """No game has one, since a game's first observation shows nothing warping in."""
         state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)])
-        assert _made(state, UnitTypeId.ZEALOT) == [(None, 1, 0.5)]
-        assert _timed(state, UnitTypeId.ZEALOT) == [(None, None)]
+        with pytest.raises(NotReportedError, match="not seen to begin"):
+            _ = state.production
 
-    def test_an_archon_merging_is_one_at_its_progress_made_by_nothing_and_at_no_known_time(self) -> None:
+    def test_an_archon_merging_is_one_made_by_nothing_in_the_time_it_takes(self) -> None:
+        """First listed at 0, it rises 1/192 a step, and its row gives no time (in game)."""
         state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ARCHON, build_progress=0.5)])
         assert _made(state, UnitTypeId.ARCHON) == [(None, 1, 0.5)]
-        assert _timed(state, UnitTypeId.ARCHON) == [(None, None)]
-
-    def test_a_type_the_tables_give_no_row_going_up_is_taken_for_a_unit_warping_in(self) -> None:
-        state = _Game(tables=_MAKING_TABLES).observe(units=[make_unit(1, UnitTypeId.ADEPT, build_progress=0.5)])
-        assert _made(state, UnitTypeId.ADEPT) == [(None, 1, 0.5)]
-        assert _timed(state, UnitTypeId.ADEPT) == [(None, None)]
+        assert _timed(state, UnitTypeId.ARCHON) == [(192, 96)]
 
     def test_a_free_order_that_makes_a_form_is_none(self) -> None:
         siege = _making(RawAbilityId.SiegeMode_SiegeMode)
@@ -317,13 +329,13 @@ class TestProduction:
         bays = [_done(1, UnitTypeId.ENGINEERING_BAY, weapons, armor), _done(2, UnitTypeId.ENGINEERING_BAY)]
         researches = _Game(tables=_MAKING_TABLES).observe(units=bays).production.researches
         assert [
-            (upgrade, research.unit.tag, research.total_time.steps, research.time_left.steps, research.progress)
+            (upgrade, research.unit.tag, research.total_time.steps, research.time_left.steps, research.fraction)
             for upgrade, research in researches.items()
         ] == [
             (UpgradeId.TERRAN_INFANTRY_WEAPONS_1, 1, 2560, 1920, 0.25),
             (UpgradeId.TERRAN_INFANTRY_ARMOR_1, 1, 2560, 2560, 0.0),
         ]
-        assert all(upgrade is research.upgrade for upgrade, research in researches.items())
+        assert all(upgrade is research.product for upgrade, research in researches.items())
         assert UpgradeId.TERRAN_INFANTRY_WEAPONS_2 not in researches
 
     def test_the_researches_cannot_be_changed_through_what_is_handed_out(self) -> None:
@@ -692,3 +704,69 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         assert game.state.upgrades == {UpgradeId.ZERG_MELEE_WEAPONS_1}
         client.leave_game()
         client.quit()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("steps_per_turn", [1, 7])
+def test_in_a_real_game_a_warp_in_and_an_archon_are_timed_until_they_are_done(steps_per_turn: int) -> None:
+    """Run with `pytest -m integration`. Warps a zealot in at a pylon among warp gates and one at a pylon far from any,
+    and merges two high templar into an archon, observing every step or every 7: each one's step plus its time left is
+    the step it is first read done, 81, 256 and 192 steps after it began (in game)."""
+    try:
+        game_map = MapFile.find("PylonAIE_v4")
+    except MapNotFoundError as missing:
+        pytest.skip(str(missing))
+
+    with (
+        GameProcess.launch(window=(640, 480)) as process,
+        closing(Client(WebSocketTransport.connect(process.url))) as client,
+    ):
+        client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
+        game = RealGame(client, client.join_game(Race.TERRAN))
+        home = game.turn(1).own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
+        middle = game.map.playable_area.center
+        # A pylon between two warp gates, and one far from them; `free` pays for the warp-ins.
+        gate_pylon_at = game.open_ground(home.towards(middle, 10), size=10)
+        lone_pylon_at = game.open_ground(home.towards(middle, 34), size=8)
+        templar_at = game.open_ground(home.towards(middle, 22), size=4)
+        game.debug(
+            debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free),
+            game.create(UnitTypeId.PYLON, gate_pylon_at),
+            game.create(UnitTypeId.WARP_GATE, gate_pylon_at + (-3.5, 0.5)),
+            game.create(UnitTypeId.WARP_GATE, gate_pylon_at + (3.5, 0.5)),
+            game.create(UnitTypeId.PYLON, lone_pylon_at),
+            game.create(UnitTypeId.HIGH_TEMPLAR, templar_at),
+            game.create(UnitTypeId.HIGH_TEMPLAR, templar_at + (1, 0)),
+        )
+        game.turn(8)
+        present = game.tracker.unit_tracker.present.own
+        gates = sorted(present.of_type(UnitTypeId.WARP_GATE), key=lambda gate: gate.id)
+        templar = present.of_type(UnitTypeId.HIGH_TEMPLAR)
+        game.order(AbilityId.WARP_GATE_WARP_IN_ZEALOT, gates[0], target=gate_pylon_at + (0, 3))
+        game.order(AbilityId.WARP_GATE_WARP_IN_ZEALOT, gates[1], target=lone_pylon_at + (0, 2.5))
+        merge = raw_pb2.ActionRawUnitCommand(
+            ability_id=AbilityId.MORPH_ARCHON, unit_tags=[unit.tag for unit in templar]
+        )
+        client.act([sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(unit_command=merge))])
+        reads: dict[int, list[tuple[int, int]]] = {}
+        totals: dict[int, int] = {}
+        first_read_done: dict[int, int] = {}
+        made = (UnitTypeId.ZEALOT, UnitTypeId.ARCHON)
+        ordered_after = game.step
+        while game.step < ordered_after + 300:
+            game.turn(steps_per_turn)
+            for item in game.state.production.of_types(made):
+                assert item.unit is not None
+                reads.setdefault(item.unit.id, []).append((game.step, item.time_left.nearest_step))
+                totals[item.unit.id] = item.total_time.nearest_step
+            for unit in game.tracker.unit_tracker.present.own.of_type(made):
+                if unit.id in reads and unit.is_complete:
+                    first_read_done.setdefault(unit.id, game.step)
+        client.leave_game()
+        client.quit()
+
+    assert sorted(totals.values()) == [81, 192, 256]
+    for unit_id, unit_reads in reads.items():
+        (done_at,) = {step + steps_left for step, steps_left in unit_reads}
+        assert all(step < done_at for step, _ in unit_reads)
+        assert done_at <= first_read_done[unit_id] < done_at + steps_per_turn
