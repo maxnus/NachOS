@@ -395,7 +395,8 @@ can be planned with the owner. Keeping the selections still waits on M5's exit g
 
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
-  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
+  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line. Since #240 the tracker
+  also holds the order book `OwnUnit.issue` orders into, which such a context would carry too.
 - Shortcuts for common orders, `issue_move`, `issue_attack` and `issue_gather`, with self types on new groups,
   `CanMove` and `CanAttack`, generated from the abilities the tech tree records each type offered; and methods on
   `Units` for a group. Held until a bot shows a need (the owner, 2026-11-08, building `OwnUnit.issue` alone in #240): a
@@ -404,7 +405,8 @@ can be planned with the owner. Keeping the selections still waits on M5's exit g
   `HOLD_POSITION` are offered to the same 81 types and `ATTACK` to 83, an SCV, a medivac and an overlord among them,
   so `CanAttack` is no army; a group of exactly those types leaves out `Worker` over the burrowed drone, so a burrowed
   form was to count as its unit. Since #237, a loop of `unit.issue` goes out as one command, so methods on `Units`
-  save no APM. A callable target per unit is to reconsider with them (review of #125), and a bot's tests of code
+  save no APM. They would not make one id per action unnecessary, since ids also show in `unit.orders` and
+  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125), and a bot's tests of code
   that calls `unit.issue` need `MadeUpUnits` to hold an order book.
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and

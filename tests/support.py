@@ -423,7 +423,8 @@ def played(
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
     `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
-    `PLAYER_ID` with `OBSERVER_ID` watching, its orders in the tracker's order book, or in a new one if it has none."""
+    `PLAYER_ID` with `OBSERVER_ID` watching, its orders in the tracker's order book. A tracker built without one gets a
+    new one, which its units cannot reach: `unit.issue` raises for them, and `game.orders.issue` orders them."""
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)

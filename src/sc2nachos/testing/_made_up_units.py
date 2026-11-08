@@ -15,7 +15,8 @@ from sc2nachos.units._tracking import _Tracker
 
 class MadeUpUnits:
     """The units of a game made up for a test, taken in one observation after another, as NachOS takes them in from a
-    game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client.
+    game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client. They cannot be ordered:
+    `sc2nachos.units.OwnUnit.issue` raises `RuntimeError`.
 
     This player is player 1, and the enemy player 2. The units read their types from `game_data`, by default build
     75689's, as `load_game_data` reads it.

@@ -25,9 +25,10 @@ marine.issue(AbilityId.ATTACK, target=drone, data=Defending(base))
 scv.issue(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 ```
 
-- **`units`**, of `api.orders.issue`, is one unit or any number of them, and each carries the order out; a unit given twice counts once. An
-  ability every unit of a command carries out goes out as one command naming them all: a move, an attack, a burrow, a
-  lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
+- **`units`**, of `api.orders.issue`, is one unit or any number of them, and each carries the order out; a unit
+  given twice counts once. An ability every unit of a command carries out goes out as one command naming them all: a
+  move, an attack, a burrow, a lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from
+  what the game was seen to do).
   The game spreads such a group around the target point, where a command to each stacks them on the point, and orders of
   such an ability given apart to one target go out as one command too ([orders sent together](#orders-sent-together)).
   Any other ability goes out as a command to each unit, since one command naming several has only one of them carry it

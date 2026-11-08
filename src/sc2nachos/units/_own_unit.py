@@ -59,15 +59,14 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         data: Any = None,
     ) -> Order[Any]:
         """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Order`, as
-        `OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
+        `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
         `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
 
-        Raises as `OrderBook.issue` does, and `RuntimeError` for a unit `sc2nachos.testing` made up, which no game takes
-        orders for.
+        Raises as `OrderBook.issue` does, and `RuntimeError` for a unit of no game, as `sc2nachos.testing` makes up.
         """
         order_book = self._tracker.order_book
         if order_book is None:
-            raise RuntimeError(f"{self!r} was made up for a test, and no game takes its orders")
+            raise RuntimeError(f"{self!r} belongs to no game, so nothing takes its orders")
         return order_book.issue(self, ability, target=target, queued=queued, force=force, data=data)
 
     @property

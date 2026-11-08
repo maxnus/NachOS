@@ -179,7 +179,7 @@ class TestOrders:
 
     def test_a_made_up_unit_cannot_be_ordered(self):
         (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE))
-        with pytest.raises(RuntimeError, match="made up for a test"):
+        with pytest.raises(RuntimeError, match="belongs to no game"):
             marine.issue(AbilityId.MOVE, target=(20.0, 21.0))
 
 

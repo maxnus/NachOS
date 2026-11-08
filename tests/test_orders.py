@@ -3,6 +3,7 @@
 # Each `type: ignore` below marks a call the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
 
+import inspect
 import random
 from collections.abc import Sequence
 from contextlib import closing
@@ -333,6 +334,12 @@ class TestOrderingAUnitThroughItself:
 
         with pytest.raises(TypeError, match="STIM takes no target"):
             game.own(1).issue(_STIM, target=(20.0, 21.0))
+
+    def test_it_takes_the_book_s_arguments_but_the_units(self) -> None:
+        """So that an argument added to the book's `issue` is not left out of the unit's."""
+        book_parameters = list(inspect.signature(OrderBook.issue).parameters.values())
+        unit_parameters = list(inspect.signature(OwnUnit.issue).parameters.values())
+        assert [parameter for parameter in book_parameters if parameter.name != "units"] == unit_parameters
 
 
 class TestOneOrderAUnitATurn:
