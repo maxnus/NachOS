@@ -11,7 +11,7 @@ from sc2nachos.units import UnitDict
 
 if TYPE_CHECKING:
     from sc2nachos import Api
-    from sc2nachos.units import OwnUnit, Unit, UnitOrder, Units, UnitType
+    from sc2nachos.units import Order, OwnUnit, Unit, Units, UnitType
 
 # The most weapon cooldown, and the most turn toward an enemy, with which a worker attacks it: the first step of a turn
 # costs nothing (in game).
@@ -63,7 +63,7 @@ class WorkerAttacks:
         self._target_by_attacker[worker] = target
         return True
 
-    def is_speed_minings_attack(self, worker: OwnUnit[UnitType.Worker], order: UnitOrder) -> bool:
+    def is_speed_minings_attack(self, worker: OwnUnit[UnitType.Worker], order: Order) -> bool:
         """Whether `order`, the current one of `worker`, is the attack speed mining gave it."""
         target = self._target_by_attacker.get(worker)
         return target is not None and order.known_target is target

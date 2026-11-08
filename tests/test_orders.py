@@ -21,7 +21,7 @@ from sc2nachos.geometry import POINT_PRECISION, Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.orders import Order, OrderBook
+from sc2nachos.orders import IssuedOrder, OrderBook
 from sc2nachos.orders._commands import unit_commands_giving
 from sc2nachos.orders._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
@@ -224,8 +224,8 @@ class TestGivingAnOrder:
         one = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
         both = game.book.issue([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
 
-        assert repr(one) == f"Order(MOVE, {game.own(1)!r})"
-        assert repr(both) == "Order(MOVE, 2 units)"
+        assert repr(one) == f"IssuedOrder(MOVE, {game.own(1)!r})"
+        assert repr(both) == "IssuedOrder(MOVE, 2 units)"
 
     def test_an_ability_aimed_at_what_it_cannot_take_is_a_mistake(self) -> None:
         """The three cases the game was seen to answer `ERROR`, which NachOS now rejects itself."""
@@ -286,7 +286,7 @@ class TestOrderingAUnitThroughItself:
 
         order = marine.issue(_MOVE, target=(20.0, 21.0), queued=True)
 
-        assert_type(order, Order)
+        assert_type(order, IssuedOrder)
         assert game.book.pending == (order,)
         assert (order.ability, order.units, order.target, order.queued) == (
             _MOVE,
@@ -1808,10 +1808,10 @@ class _OrderingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.moved: Order | None = None
-        self.stim: Order | None = None
-        self.stimmed_move: Order | None = None
-        self.at_a_dead_tag: Order | None = None
+        self.moved: IssuedOrder | None = None
+        self.stim: IssuedOrder | None = None
+        self.stimmed_move: IssuedOrder | None = None
+        self.at_a_dead_tag: IssuedOrder | None = None
         self.killed: OwnUnit[Any] | None = None
 
     def turn(self, event: TurnEvent) -> None:
@@ -1848,9 +1848,9 @@ class _UnloadingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.loads: list[Order] = []
-        self.move: Order | None = None
-        self.unload: Order | None = None
+        self.loads: list[IssuedOrder] = []
+        self.move: IssuedOrder | None = None
+        self.unload: IssuedOrder | None = None
         self.unloaded_at: dict[int, Point] = {}
         self.reported: list[tuple[float, list[str]]] = []
 
@@ -1894,7 +1894,7 @@ class _SiegingBot:
         self.api = api
         self.player = player
         self.zone: Point | None = None
-        self.sieges: list[Order] = []
+        self.sieges: list[IssuedOrder] = []
         self.reported: list[tuple[int, UnitTypeId, list[tuple[AbilityId, bool]]]] = []
 
     def turn(self, event: TurnEvent) -> None:
@@ -1925,8 +1925,8 @@ class _GroupSiegingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.siege: Order | None = None
-        self.unsiege: Order | None = None
+        self.siege: IssuedOrder | None = None
+        self.unsiege: IssuedOrder | None = None
         self.sieged: list[UnitTypeId] = []
 
     def turn(self, event: TurnEvent) -> None:
@@ -1958,8 +1958,8 @@ class _GroupUnloadingBot:
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
         self.player = player
-        self.loads: list[Order] = []
-        self.unload: Order | None = None
+        self.loads: list[IssuedOrder] = []
+        self.unload: IssuedOrder | None = None
         self.marines_left_out = 0
 
     def turn(self, event: TurnEvent) -> None:

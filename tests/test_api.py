@@ -32,7 +32,7 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
-from sc2nachos.orders import Order
+from sc2nachos.orders import IssuedOrder
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
@@ -373,7 +373,7 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(2, (1, Result.VICTORY), units=[make_unit(1)])),
         )
         api = Api()
-        issued: list[tuple[Order, tuple[Order, ...]]] = []
+        issued: list[tuple[IssuedOrder, tuple[IssuedOrder, ...]]] = []
 
         @api.on(TurnEvent, once=True)
         def turn(event: TurnEvent) -> None:

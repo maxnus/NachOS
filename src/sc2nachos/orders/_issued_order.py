@@ -11,8 +11,9 @@ if TYPE_CHECKING:
 
 
 @final
-class Order:
-    """An order a bot gave. A refusal by the game shows in `api.action_failures`."""
+class IssuedOrder:
+    """An order a bot gave. A refusal by the game shows in `api.action_failures`, and what a unit then reports doing
+    in its `sc2nachos.units.Order`s."""
 
     __slots__ = (
         "_ability",
@@ -42,7 +43,7 @@ class Order:
 
     def __repr__(self) -> str:
         units = self._units[0] if len(self._units) == 1 else f"{len(self._units)} units"
-        return f"Order({self._ability.name}, {units})"
+        return f"IssuedOrder({self._ability.name}, {units})"
 
     @property
     def ability(self) -> AbilityId:

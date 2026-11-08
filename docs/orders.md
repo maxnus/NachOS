@@ -12,7 +12,7 @@ def on_turn(event: TurnEvent) -> None:
         marine.issue(AbilityId.ATTACK, target=enemy_base)
 ```
 
-`issue` returns the `Order`: what was asked and `withdraw()` to take it back before it is sent. What the game
+`issue` returns an `IssuedOrder`: what was asked and `withdraw()` to take it back before it is sent. What the game
 refuses is listed in `api.action_failures`.
 
 ## Giving one
@@ -129,8 +129,8 @@ may not show it yet, as on the ladder; otherwise it is the unit's first reported
 sent last turn counts though the unit still shows its old one, and in a stepped game an order the unit finished, or
 the game dropped, within one turn still counts on the next: repeating it then goes out a turn late.
 
-A bot that gives the same order every turn gets a new `Order` each time: the first is sent, and the rest are left
-out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
+A bot that gives the same order every turn gets a new `IssuedOrder` each time: the first is sent, and the rest are
+left out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
 it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
 sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
 which goes out regardless.
@@ -272,8 +272,8 @@ next observation.
 
 ## Reading a unit's orders
 
-An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
-current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
+An `IssuedOrder` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `Order` for
+its current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
 site, and drops what it cannot carry out. The ids do agree: a unit reports its type's own id of an action several types
 perform, and NachOS reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the
 game reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
