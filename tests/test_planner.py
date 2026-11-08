@@ -253,7 +253,9 @@ class TestKnownPlans:
         33.43 if it walks there first, and the next SCV's 50 minerals take it 45.65 seconds more, less half its
         bucket's."""
         depot = _TERRAN_MODEL.unit_items[UnitTypeId.SUPPLY_DEPOT].build_seconds
-        build = WorkerBuild(unit_type=UnitTypeId.SUPPLY_DEPOT, seconds_left=depot, builder_walks_there=walks_there)
+        build = WorkerBuild(
+            unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=depot), builder_walks_there=walks_there
+        )
         state = _game_start(
             minerals=0.0,
             supply_used=1.0,
@@ -714,9 +716,25 @@ def _states_of(*observations: sc2api_pb2.ResponseObservation) -> list[GameState]
     return states[: len(observations)]
 
 
-def _worker_builds_rounded(state: GameState) -> list[WorkerBuild]:
-    """`state`'s worker builds, each one's seconds left rounded to a hundredth."""
-    return [dataclasses.replace(build, seconds_left=round(build.seconds_left, 2)) for build in state.worker_builds]
+def _worker_builds_in_seconds(state: GameState) -> list[tuple[UnitTypeId, float, bool]]:
+    """`state`'s worker builds, each as its type, its seconds left to a hundredth, and whether its SCV walks there."""
+    return [
+        (build.unit_type, round(build.time_left.seconds, 2), build.builder_walks_there) for build in state.worker_builds
+    ]
+
+
+def _occupations_in_seconds(state: GameState) -> list[tuple[UnitTypeId, float, float, bool]]:
+    """`state`'s occupations, each as its producer, its seconds until it starts and until it is done, and whether it
+    needs a tech lab, in order of start."""
+    return sorted(
+        (
+            occupation.producer,
+            occupation.time_until_start.seconds,
+            occupation.time_left.seconds,
+            occupation.needs_tech_lab,
+        )
+        for occupation in state.occupations
+    )
 
 
 class TestGameState:
@@ -742,7 +760,7 @@ class TestGameState:
         depot = _TERRAN_MODEL.unit_items[UnitTypeId.SUPPLY_DEPOT].build_seconds
         stimpack = _TERRAN_MODEL.upgrade_items[UpgradeId.STIMPACK].build_seconds
 
-        assert sorted(state.unit_completions) == pytest.approx(
+        assert sorted((unit_type, time.seconds) for unit_type, time in state.unit_completions) == pytest.approx(
             sorted(
                 [
                     (UnitTypeId.SCV, 0.75 * scv),
@@ -752,31 +770,20 @@ class TestGameState:
             ),
             abs=0.05,
         )
-        assert state.upgrade_completions == {UpgradeId.STIMPACK: pytest.approx(0.75 * stimpack, abs=0.05)}
-        assert _worker_builds_rounded(state) == [
-            WorkerBuild(unit_type=UnitTypeId.SUPPLY_DEPOT, seconds_left=round(depot, 2), builder_walks_there=True)
-        ]
-        assert sorted(state.occupations, key=lambda occupation: occupation.start_seconds) == pytest.approx(
-            [
-                Occupation(
-                    producer=UnitTypeId.COMMAND_CENTER, start_seconds=0.0, end_seconds=0.75 * scv, needs_tech_lab=False
-                ),
-                Occupation(
-                    producer=UnitTypeId.BARRACKS, start_seconds=0.0, end_seconds=0.5 * marauder, needs_tech_lab=True
-                ),
-                Occupation(
-                    producer=UnitTypeId.TECH_LAB_BARRACKS,
-                    start_seconds=0.0,
-                    end_seconds=0.75 * stimpack,
-                    needs_tech_lab=False,
-                ),
-                Occupation(
-                    producer=UnitTypeId.BARRACKS,
-                    start_seconds=0.5 * marauder,
-                    end_seconds=0.5 * marauder + marine,
-                    needs_tech_lab=False,
-                ),
-            ]
+        assert {upgrade: time.seconds for upgrade, time in state.upgrade_completions.items()} == {
+            UpgradeId.STIMPACK: pytest.approx(0.75 * stimpack, abs=0.05)
+        }
+        assert _worker_builds_in_seconds(state) == [(UnitTypeId.SUPPLY_DEPOT, round(depot, 2), True)]
+        assert _occupations_in_seconds(state) == pytest.approx(
+            sorted(
+                [
+                    (UnitTypeId.COMMAND_CENTER, 0.0, 0.75 * scv, False),
+                    (UnitTypeId.BARRACKS, 0.0, 0.5 * marauder, True),
+                    (UnitTypeId.TECH_LAB_BARRACKS, 0.0, 0.75 * stimpack, False),
+                    (UnitTypeId.BARRACKS, 0.5 * marauder, 0.5 * marauder + marine, False),
+                ]
+            ),
+            abs=0.05,
         )
 
     def test_an_scv_inside_a_refinery_which_the_observation_leaves_out_counts(self) -> None:
@@ -802,9 +809,7 @@ class TestGameState:
         refinery = _TERRAN_MODEL.unit_items[UnitTypeId.REFINERY].build_seconds
 
         assert state.free_geysers == 0
-        assert WorkerBuild(
-            unit_type=UnitTypeId.REFINERY, seconds_left=round(refinery, 2), builder_walks_there=True
-        ) in _worker_builds_rounded(state)
+        assert (UnitTypeId.REFINERY, round(refinery, 2), True) in _worker_builds_in_seconds(state)
 
     def test_a_command_center_an_scv_walks_to_build_waits_for_its_walk(self) -> None:
         observation = _main_base_at(0)
@@ -819,25 +824,25 @@ class TestGameState:
         )
         (state,) = _states_of(observation)
 
-        assert WorkerBuild(
-            unit_type=UnitTypeId.COMMAND_CENTER, seconds_left=71.43, builder_walks_there=True
-        ) in _worker_builds_rounded(state)
+        assert (UnitTypeId.COMMAND_CENTER, 71.43, True) in _worker_builds_in_seconds(state)
 
     def test_a_command_centers_morph_counts_down_from_the_observation_before_the_first_showing_it(self) -> None:
         """Given after the observation at 0 and seen at 10 and 20 seconds, it has 5 of its 25 left at the last."""
         states = _states_of(_main_base_at(0), _main_base_at(224, morphing=True), _main_base_at(448, morphing=True))[1:]
         orbital = _TERRAN_MODEL.unit_items[UnitTypeId.ORBITAL_COMMAND].build_seconds
         left = [
-            seconds
+            time
             for state in states
-            for unit_type, seconds in state.unit_completions
+            for unit_type, time in state.unit_completions
             if unit_type == UnitTypeId.ORBITAL_COMMAND
         ]
-        assert left == pytest.approx([orbital - 10, orbital - 20])
+        assert [time.seconds for time in left] == pytest.approx([orbital - 10, orbital - 20])
         assert all(
-            Occupation(producer=UnitTypeId.COMMAND_CENTER, start_seconds=0.0, end_seconds=seconds, needs_tech_lab=False)
+            Occupation(
+                producer=UnitTypeId.COMMAND_CENTER, time_until_start=GameTime.ZERO, time_left=time, needs_tech_lab=False
+            )
             in state.occupations
-            for state, seconds in zip(states, left, strict=True)
+            for state, time in zip(states, left, strict=True)
         )
 
 

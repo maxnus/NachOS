@@ -169,11 +169,11 @@ class PlanProgram:
     def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
         """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
         and the seconds until each SCV building, or walking to build, is back at work after its walk back."""
-        completions = list(self._state.unit_completions)
+        completions = [(unit_type, time_left.seconds) for unit_type, time_left in self._state.unit_completions]
         builders_free_after: list[float] = []
         for build in self._state.worker_builds:
             walk = self._walk_seconds.get(build.unit_type, 0.0)
-            done_after = build.seconds_left + (walk if build.builder_walks_there else 0.0)
+            done_after = build.time_left.seconds + (walk if build.builder_walks_there else 0.0)
             completions.append((build.unit_type, done_after))
             builders_free_after.append(done_after + walk)
         return tuple(completions), tuple(builders_free_after)
@@ -308,7 +308,7 @@ class PlanProgram:
         if upgrade in self._state.upgrades:
             done.constant += 1.0
         elif upgrade in self._state.upgrade_completions:
-            done.constant += self._done_by(self._state.upgrade_completions[upgrade], at_end=at_end)
+            done.constant += self._done_by(self._state.upgrade_completions[upgrade].seconds, at_end=at_end)
         elif (index := self._index_of_upgrade.get(upgrade)) is not None:
             done.add_expression(self._starts_done(index, at_end=at_end))
         return done
@@ -471,7 +471,9 @@ class PlanProgram:
             busy.add(self._starts[index], busy_seconds)
             running.add(self._starts[index], (busy_seconds > SECONDS_TOLERANCE).astype(float))
         for occupation in occupations:
-            seconds = self._busy_seconds_until(occupation.end_seconds, start_seconds=occupation.start_seconds)
+            seconds = self._busy_seconds_until(
+                occupation.time_left.seconds, start_seconds=occupation.time_until_start.seconds
+            )
             busy.constant += seconds
             running.constant += seconds > SECONDS_TOLERANCE
         self._constrain_at_most(busy, RowExpression(buckets).add_expression(lanes, self._widths))

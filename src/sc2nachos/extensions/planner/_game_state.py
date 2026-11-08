@@ -1,4 +1,4 @@
-"""The state of the game as the planner reads it: plain numbers, taken from the api, which a bot may change."""
+"""The state of the game as the planner reads it: plain values, taken from the api, which a bot may change."""
 
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ class Occupation:
 
     producer: UnitTypeId
     """The producer's type, in its usual form."""
-    start_seconds: float
-    """When it starts, in seconds from the state's time: 0 for one running, later for one queued behind another."""
-    end_seconds: float
-    """When it is done, in seconds from the state's time."""
+    time_until_start: GameTime
+    """The time from the state's until it starts: zero for one running, more for one queued behind another."""
+    time_left: GameTime
+    """The time from the state's until it is done."""
     needs_tech_lab: bool
     """Whether it is a unit its producer makes only with a tech lab."""
 
@@ -39,8 +39,8 @@ class WorkerBuild:
 
     unit_type: UnitTypeId
     """Its type, in its usual form."""
-    seconds_left: float
-    """The seconds of building it has left: its whole build time if not begun."""
+    time_left: GameTime
+    """The building it has left: its whole build time if not begun."""
     builder_walks_there: bool
     """Whether an SCV has yet to walk there: for a build not begun, and for a structure going up whose SCV has left."""
 
@@ -48,7 +48,7 @@ class WorkerBuild:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GameState:
-    """The state of the game a plan starts from, as plain numbers: what `Planner.game_state` reads, which a bot may
+    """The state of the game a plan starts from, as plain values: what `Planner.game_state` reads, which a bot may
     change with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The
     planner pools what it holds: it never knows which base a field, a refinery or a worker is at."""
 
@@ -67,11 +67,11 @@ class GameState:
     a transport included, which the observation leaves out."""
     upgrades: frozenset[UpgradeId] = frozenset()
     """The upgrades done."""
-    unit_completions: tuple[tuple[UnitTypeId, float], ...] = ()
-    """Each unit in production but a structure an SCV builds, of its type in its usual form, with the seconds until it
-    is done."""
-    upgrade_completions: Mapping[UpgradeId, float] = field(default_factory=dict)
-    """Each upgrade being researched, with the seconds until it is done."""
+    unit_completions: tuple[tuple[UnitTypeId, GameTime], ...] = ()
+    """Each unit in production but a structure an SCV builds, of its type in its usual form, with the time until it is
+    done."""
+    upgrade_completions: Mapping[UpgradeId, GameTime] = field(default_factory=dict)
+    """Each upgrade being researched, with the time until it is done."""
     occupations: tuple[Occupation, ...] = ()
     """What keeps each producer busy now."""
     worker_builds: tuple[WorkerBuild, ...] = ()
@@ -143,11 +143,11 @@ def _bases_of(api: Api[object]) -> tuple[int, int]:
 
 def _production_of(
     api: Api[object], model: TerranModel
-) -> tuple[list[tuple[UnitTypeId, float]], list[Occupation], list[tuple[WorkerBuild, InProduction]]]:
-    """Each unit in production but a structure an SCV builds, with the seconds until it is done; what keeps each
+) -> tuple[list[tuple[UnitTypeId, GameTime]], list[Occupation], list[tuple[WorkerBuild, InProduction]]]:
+    """Each unit in production but a structure an SCV builds, with the time until it is done; what keeps each
     producer busy; and each structure an SCV builds, with what it was read from. A structure not begun, or going up
     with no SCV building it, waits for an SCV's walk there."""
-    completions: list[tuple[UnitTypeId, float]] = []
+    completions: list[tuple[UnitTypeId, GameTime]] = []
     worker_builds: list[tuple[WorkerBuild, InProduction]] = []
     by_producer: dict[int, list[InProduction]] = {}
     producers: dict[int, OwnUnit[Any]] = {}
@@ -156,53 +156,51 @@ def _production_of(
         producer = in_production.producer
         if model.unit_items[unit_type].is_built_by_worker:
             walks_there = in_production.unit is None or producer is None
-            build = WorkerBuild(
-                unit_type=unit_type, seconds_left=in_production.time_left.seconds, builder_walks_there=walks_there
-            )
+            build = WorkerBuild(unit_type=unit_type, time_left=in_production.time_left, builder_walks_there=walks_there)
             worker_builds.append((build, in_production))
         elif producer is None:
-            completions.append((unit_type, in_production.time_left.seconds))
+            completions.append((unit_type, in_production.time_left))
         else:
             by_producer.setdefault(producer.id, []).append(in_production)
             producers[producer.id] = producer
     occupations: list[Occupation] = []
     for producer_id, queue in by_producer.items():
         producer = producers[producer_id]
-        lanes = [0.0] * max(producer.production_capacity, 1)
+        lanes = [GameTime.ZERO] * max(producer.production_capacity, 1)
         for in_production in sorted(queue, key=lambda queued: queued.fraction == 0):
             unit_type = model.usual_form(in_production.product)
             lane = lanes.index(min(lanes))
             start = lanes[lane]
-            lanes[lane] = start + in_production.time_left.seconds
+            lanes[lane] = start + in_production.time_left
             completions.append((unit_type, lanes[lane]))
             occupations.append(
                 Occupation(
                     producer=model.usual_form(producer.type_id),
-                    start_seconds=start,
-                    end_seconds=lanes[lane],
+                    time_until_start=start,
+                    time_left=lanes[lane],
                     needs_tech_lab=model.unit_items[unit_type].needs_tech_lab,
                 )
             )
     return completions, occupations, worker_builds
 
 
-def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId, float], list[Occupation]]:
-    """Each research's seconds until it is done, one structure researching one at a time, and what keeps each
-    researcher busy."""
-    completions: dict[UpgradeId, float] = {}
+def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId, GameTime], list[Occupation]]:
+    """Each research's time until it is done, one structure researching one at a time, and what keeps each researcher
+    busy."""
+    completions: dict[UpgradeId, GameTime] = {}
     occupations: list[Occupation] = []
-    free_after: dict[int, float] = {}
+    free_after: dict[int, GameTime] = {}
     researches = sorted(api.researches.items(), key=lambda research: research[1].fraction == 0)
     for upgrade, research in researches:
-        start = free_after.get(research.unit.id, 0.0)
-        end = start + research.time_left.seconds
+        start = free_after.get(research.unit.id, GameTime.ZERO)
+        end = start + research.time_left
         free_after[research.unit.id] = end
         completions[upgrade] = end
         occupations.append(
             Occupation(
                 producer=model.usual_form(research.unit.type_id),
-                start_seconds=start,
-                end_seconds=end,
+                time_until_start=start,
+                time_left=end,
                 needs_tech_lab=False,
             )
         )

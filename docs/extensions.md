@@ -229,7 +229,7 @@ class ThreatMap:
   the share of each unit type the bot expects lost a second, so that only what is expected to survive counts.
 
   Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `GameState`
-  `plan_now` plans from, plain numbers read off the game: stock, supply, finished units, what is in production and
+  `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and
   when it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries and
   free geysers at its bases, pooled, since the planner never knows which base a worker is at. `plan_now(state=...)`
   plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what each worker at a field or a

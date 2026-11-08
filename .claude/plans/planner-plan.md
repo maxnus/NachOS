@@ -127,7 +127,7 @@ class Extensions:
   item set is pruned to what the reward names, their prerequisites, producers, supply, workers, expansions and
   refineries.
 - `_grid.py`: bucket edges from segments. Each item's integrality window comes from its cost, or from the bot.
-- `_game_state.py`: the state as numbers, `GameState`, read from the api when `plan_now` asks: resources, supply,
+- `_game_state.py`: the state as plain values, `GameState`, read from the api when `plan_now` asks: resources, supply,
   the alive count of each type, each item in production with its time left, each structure an SCV builds and whether
   one walks there first, upgrades done and researching, and the fields, refineries and free geysers at the bot's
   bases. A bot may change it and hand it back.
@@ -143,8 +143,8 @@ class Extensions:
   process must coexist and NachOS keeps no module-level state; the interval, the triggers the bot raises, and
   re-anchoring a plan on arrival.
 
-The planner orders nothing. It never touches a unit, and it holds nothing a `UnitDict` should, since a game state is
-numbers. It handles no event: it reads the game when `plan_now` asks.
+The planner orders nothing. It never touches a unit, and it holds nothing a `UnitDict` should, since a game state
+holds plain values. It handles no event: it reads the game when `plan_now` asks.
 
 In AvocaDOS, `Extensions` in `core/api.py` builds the planner, and a `PlanManager` extending `BotManager` builds
 the reward from the strategy, raises the triggers, keeps the current plan, sets the priorities of the next items'
