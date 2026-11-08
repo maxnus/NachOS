@@ -72,9 +72,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   AvocaDOS, and a bot keeps its own data per unit in a `UnitDict` (#200).
 - **The order a bot gave is an `IssuedOrder`, and what a unit reports doing an `Order`** (the owner, 2026-11-08,
   #242), over `Order` and `UnitOrder`, which said nothing of how they differ; over `PendingOrder`, since a sent order
-  stays the same handle and `api.orders.pending` holds the unsent alone; and over `ReportedOrder`. The reported one
-  stays in `sc2nachos.units`, so a bot's old `from sc2nachos.orders import Order` fails at import rather than meaning
-  the other.
+  stays the same handle and `api.orders.pending` holds the unsent alone; and over `ReportedOrder`, the name
+  `sc2nachos.testing` gives the tuple a test makes a unit's order from. The reported one stays in `sc2nachos.units`, so
+  a bot's old `from sc2nachos.orders import Order` fails at import, or in the type checker where it is imported under
+  `TYPE_CHECKING`, rather than meaning the other; `test_package.py` checks that `sc2nachos.orders` names no `Order`.
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
