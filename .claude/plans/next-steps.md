@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-05:
+As of 2026-11-08:
 
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
@@ -46,10 +46,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   judge and the bot's to budget, and `api.action_failures` lists what the game refused. No budget, no `can_afford`,
   no `api.orders.cancel`: a built version with all of that was dropped as too complicated for what it bought.
 - **No order priority, no hold and no order state.** A unit takes the last order a turn gives it, a structure's train
-  included, and a bot that ranks its orders keeps the rank itself, in a `UnitDict`. NachOS never holds an order until
-  a unit can start it (#126, reversing #115 to #120): that belongs in the bot, or in a layer above the order book.
-  Nothing follows an order once sent (#69, #115): the `Order` is a handle, and the bot reads its units, events and
-  `api.action_failures`.
+  included, and a bot that ranks its orders keeps the rank itself, in a `UnitDict` it empties at each turn's start.
+  NachOS never holds an order until a unit can start it (#126, reversing #115 to #120): that belongs in the bot, or in a
+  layer above the order book. Nothing follows an order once sent (#69, #115): the `Order` is a handle, and the bot reads
+  its units, events and `api.action_failures`.
 - **An unqueued order a unit is already carrying out is not sent to it** (#68), though a train or a research always
   is. `force=True` sends it anyway, dropping the unit's queue, so there is no `clear_queue` (#77). A production
   order gets no "replace": a cancel frees no queue slot and no minerals in the same step (#43).

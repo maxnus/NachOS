@@ -12,7 +12,7 @@ def on_turn(event: TurnEvent) -> None:
         marine.issue(AbilityId.ATTACK, target=enemy_base)
 ```
 
-`issue` returns the `Order`: what was asked, and `withdraw()` to take it back before it is sent. What the game
+`issue` returns the `Order`: what was asked and `withdraw()` to take it back before it is sent. What the game
 refuses is listed in `api.action_failures`.
 
 ## Giving one
@@ -116,8 +116,8 @@ def keep_the_rest_together(event: TurnEvent) -> None:
             marine.issue(AbilityId.MOVE, target=rally)
 ```
 
-A bot that ranks its orders keeps the rank of each unit's order itself, in a `UnitDict`, as it keeps anything else of
-its own about a unit.
+A bot that ranks its orders keeps the rank of each unit's order itself, in a `UnitDict` say, and empties it at each
+turn's start: `issued_to` holds the turn's orders alone, but a `UnitDict` keeps a value until its unit dies.
 `issued_to(unit, include_sent=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
 in its orders yet: on the ladder an order can show two observations after it went out.
 
