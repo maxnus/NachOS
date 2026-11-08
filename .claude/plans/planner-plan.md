@@ -33,12 +33,18 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    the relative timing error constant along the plan. Durations are never rounded: a build enters the producer
    constraints in exact seconds split across the buckets it overlaps; only a start sits on a bucket's first second
    and a completion on the next edge.
-3. **Whole numbers where an item is lumpy, fluid flows where it is not.** Townhalls, production and tech structures
-   and upgrades stay integer over the whole horizon; units, depots, refineries and add-ons are integer for the first
-   90 seconds and fluid after. The rule: an item stays whole where its cost exceeds a bucket's income and it is made
-   once a bucket at most. Fluid far-term starts make the far term the value function of the near term, computed by
-   the LP at each node instead of learned; the near-term plan did not change when the window moved from 1:30 to
-   10:00. Depots kept whole for minutes stall the solver: 22 near-identical integer starts are symmetric branches.
+3. **Whole numbers where an item is lumpy, fluid flows where it is not**, for longer the more it costs (the owner,
+   phase 1): an item's starts are integer from the plan's start for 60 seconds for each 100 minerals and vespene, at
+   least 30, and fluid after: a command center to 4:00, a factory or a starport to 2:30, a barracks or an orbital
+   command to 1:30, a depot to 1:00, an SCV or a marine to 0:30. Upgrades stay integer over any horizon. A bot sets
+   its own for any unit type, `Planner(whole_until=...)` taking a function of the unit type that returns `None` for
+   the default. The rule: an item stays whole where its cost exceeds a bucket's income and it is made once a bucket
+   at most. Fluid far-term starts make the far term the value function of the near term, computed by the LP at each
+   node instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00. Depots kept
+   whole for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1 first kept
+   townhalls, production and tech structures whole over the whole horizon and the rest for 90 seconds, which left the
+   reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it is proven
+   optimal in 8 to 10 seconds (Open 7).
 4. **The reward is a discounted sum over time of concave terms in one currency.** Never the terminal state alone:
    under replanning a terminal reward defers the army forever, and it is far harder to solve. The discount
    half-life, not the horizon, is the economy knob: workers appear once it exceeds a worker's payback time, an
@@ -111,7 +117,7 @@ class Extensions:
   townhall (a Terran morph, a Zerg queen), the builder's interval, MULE income, chrono boost and warp-in later. The
   item set is pruned to what the reward names, their prerequisites, producers, supply, workers, expansions and
   refineries.
-- `_grid.py`: bucket edges from segments, and each item's integrality window by its class.
+- `_grid.py`: bucket edges from segments. Each item's integrality window comes from its cost, or from the bot.
 - `_snapshot.py`: the state as numbers, taken from the api in a `TurnStartEvent` handler at `EventPriority.BEFORE`:
   resources, supply, the alive count of each type, each item in production with its time left, workers mining,
   collecting, building and walking, upgrades done and researching, the expansions free with their walk times from
@@ -199,11 +205,13 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 6. **The discount against the solver.** A discount made a 7-minute solve faster and a 10-minute one slower; settle
    it on the real model.
 7. **Phase 1's exit: the reference configuration is not solved within 3 seconds** (measured in phase 1's pull
-   request, for the owner to settle). With decision 3's windows, the concave reward is 7.6% from the solver's bound
-   after 3 s at a half-life of 240 s and 12% undiscounted, against 0.7 to 1.9% with every start whole for 90 s alone;
-   the root relaxation of the whole structures is what stays loose, and a tighter big-M did not help. The plan after 3
-   s opens as the one after 30 s does. Kept as decision 3 says until the owner chooses: the incumbent at 3 s, whole
-   structures for a shorter window, or phase 3's warm start.
+   request). With decision 3's windows by cost, the concave reward is proven optimal in 8 to 10 s at every half-life,
+   and the plan found after 3 s is worth 0.5 to 0.8% less than the optimal one, the solver's bound still 2.0 to 2.5%
+   above it; the toy's linear reward is optimal in 8 s, but 6.5% short after 3. With phase 1's first windows,
+   townhalls, production and tech structures whole over the horizon, the concave reward was 7.6% from its bound after
+   3 s at a half-life of 240 s and 12% undiscounted, still 7 to 11% after 10 s: the root relaxation of the whole
+   structures is what stayed loose, and a tighter big-M did not help. Left for the owner: the incumbent at 3 s, or
+   phase 3's warm start.
 8. **The count-form cut holds only where a bucket's starts are whole** (phase 1, for the owner to confirm). The toy
    applied it in every bucket shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
    buckets a barracks made a marine every 32 seconds, not every 17.86. Held to whole buckets, the toy's linear case

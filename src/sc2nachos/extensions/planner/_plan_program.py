@@ -44,13 +44,15 @@ _SHARE_OF_INCOME_SPENT: Final = 0.5
 class PlanProgram:
     """The mixed-integer linear program of one plan over the buckets between `edges`, in seconds from the snapshot.
 
-    Each item's starts in each bucket are a variable, whole where the item is whole over the horizon or the bucket
-    starts before `whole_until_seconds`. A start pays from the stock at its bucket's start plus half the bucket's
-    income, keeps its producer busy for its build time over the buckets it spans, its SCV from the walk there through
-    the build to the walk back, takes its supply at once, and counts as done from the first edge at or after its end.
-    Workers mine in two tiers, two a field and a third at half the rate, collect three a refinery, or build, and each
-    orbital command adds a MULE's income. A unit counts as it survives its loss rate, for income, supply, the reward
-    and coverage.
+    Each item's starts in each bucket are a variable, whole where the bucket starts before the item's time in
+    `whole_until_seconds`, one for each item in the order of `items`. A start pays from the stock at its bucket's start
+    plus half the bucket's income, keeps its producer busy for its build time over the buckets it spans, its SCV from
+    the walk there through the build to the walk back, takes its supply at once, and counts as done from the first edge
+    at or after its end. Workers mine in two tiers, two a field and a third at half the rate, collect three a refinery,
+    or build, and each orbital command adds a MULE's income. A unit counts as it survives its loss rate, for income,
+    supply, the reward and coverage.
+
+    Raises `ValueError` unless `whole_until_seconds` hold one time for each item.
     """
 
     __slots__ = (
@@ -83,7 +85,7 @@ class PlanProgram:
         edges: Sequence[float],
         snapshot: Snapshot,
         reward: Reward,
-        whole_until_seconds: float,
+        whole_until_seconds: Sequence[float],
     ) -> None:
         self._items = tuple(items)
         self._model = model
@@ -97,10 +99,9 @@ class PlanProgram:
         self._index_of_upgrade = {item.upgrade: i for i, item in enumerate(self._items) if item.upgrade is not None}
         self._program = LinearProgram()
         self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
-        self._whole = [
-            item.is_whole_over_horizon | (self._edges[:-1] < whole_until_seconds - SECONDS_TOLERANCE)
-            for item in self._items
-        ]
+        if len(whole_until_seconds) != len(self._items):
+            raise ValueError(f"{len(whole_until_seconds)} windows for {len(self._items)} items")
+        self._whole = [self._edges[:-1] < whole_until - SECONDS_TOLERANCE for whole_until in whole_until_seconds]
         self._starts = [self._add_starts(item, whole) for item, whole in zip(self._items, self._whole, strict=True)]
         self._minerals = self._add_stock(snapshot.minerals)
         self._vespene = self._add_stock(snapshot.vespene)

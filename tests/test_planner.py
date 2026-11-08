@@ -3,6 +3,7 @@ off a made-up game, and the extension itself."""
 
 import dataclasses
 import math
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -21,6 +22,7 @@ from sc2nachos.extensions.planner import (
     TimeGrid,
 )
 from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._planner import whole_until_seconds_of
 from sc2nachos.extensions.planner._snapshot import Occupation, Snapshot
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
@@ -57,9 +59,15 @@ def _game_start(*, walk_seconds: float = 6.0, **changes: Any) -> Snapshot:
 
 
 def _best_plan(
-    snapshot: Snapshot, reward: Reward, *, horizon_seconds: float, grid: TimeGrid = _TWO_SECOND_BUCKETS
+    snapshot: Snapshot,
+    reward: Reward,
+    *,
+    horizon_seconds: float,
+    grid: TimeGrid = _TWO_SECOND_BUCKETS,
+    whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
 ) -> Plan:
-    """The best plan for `reward` from `snapshot`, over `horizon_seconds` on `grid`, proven best."""
+    """The best plan for `reward` from `snapshot`, over `horizon_seconds` on `grid` with the windows of `whole_until`,
+    proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
         items=items,
@@ -67,12 +75,17 @@ def _best_plan(
         edges=grid.edges(GameTime(seconds=horizon_seconds)),
         snapshot=snapshot,
         reward=reward,
-        whole_until_seconds=grid.whole_until.seconds,
+        whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
     )
     plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT)
     assert plan is not None
     assert plan.is_optimal
     return plan
+
+
+def _whole_over_any_horizon(_: UnitTypeId) -> GameTime:
+    """Every unit type whole over any horizon."""
+    return GameTime.INFINITE
 
 
 def _start_seconds(plan: Plan, item: UnitTypeId | UpgradeId) -> list[float]:
@@ -163,13 +176,16 @@ class TestTerranModel:
         assert orbital.supply_provided == 0.0
         assert (orbital.minerals, orbital.build_seconds) == (150.0, 25.0)
 
-    def test_the_few_and_dear_are_whole_over_the_horizon(self) -> None:
-        whole = {unit_type for unit_type, item in _TERRAN_MODEL.unit_items.items() if item.is_whole_over_horizon}
-        assert {UnitTypeId.COMMAND_CENTER, UnitTypeId.ORBITAL_COMMAND, UnitTypeId.BARRACKS} <= whole
-        assert {UnitTypeId.ENGINEERING_BAY, UnitTypeId.FUSION_CORE} <= whole
-        assert not whole & {UnitTypeId.SCV, UnitTypeId.MARINE, UnitTypeId.SUPPLY_DEPOT, UnitTypeId.REFINERY}
-        assert not whole & {UnitTypeId.TECH_LAB_BARRACKS, UnitTypeId.REACTOR_STARPORT, UnitTypeId.BUNKER}
-        assert all(item.is_whole_over_horizon for item in _TERRAN_MODEL.upgrade_items.values())
+    def test_a_unit_starts_whole_by_default_60_seconds_each_100_resources_at_least_30_and_an_upgrade_always(
+        self,
+    ) -> None:
+        windows = {unit_type: item.default_whole_until for unit_type, item in _TERRAN_MODEL.unit_items.items()}
+        assert windows[UnitTypeId.COMMAND_CENTER] == GameTime(seconds=240)
+        assert windows[UnitTypeId.FACTORY] == GameTime(seconds=150)
+        assert windows[UnitTypeId.ORBITAL_COMMAND] == GameTime(seconds=90)
+        assert windows[UnitTypeId.SUPPLY_DEPOT] == GameTime(seconds=60)
+        assert windows[UnitTypeId.SCV] == windows[UnitTypeId.MARINE] == GameTime(seconds=30)
+        assert all(item.default_whole_until == GameTime.INFINITE for item in _TERRAN_MODEL.upgrade_items.values())
 
     @pytest.mark.parametrize("unit_type", [UnitTypeId.ZERGLING, UnitTypeId.MULE, UnitTypeId.AUTO_TURRET])
     def test_a_type_terran_does_not_make_raises(self, unit_type: UnitTypeId) -> None:
@@ -209,9 +225,11 @@ class TestKnownPlans:
 
     def test_a_command_center_starts_at_48_seconds_after_uninterrupted_scv_production(self) -> None:
         """SCVs worth more than a command center, which is built as soon as it does not hold one up, on the doubling
-        grid. An SCV starts each 14 seconds, its 12.14 rounded up to whole 2-second buckets."""
+        grid, every start whole. An SCV starts each 14 seconds, its 12.14 rounded up to whole 2-second buckets."""
         reward = Reward(weights={UnitTypeId.SCV: 2.0, UnitTypeId.COMMAND_CENTER: 1.0})
-        plan = _best_plan(_game_start(), reward, horizon_seconds=150, grid=TimeGrid.doubling())
+        plan = _best_plan(
+            _game_start(), reward, horizon_seconds=150, grid=TimeGrid.doubling(), whole_until=_whole_over_any_horizon
+        )
 
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER)[0] == 48.0
         assert _start_seconds(plan, UnitTypeId.SCV)[:5] == [0.0, 14.0, 28.0, 42.0, 56.0]
@@ -303,6 +321,53 @@ class TestKnownPlans:
         assert _start_seconds(without, UnitTypeId.BARRACKS) == []
         assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
         assert _start_seconds(kept, UnitTypeId.BARRACKS)[0] <= 30.0
+
+
+class TestWholeUntil:
+    def test_a_unit_type_has_what_whole_until_returns_or_its_default_for_none_and_an_upgrade_its_default(self) -> None:
+        items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[UpgradeId.STIMPACK])
+        asked: list[UnitTypeId] = []
+
+        def whole_until(unit_type: UnitTypeId) -> GameTime | None:
+            asked.append(unit_type)
+            return GameTime(seconds=20) if unit_type == UnitTypeId.SUPPLY_DEPOT else None
+
+        seconds = whole_until_seconds_of(items, whole_until=whole_until)
+
+        seconds_by_name = {item.name: window for item, window in zip(items, seconds, strict=True)}
+        assert seconds_by_name["SUPPLY_DEPOT"] == 20.0
+        assert seconds_by_name["COMMAND_CENTER"] == 240.0
+        assert seconds_by_name["STIMPACK"] == math.inf
+        assert asked == [item.unit_type for item in items if item.unit_type is not None]
+        assert whole_until_seconds_of(items, whole_until=None) == tuple(
+            item.default_whole_until.seconds for item in items
+        )
+
+    def test_a_negative_time_raises(self) -> None:
+        items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[])
+        with pytest.raises(ValueError, match="SCV"):
+            whole_until_seconds_of(
+                items, whole_until=lambda unit_type: GameTime(seconds=-1) if unit_type == UnitTypeId.SCV else None
+            )
+
+    def test_starts_are_whole_in_the_buckets_that_start_before_their_items_time(self) -> None:
+        reward = Reward(weights={UnitTypeId.MARINE: 1.0})
+        items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+
+        def whole_numbers(whole_until: GameTime) -> int:
+            program = PlanProgram(
+                items=items,
+                model=_TERRAN_MODEL,
+                edges=_TWO_SECOND_BUCKETS.edges(GameTime(seconds=60)),
+                snapshot=_game_start(),
+                reward=reward,
+                whole_until_seconds=[whole_until.seconds] * len(items),
+            )
+            return program.linear_program.integral_count
+
+        assert whole_numbers(GameTime.ZERO) == 0
+        assert whole_numbers(GameTime(seconds=10)) == 5 * len(items)
+        assert whole_numbers(GameTime.INFINITE) == 30 * len(items)
 
 
 class TestReward:
@@ -651,4 +716,15 @@ class TestPlanner:
             api.extensions.plan_now(Reward(), horizon=GameTime(seconds=10), loss_rates={UnitTypeId.MARINE: -0.1})
 
         with pytest.raises(ValueError, match="loss rates"):
+            api.play(game.joined())
+
+    def test_a_negative_time_from_whole_until_raises(self) -> None:
+        game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
+        api = Api(extensions=lambda api: Planner(api, whole_until=lambda _: GameTime(seconds=-1)))
+
+        @api.on(TurnEvent)
+        def plan_marines(_: TurnEvent) -> None:
+            api.extensions.plan_now(Reward(weights={UnitTypeId.MARINE: 1.0}), horizon=GameTime(seconds=10))
+
+        with pytest.raises(ValueError, match="negative time"):
             api.play(game.joined())

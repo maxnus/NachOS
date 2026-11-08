@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.gamedata import Tech
+from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 from sc2nachos.units import UnitType
@@ -39,6 +40,9 @@ ECONOMY_TYPES: Final = (
     UnitTypeId.ORBITAL_COMMAND,
     UnitTypeId.REFINERY,
 )
+# By default a unit starts whole for this long for each 100 minerals and vespene it costs, but at least the shortest.
+_DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES: Final = 60.0
+_SHORTEST_DEFAULT_WHOLE_SECONDS: Final = 30.0
 _TECH_LAB_TYPES: Final = UnitType.AnyTechLab.type_ids
 _REACTOR_TYPES: Final = UnitType.AnyReactor.type_ids
 
@@ -75,9 +79,17 @@ class Item:
     """The type it is made from and uses up, a command center for an orbital command."""
     is_built_by_worker: bool
     """Whether an SCV builds it, away from its work from the walk there through the build to the walk back."""
-    is_whole_over_horizon: bool
-    """Whether it starts in whole numbers over the whole horizon: a townhall, a structure that makes or researches
-    something, a townhall's morph, or an upgrade."""
+
+    @property
+    def default_whole_until(self) -> GameTime:
+        """The time from a plan's start until which it starts in whole numbers, unless the bot chooses another: for a
+        unit, 60 seconds for each 100 minerals and vespene it costs, but at least 30, so a command center 4:00, a
+        barracks or an orbital command 1:30, a supply depot 1:00, and an SCV or a marine 0:30; for an upgrade, over any
+        horizon, since each is made once at most."""
+        if self.is_upgrade:
+            return GameTime.INFINITE
+        seconds = _DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES * (self.minerals + self.vespene) / 100
+        return GameTime(seconds=max(_SHORTEST_DEFAULT_WHOLE_SECONDS, seconds))
 
     @property
     def is_upgrade(self) -> bool:
@@ -108,9 +120,7 @@ class TerranModel:
             for unit_type, row in game_data.units.items()
             if self._usual_forms.get(unit_type) == unit_type and _is_made_by_an_order(row)
         ]
-        makers = {self.usual_form(producer) for row in item_rows for producer in row.producers}
-        makers.update(researcher for upgrade in game_data.upgrades.values() for researcher in upgrade.researchers)
-        items_by_type = {row.id: self._unit_item(row, makes_something=row.id in makers) for row in item_rows}
+        items_by_type = {row.id: self._unit_item(row) for row in item_rows}
         self._items_by_type: Mapping[UnitTypeId, Item] = MappingProxyType(items_by_type)
         items_by_upgrade: dict[UpgradeId, Item] = {}
         for upgrade, upgrade_row in game_data.upgrades.items():
@@ -130,7 +140,6 @@ class TerranModel:
                     upgrades_needed=upgrade_row.tech_requirements.upgrades,
                     morphed_from=None,
                     is_built_by_worker=False,
-                    is_whole_over_horizon=True,
                 )
         self._items_by_upgrade: Mapping[UpgradeId, Item] = MappingProxyType(items_by_upgrade)
 
@@ -230,8 +239,8 @@ class TerranModel:
         ]
         return needed + [self._items_by_upgrade[upgrade] for upgrade in item.upgrades_needed]
 
-    def _unit_item(self, row: UnitTypeData, *, makes_something: bool) -> Item:
-        """The item making the unit type of `row`, which `makes_something` if it makes or researches an item."""
+    def _unit_item(self, row: UnitTypeData) -> Item:
+        """The item making the unit type of `row`."""
         producers = frozenset(self.usual_form(producer) for producer in row.producers)
         morphed_from = None if row.morphed_from is None else self.usual_form(row.morphed_from)
         provided_before = 0.0 if morphed_from is None else self._game_data.units[morphed_from].supply_provided
@@ -249,7 +258,6 @@ class TerranModel:
             upgrades_needed=row.tech_requirements.upgrades,
             morphed_from=morphed_from,
             is_built_by_worker=UnitTypeId.SCV in producers,
-            is_whole_over_horizon=_is_structure(row) and makes_something and not self.is_add_on(row.id),
         )
 
 

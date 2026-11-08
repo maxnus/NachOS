@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from sc2nachos import Api
     from sc2nachos.extensions.planner._plan import Plan
     from sc2nachos.extensions.planner._reward import Reward
+    from sc2nachos.extensions.planner._terran_model import Item
 
 _NO_LOSSES: Mapping[UnitTypeId, float] = MappingProxyType({})
 _TOWNHALL_MORPHS = (UnitTypeId.ORBITAL_COMMAND, UnitTypeId.PLANETARY_FORTRESS)
@@ -66,6 +67,13 @@ class Planner:
     - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
       from the first edge at or after their end; build times are never rounded. So production chained on one producer
       starts a whole number of buckets apart while its starts are whole: SCVs every 14 seconds on 2-second buckets.
+    - An item starts in whole numbers until a time from the plan's start, and in fractions after it, so that the solver
+      weighs the far term without branching over it; the bot carries out the near term and plans again before the
+      rest. The time is what `whole_until` returns for the item's unit type, or where it returns `None`, or is `None`,
+      60 seconds for each 100 minerals and vespene the item costs, but at least 30: a command center 4:00, a factory or
+      a starport 2:30, a barracks or an orbital command 1:30, a supply depot 1:00, an SCV or a marine 0:30. An upgrade
+      starts whole over any horizon, since each is made once at most, and `GameTime.INFINITE` keeps a unit type so.
+      Longer times make a plan exact further ahead, and the solve slower.
 
     The solve stops at `time_limit` seconds of wall-clock time, or after `node_limit` nodes of branching, each
     unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
@@ -74,7 +82,17 @@ class Planner:
     negative `walk_time`; and `NotPlayingError` if built before the game starts.
     """
 
-    __slots__ = ("_api", "_grid", "_model", "_morph_starts", "_node_limit", "_plan", "_time_limit", "_walk_time")
+    __slots__ = (
+        "_api",
+        "_grid",
+        "_model",
+        "_morph_starts",
+        "_node_limit",
+        "_plan",
+        "_time_limit",
+        "_walk_time",
+        "_whole_until",
+    )
 
     def __init__(
         self,
@@ -84,6 +102,7 @@ class Planner:
         time_limit: float | None = 3.0,
         node_limit: int | None = None,
         walk_time: GameTime = GameTime(seconds=6),
+        whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
     ) -> None:
         if api.player.race != Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -98,6 +117,7 @@ class Planner:
         self._time_limit = time_limit
         self._node_limit = node_limit
         self._walk_time = walk_time
+        self._whole_until = whole_until
         self._model = TerranModel(api.data)
         self._morph_starts: UnitDict[OwnUnit[Any], GameTime] = UnitDict()
         self._plan: Plan | None = None
@@ -121,12 +141,14 @@ class Planner:
         that only the share expected alive counts. It solves within the planner's limits, before it returns.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, or a negative loss rate; and `NoPlanFoundError` if the solver finds no plan within its limits.
+        than 0, a negative loss rate, or a negative time from `whole_until`; and `NoPlanFoundError` if the solver finds
+        no plan within its limits.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+        whole_until_seconds = whole_until_seconds_of(items, whole_until=self._whole_until)
         snapshot = Snapshot.from_api(
             self._api,
             model=self._model,
@@ -140,7 +162,7 @@ class Planner:
             edges=edges,
             snapshot=snapshot,
             reward=reward,
-            whole_until_seconds=self._grid.whole_until.seconds,
+            whole_until_seconds=whole_until_seconds,
         )
         plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)
         if plan is None:
@@ -156,3 +178,20 @@ class Planner:
             if (producer := in_production.producer) is not None:
                 morphing[producer] = noted.get(producer, self._api.time)
         self._morph_starts = morphing
+
+
+def whole_until_seconds_of(
+    items: Sequence[Item], *, whole_until: Callable[[UnitTypeId], GameTime | None] | None
+) -> tuple[float, ...]:
+    """The seconds from the plan's start until which each of `items` starts in whole numbers: for a unit, what
+    `whole_until` returns for its type, or its default where that is `None`; for an upgrade, its default.
+
+    Raises `ValueError` for a negative time from `whole_until`.
+    """
+    seconds: list[float] = []
+    for item in items:
+        chosen = None if whole_until is None or item.unit_type is None else whole_until(item.unit_type)
+        if chosen is not None and chosen < GameTime.ZERO:
+            raise ValueError(f"whole_until must not return a negative time, but returned {chosen} for {item.name}")
+        seconds.append((item.default_whole_until if chosen is None else chosen).seconds)
+    return tuple(seconds)

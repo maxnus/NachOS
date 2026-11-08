@@ -5,11 +5,12 @@ Every case plans from the start of a game, twelve SCVs on a main's eight fields 
 minerals, 12 of 15 supply and three free expansions, over 10 minutes, valuing marines, marauders and medivacs as the
 toy did, with no walks unless the case says so:
 
-- `reference`: the reference configuration, the doubling grid, starts of townhalls, production and tech structures and
-  upgrades whole over the horizon and the rest for 90 seconds, and a discounted concave reward, at each half-life
-  given by `--half-lives`, with walks: 25 seconds to the expansion and 6 to anything else.
+- `reference`: the reference configuration, the doubling grid, the planner's default windows of whole starts, and a
+  discounted concave reward, at each half-life given by `--half-lives`, with walks: 25 seconds to the expansion and 6
+  to anything else.
 - `grids`: the toy's run7, its four grids with every start whole for 90 seconds and fluid after.
-- `windows`: its run8, those windows against the reference's, with the linear reward.
+- `windows`: its run8, every start whole for 90 seconds against its lumpy items whole over the horizon, and both
+  against the planner's default, with the linear reward.
 - `rewards`: its run9, the linear reward against the concave one.
 - `enemy`: its run10, covering an enemy armored, turning to air at 4:00, or air.
 - `walks`: its run11, no walks against Terran's.
@@ -32,6 +33,7 @@ from types import MappingProxyType
 from sc2nachos import GameTime
 from sc2nachos.extensions.planner import Coverage, CurveSegment, Plan, Reward, TimeGrid
 from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._planner import whole_until_seconds_of
 from sc2nachos.extensions.planner._snapshot import Snapshot
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId
@@ -77,6 +79,21 @@ _TOY_WALKS = {
 }
 _REFERENCE_WALK_SECONDS = 6.0
 _NO_WALKS: Mapping[UnitTypeId, float] = MappingProxyType({})
+# The toy's run8: townhalls, their morphs and the structures that make or research something, whole over the horizon.
+_WHOLE_OVER_THE_HORIZON_IN_THE_TOY = frozenset(
+    {
+        UnitTypeId.COMMAND_CENTER,
+        UnitTypeId.ORBITAL_COMMAND,
+        UnitTypeId.PLANETARY_FORTRESS,
+        UnitTypeId.BARRACKS,
+        UnitTypeId.FACTORY,
+        UnitTypeId.STARPORT,
+        UnitTypeId.ENGINEERING_BAY,
+        UnitTypeId.ARMORY,
+        UnitTypeId.GHOST_ACADEMY,
+        UnitTypeId.FUSION_CORE,
+    }
+)
 _TOY_GRIDS = {
     "step": TimeGrid(
         segments=[
@@ -130,14 +147,11 @@ def _solve_and_print(
     *,
     grid: TimeGrid,
     time_limit: float,
-    lumpy_whole_over_horizon: bool = True,
+    whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
 ) -> Plan | None:
-    """Plan for `reward` from `snapshot` on `grid` within `time_limit` seconds, and print what came of it: with
-    `lumpy_whole_over_horizon` false, every start is whole for the grid's window alone, as in the toy's runs before
-    run8."""
+    """Plan for `reward` from `snapshot` on `grid` within `time_limit` seconds, with the windows of whole starts
+    `whole_until` gives, as `Planner` takes it, and print what came of it."""
     items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
-    if not lumpy_whole_over_horizon:
-        items = tuple(dataclasses.replace(item, is_whole_over_horizon=False) for item in items)
     started = time.perf_counter()
     program = PlanProgram(
         items=items,
@@ -145,7 +159,7 @@ def _solve_and_print(
         edges=grid.edges(_HORIZON),
         snapshot=snapshot,
         reward=reward,
-        whole_until_seconds=grid.whole_until.seconds,
+        whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
     )
     built = time.perf_counter() - started
     plan = program.solve(time_limit=time_limit, node_limit=None)
@@ -187,15 +201,18 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             reward,
             grid=grid,
             time_limit=time_limit,
-            lumpy_whole_over_horizon=False,
+            whole_until=_whole_for_90_seconds,
         )
 
 
 def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
-    """Every start whole for 90 seconds, against the reference's windows."""
+    """Every start whole for 90 seconds, against the toy's lumpy items whole over the horizon, and the default."""
     reward = Reward(weights=_TOY_WEIGHTS)
-    for lumpy_whole in (False, True):
-        label = "lumpy whole over the horizon" if lumpy_whole else "everything whole for 90 s only"
+    for label, whole_until in (
+        ("everything whole for 90 s only", _whole_for_90_seconds),
+        ("lumpy whole over the horizon, the rest for 90 s", _whole_as_in_the_toy),
+        ("the planner's default", None),
+    ):
         _solve_and_print(
             label,
             model,
@@ -203,7 +220,7 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
             reward,
             grid=TimeGrid.doubling(),
             time_limit=time_limit,
-            lumpy_whole_over_horizon=lumpy_whole,
+            whole_until=whole_until,
         )
 
 
@@ -258,6 +275,16 @@ def _run_discount(model: TerranModel, time_limit: float, half_lives: Sequence[Ga
         reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life)
         label = f"half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
         _solve_and_print(label, model, _game_start(model), reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+
+
+def _whole_for_90_seconds(_: UnitTypeId) -> GameTime:
+    """Every unit type whole for 90 seconds, as in the toy's runs before run8."""
+    return GameTime(seconds=90)
+
+
+def _whole_as_in_the_toy(unit_type: UnitTypeId) -> GameTime:
+    """The toy's run8 windows: its lumpy items whole over the horizon, the rest for 90 seconds."""
+    return GameTime.INFINITE if unit_type in _WHOLE_OVER_THE_HORIZON_IN_THE_TOY else GameTime(seconds=90)
 
 
 def _print_starts_by_minute(plan: Plan, unit_types: Sequence[UnitTypeId]) -> None:
