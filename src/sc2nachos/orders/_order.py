@@ -11,15 +11,11 @@ if TYPE_CHECKING:
 
 
 @final
-class Order[T]:
-    """An order a bot gave. A refusal by the game shows in `api.action_failures`.
-
-    `T` is whatever the bot attached as `data`. NachOS carries it and never reads it.
-    """
+class Order:
+    """An order a bot gave. A refusal by the game shows in `api.action_failures`."""
 
     __slots__ = (
         "_ability",
-        "_data",
         "_issued_time",
         "_queued",
         "_target",
@@ -34,7 +30,6 @@ class Order[T]:
         target: Target | None,
         *,
         queued: bool,
-        data: T,
         issued_time: GameTime,
     ) -> None:
         """An order of `ability` to `units`, issued at `issued_time`. Made by the order book, never by a bot."""
@@ -42,7 +37,6 @@ class Order[T]:
         self._units = units
         self._target = target
         self._queued = queued
-        self._data = data
         self._issued_time = issued_time
         self._withdrawn = False
 
@@ -69,11 +63,6 @@ class Order[T]:
     def queued(self) -> bool:
         """Whether the order goes behind each unit's orders instead of replacing them."""
         return self._queued
-
-    @property
-    def data(self) -> T:
-        """Whatever the bot attached when it gave the order."""
-        return self._data
 
     @property
     def issued_time(self) -> GameTime:

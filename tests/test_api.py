@@ -4,7 +4,6 @@ import itertools
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import closing
 from pathlib import Path
-from typing import Any
 
 import pytest
 from loguru import logger
@@ -374,7 +373,7 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(2, (1, Result.VICTORY), units=[make_unit(1)])),
         )
         api = Api()
-        issued: list[tuple[Order[None], tuple[Order[Any], ...]]] = []
+        issued: list[tuple[Order, tuple[Order, ...]]] = []
 
         @api.on(TurnEvent, once=True)
         def turn(event: TurnEvent) -> None:
