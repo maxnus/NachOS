@@ -102,12 +102,14 @@ def _morphing_into(product: UnitTypeId, producer: OwnUnit[Any]) -> InProduction:
     """A `product` that `producer` is morphing into, at its `morph_progress`, or at no known progress for a morph not
     seen to begin."""
     try:
-        morph = producer.morph_progress
+        morph_progress = producer.morph_progress
     except NotReportedError:
-        morph = None
-    if morph is None:
+        morph_progress = None
+    if morph_progress is None:
         return InProduction(product, producer, None, None, None, None)
-    return InProduction(product, producer, None, morph.fraction, morph.total_time, morph.time_left)
+    return InProduction(
+        product, producer, None, morph_progress.fraction, morph_progress.total_time, morph_progress.time_left
+    )
 
 
 def _total_time_and_time_left(row: UnitTypeData, progress: float) -> tuple[GameTime, GameTime]:

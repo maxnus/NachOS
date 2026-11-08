@@ -1,17 +1,20 @@
 """How far a morph the game reports no progress for has got: a structure's of this player's, and a cocoon's of either
 side, timed from the observation before the first that shows it."""
 
+import typing
 from contextlib import closing
 from typing import Any
 
 import pytest
 from s2clientprotocol import data_pb2, debug_pb2, raw_pb2
 
+from sc2nachos.gamedata._techtree import COCOON_PRODUCTS
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.protocol import Client, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.units import Alliance, NotReportedError, Progress, Unit
+from sc2nachos.units._tracking._morph_tracker import _MORPHING_STRUCTURE_TYPES
 from support import RealGame, make_observation, make_tables, make_tracker, make_unit
 
 # At the build times of the game's tables, an overseer's no whole number of steps, and a lurker's 553.33, which NachOS
@@ -70,8 +73,17 @@ def _command_center(*orders: raw_pb2.UnitOrder, alliance: Alliance = Alliance.OW
 def _steps(progress: Progress[UnitTypeId] | None) -> tuple[UnitTypeId, float, float, float]:
     """What `progress` makes, its build time, and the steps it has done and left."""
     assert progress is not None
-    steps_done = round(progress.fraction * progress.total_time.steps)
-    return progress.product, progress.total_time.steps, steps_done, progress.time_left.steps
+    total_steps = progress.total_time.steps
+    return progress.product, total_steps, total_steps - progress.time_left.steps, progress.time_left.steps
+
+
+def test_it_is_read_on_the_types_whose_morphs_are_timed_and_no_others() -> None:
+    """The self type of `Unit.morph_progress` names each structure and cocoon type the tracker times."""
+    read = Unit.morph_progress.fget
+    assert read is not None
+    (types_read,) = typing.get_args(typing.get_type_hints(read, localns={"Progress": Progress})["self"])
+    timed = _MORPHING_STRUCTURE_TYPES | COCOON_PRODUCTS.keys()
+    assert {unit_type.id for unit_type in typing.get_args(types_read)} == timed
 
 
 class TestAStructuresMorph:
@@ -135,6 +147,17 @@ class TestAStructuresMorph:
         game.observe(8, _command_center(_ORBITAL))
         game.observe(559, make_unit(1, UnitTypeId.ORBITAL_COMMAND, build_progress=559 / 560))
         assert game.progress(1) is None
+
+    def test_a_lair_still_showing_its_morph_as_its_last_step_begins_none(self) -> None:
+        """A hatchery reads a lair, unfinished, a step before it is done, and still shows the lair morph (in game)."""
+        lair = raw_pb2.UnitOrder(ability_id=AbilityId.HATCHERY_MORPH_LAIR)
+        game = _Game()
+        game.observe(0, make_unit(1, UnitTypeId.HATCHERY))
+        game.observe(1, make_unit(1, UnitTypeId.HATCHERY, orders=[lair]))
+        game.observe(1279, make_unit(1, UnitTypeId.LAIR, orders=[lair], build_progress=1279 / 1280))
+        assert game.progress(1) is None
+        game.observe(1280, make_unit(1, UnitTypeId.LAIR, orders=[_HIVE]))
+        assert _steps(game.progress(1)) == (UnitTypeId.HIVE, 1600, 1, 1599)
 
     def test_an_enemys_is_not_reported(self) -> None:
         """The game shows an enemy's orders to nobody, and its type changes only once the morph is done (in game)."""
@@ -211,12 +234,42 @@ class TestACocoon:
         assert game.progress(1) is None
 
 
+# Each morph the in-game test orders: what carries it out, the ability, what it becomes, and what it needs standing.
+_MORPHS_IN_GAME = (
+    (
+        UnitTypeId.COMMAND_CENTER,
+        AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND,
+        UnitTypeId.ORBITAL_COMMAND,
+        UnitTypeId.BARRACKS,
+    ),
+    (
+        UnitTypeId.COMMAND_CENTER,
+        AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS,
+        UnitTypeId.PLANETARY_FORTRESS,
+        UnitTypeId.ENGINEERING_BAY,
+    ),
+    (UnitTypeId.HATCHERY, AbilityId.HATCHERY_MORPH_LAIR, UnitTypeId.LAIR, UnitTypeId.SPAWNING_POOL),
+    (UnitTypeId.LAIR, AbilityId.LAIR_MORPH_HIVE, UnitTypeId.HIVE, UnitTypeId.INFESTATION_PIT),
+    (UnitTypeId.SPIRE, AbilityId.SPIRE_MORPH_GREATER_SPIRE, UnitTypeId.GREATER_SPIRE, UnitTypeId.HIVE),
+    (UnitTypeId.ZERGLING, AbilityId.ZERGLING_MORPH_BANELING, UnitTypeId.BANELING, UnitTypeId.BANELING_NEST),
+)
+# The side of the square each type the in-game test makes stands on: a townhall's 5, a spire's 2, the rest 3.
+_SQUARE_SIDES = {
+    UnitTypeId.COMMAND_CENTER: 5,
+    UnitTypeId.HATCHERY: 5,
+    UnitTypeId.LAIR: 5,
+    UnitTypeId.HIVE: 5,
+    UnitTypeId.SPIRE: 2,
+    UnitTypeId.ZERGLING: 2,
+}
+
+
 @pytest.mark.integration
 @pytest.mark.parametrize("steps_per_turn", [1, 7])
-def test_in_a_real_game_a_morphs_time_left_runs_out_as_it_is_done(steps_per_turn: int) -> None:
-    """Run with `pytest -m integration`. Morphs a command center into an orbital command and a zergling into a
-    baneling, observing every step or every 7: the orbital is done its 560 steps after the step its order was sent
-    after, and the baneling, a step short of its 320, is listed within a step of them (in game)."""
+def test_in_a_real_game_each_morphs_time_left_runs_out_as_it_is_done(steps_per_turn: int) -> None:
+    """Run with `pytest -m integration`. Gives every structure morph and a zergling's baneling morph at once, observing
+    every step or every 7: each structure is done its row's time after the step its order was sent after, and the
+    baneling, a step short of its 320, is listed within a step of them (in game)."""
     try:
         game_map = MapFile.find("PylonAIE_v4")
     except MapNotFoundError as missing:
@@ -228,37 +281,59 @@ def test_in_a_real_game_a_morphs_time_left_runs_out_as_it_is_done(steps_per_turn
     ):
         client.create_game(game_map.path, [Participant(), Computer(Race.ZERG, Difficulty.VERY_EASY)])
         game = RealGame(client, client.join_game(Race.TERRAN))
-        command_center = game.turn(1).own.of_type(UnitTypeId.COMMAND_CENTER)[0]
-        home = command_center.position
+        home = game.turn(1).own.of_type(UnitTypeId.COMMAND_CENTER)[0].position
         middle = game.map.playable_area.center
-        # The orbital needs a barracks, the baneling a baneling nest; `free` pays for both morphs.
+        made = [unit_type for maker, _, _, needed in _MORPHS_IN_GAME for unit_type in (maker, needed)]
+        spots = [
+            home.towards(middle, distance).rotated(angle, around=home)
+            for distance in (12, 20, 28, 36)
+            for angle in (-0.7, 0.0, 0.7)
+        ]
+        # `free` pays for every morph, and what each needs is made standing.
         game.debug(
             debug_pb2.DebugCommand(game_state=debug_pb2.DebugGameState.free),
-            game.create(UnitTypeId.BARRACKS, game.open_ground(home.towards(middle, 9), size=3)),
-            game.create(UnitTypeId.BANELING_NEST, game.open_ground(home.towards(middle, 14), size=3)),
-            game.create(UnitTypeId.ZERGLING, game.open_ground(home.towards(middle, 18))),
+            *(
+                game.create(unit_type, game.open_ground(spot, size=_SQUARE_SIDES.get(unit_type, 3)))
+                for unit_type, spot in zip(made, spots, strict=False)
+            ),
         )
         game.turn(8)
-        zergling = game.newest(UnitTypeId.ZERGLING)
+        makers = _makers_by_morph(game)
         ordered_after = game.step
-        game.order(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND, command_center)
-        game.order(AbilityId.ZERGLING_MORPH_BANELING, zergling)
-        orbital_reads: list[tuple[int, int | None, bool]] = []
-        baneling_reads: list[tuple[int, int | None, bool]] = []
-        while game.step < ordered_after + 580:
+        for ability, maker in makers.items():
+            game.order(ability, maker)
+        reads: dict[AbilityId, list[tuple[int, int | None, bool]]] = {ability: [] for ability in makers}
+        becoming = {ability: product for _, ability, product, _ in _MORPHS_IN_GAME}
+        while game.step < ordered_after + 1620:
             game.turn(steps_per_turn)
-            orbital_reads.append(_read_morph(game.step, command_center, UnitTypeId.ORBITAL_COMMAND))
-            baneling_reads.append(_read_morph(game.step, zergling, UnitTypeId.BANELING))
+            for ability, maker in makers.items():
+                reads[ability].append(_read_morph(game.step, maker, becoming[ability]))
             if game.step == ordered_after + 7 * steps_per_turn:
-                morph = command_center.morph_progress
+                orbital_maker = makers[AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND]
+                morph_progress = orbital_maker.morph_progress
                 (orbital,) = game.state.production.of_types({UnitTypeId.ORBITAL_COMMAND})
-                assert morph is not None
-                assert orbital.time_left == morph.time_left
+                assert morph_progress is not None
+                assert orbital.time_left == morph_progress.time_left
+        build_steps = {
+            ability: game.tracker.game_data.units[product].build_time.nearest_step
+            for ability, product in becoming.items()
+        }
         client.leave_game()
         client.quit()
 
-    _assert_time_left_runs_out_as_it_is_done(orbital_reads, done_at=ordered_after + 560)
-    _assert_time_left_runs_out_as_it_is_done(baneling_reads, done_at=ordered_after + 320)
+    for ability, ability_reads in reads.items():
+        _assert_time_left_runs_out_as_it_is_done(ability_reads, done_at=ordered_after + build_steps[ability])
+
+
+def _makers_by_morph(game: RealGame) -> dict[AbilityId, Unit[Any]]:
+    """The unit of `game` to give each morph of `_MORPHS_IN_GAME`: a command center apiece for the orbital command and
+    the planetary fortress, and the newest of its type for every other."""
+    present = game.tracker.unit_tracker.present.own
+    command_centers = sorted(present.of_type(UnitTypeId.COMMAND_CENTER), key=lambda unit: unit.id)
+    makers = {ability: game.newest(maker) for maker, ability, _, _ in _MORPHS_IN_GAME}
+    makers[AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND] = command_centers[0]
+    makers[AbilityId.COMMAND_CENTER_MORPH_PLANETARY_FORTRESS] = command_centers[-1]
+    return makers
 
 
 def _read_morph(step: int, unit: Unit[Any], becoming: UnitTypeId) -> tuple[int, int | None, bool]:

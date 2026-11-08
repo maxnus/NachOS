@@ -27,12 +27,13 @@ _STRUCTURE_MORPHS = (
     AbilityId.LAIR_MORPH_HIVE,
     AbilityId.SPIRE_MORPH_GREATER_SPIRE,
 )
-# What each of those makes, by the raw id the structure's order reports it under.
-_PRODUCT_BY_STRUCTURE_MORPH: Final[Mapping[int, UnitTypeId]] = MappingProxyType(
+# What each of those makes, by the type carrying it out and the raw id its order reports. A lair still shows the lair
+# morph as its order in the step it first reads a lair, unfinished (in game), which is no morph of a lair's.
+_PRODUCT_BY_STRUCTURE_MORPH: Final[Mapping[tuple[UnitTypeId, int], UnitTypeId]] = MappingProxyType(
     {
-        int(ability): product
+        (performer, int(ability)): product
         for ability in _STRUCTURE_MORPHS
-        for product in TECH_TREE.ability(ability).products.values()
+        for performer, product in TECH_TREE.ability(ability).products.items()
         if isinstance(product, UnitTypeId)
     }
 )
@@ -75,7 +76,7 @@ class _MorphTracker:
             self._read_type_changes(changes.units_type_changed, previous_step)
         if self._structures:
             self._read_structure_orders(previous_step)
-        if changes.units_died or changes.units_found_dead:
+        if (self._morphs or self._structures) and (changes.units_died or changes.units_found_dead):
             for unit in itertools.chain(changes.units_died, changes.units_found_dead):
                 self._morphs.pop(unit._id, None)
                 self._structures.pop(unit._id, None)
@@ -128,12 +129,12 @@ class _MorphTracker:
                 self._structures.pop(unit._id, None)
 
     def _read_structure_orders(self, previous_step: int | None) -> None:
-        """Begin the morph of each watched structure whose order is one it did not show before, at `previous_step`,
-        and end that of each whose order is no morph."""
+        """Begin the morph of each watched structure whose order is one of its type's morphs that it did not show
+        before, at `previous_step`, and end that of each whose order is none."""
         morphs = self._morphs
         for unit_id, unit in self._structures.items():
             orders = unit._latest_report.orders
-            product = _PRODUCT_BY_STRUCTURE_MORPH.get(orders[0].ability_id) if orders else None
+            product = _PRODUCT_BY_STRUCTURE_MORPH.get((unit._type_id, orders[0].ability_id)) if orders else None
             if product is None:
                 morphs.pop(unit_id, None)
             elif (morph := morphs.get(unit_id)) is None or morph[0] is not product:

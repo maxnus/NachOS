@@ -55,7 +55,7 @@ class GameData:
     def __init__(self, data: sc2api_pb2.ResponseData) -> None:
         """Read the tables from the game's answer to `RequestData`."""
         unit_rows = _read_table(data.units, lambda unit: UnitTypeData._from_proto(unit, TECH_TREE), lambda row: row.id)
-        unit_rows = _with_build_times_corrected(_with_build_times_borrowed(unit_rows, TECH_TREE))
+        unit_rows = _with_build_times_borrowed(_with_build_times_corrected(unit_rows), TECH_TREE)
         unit_rows = _with_build_times_in_whole_costs(_with_turning(with_missing_attacks(unit_rows)))
         step_costs = _step_costs(unit_rows)
         self._units = _with_costs_from_steps(unit_rows, step_costs)
