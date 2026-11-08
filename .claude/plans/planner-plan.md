@@ -220,7 +220,10 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    townhalls, production and tech structures whole over the horizon, the concave reward was 7.6% from its bound after
    3 s at a half-life of 240 s and 12% undiscounted, still 7 to 11% after 10 s: the root relaxation of the whole
    structures is what stayed loose, and a tighter big-M did not help. Left for the owner: the incumbent at 3 s, or
-   phase 3's warm start.
+   phase 3's warm start. With no cap on free expansions, a bucket's command centers are bounded by 100, and the
+   prerequisite rows' big-M of a morph and a refinery with them, to about 101 and 202 at a game's start, where three
+   free expansions gave 4 and 8; the reference was no slower, optimal in 7.0 to 11.0 s. A valid tighter bound, if the
+   3 seconds call for one: the command centers the horizon's resources can pay for.
 8. **The count-form cut holds only where a bucket's starts are whole** (phase 1, for the owner to confirm). The toy
    applied it in every bucket shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
    buckets a barracks made a marine every 32 seconds, not every 17.86. Held to whole buckets, the toy's linear case

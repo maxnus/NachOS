@@ -236,14 +236,21 @@ class ThreatMap:
   refinery brings in a second, a list from the first worker on, what each orbital command's MULEs mine, what a new
   command center brings, and how long an SCV walks to build each structure. Its defaults are the rates measured
   speed mining, and a walk of 10 seconds to a command center and 6 to anything else. `free_expansions` caps the
-  command centers a plan starts, none by default. A base about to fall, left out, with the MULEs' energy spent on
-  scans:
+  command centers a plan starts, none by default. A base about to fall, with no refinery yet, left out, and the
+  MULEs' energy spent on scans:
 
   ```python
+  import dataclasses
+
+  from sc2nachos.extensions.planner import Economy
+
   planner = api.extensions.planner
   state = planner.game_state()
-  falling = len(base_under_attack.mineral_fields.alive)
-  state = dataclasses.replace(state, mineral_fields=state.mineral_fields - falling)
+  state = dataclasses.replace(
+      state,
+      mineral_fields=state.mineral_fields - len(falling_base.mineral_fields.alive),
+      free_geysers=state.free_geysers - len(falling_base.geysers),
+  )
   economy = Economy(mule_minerals_per_orbital_second=0.0)
   plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy)
   ```

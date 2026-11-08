@@ -241,6 +241,33 @@ class TestKnownPlans:
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER)[0] == 48.0
         assert _start_seconds(plan, UnitTypeId.SCV)[:5] == [0.0, 14.0, 28.0, 42.0, 56.0]
 
+    @pytest.mark.parametrize(
+        ("walks_there", "depot_done", "scv_start"),
+        [(False, 22.0, 74.0), (True, 28.0, 80.0)],
+        ids=["its SCV building it", "its SCV walking there first"],
+    )
+    def test_a_structure_an_scv_builds_is_done_after_any_walk_there_and_keeps_it_until_its_walk_back(
+        self, walks_there: bool, depot_done: float, scv_start: float
+    ) -> None:
+        """The one SCV, with 21.43 seconds of a depot to build and 6 to walk each way, mines from 27.43 seconds, or
+        33.43 if it walks there first, and the next SCV's 50 minerals take it 45.65 seconds more, less half its
+        bucket's."""
+        depot = _TERRAN_MODEL.unit_items[UnitTypeId.SUPPLY_DEPOT].build_seconds
+        build = WorkerBuild(unit_type=UnitTypeId.SUPPLY_DEPOT, seconds_left=depot, builder_walks_there=walks_there)
+        state = _game_start(
+            minerals=0.0,
+            supply_used=1.0,
+            counts={UnitTypeId.SCV: 1, UnitTypeId.COMMAND_CENTER: 1},
+            worker_builds=(build,),
+        )
+        plan = _best_plan(
+            state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=100, whole_until=_whole_over_any_horizon
+        )
+
+        depot_counts = zip(plan.times, plan.counts[UnitTypeId.SUPPLY_DEPOT], strict=False)
+        assert next(time for time, count in depot_counts if count >= 1) == GameTime(seconds=depot_done)
+        assert _start_seconds(plan, UnitTypeId.SCV) == [scv_start]
+
     def test_the_plans_curves_start_from_the_state_and_its_times_at_the_grids_edges(self) -> None:
         state = _game_start(time=GameTime(seconds=30))
         plan = _best_plan(state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
@@ -751,6 +778,13 @@ class TestGameState:
                 ),
             ]
         )
+
+    def test_an_scv_inside_a_refinery_which_the_observation_leaves_out_counts(self) -> None:
+        before = _main_base_at(0)
+        before.observation.raw_data.units.append(make_unit(31, UnitTypeId.SCV, at=(31.0, 27.0), build_progress=1.0))
+        _, inside = _states_of(before, _main_base_at(1))
+
+        assert inside.counts[UnitTypeId.SCV] == 13
 
     def test_it_reads_the_fields_and_free_geysers_of_its_bases_but_not_of_a_free_expansion(self) -> None:
         (state,) = _states_of(_main_base_at(0))

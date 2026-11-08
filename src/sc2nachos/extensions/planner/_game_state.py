@@ -63,7 +63,8 @@ class GameState:
     supply_cap: float
     """The supply cap, up to the game's limit."""
     counts: Mapping[UnitTypeId, int]
-    """The number of this player's finished units alive of each type, in its usual form."""
+    """The number of this player's finished units alive of each type, in its usual form, those inside a gas building or
+    a transport included, which the observation leaves out."""
     upgrades: frozenset[UpgradeId] = frozenset()
     """The upgrades done."""
     unit_completions: tuple[tuple[UnitTypeId, float], ...] = ()
@@ -113,10 +114,11 @@ def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
 
 def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[UnitTypeId, int], int]:
     """The number of this player's finished units of each type, in its usual form, and of its finished refineries with
-    vespene left."""
+    vespene left. Those known alive count, an SCV inside a refinery and a marine in a bunker among them, which the last
+    observation leaves out (in game)."""
     counts: dict[UnitTypeId, int] = {}
     refineries_with_vespene = 0
-    for unit in api.units.own:
+    for unit in api.known_units.own:
         if not unit.is_complete:
             continue
         usual = model.usual_form(unit.type_id)

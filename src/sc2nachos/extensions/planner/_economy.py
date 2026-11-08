@@ -60,7 +60,8 @@ class Economy:
     walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
     """How long an SCV walks to build a structure of a unit type, and walks back after: what it returns, or where it
     returns `None`, or is `None`, 10 seconds to a command center and 6 to any other. A build an SCV has not begun, or
-    has left, takes that walk first."""
+    has left, takes that walk first. It is asked about every structure an SCV builds, not only those a plan values, so
+    a lookup returns `None` for those it does not hold."""
 
     def __post_init__(self) -> None:
         for name, rates in (
