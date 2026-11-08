@@ -59,8 +59,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   target, given to several raises `ValueError`, since only one of them can carry it out.
 - **`unit.issue(ability, ...)` is `api.orders.issue(unit, ability, ...)`** (#240), through the order book its tracker
   holds: a second spelling for one unit, which the owner chose over the review checklist's rule (2026-11-08). The docs
-  and the demo bot order one unit through it and several through `api.orders.issue`. A unit `MadeUpUnits` made, which
-  belongs to no game, raises `RuntimeError`.
+  and the demo bot order one unit through it and several through `api.orders.issue`. Every tracker holds a book:
+  `MadeUpUnits` has its own, `orders`, which each observation empties and which sends nothing (the owner, review of
+  #240, over raising for its units).
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
@@ -254,6 +255,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **Drop `data` from orders** (the owner, review of #240), in a pull request of its own after #240: from
+  `api.orders.issue` and `unit.issue`, so that `Order` loses its type parameter, and from the decision above that a bot
+  ranks its orders in `data`. Nothing reads it: not the demo bot, not the extensions (speed mining chose not to, review
+  of #231), not AvocaDOS. A bot keeps its own data per unit in a `UnitDict` (#200). A bot may have to change for it,
+  so its release notes say so.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
@@ -406,8 +412,7 @@ can be planned with the owner. Keeping the selections still waits on M5's exit g
   so `CanAttack` is no army; a group of exactly those types leaves out `Worker` over the burrowed drone, so a burrowed
   form was to count as its unit. Since #237, a loop of `unit.issue` goes out as one command, so methods on `Units`
   save no APM. They would not make one id per action unnecessary, since ids also show in `unit.orders` and
-  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125), and a bot's tests of code
-  that calls `unit.issue` need `MadeUpUnits` to hold an order book.
+  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125).
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).

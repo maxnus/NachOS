@@ -62,12 +62,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
         `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
 
-        Raises as `OrderBook.issue` does, and `RuntimeError` for a unit of no game, as `sc2nachos.testing` makes up.
+        Raises as `OrderBook.issue` does.
         """
-        order_book = self._tracker.order_book
-        if order_book is None:
-            raise RuntimeError(f"{self!r} belongs to no game, so nothing takes its orders")
-        return order_book.issue(self, ability, target=target, queued=queued, force=force, data=data)
+        return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force, data=data)
 
     @property
     def orders(self) -> tuple[UnitOrder, ...]:

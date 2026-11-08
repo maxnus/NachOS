@@ -31,17 +31,16 @@ from sc2nachos.state import (
 )
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, NotReportedError, Unit, Units
-from sc2nachos.units._tracking import _Tracker
 from support import (
     FakeTransport,
     RealGame,
     make_bits,
     make_bytes,
-    make_enemy,
     make_game_info,
     make_observation,
     make_response,
     make_tables,
+    make_tracker,
     make_unit,
     record,
 )
@@ -58,7 +57,7 @@ class _Game:
     """A game on an eight by eight map, taking in observations one at a time."""
 
     def __init__(self, game_info: sc2api_pb2.ResponseGameInfo | None = None, tables: GameData = _TABLES) -> None:
-        self.tracker = _Tracker(tables, make_enemy(tables))
+        self.tracker = make_tracker(tables)
         self.map = GameMap(game_info or make_game_info(), start_location=Point((0.5, 0.5)))
 
     def observe(self, step: int = 0, **fields: Any) -> _State:

@@ -177,10 +177,18 @@ class TestOrders:
             (AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5)
         ]
 
-    def test_a_made_up_unit_cannot_be_ordered(self):
-        (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE))
-        with pytest.raises(RuntimeError, match="belongs to no game"):
-            marine.issue(AbilityId.MOVE, target=(20.0, 21.0))
+    def test_an_order_given_a_unit_is_in_the_orders_until_the_next_observation(self):
+        made_up = MadeUpUnits()
+        (marine,) = made_up.observe(UnitReport(1, UnitTypeId.MARINE), step=16)
+
+        order = marine.issue(AbilityId.MOVE, target=(20.0, 21.0))
+
+        assert made_up.orders.pending == (order,)
+        assert made_up.orders.issued_to(marine) == (order,)
+        assert order.issued_time == GameTime(steps=16)
+        made_up.observe(UnitReport(1, UnitTypeId.MARINE))
+        assert made_up.orders.pending == ()
+        assert made_up.orders.issued_to(marine, include_sent=True) == ()
 
 
 class TestObservations:

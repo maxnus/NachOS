@@ -12,8 +12,7 @@ from sc2nachos.geometry import Circle, Point, Rectangle, Tile
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.testing import MadeUpUnits, ReportedOrder, UnitReport
 from sc2nachos.units import Alliance, NotReportedError, OwnUnit, Unit, Units, UnitType, Visibility
-from sc2nachos.units._tracking import _Tracker
-from support import make_enemy, make_observation, make_tables, make_unit
+from support import make_observation, make_tables, make_tracker, make_unit
 
 _TYPES = (UnitTypeId.MARINE, UnitTypeId.SCV, UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT)
 _STRUCTURES = {UnitTypeId.BARRACKS, UnitTypeId.SUPPLY_DEPOT}
@@ -55,7 +54,7 @@ def _assorted_own_units(count: int, *, seed: int = 0) -> Units[OwnUnit[Any]]:
 def _units_of_every_alliance() -> Units[Unit[Any]]:
     """A unit of every alliance, plus a hidden and a remembered enemy."""
     # From the game's own reports, as `UnitReport` refuses an ally's unit.
-    tracker = _Tracker(_TABLES, make_enemy(_TABLES))
+    tracker = make_tracker(_TABLES)
     reports = [
         make_unit(1, alliance=Alliance.OWN),
         make_unit(2, alliance=Alliance.ENEMY),

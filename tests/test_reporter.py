@@ -73,18 +73,17 @@ from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import Alert, CameraMove
 from sc2nachos.state._state import _State
 from sc2nachos.units import Alliance, CloakState, OwnUnit, Unit, UnitType, Visibility, VitalType
-from sc2nachos.units._tracking import _Tracker
 from support import (
     HAPPENINGS,
     OBSERVER_ID,
     PLAYER_ID,
     RealGame,
     make_client,
-    make_enemy,
     make_game_info,
     make_observation,
     make_response,
     make_tables,
+    make_tracker,
     make_unit,
     played,
     record,
@@ -116,7 +115,7 @@ class _Game:
 
     def __init__(self, events: _EventBus | None = None) -> None:
         self.events = events or _EventBus()
-        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
+        self.tracker = make_tracker(_TABLES)
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.state: _State | None = None
         self._client, _ = make_client()

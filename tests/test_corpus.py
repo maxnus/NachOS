@@ -44,8 +44,7 @@ from sc2nachos.match import Computer, Participant, Race, Result
 from sc2nachos.protocol import Client, PlaybackTransport, Recording
 from sc2nachos.state._state import _State
 from sc2nachos.units import NotReportedError, OwnUnit, Unit, VitalType
-from sc2nachos.units._tracking import _Tracker
-from support import HAPPENINGS, make_enemy, recorded_observations
+from support import HAPPENINGS, make_tracker, recorded_observations
 
 # Recorded by `tools/record_corpus.py`, which says what each game is.
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
@@ -147,7 +146,7 @@ _NAMING = ("orders", "rally_targets", "passengers", "add_on", "engaged_target", 
 def test_the_units_are_every_tagged_unit_the_game_reported_each_one_object_under_one_id(path: Path) -> None:
     recording = Recording(path)
     tables = _tables(recording)
-    tracker = _Tracker(tables, make_enemy(tables))
+    tracker = make_tracker(tables)
     objects: dict[int, Unit[Any]] = {}
     for index, observation in enumerate(recorded_observations(recording)):
         step = observation.observation.game_loop
@@ -295,7 +294,7 @@ _STATE_READS = sorted(
 def test_every_observation_answers_every_read_beyond_its_units(path: Path) -> None:
     recording = Recording(path)
     tables = _tables(recording)
-    tracker = _Tracker(tables, make_enemy(tables))
+    tracker = make_tracker(tables)
     game_map = _map(recording)
     for observation in recorded_observations(recording):
         tracker.update(observation.observation.raw_data, observation.observation.game_loop)

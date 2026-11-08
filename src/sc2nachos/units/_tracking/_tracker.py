@@ -45,11 +45,11 @@ class _Tracker:
         enemy: Enemy | None,
         *,
         id_provider: Callable[[raw_pb2.Unit], int] | None = None,
-        order_book: OrderBook | None = None,
+        order_book: OrderBook,
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
         alliance's next id, or under the one `id_provider` gives the report it is first seen in. This player's units
-        are ordered into `order_book`, and units with none cannot be ordered."""
+        are ordered into `order_book`."""
         self._game_data = game_data
         self._enemy = enemy
         self._order_book = order_book
@@ -72,9 +72,8 @@ class _Tracker:
         return self._enemy
 
     @property
-    def order_book(self) -> OrderBook | None:
-        """The book this player's units are ordered into, or `None` for units made up for a test, which no game takes
-        orders for."""
+    def order_book(self) -> OrderBook:
+        """The book this player's units are ordered into."""
         return self._order_book
 
     @property
