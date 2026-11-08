@@ -24,8 +24,9 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata import UnitTypeData, Weapon
     from sc2nachos.geometry import PointLike
+    from sc2nachos.units._progress import Progress
     from sc2nachos.units._tracking import _Tracker
-    from sc2nachos.units._values import UnitOrder
+    from sc2nachos.units._values import Order
 
 _VISIBLE = raw_pb2.DisplayType.Visible
 # A unit this close to facing a target counts as facing it, unless `time_to_face` is told otherwise: most attackers fire
@@ -151,7 +152,7 @@ class Unit[K: UnitType.AnyType]:
     _order_targets: dict[int, Unit[Any]] | None
     # `OwnUnit.orders` as last read, with the tracker update it was read at, kept here since `OwnUnit` declares no
     # slots of its own. It holds no report, so it keeps no observation alive.
-    _orders: _Snapshot[tuple[UnitOrder, ...]]
+    _orders: _Snapshot[tuple[Order, ...]]
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker
@@ -621,7 +622,7 @@ class Unit[K: UnitType.AnyType]:
         """A structure's progress through construction, or a unit's through warping in, from 0 to 1.
 
         Anything else reads 1, anything morphing included. A larva's egg has its progress in its order; a cocoon and a
-        structure morphing report none (in game).
+        structure morphing report none (in game), and `morph_progress` works theirs out.
         """
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("build progress")
@@ -634,6 +635,28 @@ class Unit[K: UnitType.AnyType]:
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("build progress")
         return report.build_progress == 1.0
+
+    @property
+    def morph_progress(
+        self: Unit[UnitType.CommandCenter | UnitType.Hatchery | UnitType.Lair | UnitType.Spire | UnitType.Cocoon],
+    ) -> Progress[UnitTypeId] | None:
+        """How far the unit's morph has got, of those the game reports no progress for: a command center becoming an
+        orbital command or a planetary fortress, a hatchery a lair, a lair a hive, a spire a greater spire, and a cocoon
+        or a lurker egg hatching. `None` for a unit not morphing, a dead one among them.
+
+        A morph is taken to begin at the step of the observation before the first that shows it, the step its order was
+        sent after (in game). `fraction` is the steps since then over the product's unrounded build time, and
+        `time_left` its `UnitTypeData.build_time` less those steps: exact for a structure of this player's, and to
+        within a step for a cocoon (in game), in a game the bot steps itself. In a realtime game, or on the ladder, a
+        morph can show an observation late, and an enemy's cocoon, or one of this player's queued behind another order,
+        may have begun at any step since the observation before. A structure takes its last step as the type it
+        becomes, unfinished (in game), and a morph past its time, such as an enemy's cocoon that hatched out of sight,
+        reads done.
+
+        Raises `NotReportedError` for an enemy's structure, whose morph the game does not show, and for a morph not seen
+        to begin: a cocoon first seen as one, back in sight or turned in the fog.
+        """
+        return self._tracker.morph_tracker.progress_of(self)
 
     @property
     def is_powered(self: Unit[UnitType.ProtossStructure]) -> bool:

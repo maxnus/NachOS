@@ -12,13 +12,13 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-07:
+As of 2026-11-08:
 
 - **The build planner is the work in progress**: `sc2nachos.extensions.planner`, a solver of build orders any bot hands
   its reward. [planner-plan.md](planner-plan.md) holds its decisions, the measurements behind them, its design and its
   phases, and its toy is `tools/planner_toy/`. Phase 1, the extension for Terran, synchronous, is the pull request that
   moved them here; phase 2 plays it in AvocaDOS.
-- **M4 is done** but for slice 7, typed order methods on `OwnUnit`, which is deferred (section 1).
+- **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
   on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
   open.
@@ -31,6 +31,15 @@ As of 2026-11-07:
   a number of collectors, speed mining picking their refineries and `release_collectors` those to let go, reads when
   each tile was last in sight off `api.vision`, and starts its turn clock at `BEFORE` and ends it at `AFTER`, after
   speed mining, so that its step time stays the whole turn.
+- **0.4.0 is out** (2026-11-05, from 9f56f9a), with #236 and #237: orders given apart go out as one command where one
+  order could have named their units. Its notes say a bot changes nothing in its code, only what `api.action_failures`
+  lists. AvocaDOS took it in AvocaDOS #95.
+- **Since 0.4.0**, on main: #240, #241, #242, #244 and #245. The next release, 0.5.0 since #241 and #242 remove and
+  rename what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its
+  own data per unit in a `UnitDict`; and the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was
+  an `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242). It
+  adds `unit.issue` (#240) and `train`, `build` and `research` (#245). AvocaDOS #97, a draft, takes it: its production
+  trains a unit, builds an add-on and morphs an orbital command, and it bumps its pin once 0.5.0 is out.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -47,10 +56,10 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   judge and the bot's to budget, and `api.action_failures` lists what the game refused. No budget, no `can_afford`,
   no `api.orders.cancel`: a built version with all of that was dropped as too complicated for what it bought.
 - **No order priority, no hold and no order state.** A unit takes the last order a turn gives it, a structure's train
-  included, and a bot that ranks its orders puts the rank in the order's `data`. NachOS never holds an order until a
-  unit can start it (#126, reversing #115 to #120): that belongs in the bot, or in a layer above the order book.
-  Nothing follows an order once sent (#69, #115): the `Order` is a handle, and the bot reads its units, events and
-  `api.action_failures`.
+  included, and a bot that ranks its orders keeps the rank itself, in a `UnitDict` it empties at each turn's start.
+  NachOS never holds an order until a unit can start it (#126, reversing #115 to #120): that belongs in the bot, or in a
+  layer above the order book. Nothing follows an order once sent (#69, #115): the `IssuedOrder` is a handle, and the bot
+  reads its units, events and `api.action_failures`.
 - **An unqueued order a unit is already carrying out is not sent to it** (#68), though a train or a research always
   is. `force=True` sends it anyway, dropping the unit's queue, so there is no `clear_queue` (#77). A production
   order gets no "replace": a cancel frees no queue slot and no minerals in the same step (#43).
@@ -58,9 +67,36 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   per-unit ids only in `RawAbilityId`, with no `GENERAL_` prefix, and the leveled researches keep an id per level. An
   ability that behaves differently by its target is split into custom ids, one per behavior: `UNLOAD` and
   `UNLOAD_AT`, `LIBERATOR_SIEGE_AT` (#101, #126).
-- **`api.orders.issue` is the one way to order**, one unit or many, with no `issue_all` (#130): what every unit of a
-  command carries out goes out as one command naming them all, anything else as a command to each. A research, or a
-  placement at one target, given to several raises `ValueError`, since only one of them can carry it out.
+- **`api.orders.issue` orders one unit or many**, with no `issue_all` (#130): what every unit of a command carries
+  out goes out as one command naming them all, anything else as a command to each. A research, or a placement at one
+  target, given to several raises `ValueError`, since only one of them can carry it out.
+- **`unit.issue(ability, ...)` is `api.orders.issue(unit, ability, ...)`** (#240), through the order book its tracker
+  holds: a second spelling for one unit, which the owner chose over the review checklist's rule (2026-11-08). The docs
+  and the demo bot order one unit through it and several through `api.orders.issue`. Every tracker holds a book:
+  `MadeUpUnits` has its own, `orders`, which sends nothing and so holds every order its units were given (the owner,
+  review of #240, over raising for its units, and over emptying it at each observation, code the order book would
+  carry for a test helper alone).
+- **An order carries nothing of the bot's** (the owner, review of #240; #241): no `data`, so `IssuedOrder` takes no
+  type parameter. Nothing read it, not the demo bot, the extensions (speed mining chose not to, review of #231) or
+  AvocaDOS, and a bot keeps its own data per unit in a `UnitDict` (#200).
+- **The order a bot gave is an `IssuedOrder`, and what a unit reports doing an `Order`** (the owner, 2026-11-08,
+  #242), over `Order` and `UnitOrder`, which said nothing of how they differ; over `PendingOrder`, since a sent order
+  stays the same handle and `api.orders.pending` holds the unsent alone; and over `ReportedOrder`, the name
+  `sc2nachos.testing` gives the tuple a test makes a unit's order from. The reported one stays in `sc2nachos.units`, so
+  a bot's old `from sc2nachos.orders import Order` fails at import, or in the type checker where it is imported under
+  `TYPE_CHECKING`, rather than meaning the other; `test_package.py` checks that `sc2nachos.orders` names no `Order`.
+- **`train`, `build` and `research` order by what is made or researched** (the owner, 2026-11-08, #245), on
+  `api.orders`, which translates, and on each unit, which forwards. Each (maker type, product) pair is made with one
+  ability (a test checks it on the game's data), read off each ability's `products`, so a warp gate's zealot is its
+  warp-in where a gateway's is a train, and a rich gas building, which the products leave out, is read off its own
+  creation ability. `train` orders what a structure or a larva makes that is not a structure (53 abilities), and `build`
+  a structure a worker makes and an add-on (57 maker and product pairs), over one method for everything a unit makes,
+  and over `train` alone; morphs, an orbital, a lair or a baneling, and changes of mode, a lift or a siege, stay
+  `issue`. A research given to a type not among its `researchers` raises `ValueError` naming them, a barracks's tech lab
+  for Stimpack, over passing it to the add-on. Units whose types make one type with different abilities, a gateway and a
+  warp gate, raise and are ordered apart, so each method returns one `IssuedOrder`. Self types keep `train` to a
+  structure or a larva, `build` to a worker or an add-on's host and `research` to a structure. The demo bot keeps
+  `issue`, since its budget and its count of builds go by ability.
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
@@ -96,6 +132,15 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   other player, "enemy" its units (#131).
 - **A niche case of one spell gets its behavior documented**, never event generation made more complicated for it,
   as for a neural parasite's takeover.
+- **A morph the game reports no progress for is timed from observations** (#109, the owner, 2026-11-08), over the
+  step the game reports carrying out its order: from the step of the observation before the first that shows it, so
+  that one step a turn is always exact. This player's structures by their order, a cocoon of either side by its type;
+  an enemy's structure shows nothing, and raises. `Unit.morph_progress` gives a `Progress[T]`, one generic class for
+  how far making something has got (the owner), which `InProduction` and `Research` subclass, over an optional
+  `producer` on it, with their times required, over `None` for a warp-in: a warp-in is timed by how fast it rises from
+  the observation before the one that first lists it, 1/256 a step for 256 steps and 1/80 for 81. A morph or a warp-in
+  not seen to begin, which only a scripted first observation has, raises, with no code of its own (the owner, over
+  taking it as just begun).
 - **With the fog off, what the player knew stays as it was** (#163): `api.units`, `Visibility` and every event read
   as with the fog on, and the whole game is `api.all_units`, which raises `FogOnError` with the fog on, over marking
   the unseen in one list.
@@ -107,6 +152,8 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   nothing else of NachOS.
 - **`api.data` is static**: the game's tables, read once. Anything that depends on the game's progress is read from
   the state, never written into `api.data`.
+- **A build time the tables get wrong is corrected in `api.data`** (#109, the owner): the lurker's 403 steps and the
+  archon's 192, measured, beside the cost overrides, over leaving their progress unknown.
 - **A tile is a frozen dataclass, not a tuple** (#137): as a tuple it passed pyright as a point and indexed numpy as
   an array index. Nothing checks at run time that a point is a point: pyright catches a tile or a unit given as one,
   and only what cannot work otherwise, `in`, a grid's index and `Point`'s arithmetic, raises `not_a_point_error`.
@@ -260,6 +307,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - **The build planner**, a phase at a time, as [planner-plan.md](planner-plan.md) orders them: after phase 1, playing it
   in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
   the owner to settle: the 3-second exit, and the count-form cut.
+- The build planner (#239) drops `_note_morph_starts` and `morph_starts` once its branch takes main, which times a
+  command center's morph, and reads `InProduction.product` and `fraction` where it read `type_id` and `progress`.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
@@ -381,8 +430,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## 1. Waiting until something needs them
 
-M5's swap is done, so the items below that waited on it, a narrow context for a unit and typed order methods, can
-be planned with the owner. Keeping the selections still waits on M5's exit gate.
+M5's swap is done, so the items below that waited on it, a narrow context for a unit and shortcuts for common orders,
+can be planned with the owner. Keeping the selections still waits on M5's exit gate.
 
 - A launch passes no data version, only the base build: a replay whose data version is not its base build's default
   may be refused on Windows or macOS (unverified; the owner, review of #160, over passing it untested).
@@ -401,16 +450,19 @@ be planned with the owner. Keeping the selections still waits on M5's exit gate.
 
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
-  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
-- Typed order methods on `OwnUnit`, M4's slice 7, to plan with the owner once M5 is done (the owner, 2026-10-31).
-  M4 deferred them (2026-10-18), since a type is offered at most 24 of the 312 abilities and pyright's completion
-  would offer every unit all of them, and AvocaDOS's build orders hold ids. They would not make one id per action
-  unnecessary, since ids also show in `unit.orders` and `unit.abilities`, and a callable target per unit is to
-  reconsider with them (review of #125). Building them is easy, one `api.orders.issue` a method through the unit's
-  tracker once it holds the order book, but their design needs the owner: a small generic set with self types, so a
-  barracks has no `gather`; methods on `Units` for a group, which `issue` sends as one command; the "no second
-  spelling" rule of `docs/maintaining/code-review.md`; and raising for a unit no order book sends, in a finished game
-  or a replay. AvocaDOS keeps its own wrappers, so it will not use them soon.
+  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line. Since #240 the tracker
+  also holds the order book `OwnUnit.issue` orders into, which such a context would carry too.
+- Shortcuts for common orders, `issue_move`, `issue_attack` and `issue_gather`, with self types on new groups,
+  `CanMove` and `CanAttack`, generated from the abilities the tech tree records each type offered; and methods on
+  `Units` for a group. Held until a bot shows a need (the owner, 2026-11-08, building `OwnUnit.issue` alone in #240): a
+  shortcut saves an import and a few characters, its self type checks only a unit whose type was narrowed, and the
+  game already reports the mistake it catches in `api.action_failures`. Found while planning: `MOVE`, `PATROL` and
+  `HOLD_POSITION` are offered to the same 81 types and `ATTACK` to 83, an SCV, a medivac and an overlord among them,
+  so `CanAttack` is no army; a group of exactly those types leaves out `Worker` over the burrowed drone, so a burrowed
+  form was to count as its unit. Since #237, a loop of `unit.issue` goes out as one command, so methods on `Units`
+  save no APM. They would not make one id per action unnecessary, since ids also show in `unit.orders` and
+  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125). `train`, `build` and
+  `research`, which translate an id, are in (#245).
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).

@@ -8,8 +8,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.gamedata import Attribute, GameData, TargetDomain
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance, OwnUnit, Unit, Units
-from sc2nachos.units._tracking import _Tracker
-from support import make_enemy, make_observation, make_unit
+from support import make_observation, make_tracker, make_unit
 
 # The mean of the random delay the game adds to every attack's cooldown, in steps (tool `sweep_combat`).
 _MEAN_DELAY = 0.4996
@@ -19,7 +18,7 @@ _BEAM_ON = [BuffId.ORACLE_PULSAR_BEAM]
 
 def _units_observed(tables: GameData, *units: raw_pb2.Unit, upgrades: tuple[int, ...] = ()) -> list[Unit[Any]]:
     """`units` as one observation shows them, this player having `upgrades`."""
-    tracker = _Tracker(tables, make_enemy(tables))
+    tracker = make_tracker(tables)
     tracker.update(make_observation(0, units=units, upgrades=upgrades).observation.raw_data, 0)
     by_tag = {unit.tag: unit for unit in tracker.unit_tracker.present}
     return [by_tag[unit.tag] for unit in units]

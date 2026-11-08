@@ -74,7 +74,7 @@ from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty
 from sc2nachos.run import Installation
-from sc2nachos.units import OwnUnit, Unit, UnitOrder, UnitType
+from sc2nachos.units import Order, OwnUnit, Unit, UnitType
 
 # The distances from where a trip ends between which a collector on its gather or return is given the move, and how far
 # from a townhall's center the move of a trip back ends: speed mining's for its miners.
@@ -500,7 +500,7 @@ class _TrialGame:
     def _route_of_the_trip(
         self,
         scv: OwnUnit[UnitType.Worker],
-        current_order: UnitOrder,
+        current_order: Order,
         refinery: Unit[UnitType.GasBuilding],
         townhall: Unit[UnitType.Townhall],
     ) -> list[tuple[AbilityId, Point | Unit[Any]]] | None:

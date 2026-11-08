@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from sc2nachos import Api
     from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.geometry import Point
-    from sc2nachos.units import OwnUnit, Unit, UnitOrder
+    from sc2nachos.units import Order, OwnUnit, Unit
 
 # The distances from the point a trip's move ends at between which a worker on a plain gather or return is given the
 # move: AvocaDOS's values.
@@ -260,17 +260,17 @@ def _is_any_in_the_way(units: Iterable[Unit[Any]], start: Point, end: Point) -> 
     return any(unit.position.distance_to_segment(start, end) < clearance + unit.radius for unit in units)
 
 
-def _is_gathering_at(order: UnitOrder | None, resource: Unit[UnitType.AnyResource]) -> bool:
+def _is_gathering_at(order: Order | None, resource: Unit[UnitType.AnyResource]) -> bool:
     """Whether `order` is a gather at `resource`."""
     return order is not None and order.ability is AbilityId.GATHER and order.known_target is resource
 
 
-def _is_returning(order: UnitOrder | None) -> bool:
+def _is_returning(order: Order | None) -> bool:
     """Whether `order` is a return of cargo."""
     return order is not None and order.ability is AbilityId.RETURN
 
 
-def _is_on_the_trip_back(order: UnitOrder | None, return_point: Point) -> bool:
+def _is_on_the_trip_back(order: Order | None, return_point: Point) -> bool:
     """Whether `order` is a return of cargo or a move to `return_point`, where the move of the trip back ends: a
     collector's trip read off its order, since gas from a rich geyser shows no cargo (in game)."""
     if order is None:

@@ -1,32 +1,33 @@
 # Orders
 
-A bot orders its units through `api.orders` from its handlers. Orders are sent in one request after the turn's last
-handler returns, so a turn that orders nothing sends nothing. Every order goes out in the turn it was given, as given,
-and the game charges what costs then.
+A bot orders a unit through `unit.issue` from its handlers, and several units at once through `api.orders.issue`:
+`unit.issue(ability, ...)` is `api.orders.issue(unit, ability, ...)`, and everything here holds for both. Orders are
+sent in one request after the turn's last handler returns, so a turn that orders nothing sends nothing. Every order
+goes out in the turn it was given, as given, and the game charges what costs then.
 
 ```python
 @api.on(TurnEvent)
 def on_turn(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        api.orders.issue(marine, AbilityId.ATTACK, target=enemy_base)
+        marine.issue(AbilityId.ATTACK, target=enemy_base)
 ```
 
-`issue` returns the `Order`: what was asked, the bot's own `data`, and `withdraw()` to take it back before it is
-sent. What the game refuses is listed in `api.action_failures`.
+`issue` returns an `IssuedOrder`: what was asked and `withdraw()` to take it back before it is sent. What the game
+refuses is listed in `api.action_failures`.
 
 ## Giving one
 
 ```python
-order = api.orders.issue(marine, AbilityId.STIM)
+order = marine.issue(AbilityId.STIM)
 api.orders.issue(squad, AbilityId.MOVE, target=ramp)
-api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
-api.orders.issue(marine, AbilityId.ATTACK, target=drone, data=Defending(base))
-api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
+scv.issue(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
+scv.issue(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 ```
 
-- **`units`** is one unit or any number of them, and each carries the order out; a unit given twice counts once. An
-  ability every unit of a command carries out goes out as one command naming them all: a move, an attack, a burrow, a
-  lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from what the game was seen to do).
+- **`units`**, of `api.orders.issue`, is one unit or any number of them, and each carries the order out; a unit
+  given twice counts once. An ability every unit of a command carries out goes out as one command naming them all: a
+  move, an attack, a burrow, a lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from
+  what the game was seen to do).
   The game spreads such a group around the target point, where a command to each stacks them on the point, and orders of
   such an ability given apart to one target go out as one command too ([orders sent together](#orders-sent-together)).
   Any other ability goes out as a command to each unit, since one command naming several has only one of them carry it
@@ -43,12 +44,40 @@ api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
   ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
   queued behind it (in game), so this is how a queue is dropped on purpose. A forced order still competes with the
   turn's other orders.
-- **`data`** is the bot's own: why the order was given, what plan it serves, anything. NachOS carries it and never
-  reads it. `api.orders.issue(..., data=x)` returns an `Order[type of x]`, so a type checker follows it through.
 
 The turn's request also carries `api.camera.move_to(point)`, which centers this player's camera on a point after the
 turn's orders, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
 `api.camera.center` is where the turn's observation has the camera.
+
+## Training, building and researching
+
+`train`, `build` and `research` take what to make or research in place of the ability, and order the ability the
+unit's type does it with, as `issue` orders it:
+
+```python
+barracks.train(UnitTypeId.MARINE)  # BARRACKS_TRAIN_MARINE
+warp_gate.train(UnitTypeId.ZEALOT, target=point)  # WARP_GATE_WARP_IN_ZEALOT
+larva.train(UnitTypeId.DRONE)  # LARVA_MORPH_DRONE
+scv.build(UnitTypeId.SUPPLY_DEPOT, target=site)  # SCV_BUILD_SUPPLY_DEPOT
+drone.build(UnitTypeId.EXTRACTOR, target=geyser)  # DRONE_MORPH_EXTRACTOR
+barracks.build(UnitTypeId.TECH_LAB_BARRACKS)  # BUILD_TECH_LAB
+api.orders.train(api.units.own.of_type(UnitType.Barracks).idle, UnitTypeId.MARINE)
+if (tech_lab := barracks.add_on) is not None:
+    tech_lab.research(UpgradeId.STIMPACK)  # BARRACKS_TECH_LAB_RESEARCH_STIMPACK
+```
+
+- **`train`** orders what a structure or a larva makes that is not a structure: a train, a warp gate's warp-in, aimed
+  at a point, and a larva's morph.
+- **`build`** orders a structure a worker makes, at a point or on a geyser, and a barracks's, factory's or starport's
+  add-on.
+- **`research`** orders an upgrade's `research_ability`, given to one of its `researchers`. A barracks's upgrades are
+  its tech lab's, so `barracks.research(UpgradeId.STIMPACK)` raises `ValueError` naming the tech lab.
+- **`issue`** orders the rest: a morph, as of an orbital command, a lair or a baneling, and a change of mode, as a lift
+  or a siege.
+
+A unit whose type does not make what it is given raises `ValueError` saying what does, or which of the three orders
+it, and so do units whose types make it with different abilities, as a gateway and a warp gate a zealot: they are
+ordered apart. Each returns the `IssuedOrder`, whose `ability` is the one ordered.
 
 ## One order a unit a turn
 
@@ -78,7 +107,7 @@ move; aimed at a point, they fly there and unload (in game). So an unload keeps 
 a point replaces them:
 
 ```python
-api.orders.issue(medivac, AbilityId.MOVE, target=retreat)
+medivac.issue(AbilityId.MOVE, target=retreat)
 api.orders.issue([bunker, medivac], AbilityId.UNLOAD)  # all three commands go out
 ```
 
@@ -100,8 +129,8 @@ start on it, so NachOS sends only the last. To fill a queue on purpose — a rea
 structure starts at once — pass `queued=True`:
 
 ```python
-api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
-api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
+barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
 ```
 
 Both go out, and a barracks with a reactor makes both marines at once.
@@ -114,10 +143,11 @@ Orders have no priority of their own. Handlers already run highest priority firs
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
         if not api.orders.issued_to(marine):
-            api.orders.issue(marine, AbilityId.MOVE, target=rally)
+            marine.issue(AbilityId.MOVE, target=rally)
 ```
 
-A bot that wants its own ranking puts it in `data` and reads it back from the orders `issued_to` returns.
+A bot that ranks its orders keeps the rank of each unit's order itself, in a `UnitDict` say, and empties it at each
+turn's start: `issued_to` holds the turn's orders alone, but a `UnitDict` keeps a value until its unit dies.
 `issued_to(unit, include_sent=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
 in its orders yet: on the ladder an order can show two observations after it went out.
 
@@ -129,8 +159,8 @@ may not show it yet, as on the ladder; otherwise it is the unit's first reported
 sent last turn counts though the unit still shows its old one, and in a stepped game an order the unit finished, or
 the game dropped, within one turn still counts on the next: repeating it then goes out a turn late.
 
-A bot that gives the same order every turn gets a new `Order` each time: the first is sent, and the rest are left
-out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
+A bot that gives the same order every turn gets a new `IssuedOrder` each time: the first is sent, and the rest are
+left out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
 it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
 sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
 which goes out regardless.
@@ -151,7 +181,7 @@ as one move, and the game spreads it around the point as it would one order to t
 
 ```python
 for marine in squad:
-    api.orders.issue(marine, AbilityId.MOVE, target=rally)  # one command naming every marine
+    marine.issue(AbilityId.MOVE, target=rally)  # one command naming every marine
 ```
 
 An order joins the last such command before it unless one of its units is named in that command or a later one. So
@@ -182,7 +212,7 @@ A bot budgets for itself, since only it knows what matters most:
 ```python
 cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
 if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
-    api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+    barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
 `api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and in a
@@ -207,10 +237,10 @@ one step at a time, renewed each turn the worker walks:
 
 ```python
 if scv.distance_to(site) > 2.5:
-    api.orders.issue(scv, AbilityId.MOVE, target=site)
+    scv.issue(AbilityId.MOVE, target=site)
     api.placement.reserve(UnitTypeId.SUPPLY_DEPOT, at=site, max_time=GameTime(steps=1))
 else:
-    api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site)
+    scv.issue(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site)
 ```
 
 Once ordered, the build reserves its site itself. A reservation without `max_time` lasts until it is withdrawn or
@@ -234,7 +264,7 @@ top, near and far going by its main's start:
 ```python
 terran_wall = api.placement.terran_wall(api.player.start_location.main_ramp)
 if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at=terran_wall.near_depot):
-    api.orders.issue(scv, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=terran_wall.near_depot)
+    scv.issue(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=terran_wall.near_depot)
 ```
 
 - **The Terran wall** is a supply depot at each corner of the top, `near_depot` and `far_depot` by their distance to
@@ -272,8 +302,8 @@ next observation.
 
 ## Reading a unit's orders
 
-An `Order` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `UnitOrder` for its
-current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
+An `IssuedOrder` is what the bot asked for; `unit.orders` is what the game says the unit is doing, one `Order` for
+its current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
 site, and drops what it cannot carry out. The ids do agree: a unit reports its type's own id of an action several types
 perform, and NachOS reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the
 game reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows

@@ -41,6 +41,14 @@ def test_what_starts_a_game_is_exported_from_the_top_level() -> None:
     assert set(sc2nachos.__all__) >= {"Api", "run_local", "run_ladder", "Race", "Computer", "Difficulty"}
 
 
+def test_the_orders_package_names_no_order() -> None:
+    """The order a unit reports is `sc2nachos.units.Order`, and the one a bot gave `sc2nachos.orders.IssuedOrder`,
+    which was `sc2nachos.orders.Order` through 0.4.0: so a bot's old import of it fails rather than naming the other."""
+    import sc2nachos.orders
+
+    assert not hasattr(sc2nachos.orders, "Order")
+
+
 def test_no_public_signature_names_a_private_type() -> None:
     """What every package exports takes, returns and holds only public types. Constructors, which only NachOS calls,
     are left out."""

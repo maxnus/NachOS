@@ -22,7 +22,8 @@ type ReportedTarget = PointLike | UnitReport | int | None
 """What an order is aimed at: a point on the ground, the unit a report describes, the tag of a unit, or nothing."""
 
 type ReportedOrder = tuple[AbilityId, ReportedTarget] | tuple[AbilityId, ReportedTarget, float]
-"""An order as a unit reports it: the ability, its target, and its progress from 0 to 1, by default 0."""
+"""An order as a unit reports it, which the unit reads as a `sc2nachos.units.Order`: the ability, its target, and its
+progress from 0 to 1, by default 0."""
 
 
 @dataclass(frozen=True, slots=True)
