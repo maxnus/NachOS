@@ -27,10 +27,11 @@ As of 2026-11-08:
   a number of collectors, speed mining picking their refineries and `release_collectors` those to let go, reads when
   each tile was last in sight off `api.vision`, and starts its turn clock at `BEFORE` and ends it at `AFTER`, after
   speed mining, so that its step time stays the whole turn.
-- **Since 0.3.0**, on main: #237, #240, #241 and #242. The next release, 0.4.0 since #241 and #242 remove and rename
-  what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its own
-  data per unit in a `UnitDict`; and the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was an
-  `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242).
+- **Since 0.3.0**, on main: #237, #240, #241, #242 and #245. The next release, 0.4.0 since #241 and #242 remove and
+  rename what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its
+  own data per unit in a `UnitDict`; and the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was
+  an `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242). It
+  adds `unit.issue` (#240) and `train`, `build` and `research` (#245).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -76,6 +77,18 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   `sc2nachos.testing` gives the tuple a test makes a unit's order from. The reported one stays in `sc2nachos.units`, so
   a bot's old `from sc2nachos.orders import Order` fails at import, or in the type checker where it is imported under
   `TYPE_CHECKING`, rather than meaning the other; `test_package.py` checks that `sc2nachos.orders` names no `Order`.
+- **`train`, `build` and `research` order by what is made or researched** (the owner, 2026-11-08, #245), on
+  `api.orders`, which translates, and on each unit, which forwards. Each (maker type, product) pair is made with one
+  ability (a test checks it on the game's data), read off each ability's `products`, so a warp gate's zealot is its
+  warp-in where a gateway's is a train, and a rich gas building, which the products leave out, is read off its own
+  creation ability. `train` orders what a structure or a larva makes that is not a structure (53 abilities), and `build`
+  a structure a worker makes and an add-on (57 maker and product pairs), over one method for everything a unit makes,
+  and over `train` alone; morphs, an orbital, a lair or a baneling, and changes of mode, a lift or a siege, stay
+  `issue`. A research given to a type not among its `researchers` raises `ValueError` naming them, a barracks's tech lab
+  for Stimpack, over passing it to the add-on. Units whose types make one type with different abilities, a gateway and a
+  warp gate, raise and are ordered apart, so each method returns one `IssuedOrder`. Self types keep `train` to a
+  structure or a larva, `build` to a worker or an add-on's host and `research` to a structure. The demo bot keeps
+  `issue`, since its budget and its count of builds go by ability.
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
@@ -269,14 +282,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- **`train` and `research`** (the owner, review of #240), a pull request of its own after #240, its design settled
-  with the owner when it starts: `api.orders.train(units, unit_type)` and `api.orders.research(unit, upgrade)`
-  translate a `UnitTypeId` or an `UpgradeId` into the ability and issue it, and `unit.train` and `unit.research`
-  forward, as `unit.issue` does. A research maps one to one, `api.data.upgrades[upgrade].research_ability`, its
-  researcher a tech lab where it is one, not the barracks. A train depends on the producer's type: a gateway trains a
-  zealot with `GATEWAY_TRAIN_ZEALOT` and a warp gate warps one in with `WARP_GATE_WARP_IN_ZEALOT` at a point, so the
-  translation reads each ability's products by performer in the tech tree. To settle: whether `train` covers a
-  larva's morphs, a morph such as an orbital or a baneling, and a warp-in, and whether `build` joins it.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
@@ -429,8 +434,8 @@ can be planned with the owner. Keeping the selections still waits on M5's exit g
   so `CanAttack` is no army; a group of exactly those types leaves out `Worker` over the burrowed drone, so a burrowed
   form was to count as its unit. Since #237, a loop of `unit.issue` goes out as one command, so methods on `Units`
   save no APM. They would not make one id per action unnecessary, since ids also show in `unit.orders` and
-  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125). `train` and `research`,
-  which translate an id, are planned apart (Next).
+  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125). `train`, `build` and
+  `research`, which translate an id, are in (#245).
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).

@@ -119,6 +119,7 @@ it.
 | python-sc2 | NachOS |
 |---|---|
 | `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.issue(AbilityId.MOVE, target=p)`, or `api.orders.issue(units, ...)` for several at once |
+| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.orders.train(units, t)` and so on for several at once ([orders](../orders.md#training-building-and-researching)) |
 | `bot.do(action)`, `await bot._do_actions(...)` | `unit.issue(...)` or `api.orders.issue(...)`, sent once the turn's handlers have run |
 | nothing | `unit.issue(..., force=True)`, `api.orders.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `unit.issue(..., queued=True)` |
@@ -138,9 +139,11 @@ it.
   structure is no exception: of two trains given in a turn only the last goes out, and a reactor's second marine
   needs `queued=True` ([orders](../orders.md#one-order-a-unit-a-turn)). python-sc2 sends both, and the game queues and
   charges both.
-- **A drone's morph is given to a larva.** python-sc2's `train` picks a larva itself. In NachOS, as in the game, a
-  larva's morph given to a hatchery is refused `NotSupported` (in game), so pick a larva from
-  `api.units.own.of_type(UnitType.Larva)`.
+- **A drone's morph is given to a larva, and a barracks's research to its tech lab.** python-sc2's `train` and
+  `research` pick the unit themselves. In NachOS, as in the game, a larva's morph given to a hatchery is refused
+  `NotSupported` (in game), so pick a larva from `api.units.own.of_type(UnitType.Larva)` and order
+  `larva.train(UnitTypeId.DRONE)`. `hatchery.train(UnitTypeId.DRONE)` and `barracks.research(UpgradeId.STIMPACK)`
+  raise `ValueError`, naming what does.
 - **Each unit given an order carries it out.** What every unit of a command carries out, a move, an attack, a stim,
   goes out as one command naming them all, and so do orders of it given apart to one target in a turn, where
   python-sc2's `combine_actions` joins only neighboring ones ([orders](../orders.md#orders-sent-together)); anything
