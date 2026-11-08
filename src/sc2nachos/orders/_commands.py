@@ -30,7 +30,7 @@ class UnitCommand:
     ability: int
     target: Target | None
     queued: bool
-    parts: list[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]
+    parts: list[tuple[Order, tuple[OwnUnit[Any], ...]]]
     """Each order the command carries, with the units it names for that order, in the order they joined it."""
 
     def to_action(self) -> sc2api_pb2.Action:
@@ -39,7 +39,7 @@ class UnitCommand:
         return _unit_command_action(self.ability, tags, self.target, queued=self.queued)
 
 
-def unit_commands_giving(orders: Iterable[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]) -> list[UnitCommand]:
+def unit_commands_giving(orders: Iterable[tuple[Order, tuple[OwnUnit[Any], ...]]]) -> list[UnitCommand]:
     """The raw commands giving each of `orders` to the units it goes out to, in the order they go out.
 
     An order of an ability every unit of a command carries out goes out as one command naming its units, or one for
@@ -70,7 +70,7 @@ def unit_commands_giving(orders: Iterable[tuple[Order[Any], tuple[OwnUnit[Any], 
 
 
 def _join_key(
-    order: Order[Any], ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
+    order: Order, ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
 ) -> tuple[int, Target | None, bool] | None:
     """What a command of `order`, giving the game's `ability` at `target` to `units`, shares with each command it may
     join: the ability, the target as the game keeps it and the queue flag. `None` for a command that joins none and that
@@ -84,8 +84,8 @@ def _join_key(
 
 
 def _commands_of_each(
-    orders: Iterable[tuple[Order[Any], tuple[OwnUnit[Any], ...]]],
-) -> Iterator[tuple[Order[Any], int, Target | None, tuple[OwnUnit[Any], ...]]]:
+    orders: Iterable[tuple[Order, tuple[OwnUnit[Any], ...]]],
+) -> Iterator[tuple[Order, int, Target | None, tuple[OwnUnit[Any], ...]]]:
     """Each raw command each of `orders` goes out as on its own, with its order: one naming its units for an ability
     every unit of a command carries out, or one for each ability it is sent as, and one to each unit for any other."""
     for order, units in orders:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast, overload
+from typing import TYPE_CHECKING, Any, cast
 
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId
@@ -28,7 +28,6 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     __slots__ = ()
 
-    @overload
     def issue(
         self,
         ability: AbilityId,
@@ -36,35 +35,14 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> Order[None]: ...
-
-    @overload
-    def issue[T](
-        self,
-        ability: AbilityId,
-        *,
-        target: PointLike | Unit[Any] | None = None,
-        queued: bool = False,
-        force: bool = False,
-        data: T,
-    ) -> Order[T]: ...
-
-    def issue(
-        self,
-        ability: AbilityId,
-        *,
-        target: PointLike | Unit[Any] | None = None,
-        queued: bool = False,
-        force: bool = False,
-        data: Any = None,
-    ) -> Order[Any]:
+    ) -> Order:
         """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Order`, as
         `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
         `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
 
         Raises as `OrderBook.issue` does.
         """
-        return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force, data=data)
+        return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force)
 
     @property
     def orders(self) -> tuple[UnitOrder, ...]:

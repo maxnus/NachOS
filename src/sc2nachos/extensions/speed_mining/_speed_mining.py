@@ -576,7 +576,7 @@ def _workers_by_resource[R: Unit[Any]](
     return workers_by_resource
 
 
-def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[Order[Any]], *, mining: bool) -> bool:
+def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[Order], *, mining: bool) -> bool:
     """Whether one of `orders`, issued to a worker this turn, a miner if `mining`, else a collector, stands, no unqueued
     order coming after it, and is not a hand-over's: a return, or a gather at a mineral field, for a miner, or at a gas
     building, for a collector."""

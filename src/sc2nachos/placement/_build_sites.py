@@ -53,9 +53,9 @@ class _BuildSites:
                     self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
-    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Order[Any] | UnitOrder]:
+    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Order | UnitOrder]:
         """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
-        ordered: list[Order[Any] | UnitOrder] = [*self._order_book.issued_to(unit, include_sent=True)]
+        ordered: list[Order | UnitOrder] = [*self._order_book.issued_to(unit, include_sent=True)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
         if any(self._ability_places_structure(ability) for ability in reported):
@@ -70,7 +70,7 @@ class _BuildSites:
     def _reserve_site(
         self,
         reserved: Grid[bool],
-        build: Order[Any] | UnitOrder,
+        build: Order | UnitOrder,
         builder: OwnUnit[Any],
         standing: Collection[tuple[int, int]],
     ) -> None:

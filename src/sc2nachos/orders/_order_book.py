@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, final, overload
+from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import raw_pb2
 
@@ -72,23 +72,22 @@ class OrderBook:
         """A book for one game. `game_data` says what each ability does and what it must be aimed at."""
         self._game_data = game_data
         # The turn's orders in the order they were issued, and those of each unit by its id.
-        self._issued: list[Order[Any]] = []
-        self._issued_by_unit: dict[int, list[Order[Any]]] = {}
+        self._issued: list[Order] = []
+        self._issued_by_unit: dict[int, list[Order]] = {}
         # The turn's orders issued with `force`, sent even to units already carrying them out.
-        self._forced: set[Order[Any]] = set()
+        self._forced: set[Order] = set()
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
-        self._last_sent: dict[int, tuple[Order[Any], int]] = {}
+        self._last_sent: dict[int, tuple[Order, int]] = {}
         # By unit id, each order the game took that does not replace the unit's orders, one queued, a train, a
         # research, an add-on or a morph, with the number of the observation its turn read, until the observations must
         # show it or an order replaces the unit's orders.
-        self._sent_not_replacing: dict[int, list[tuple[Order[Any], int]]] = {}
+        self._sent_not_replacing: dict[int, list[tuple[Order, int]]] = {}
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
         self._time = GameTime.ZERO
 
-    @overload
     def issue(
         self,
         units: OwnUnit[Any] | Iterable[OwnUnit[Any]],
@@ -97,37 +96,13 @@ class OrderBook:
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> Order[None]: ...
-
-    @overload
-    def issue[T](
-        self,
-        units: OwnUnit[Any] | Iterable[OwnUnit[Any]],
-        ability: AbilityId,
-        *,
-        target: PointLike | Unit[Any] | None = None,
-        queued: bool = False,
-        force: bool = False,
-        data: T,
-    ) -> Order[T]: ...
-
-    def issue(
-        self,
-        units: OwnUnit[Any] | Iterable[OwnUnit[Any]],
-        ability: AbilityId,
-        *,
-        target: PointLike | Unit[Any] | None = None,
-        queued: bool = False,
-        force: bool = False,
-        data: Any = None,
-    ) -> Order[Any]:
+    ) -> Order:
         """Order `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Order`.
 
         Every unit given carries it out, and a unit given twice counts once. An ability every unit of one command
         carries out (`AbilityData.multi_unit`) goes out as one command naming them all, so units ordered together keep
         their spacing where the game spreads them; any other goes out as a command to each. `queued` puts the order
-        behind each unit's orders. `data` is the bot's own; NachOS carries it and never reads it. Nothing is
-        sent until the turn's handlers have all run.
+        behind each unit's orders. Nothing is sent until the turn's handlers have all run.
 
         Orders of an ability that joins other orders (`AbilityData.joins_other_orders`), given apart in one turn, go out
         as one command where they are aimed at the same unit, or at the same point as the game keeps it, and are queued
@@ -174,20 +149,13 @@ class OrderBook:
             _check_placed_where_flying(ability, row, given)
         if isinstance(aimed, Unit):
             _check_not_aimed_at_itself(ability, aimed, given)
-        order = Order(
-            ability,
-            Units(given),
-            aimed,
-            queued=queued,
-            data=data,
-            issued_time=self._time,
-        )
+        order = Order(ability, Units(given), aimed, queued=queued, issued_time=self._time)
         self._add(order)
         if force:
             self._forced.add(order)
         return order
 
-    def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[Order[Any], ...]:
+    def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[Order, ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued. Withdrawn orders are left out.
         With `include_sent`, first come the orders that went out to it lately and that the observations may not show
         yet: the last one sent that replaced its orders, and those sent since that did not, queued ones, trains,
@@ -201,7 +169,7 @@ class OrderBook:
         return (*sent, *(order for order in turns if not order._withdrawn))
 
     @property
-    def pending(self) -> tuple[Order[Any], ...]:
+    def pending(self) -> tuple[Order, ...]:
         """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
         return tuple(order for order in self._issued if not order._withdrawn)
 
@@ -257,15 +225,15 @@ class OrderBook:
                 self._sent_not_replacing[unit_id] = sent
 
     def _orders_to_send(
-        self, issued: Sequence[Order[Any]], forced: Collection[Order[Any]]
-    ) -> Iterator[tuple[Order[Any], tuple[OwnUnit[Any], ...]]]:
+        self, issued: Sequence[Order], forced: Collection[Order]
+    ) -> Iterator[tuple[Order, tuple[OwnUnit[Any], ...]]]:
         """Each order of `issued` that goes out, with the units it goes out to.
 
         An order that acts at once, or that is queued behind a unit's orders, competes with nothing. Of the
         rest, a unit keeps only the last it was given. An order is then left out for the units already carrying it
         out, unless it is in `forced`. A withdrawn order, or one left with no unit, is not sent.
         """
-        holder: dict[int, Order[Any]] = {}
+        holder: dict[int, Order] = {}
         for order in issued:
             if not order._withdrawn:
                 for unit in order.units:
@@ -282,7 +250,7 @@ class OrderBook:
             if units:
                 yield order, units
 
-    def _competes_for(self, order: Order[Any], unit: OwnUnit[Any]) -> bool:
+    def _competes_for(self, order: Order, unit: OwnUnit[Any]) -> bool:
         """Whether `order` competes with the turn's other orders for `unit`, which then takes the last of them.
 
         Every unqueued order does, a structure's train included, whatever it would do to the unit. A queued order
@@ -294,13 +262,13 @@ class OrderBook:
         row = self._game_data.abilities.get(order.ability)
         return _behavior_for(row, unit) is not OrderBehavior.KEEPS_ORDERS
 
-    def _add(self, order: Order[Any]) -> None:
+    def _add(self, order: Order) -> None:
         """Count `order` among the turn's, last."""
         self._issued.append(order)
         for unit_id in {unit.id for unit in order.units}:
             self._issued_by_unit.setdefault(unit_id, []).append(order)
 
-    def _remember_sent(self, order: Order[Any], units: Sequence[OwnUnit[Any]]) -> None:
+    def _remember_sent(self, order: Order, units: Sequence[OwnUnit[Any]]) -> None:
         """Record `order`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
         replaces, unqueued, and otherwise one sent that does not replace them, unless the unit carries it out at
         once."""
@@ -313,9 +281,7 @@ class OrderBook:
             elif order.queued or behavior is not OrderBehavior.KEEPS_ORDERS:
                 self._sent_not_replacing.setdefault(unit.id, []).append((order, self._observations))
 
-    def _units_not_carrying_it_out(
-        self, order: Order[Any], units: tuple[OwnUnit[Any], ...]
-    ) -> tuple[OwnUnit[Any], ...]:
+    def _units_not_carrying_it_out(self, order: Order, units: tuple[OwnUnit[Any], ...]) -> tuple[OwnUnit[Any], ...]:
         """The units of `units` that `order` would change anything for: all of them for a queued order, else all but
         those whose orders it replaces and which are already doing it."""
         if order.queued:
@@ -336,14 +302,14 @@ class OrderBook:
             return sent.ability is ability and same_target(sent.target, target)
         return self._unit_is_at(unit, ability, target)
 
-    def _sent_and_not_shown(self, unit: OwnUnit[Any]) -> Order[Any] | None:
+    def _sent_and_not_shown(self, unit: OwnUnit[Any]) -> Order | None:
         """The last order sent to `unit` that replaced its orders, while the observations may not show it yet."""
         last = self._last_sent.get(unit.id)
         if last is not None and self._observations - last[1] < _SHOWN_WITHIN:
             return last[0]
         return None
 
-    def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Order[Any]]:
+    def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Order]:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
         replaced its orders, and those sent since that did not."""
         orders = []
