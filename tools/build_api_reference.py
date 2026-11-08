@@ -1,10 +1,10 @@
 """Build NachOS's API reference with pdoc: a page for each public module, from its docstrings.
 
 A public module is one whose name has no part that starts with an underscore, and each package's page lists those
-under it, through the template in `api_reference_templates`. A variable a package imports, as it imports every public
-`type` alias from a private module, shows the docstring written after it where it is defined. Any warning pdoc gives
-fails the build, but for the annotations it cannot evaluate, and so does a `type` alias shown without the docstring
-written after it. The pages go to `build/api-reference`, or to `--output`. Runs without StarCraft II::
+under it, through the template in `api_reference_templates`. A variable a package imports from another module shows
+the docstring written after it there. Any warning pdoc gives fails the build, but for the annotations it cannot
+evaluate, and so does a `type` alias shown without the docstring written after it. The pages go to
+`build/api-reference`, or to `--output`. Runs without StarCraft II::
 
     uv run python tools/build_api_reference.py
 
@@ -54,18 +54,19 @@ def docstring_where_defined(module: types.ModuleType, name: str) -> str:
             for imported in statement.names:
                 if (imported.asname or imported.name) == name:
                     imported_from = "." * statement.level + (statement.module or "")
-                    source = importlib.import_module(imported_from, module.__package__)
-                    return docstring_where_defined(source, imported.name)
+                    source_module = importlib.import_module(imported_from, module.__package__)
+                    return docstring_where_defined(source_module, imported.name)
     return ""
 
 
 def documented_modules() -> dict[str, pdoc.doc.Module]:
-    """pdoc's documentation of each public module, by name. pdoc reads a variable's docstring from the module it
-    documents alone (its issue 365), so a variable a module imports gets the one written where it is defined."""
+    """pdoc's documentation of each public module, by name, a variable a module imports given the docstring written
+    where it is defined."""
     modules: dict[str, pdoc.doc.Module] = {}
     for name in pdoc.extract.walk_specs([*public_modules(), EXCLUDING_PRIVATE_MODULES]):
         module = pdoc.doc.Module.from_name(name)
         for member in module.members.values():
+            # pdoc reads a variable's docstring from the module it documents alone (its issue 365).
             if isinstance(member, pdoc.doc.Variable) and not member.docstring:
                 member.docstring = docstring_where_defined(module.obj, member.name)
         modules[name] = module
@@ -73,17 +74,25 @@ def documented_modules() -> dict[str, pdoc.doc.Module]:
 
 
 def check_type_alias_docstrings(modules: dict[str, pdoc.doc.Module]) -> None:
-    """Fail the build if a page shows a `type` alias without the docstring written after its statement, which is
-    found through the alias's own `__module__`, apart from how `documented_modules` found it."""
+    """Fail the build if a page shows a `type` alias without the docstring written after its statement, or if no page
+    shows an alias that has one."""
+    checked_aliases: list[str] = []
     missing: list[str] = []
     for module in modules.values():
         for member in module.members.values():
-            if isinstance(member, pdoc.doc.Variable) and member.is_type_alias_type:
-                alias = member.default_value
-                defining_module = importlib.import_module(alias.__module__)
-                written = pdoc.doc_ast.walk_tree(defining_module).var_docstrings.get(alias.__name__)
-                if written is not None and member.docstring != written:
-                    missing.append(member.fullname)
+            if not (isinstance(member, pdoc.doc.Variable) and member.is_type_alias_type):
+                continue
+            alias = member.default_value
+            # Through the alias's own `__module__`, apart from how `documented_modules` found the docstring.
+            defining_module = importlib.import_module(alias.__module__)
+            written_docstring = pdoc.doc_ast.walk_tree(defining_module).var_docstrings.get(alias.__name__)
+            if written_docstring is None:
+                continue
+            checked_aliases.append(member.fullname)
+            if member.docstring != written_docstring:
+                missing.append(member.fullname)
+    if not checked_aliases:
+        raise SystemExit("The API reference shows no `type` alias with a docstring, so nothing checks that one shows")
     if missing:
         raise SystemExit(f"The API reference leaves out the docstring of {', '.join(missing)}")
 
@@ -94,9 +103,9 @@ def write_pages(modules: dict[str, pdoc.doc.Module], output: Path) -> None:
         page = output / f"{module.fullname.replace('.', '/')}.html"
         page.parent.mkdir(parents=True, exist_ok=True)
         page.write_bytes(pdoc.render.html_module(module, modules).encode())
-    index = pdoc.render.html_index(modules)
-    if index:
-        (output / "index.html").write_bytes(index.encode())
+    index_page = pdoc.render.html_index(modules)
+    if index_page:
+        (output / "index.html").write_bytes(index_page.encode())
     search_index = pdoc.render.search_index(modules)
     if search_index:
         (output / "search.js").write_bytes(search_index.encode())
