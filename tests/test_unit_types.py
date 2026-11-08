@@ -235,6 +235,27 @@ class TestUnitType:
         }
         assert UnitType.AnyAddOn.type_ids == UnitType.AnyTechLab.type_ids | UnitType.AnyReactor.type_ids
 
+    def test_a_production_structures_group_is_every_unit_it_makes_in_any_form(self) -> None:
+        """A Zerg unit hatches from an egg or a cocoon, so no Zerg structure has such a group."""
+        made = {
+            UnitType.BarracksUnit: {"MARINE", "MARAUDER", "REAPER", "GHOST"},
+            UnitType.FactoryUnit: {
+                *("HELLION", "HELLBAT", "WIDOW_MINE", "WIDOW_MINE_BURROWED", "SIEGE_TANK", "SIEGE_TANK_SIEGED"),
+                *("CYCLONE", "THOR", "THOR_HIGH_IMPACT"),
+            },
+            UnitType.StarportUnit: {
+                *("VIKING", "VIKING_LANDED", "MEDIVAC", "LIBERATOR", "LIBERATOR_SIEGED", "RAVEN", "BANSHEE"),
+                "BATTLECRUISER",
+            },
+            UnitType.GatewayUnit: {"ZEALOT", "STALKER", "SENTRY", "ADEPT", "HIGH_TEMPLAR", "DARK_TEMPLAR"},
+            UnitType.RoboticsFacilityUnit: {
+                *("OBSERVER", "OBSERVER_SIEGED", "WARP_PRISM", "WARP_PRISM_PHASING"),
+                *("IMMORTAL", "COLOSSUS", "DISRUPTOR"),
+            },
+            UnitType.StargateUnit: {"PHOENIX", "ORACLE", "VOID_RAY", "TEMPEST", "CARRIER"},
+        }
+        assert {group: {unit_type.name for unit_type in group.type_ids} for group in made} == made
+
 
 _MARINE_TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))
 

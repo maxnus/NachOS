@@ -47,10 +47,10 @@ class UnitType:
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
     geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
     acceleration zones, the critters, the changelings, the creep tumors, the cocoons, the add-ons, tech labs and
-    reactors, the spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such
-    as a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
-    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a
-    `Structure`.
+    reactors, the spires, the overlords, the units each Terran and Protoss production structure makes, or the two forms
+    of a structure or a unit that changes and changes back, such as a supply depot raised or lowered, a siege tank
+    sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot`
+    is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, and `Townhall` a `Structure`.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -260,7 +260,31 @@ ROLES = {
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnySpire": "A spire or a greater spire.",
     "AnyOverlord": "An overlord, a transport overlord, or an overseer in either mode, which the tables count as one.",
+    "BarracksUnit": "A unit a barracks trains: a marine, a marauder, a reaper or a ghost.",
+    "FactoryUnit": (
+        "A unit a factory makes, in any form: a hellion or hellbat, a widow mine, siege tank, cyclone or thor."
+    ),
+    "StarportUnit": (
+        "A unit a starport makes, in any form: a viking, medivac, liberator, raven, banshee or battlecruiser."
+    ),
+    "GatewayUnit": (
+        "A unit a gateway trains or a warp gate warps in: a zealot, stalker, sentry, adept or either templar."
+    ),
+    "RoboticsFacilityUnit": (
+        "A unit a robotics facility makes, in any form: an observer, warp prism, immortal, colossus or disruptor."
+    ),
+    "StargateUnit": "A unit a stargate makes: a phoenix, an oracle, a void ray, a tempest or a carrier.",
     **TWO_FORM_DOCSTRINGS,
+}
+# The groups of the units each Terran and Protoss production structure makes, as the tables give its products, with
+# that structure. A Zerg unit hatches from an egg or a cocoon, which is in no such group.
+PRODUCED_BY = {
+    "BarracksUnit": UnitTypeId.BARRACKS,
+    "FactoryUnit": UnitTypeId.FACTORY,
+    "StarportUnit": UnitTypeId.STARPORT,
+    "GatewayUnit": UnitTypeId.GATEWAY,
+    "RoboticsFacilityUnit": UnitTypeId.ROBOTICS_FACILITY,
+    "StargateUnit": UnitTypeId.STARGATE,
 }
 # The groups that hold every type of another group, by that other group.
 HOLDING_GROUPS = {
@@ -317,6 +341,22 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTy
     return found + [HOLDING_GROUPS[role] for role in found if role in HOLDING_GROUPS]
 
 
+def producer_groups(tables: GameData) -> dict[UnitTypeId, list[str]]:
+    """The groups of `PRODUCED_BY` each unit type is in: those of the structures the tables say make it, a structure's
+    own add-ons and lifted form left out, or make another of its forms, as a factory does a siege tank sieged."""
+    groups: dict[UnitTypeId, list[str]] = {}
+    for group, producer in PRODUCED_BY.items():
+        made = {
+            unit_type
+            for unit_type, row in tables.units.items()
+            if producer in row.producers and Attribute.STRUCTURE not in row.attributes
+        }
+        made |= {form for forms in TWO_FORMS.values() if forms & made for form in forms}
+        for unit_type in made:
+            groups.setdefault(unit_type, []).append(group)
+    return groups
+
+
 def table_group(row: UnitTypeData) -> str:
     """The race or structure group the tables put the type of `row` in, the narrowest: `TerranStructure`, `Terran`,
     `Structure`, or `AnyType` for a type of no race that is no structure."""
@@ -341,8 +381,10 @@ def render(answer: sc2api_pb2.ResponseData) -> str:
     tables = GameData(answer)
     counted_as = tech_aliases(answer)
     table_groups = {unit_type: table_group(tables.units[unit_type]) for unit_type in UnitTypeId}
+    produced = producer_groups(tables)
     found = {
         unit_type: roles(unit_type, tables.units[unit_type], counted_as.get(unit_type, frozenset()))
+        + produced.get(unit_type, [])
         for unit_type in UnitTypeId
     }
     bases: dict[str, tuple[str, ...]] = {

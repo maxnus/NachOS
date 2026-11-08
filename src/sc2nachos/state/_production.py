@@ -10,7 +10,7 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
 from sc2nachos.state._research import Research
-from sc2nachos.units._tracking._warp_in_tracker import WARP_IN_TYPES
+from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
@@ -82,8 +82,9 @@ class _Production:
 def _going_up(unit: OwnUnit[Any], game_data: GameData) -> InProduction:
     """`unit` itself while it goes up: a unit warping in, made by nothing, in a time how fast it goes up tells; or a
     structure, made by its builder, or an archon two high templar merged into, made by nothing, each in its row's
-    time."""
-    if unit.type_id in WARP_IN_TYPES:
+    time. A gateway's unit is listed going up only while it warps in, a gateway training one listing it only once it
+    is done (in game)."""
+    if unit.type_id in UnitType.GatewayUnit.type_ids:
         warp_in = unit._tracker.warp_in_tracker.progress_of(unit)
         return InProduction(unit.type_id, warp_in.fraction, warp_in.total_time, warp_in.time_left, None, unit)
     row = game_data.units[unit.type_id]

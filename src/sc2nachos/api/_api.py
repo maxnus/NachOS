@@ -353,8 +353,6 @@ class Api[E]:
         make, or an add-on its host has been ordered to build, until the structure stands. A reactor's two marines are
         two. The turn's orders are not among them; they are in `api.orders.issued_to`. Takes the types as
         `Units.of_type` does.
-
-        Raises `NotReportedError` for a morph or a warp-in under way in the api's first observation, which no game has.
         """
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids_of(types, unit_types)
         return self._current_game().state.production.of_types(wanted)
@@ -362,10 +360,7 @@ class Api[E]:
     @property
     def researches(self) -> Mapping[UpgradeId, Research]:
         """Each research this player has running or queued in the last observation, by upgrade, in the order the
-        observation lists the structures and each its orders. A finished one is in `upgrades`.
-
-        Raises `NotReportedError` as `in_production` does.
-        """
+        observation lists the structures and each its orders. A finished one is in `upgrades`."""
         return self._current_game().state.production.researches
 
     @property

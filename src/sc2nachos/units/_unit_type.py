@@ -22,10 +22,10 @@ class UnitType:
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
     geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
     acceleration zones, the critters, the changelings, the creep tumors, the cocoons, the add-ons, tech labs and
-    reactors, the spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such
-    as a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
-    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a
-    `Structure`.
+    reactors, the spires, the overlords, the units each Terran and Protoss production structure makes, or the two forms
+    of a structure or a unit that changes and changes back, such as a supply depot raised or lowered, a siege tank
+    sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot`
+    is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, and `Townhall` a `Structure`.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -156,6 +156,24 @@ class UnitType:
     class AnyOverlord(Zerg):
         """An overlord, a transport overlord, or an overseer in either mode, which the tables count as one."""
 
+    class BarracksUnit(Terran):
+        """A unit a barracks trains: a marine, a marauder, a reaper or a ghost."""
+
+    class FactoryUnit(Terran):
+        """A unit a factory makes, in any form: a hellion or hellbat, a widow mine, siege tank, cyclone or thor."""
+
+    class StarportUnit(Terran):
+        """A unit a starport makes, in any form: a viking, medivac, liberator, raven, banshee or battlecruiser."""
+
+    class GatewayUnit(Protoss):
+        """A unit a gateway trains or a warp gate warps in: a zealot, stalker, sentry, adept or either templar."""
+
+    class RoboticsFacilityUnit(Protoss):
+        """A unit a robotics facility makes, in any form: an observer, warp prism, immortal, colossus or disruptor."""
+
+    class StargateUnit(Protoss):
+        """A unit a stargate makes: a phoenix, an oracle, a void ray, a tempest or a carrier."""
+
     class AnySupplyDepot(TerranStructure):
         """A supply depot, raised or lowered."""
 
@@ -183,31 +201,31 @@ class UnitType:
     class AnySporeCrawler(ZergStructure):
         """A spore crawler, rooted or uprooted."""
 
-    class AnyViking(Terran):
+    class AnyViking(StarportUnit):
         """A viking, flying or landed."""
 
-    class AnySiegeTank(Terran):
+    class AnySiegeTank(FactoryUnit):
         """A siege tank, sieged or not."""
 
-    class AnyWidowMine(Terran):
+    class AnyWidowMine(FactoryUnit):
         """A widow mine, burrowed or not."""
 
-    class AnyLiberator(Terran):
+    class AnyLiberator(StarportUnit):
         """A liberator, sieged or not."""
 
-    class AnyThor(Terran):
+    class AnyThor(FactoryUnit):
         """A thor, in either mode."""
 
-    class AnyHellion(Terran):
+    class AnyHellion(FactoryUnit):
         """A hellion or a hellbat."""
 
-    class AnyObserver(Protoss):
+    class AnyObserver(RoboticsFacilityUnit):
         """An observer, in surveillance mode or not."""
 
     class AnyOverseer(AnyOverlord):
         """An overseer, in oversight mode or not."""
 
-    class AnyWarpPrism(Protoss):
+    class AnyWarpPrism(RoboticsFacilityUnit):
         """A warp prism, phasing or not."""
 
     class AnyLocust(Zerg):
@@ -264,7 +282,7 @@ class UnitType:
     class AccelerationZoneSmall(AccelerationZone):
         id = UnitTypeId.ACCELERATION_ZONE_SMALL
 
-    class Adept(Protoss):
+    class Adept(GatewayUnit):
         id = UnitTypeId.ADEPT
 
     class AdeptShade(Protoss):
@@ -297,7 +315,7 @@ class UnitType:
     class BanelingNest(ZergStructure):
         id = UnitTypeId.BANELING_NEST
 
-    class Banshee(Terran):
+    class Banshee(StarportUnit):
         id = UnitTypeId.BANSHEE
 
     class Barracks(AnyBarracks):
@@ -306,7 +324,7 @@ class UnitType:
     class BarracksFlying(AnyBarracks):
         id = UnitTypeId.BARRACKS_FLYING
 
-    class Battlecruiser(Terran):
+    class Battlecruiser(StarportUnit):
         id = UnitTypeId.BATTLECRUISER
 
     class BroodLord(Zerg):
@@ -321,7 +339,7 @@ class UnitType:
     class Bunker(TerranStructure):
         id = UnitTypeId.BUNKER
 
-    class Carrier(Protoss):
+    class Carrier(StargateUnit):
         id = UnitTypeId.CARRIER
 
     class Changeling(AnyChangeling):
@@ -423,7 +441,7 @@ class UnitType:
     class CollapsibleTowerTerran(CollapsibleTower):
         id = UnitTypeId.COLLAPSIBLE_TOWER_TERRAN
 
-    class Colossus(Protoss):
+    class Colossus(RoboticsFacilityUnit):
         id = UnitTypeId.COLOSSUS
 
     class CommandCenter(AnyCommandCenter):
@@ -453,13 +471,13 @@ class UnitType:
     class CyberneticsCore(ProtossStructure):
         id = UnitTypeId.CYBERNETICS_CORE
 
-    class Cyclone(Terran):
+    class Cyclone(FactoryUnit):
         id = UnitTypeId.CYCLONE
 
     class DarkShrine(ProtossStructure):
         id = UnitTypeId.DARK_SHRINE
 
-    class DarkTemplar(Protoss):
+    class DarkTemplar(GatewayUnit):
         id = UnitTypeId.DARK_TEMPLAR
 
     class Destructible1x1BraxisAlpha(Destructible):
@@ -612,7 +630,7 @@ class UnitType:
     class DestructibleUnbuildableRocks(Destructible):
         id = UnitTypeId.DESTRUCTIBLE_UNBUILDABLE_ROCKS
 
-    class Disruptor(Protoss):
+    class Disruptor(RoboticsFacilityUnit):
         id = UnitTypeId.DISRUPTOR
 
     class Drone(AnyDrone):
@@ -657,7 +675,7 @@ class UnitType:
     class Gateway(AnyGateway):
         id = UnitTypeId.GATEWAY
 
-    class Ghost(Terran):
+    class Ghost(BarracksUnit):
         id = UnitTypeId.GHOST
 
     class GhostAcademy(TerranStructure):
@@ -678,7 +696,7 @@ class UnitType:
     class Hellion(AnyHellion):
         id = UnitTypeId.HELLION
 
-    class HighTemplar(Protoss):
+    class HighTemplar(GatewayUnit):
         id = UnitTypeId.HIGH_TEMPLAR
 
     class Hive(AnyZergTownhall):
@@ -693,7 +711,7 @@ class UnitType:
     class HydraliskDen(ZergStructure):
         id = UnitTypeId.HYDRALISK_DEN
 
-    class Immortal(Protoss):
+    class Immortal(RoboticsFacilityUnit):
         id = UnitTypeId.IMMORTAL
 
     class InfestationPit(ZergStructure):
@@ -756,13 +774,13 @@ class UnitType:
     class LurkerEgg(Cocoon):
         id = UnitTypeId.LURKER_EGG
 
-    class Marauder(Terran):
+    class Marauder(BarracksUnit):
         id = UnitTypeId.MARAUDER
 
-    class Marine(Terran):
+    class Marine(BarracksUnit):
         id = UnitTypeId.MARINE
 
-    class Medivac(Terran):
+    class Medivac(StarportUnit):
         id = UnitTypeId.MEDIVAC
 
     class MineralField(AnyMineralField):
@@ -840,7 +858,7 @@ class UnitType:
     class ObserverSieged(AnyObserver):
         id = UnitTypeId.OBSERVER_SIEGED
 
-    class Oracle(Protoss):
+    class Oracle(StargateUnit):
         id = UnitTypeId.ORACLE
 
     class OrbitalCommand(AnyOrbitalCommand):
@@ -870,7 +888,7 @@ class UnitType:
     class ParasiticBombLeftBehind(Zerg):
         id = UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND
 
-    class Phoenix(Protoss):
+    class Phoenix(StargateUnit):
         id = UnitTypeId.PHOENIX
 
     class PhotonCannon(ProtossStructure):
@@ -903,7 +921,7 @@ class UnitType:
     class RavagerCocoon(Cocoon):
         id = UnitTypeId.RAVAGER_COCOON
 
-    class Raven(Terran):
+    class Raven(StarportUnit):
         id = UnitTypeId.RAVEN
 
     class Reactor(AnyReactor):
@@ -918,7 +936,7 @@ class UnitType:
     class ReactorStarport(AnyReactor):
         id = UnitTypeId.REACTOR_STARPORT
 
-    class Reaper(Terran):
+    class Reaper(BarracksUnit):
         id = UnitTypeId.REAPER
 
     class ReaperGrenade(TerranStructure):
@@ -954,7 +972,7 @@ class UnitType:
     class SensorTower(TerranStructure):
         id = UnitTypeId.SENSOR_TOWER
 
-    class Sentry(Protoss):
+    class Sentry(GatewayUnit):
         id = UnitTypeId.SENTRY
 
     class ShieldBattery(ProtossStructure):
@@ -984,7 +1002,7 @@ class UnitType:
     class SporeCrawlerUprooted(AnySporeCrawler):
         id = UnitTypeId.SPORE_CRAWLER_UPROOTED
 
-    class Stalker(Protoss):
+    class Stalker(GatewayUnit):
         id = UnitTypeId.STALKER
 
     class Stargate(ProtossStructure):
@@ -1023,7 +1041,7 @@ class UnitType:
     class TechLabStarport(AnyTechLab):
         id = UnitTypeId.TECH_LAB_STARPORT
 
-    class Tempest(Protoss):
+    class Tempest(StargateUnit):
         id = UnitTypeId.TEMPEST
 
     class TemplarArchive(ProtossStructure):
@@ -1074,7 +1092,7 @@ class UnitType:
     class Viper(Zerg):
         id = UnitTypeId.VIPER
 
-    class VoidRay(Protoss):
+    class VoidRay(StargateUnit):
         id = UnitTypeId.VOID_RAY
 
     class WarpGate(AnyGateway):
@@ -1095,7 +1113,7 @@ class UnitType:
     class WidowMineBurrowed(AnyWidowMine):
         id = UnitTypeId.WIDOW_MINE_BURROWED
 
-    class Zealot(Protoss):
+    class Zealot(GatewayUnit):
         id = UnitTypeId.ZEALOT
 
     class Zergling(AnyZergling):
