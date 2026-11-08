@@ -45,8 +45,8 @@ class MadeUpUnits:
 
     @property
     def orders(self) -> OrderBook:
-        """This player's orders since the latest observation, as `api.orders` holds a turn's: those given through
-        `sc2nachos.units.OwnUnit.issue` or this book's `issue`. Nothing is sent, and the next observation drops them."""
+        """Every order the units were given since they were made up, through `sc2nachos.units.OwnUnit.issue` or this
+        book's `issue`, as `api.orders` holds a turn's. Nothing is sent, so none leaves the book."""
         return self._order_book
 
     @property
@@ -75,7 +75,6 @@ class MadeUpUnits:
         # Set first: an update that raises partway, as for a type the curated ids leave out, has taken in part of the
         # observation at this step, so the next one must come after it.
         self._step = step
-        self._order_book._drop_the_turns_orders()
         self._order_book._observe(GameTime(steps=step), ())
         self._tracker.update(observation, step)
         unit_tracker = self._tracker.unit_tracker

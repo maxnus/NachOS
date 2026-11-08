@@ -148,7 +148,7 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
 
 The units belong to no game: there is no map and no event, and nothing is sent. What the code under test orders goes
-into `made_up.orders`, an `OrderBook` as `api.orders` is, until the next observation drops it:
+into `made_up.orders`, an `OrderBook` as `api.orders` is, and stays there, every order since the units were made up:
 
 ```python
 def test_the_marine_attacks_the_nearer_zergling() -> None:

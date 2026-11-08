@@ -60,8 +60,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **`unit.issue(ability, ...)` is `api.orders.issue(unit, ability, ...)`** (#240), through the order book its tracker
   holds: a second spelling for one unit, which the owner chose over the review checklist's rule (2026-11-08). The docs
   and the demo bot order one unit through it and several through `api.orders.issue`. Every tracker holds a book:
-  `MadeUpUnits` has its own, `orders`, which each observation empties and which sends nothing (the owner, review of
-  #240, over raising for its units).
+  `MadeUpUnits` has its own, `orders`, which sends nothing and so holds every order its units were given (the owner,
+  review of #240, over raising for its units, and over emptying it at each observation, code the order book would
+  carry for a test helper alone).
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
@@ -255,6 +256,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **`train` and `research`** (the owner, review of #240), a pull request of its own after #240, its design settled
+  with the owner when it starts: `api.orders.train(units, unit_type)` and `api.orders.research(unit, upgrade)`
+  translate a `UnitTypeId` or an `UpgradeId` into the ability and issue it, and `unit.train` and `unit.research`
+  forward, as `unit.issue` does. A research maps one to one, `api.data.upgrades[upgrade].research_ability`, its
+  researcher a tech lab where it is one, not the barracks. A train depends on the producer's type: a gateway trains a
+  zealot with `GATEWAY_TRAIN_ZEALOT` and a warp gate warps one in with `WARP_GATE_WARP_IN_ZEALOT` at a point, so the
+  translation reads each ability's products by performer in the tech tree. To settle: whether `train` covers a
+  larva's morphs, a morph such as an orbital or a baneling, and a warp-in, and whether `build` joins it.
 - **Drop `data` from orders** (the owner, review of #240), in a pull request of its own after #240: from
   `api.orders.issue` and `unit.issue`, so that `Order` loses its type parameter, and from the decision above that a bot
   ranks its orders in `data`. Nothing reads it: not the demo bot, not the extensions (speed mining chose not to, review
@@ -412,7 +421,8 @@ can be planned with the owner. Keeping the selections still waits on M5's exit g
   so `CanAttack` is no army; a group of exactly those types leaves out `Worker` over the burrowed drone, so a burrowed
   form was to count as its unit. Since #237, a loop of `unit.issue` goes out as one command, so methods on `Units`
   save no APM. They would not make one id per action unnecessary, since ids also show in `unit.orders` and
-  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125).
+  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125). `train` and `research`,
+  which translate an id, are planned apart (Next).
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).

@@ -242,11 +242,6 @@ class OrderBook:
                     refusals += [ActionFailure(self._time, unit, order.ability, action_result) for unit in units]
         self._refusals = tuple(refusals)
 
-    def _drop_the_turns_orders(self) -> None:
-        """Forget the turn's orders without sending them, as for units made up for a test, which no game takes orders
-        from."""
-        self._issued, self._issued_by_unit, self._forced = [], {}, set()
-
     def _observe(self, time: GameTime, lost: Iterable[Unit[Any]]) -> None:
         """Take in the observation at `time`, which found `lost` dead or no longer this player's."""
         self._time = time
