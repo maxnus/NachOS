@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos._shared.errors import NotReportedError
 from sc2nachos.gamedata import Attribute, OrderBehavior
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -89,11 +90,26 @@ def _going_up(unit: OwnUnit[Any], build_progress: float, game_data: GameData) ->
 def _made_by_order(
     product: UnitTypeId, producer: OwnUnit[Any], progress: float | None, game_data: GameData
 ) -> InProduction:
-    """A `product` of `producer`'s order at `progress`, or at no known progress, as for a morph other than a larva's."""
+    """A `product` of `producer`'s order at `progress`, or, where the order reports none, at the progress of
+    `producer`'s morph."""
     if progress is None:
-        return InProduction(product, producer, None, None, None, None)
+        return _morphing_into(product, producer)
     total_time, time_left = _total_time_and_time_left(game_data.units[product], progress)
     return InProduction(product, producer, None, progress, total_time, time_left)
+
+
+def _morphing_into(product: UnitTypeId, producer: OwnUnit[Any]) -> InProduction:
+    """A `product` that `producer` is morphing into, at its `morph_progress`, or at no known progress for a morph not
+    seen to begin."""
+    try:
+        morph_progress = producer.morph_progress
+    except NotReportedError:
+        morph_progress = None
+    if morph_progress is None:
+        return InProduction(product, producer, None, None, None, None)
+    return InProduction(
+        product, producer, None, morph_progress.fraction, morph_progress.total_time, morph_progress.time_left
+    )
 
 
 def _total_time_and_time_left(row: UnitTypeData, progress: float) -> tuple[GameTime, GameTime]:

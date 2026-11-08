@@ -298,6 +298,7 @@ it.
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_listed` while the observation lists it, cloaked or remembered in the fog included |
 | `unit.age`, `age_in_frames`, `is_memory`, of a unit kept from an earlier step | nothing: a unit is updated in place every observation, and `unit.is_listed` false once the observation leaves it out; `unit.first_seen` and `unit.last_seen`, the first and the last observation that showed it visible, each `None` if none has |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
+| nothing | `unit.morph_progress` of a command center, hatchery, lair or spire morphing, or of a cocoon or a lurker egg, whose progress the game does not report: a `Progress` with what it becomes, its `fraction` and its `time_left`, timed from the observation before the one that first showed it |
 | `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.repairable` | `unit.is_repairable`, with `unit.total_repair_cost` and `unit.required_repair_cost` from its health now, each a `Cost` with its steps; not for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
@@ -589,7 +590,7 @@ it.
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
 | `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
-| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
+| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step, and the lurker's the 403 steps it took in game, where python-sc2 reads its row's 553.33; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_used`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |

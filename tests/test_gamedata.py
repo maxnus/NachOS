@@ -27,6 +27,7 @@ from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
+    UNIT_TYPE_BUILD_TIME_OVERRIDES,
     UNIT_TYPE_COST_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
 )
@@ -575,14 +576,28 @@ class TestARecordedGamesTables:
 
     def test_only_a_rich_gas_building_takes_its_build_time_from_another_type(self, path: Path) -> None:
         """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing. Every other
-        type takes its row's, rounded up."""
+        type takes its row's, rounded up, but where a build time is written down."""
         answer = _answer(path)
         data = GameData(answer)
         tabled = {row.unit_id: math.ceil(row.build_time) for row in answer.units}
         borrowed = {unit_type for unit_type, row in data.units.items() if row.build_time.steps != tabled[unit_type]}
-        assert borrowed <= set(_RICH_GAS_BUILDINGS)
+        assert borrowed - UNIT_TYPE_BUILD_TIME_OVERRIDES.keys() <= set(_RICH_GAS_BUILDINGS)
         for rich, plain in _RICH_GAS_BUILDINGS.items():
             assert data.units[rich].build_time.steps == data.units[plain].build_time.steps == 480, rich.name
+
+    def test_a_build_time_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
+        """Once the game's own row gives the time measured, the entry can go."""
+        tabled = {row.unit_id: math.ceil(row.build_time) for row in _answer(path).units}
+        for unit_type, build_time in UNIT_TYPE_BUILD_TIME_OVERRIDES.items():
+            assert tabled[unit_type] != build_time.steps, f"the tables now give {unit_type.name} {build_time}"
+
+    def test_a_build_time_written_down_is_the_types_own_its_costs_and_its_whole_costs(self, path: Path) -> None:
+        """A lurker takes 403 steps, and so does its cost, and its whole cost a hydralisk's and those."""
+        units = _tables(path).units
+        lurker = units[UnitTypeId.LURKER]
+        assert (lurker.build_time.steps, lurker._unrounded_build_time.steps, lurker.cost.time.steps) == (403, 403, 403)
+        hydralisk = units[UnitTypeId.HYDRALISK]
+        assert lurker.total_cost.time == hydralisk.total_cost.time + GameTime(steps=403)
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
         """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.

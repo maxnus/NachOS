@@ -118,7 +118,8 @@ class Order:
     _target: Target | Literal[_NotReported.TARGET] | None
     progress: float
     """The order's progress from 0 to 1 for a train, a research or a larva's morph, and 0 otherwise: any other morph
-    and an add-on read 0 until they are done (in game)."""
+    and an add-on read 0 until they are done (in game). `Unit.morph_progress` works out a structure's or a cocoon's
+    morph, and an add-on reports its own `build_progress`."""
 
     @property
     def target(self) -> Target | None:

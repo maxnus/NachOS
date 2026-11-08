@@ -85,6 +85,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   phasing warp prism (tool `sweep_orders`, `production-times`, build 75689). An archon's row gives no build time,
   and two high templar merged into one 192 steps after it was first listed, twice (probe in #189, under `food`, local
   game, Linux build 75689). What each reports meanwhile is in [units](units.md).
+- Every structure morph showed in the first observation after its order, and a zergling's cocoon too, so each
+  structure was done its row's time after the observation before the one that first showed the morph, read every step
+  and every 7: an orbital command, a planetary fortress, a lair, a hive and a greater spire. The baneling was listed
+  within a step of 320 after it. A lair, in the step it first read a lair, unfinished, still showed the lair morph as
+  its order (tested; local game, Linux build 75689).
 - Every gas building takes 480 steps from the step it is first read, at build progress 0, to the step it is first read
   done, rich or plain: a refinery, an assimilator and an extractor, each built by its race's worker, though their rows
   give the three rich ones no build time (tool `sweep_orders`, `gas-buildings`, build 75689; corpus).

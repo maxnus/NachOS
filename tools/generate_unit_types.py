@@ -14,6 +14,7 @@ from pathlib import Path
 from s2clientprotocol import sc2api_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, UnitTypeData
+from sc2nachos.gamedata._techtree import COCOON_PRODUCTS
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
@@ -45,10 +46,11 @@ class UnitType:
     `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
     geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
-    acceleration zones, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the
-    spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such as a supply
-    depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that
-    holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+    acceleration zones, the critters, the changelings, the creep tumors, the cocoons, the add-ons, tech labs and
+    reactors, the spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such
+    as a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
+    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a
+    `Structure`.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -252,6 +254,7 @@ ROLES = {
     "Critter": "One of a map's critters: an animal or a robot that wanders and covers no ground.",
     "AnyChangeling": "A changeling, plain or in the shape of a marine, a zealot or a zergling.",
     "AnyCreepTumor": "A creep tumor, a queen's or another tumor's, growing or burrowed.",
+    "Cocoon": "A cocoon or a lurker egg: a unit on its way to becoming another, as a zergling becomes a baneling.",
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
     "AnyReactor": "A reactor of any kind: a barracks', a factory's or a starport's, or a plain one.",
@@ -299,6 +302,7 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTy
         ("Critter", CRITTERS),
         ("AnyChangeling", CHANGELINGS),
         ("AnyCreepTumor", CREEP_TUMORS),
+        ("Cocoon", COCOON_PRODUCTS.keys()),
         *TWO_FORMS.items(),
     )
     found = [role for role, members in curated if unit_type in members]

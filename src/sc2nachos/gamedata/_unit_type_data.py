@@ -200,9 +200,10 @@ class UnitTypeData:
     something, one after another."""
     build_time: GameTime
     """The time to make one: the tables' build time rounded up to a whole step, as a train takes it, a void ray's 963.2
-    steps as 964 (in game); for a morph, only the last stage, which a unit's morph does not keep to, a lurker's taking
-    403 of 554 (in game; `docs/reference/game-behavior/upgrades-and-tables.md`). A type the table gives none takes the
-    build time of the one other type its creation ability makes: a rich gas building its plain one's."""
+    steps as 964 (in game); for a morph, only the last stage, which a unit's morph keeps to within a step. A lurker
+    takes the 403 steps it took in game, where its row reads 553.33
+    (`docs/reference/game-behavior/upgrades-and-tables.md`). A type the table gives none takes the build time of the
+    one other type its creation ability makes: a rich gas building its plain one's."""
     supply_provided: float
     """What it adds to the supply cap."""
     supply_used: float
