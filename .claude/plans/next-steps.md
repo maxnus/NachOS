@@ -27,11 +27,15 @@ As of 2026-11-08:
   a number of collectors, speed mining picking their refineries and `release_collectors` those to let go, reads when
   each tile was last in sight off `api.vision`, and starts its turn clock at `BEFORE` and ends it at `AFTER`, after
   speed mining, so that its step time stays the whole turn.
-- **Since 0.3.0**, on main: #237, #240, #241, #242 and #245. The next release, 0.4.0 since #241 and #242 remove and
+- **0.4.0 is out** (2026-11-05, from 9f56f9a), with #236 and #237: orders given apart go out as one command where one
+  order could have named their units. Its notes say a bot changes nothing in its code, only what `api.action_failures`
+  lists. AvocaDOS took it in AvocaDOS #95.
+- **Since 0.4.0**, on main: #240, #241, #242, #244 and #245. The next release, 0.5.0 since #241 and #242 remove and
   rename what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its
   own data per unit in a `UnitDict`; and the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was
   an `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242). It
-  adds `unit.issue` (#240) and `train`, `build` and `research` (#245).
+  adds `unit.issue` (#240) and `train`, `build` and `research` (#245). AvocaDOS #97, a draft, takes it: its production
+  trains a unit, builds an add-on and morphs an orbital command, and it bumps its pin once 0.5.0 is out.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
