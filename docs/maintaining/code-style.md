@@ -30,7 +30,7 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Type hints** on all parameters and return types.
 - **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
 - **Several units handed to a bot are a `Units`**, the established public interface, unless there is a good reason
-  for another type (the owner, review of #229): `SpeedMining.workers_at` and its releases return one, and `Order`
+  for another type (the owner, review of #229): `SpeedMining.workers_at` and its releases return one, and `IssuedOrder`
   and the actions read off an observation hold one, where they had tuples. A `Units` equals another of the same units
   in the same order, so a frozen dataclass holding one compares by value. Inside, a list built up or sorted is wrapped
   where it is handed out.

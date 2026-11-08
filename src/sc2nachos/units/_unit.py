@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from sc2nachos.gamedata import UnitTypeData, Weapon
     from sc2nachos.geometry import PointLike
     from sc2nachos.units._tracking import _Tracker
-    from sc2nachos.units._values import UnitOrder
+    from sc2nachos.units._values import Order
 
 _VISIBLE = raw_pb2.DisplayType.Visible
 # A unit this close to facing a target counts as facing it, unless `time_to_face` is told otherwise: most attackers fire
@@ -151,7 +151,7 @@ class Unit[K: UnitType.AnyType]:
     _order_targets: dict[int, Unit[Any]] | None
     # `OwnUnit.orders` as last read, with the tracker update it was read at, kept here since `OwnUnit` declares no
     # slots of its own. It holds no report, so it keeps no observation alive.
-    _orders: _Snapshot[tuple[UnitOrder, ...]]
+    _orders: _Snapshot[tuple[Order, ...]]
 
     def __init__(self, report: raw_pb2.Unit, tracker: _Tracker, unit_id: int, step: int) -> None:
         self._tracker = tracker

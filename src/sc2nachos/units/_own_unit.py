@@ -9,7 +9,7 @@ from sc2nachos.ids import AbilityId
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
 from sc2nachos.units._unit_type import UnitType
-from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
+from sc2nachos.units._values import Order, Passenger, RallyTarget
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.geometry import PointLike
-    from sc2nachos.orders import Order
+    from sc2nachos.orders import IssuedOrder
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -35,8 +35,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> Order:
-        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Order`, as
+    ) -> IssuedOrder:
+        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `IssuedOrder`, as
         `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
         `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
 
@@ -45,19 +45,19 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force)
 
     @property
-    def orders(self) -> tuple[UnitOrder, ...]:
+    def orders(self) -> tuple[Order, ...]:
         """The unit's current order, then its queued orders."""
         update = self._tracker.last_changes.update
         # Read off the snapshot's fields rather than through `at`, to spare a call on the common path.
         if (cached := self._orders).update == update:
             return cached.value
         reported = self._latest_report.orders
-        orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in reported)
+        orders = tuple(Order._from_proto(order, self._unit_target_of_order) for order in reported)
         self._orders = _Snapshot(orders, update)
         return orders
 
     @property
-    def current_order(self) -> UnitOrder | None:
+    def current_order(self) -> Order | None:
         """The order the unit is carrying out, the first of `orders`, or `None` for an idle unit."""
         orders = self.orders
         return orders[0] if orders else None

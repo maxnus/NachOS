@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Footprint
-    from sc2nachos.orders import Order, OrderBook
+    from sc2nachos.orders import IssuedOrder, OrderBook
     from sc2nachos.placement._placement_reservation import PlacementReservation
-    from sc2nachos.units import OwnUnit, UnitOrder, Units
+    from sc2nachos.units import Order, OwnUnit, Units
 
 
 @final
@@ -53,9 +53,9 @@ class _BuildSites:
                     self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
-    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Order | UnitOrder]:
+    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[IssuedOrder | Order]:
         """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
-        ordered: list[Order | UnitOrder] = [*self._order_book.issued_to(unit, include_sent=True)]
+        ordered: list[IssuedOrder | Order] = [*self._order_book.issued_to(unit, include_sent=True)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
         if any(self._ability_places_structure(ability) for ability in reported):
@@ -70,7 +70,7 @@ class _BuildSites:
     def _reserve_site(
         self,
         reserved: Grid[bool],
-        build: Order | UnitOrder,
+        build: IssuedOrder | Order,
         builder: OwnUnit[Any],
         standing: Collection[tuple[int, int]],
     ) -> None:

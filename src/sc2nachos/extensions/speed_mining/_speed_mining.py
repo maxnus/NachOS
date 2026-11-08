@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.gamemap import Expansion
     from sc2nachos.geometry import Point
-    from sc2nachos.orders import Order
-    from sc2nachos.units import UnitOrder
+    from sc2nachos.orders import IssuedOrder
+    from sc2nachos.units import Order
 
 # The most workers speed mining holds at one field: with three, it mined 19% less than plain gathers (in game).
 _MOST_MINERS_AT_A_FIELD = 2
@@ -513,7 +513,7 @@ class SpeedMining:
         current_order = worker.current_order
         return current_order is not None and not self._is_its_work(worker, current_order, mining=mining)
 
-    def _is_its_work(self, worker: OwnUnit[UnitType.Worker], order: UnitOrder, *, mining: bool) -> bool:
+    def _is_its_work(self, worker: OwnUnit[UnitType.Worker], order: Order, *, mining: bool) -> bool:
         """Whether `order`, the current one of `worker`, is its work or speed mining's, for a worker mining minerals if
         `mining`, else collecting vespene: a gather at a mineral field, or at a gas building; a return of minerals, or
         of anything else, as gas from a rich geyser shows no cargo (in game); a move to where one of speed mining's
@@ -576,7 +576,7 @@ def _workers_by_resource[R: Unit[Any]](
     return workers_by_resource
 
 
-def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[Order], *, mining: bool) -> bool:
+def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[IssuedOrder], *, mining: bool) -> bool:
     """Whether one of `orders`, issued to a worker this turn, a miner if `mining`, else a collector, stands, no unqueued
     order coming after it, and is not a hand-over's: a return, or a gather at a mineral field, for a miner, or at a gas
     building, for a collector."""
