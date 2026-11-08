@@ -12,13 +12,13 @@ from sc2nachos.gamedata._sent_as import SENT_UNCHANGED
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
-from sc2nachos.ids import AbilityId, UnitTypeId
+from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.orders._commands import unit_commands_giving
 from sc2nachos.orders._issued_order import IssuedOrder
 from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionFailure, ActionResult
-from sc2nachos.units import OwnUnit, Unit, Units
+from sc2nachos.units import OwnUnit, Unit, Units, UnitType
 from sc2nachos.units._units import _unit_tuple
 
 if TYPE_CHECKING:
@@ -57,6 +57,7 @@ class OrderBook:
     """
 
     __slots__ = (
+        "_built_abilities",
         "_forced",
         "_game_data",
         "_issued",
@@ -66,6 +67,7 @@ class OrderBook:
         "_sent_not_replacing",
         "_refusals",
         "_time",
+        "_trained_abilities",
     )
 
     def __init__(self, game_data: GameData) -> None:
@@ -87,6 +89,10 @@ class OrderBook:
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
         self._time = GameTime.ZERO
+        # By maker and product, the ability `train` orders, and the one `build` orders.
+        abilities_making = _abilities_making(game_data)
+        self._trained_abilities = {pair: ability for pair, ability in abilities_making.items() if _is_trained(*pair)}
+        self._built_abilities = {pair: ability for pair, ability in abilities_making.items() if _is_built(*pair)}
 
     def issue(
         self,
@@ -135,7 +141,7 @@ class OrderBook:
         if len(given) > 1:
             given = tuple(dict.fromkeys(given))
         if not given:
-            raise ValueError("an order needs a unit to give it to")
+            raise ValueError(_NEEDS_A_UNIT)
         row = self._game_data.abilities.get(ability)
         sent_as = ABILITIES_SENT_AS_ANOTHER.get(ability, SENT_UNCHANGED)
         if ability.is_custom:
@@ -154,6 +160,105 @@ class OrderBook:
         if force:
             self._forced.add(order)
         return order
+
+    def train(
+        self,
+        units: OwnUnit[Any] | Iterable[OwnUnit[Any]],
+        unit_type: UnitTypeId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order `units` to make a unit of `unit_type` and return the `IssuedOrder`, as `issue` orders the ability
+        their type makes it with: a barracks's `BARRACKS_TRAIN_MARINE`, a warp gate's `WARP_GATE_WARP_IN_ZEALOT`, aimed
+        at a point, a larva's `LARVA_MORPH_DRONE`.
+
+        It orders what a structure or a larva makes that is not a structure; `build` orders a structure a worker makes
+        and an add-on, and `issue` the rest, a morph such as an orbital command's or a baneling's among them.
+
+        Raises `ValueError` where one of `units` does not train `unit_type`, saying what does, and where two of them
+        make it with different abilities, as a gateway and a warp gate a zealot: they are ordered apart. Raises
+        otherwise as `issue` does.
+        """
+        given = _unit_tuple(units)
+        ability = self._ability_making(given, unit_type, self._trained_abilities, "train")
+        return self.issue(given, ability, target=target, queued=queued, force=force)
+
+    def build(
+        self,
+        units: OwnUnit[Any] | Iterable[OwnUnit[Any]],
+        unit_type: UnitTypeId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order `units` to make a structure of `unit_type` and return the `IssuedOrder`, as `issue` orders the
+        ability their type makes it with: an SCV's `SCV_BUILD_SUPPLY_DEPOT` aimed at a point, a drone's
+        `DRONE_MORPH_EXTRACTOR` aimed at a geyser, a barracks's `BUILD_TECH_LAB`.
+
+        It orders a structure a worker makes, and an add-on; `train` orders what a structure or a larva makes that is
+        not a structure, and `issue` the rest, a morph such as an orbital command's or a lair's among them.
+
+        Raises `ValueError` where one of `units` does not build `unit_type`, saying what does, and where two of them
+        make it with different abilities. Raises otherwise as `issue` does: `ValueError` for workers given one site.
+        """
+        given = _unit_tuple(units)
+        ability = self._ability_making(given, unit_type, self._built_abilities, "build")
+        return self.issue(given, ability, target=target, queued=queued, force=force)
+
+    def research(
+        self, unit: OwnUnit[Any], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
+    ) -> IssuedOrder:
+        """Order `unit` to research `upgrade` and return the `IssuedOrder`, as `issue` orders the upgrade's
+        `research_ability`: Stimpack's `BARRACKS_TECH_LAB_RESEARCH_STIMPACK`.
+
+        Raises `ValueError` where nothing researches `upgrade`, and where `unit`'s type is not one of its
+        `researchers`: a barracks's upgrades are its tech lab's. Raises otherwise as `issue` does.
+        """
+        row = self._game_data.upgrades.get(upgrade)
+        if row is None or row.research_ability is None:
+            raise ValueError(f"nothing researches {upgrade.name}")
+        if unit.type_id not in row.researchers:
+            researchers = _listed_with_or(row.researchers)
+            raise ValueError(f"{upgrade.name} is researched by {researchers}, not a {unit.type_id.name}")
+        return self.issue(unit, row.research_ability, queued=queued, force=force)
+
+    def _ability_making(
+        self,
+        units: tuple[OwnUnit[Any], ...],
+        product: UnitTypeId,
+        abilities: Mapping[tuple[UnitTypeId, UnitTypeId], AbilityId],
+        method: str,
+    ) -> AbilityId:
+        """The one ability `units` make `product` with, of `abilities`, those the order book's `method` orders.
+        Raises `ValueError` as `train` and `build` say."""
+        if not units:
+            raise ValueError(_NEEDS_A_UNIT)
+        makers_by_ability: dict[AbilityId, list[UnitTypeId]] = {}
+        for maker in dict.fromkeys(unit.type_id for unit in units):
+            ability = abilities.get((maker, product))
+            if ability is None:
+                raise ValueError(self._why_not_made(maker, product, method))
+            makers_by_ability.setdefault(ability, []).append(maker)
+        if len(makers_by_ability) > 1:
+            makers = " and ".join(f"a {maker.name}" for makers in makers_by_ability.values() for maker in makers)
+            used = " and ".join(ability.name for ability in makers_by_ability)
+            raise ValueError(f"{makers} make a {product.name} with different abilities, {used}: order them apart")
+        return next(iter(makers_by_ability))
+
+    def _why_not_made(self, maker: UnitTypeId, product: UnitTypeId, method: str) -> str:
+        """Why `method` cannot order a `maker` to make a `product`: what orders it instead, or what makes one."""
+        abilities_making = _abilities_making(self._game_data)
+        if (ability := abilities_making.get((maker, product))) is not None:
+            ordered_by = "train" if _is_trained(maker, product) else "build" if _is_built(maker, product) else "issue"
+            made_with = f"a {maker.name} makes a {product.name} with {ability.name}"
+            return f"{made_with}, which `{ordered_by}` orders, not `{method}`"
+        makers = {made_by for made_by, made in abilities_making if made is product}
+        if not makers:
+            return f"nothing makes a {product.name}"
+        return f"a {maker.name} does not make a {product.name}: {_listed_with_or(makers)} does"
 
     def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[IssuedOrder, ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued. Withdrawn orders are left out.
@@ -350,6 +455,40 @@ def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
     """The ability a raw order runs, or `NULL` if the curated ids leave it out. No order of ours runs such an
     ability."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL
+
+
+_NEEDS_A_UNIT = "an order needs a unit to give it to"
+
+
+def _abilities_making(game_data: GameData) -> dict[tuple[UnitTypeId, UnitTypeId], AbilityId]:
+    """The ability each unit type makes each unit type with, by maker and product: one for each pair (tool
+    `sweep_tech_tree`), a warp gate's zealot a warp-in where a gateway's is a train."""
+    return {
+        (maker, product): ability
+        for ability, row in game_data.abilities.items()
+        for maker, product in row.products.items()
+        if isinstance(product, UnitTypeId)
+    }
+
+
+def _is_trained(maker: UnitTypeId, product: UnitTypeId) -> bool:
+    """Whether `OrderBook.train` orders a `maker` to make a `product`: a unit not a structure, made by a structure or
+    a larva."""
+    structures = UnitType.Structure.type_ids
+    return product not in structures and (maker in structures or maker is UnitTypeId.LARVA)
+
+
+def _is_built(maker: UnitTypeId, product: UnitTypeId) -> bool:
+    """Whether `OrderBook.build` orders a `maker` to make a `product`: a structure made by a worker, or an add-on."""
+    if product in UnitType.AnyAddOn.type_ids:
+        return True
+    return product in UnitType.Structure.type_ids and maker in UnitType.Worker.type_ids
+
+
+def _listed_with_or(unit_types: Collection[UnitTypeId]) -> str:
+    """`unit_types` as a phrase, in alphabetical order: "a HATCHERY, a HIVE or a LAIR"."""
+    names = [f"a {unit_type.name}" for unit_type in sorted(unit_types, key=lambda unit_type: unit_type.name)]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
 
 
 def _check_sent_as(ability: AbilityId, sent_as: Mapping[UnitTypeId, SentAs], units: Sequence[OwnUnit[Any]]) -> None:

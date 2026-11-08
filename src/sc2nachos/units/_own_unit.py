@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.geometry import PointLike
+    from sc2nachos.ids import UnitTypeId, UpgradeId
     from sc2nachos.orders import IssuedOrder
 
 
@@ -43,6 +44,49 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         Raises as `OrderBook.issue` does.
         """
         return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force)
+
+    def train(
+        self: OwnUnit[UnitType.Structure | UnitType.Larva],
+        unit_type: UnitTypeId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order the structure or larva to make a unit of `unit_type` and return the `IssuedOrder`, as
+        `sc2nachos.orders.OrderBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
+        `api.orders.train(barracks, UnitTypeId.MARINE)`.
+
+        Raises as `OrderBook.train` does.
+        """
+        return self._tracker.order_book.train(self, unit_type, target=target, queued=queued, force=force)
+
+    def build(
+        self: OwnUnit[UnitType.Worker | UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport],
+        unit_type: UnitTypeId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
+        return the `IssuedOrder`, as `sc2nachos.orders.OrderBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
+        target=site)` is `api.orders.build(scv, UnitTypeId.BUNKER, target=site)`.
+
+        Raises as `OrderBook.build` does.
+        """
+        return self._tracker.order_book.build(self, unit_type, target=target, queued=queued, force=force)
+
+    def research(
+        self: OwnUnit[UnitType.Structure], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
+    ) -> IssuedOrder:
+        """Order the structure to research `upgrade` and return the `IssuedOrder`, as
+        `sc2nachos.orders.OrderBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
+        `api.orders.research(tech_lab, UpgradeId.STIMPACK)`.
+
+        Raises as `OrderBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
+        """
+        return self._tracker.order_book.research(self, upgrade, queued=queued, force=force)
 
     @property
     def orders(self) -> tuple[Order, ...]:
