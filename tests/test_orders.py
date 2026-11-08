@@ -27,6 +27,7 @@ from sc2nachos.orders._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
+from sc2nachos.testing import MadeUpUnits, UnitReport, load_game_data
 from sc2nachos.units import Alliance, OwnUnit, Unit, Units, UnitType
 from sc2nachos.units._tracking import _Tracker
 from support import make_client, make_enemy, make_game_info, make_observation, make_response, make_tables, make_unit
@@ -325,6 +326,207 @@ class TestOrderingAUnitThroughItself:
         book_parameters = list(inspect.signature(OrderBook.issue).parameters.values())
         unit_parameters = list(inspect.signature(OwnUnit.issue).parameters.values())
         assert [parameter for parameter in book_parameters if parameter.name != "units"] == unit_parameters
+
+
+def _made_up(*reports: UnitReport) -> tuple[MadeUpUnits, list[Any]]:
+    """Units of `reports` made up on the game's data NachOS ships, with the book they are ordered into."""
+    made_up = MadeUpUnits()
+    return made_up, made_up.observe(*reports)
+
+
+class TestTrainingBuildingAndResearching:
+    """`train`, `build` and `research` order the ability that makes a unit type or researches an upgrade, as `issue`
+    orders it, on the game's own data."""
+
+    def test_a_structure_trains_a_unit_with_its_own_ability(self) -> None:
+        made_up, (barracks, gateway, warp_gate) = _made_up(
+            UnitReport(1, UnitTypeId.BARRACKS), UnitReport(2, UnitTypeId.GATEWAY), UnitReport(3, UnitTypeId.WARP_GATE)
+        )
+
+        marine = barracks.train(UnitTypeId.MARINE)
+        zealot = gateway.train(UnitTypeId.ZEALOT)
+        warped_in = warp_gate.train(UnitTypeId.ZEALOT, target=(20.0, 21.0))
+
+        assert_type(made_up.orders.train(barracks, UnitTypeId.MARINE), IssuedOrder)
+        assert (marine.ability, marine.units, marine.target) == (
+            AbilityId.BARRACKS_TRAIN_MARINE,
+            Units([barracks]),
+            None,
+        )
+        assert zealot.ability is AbilityId.GATEWAY_TRAIN_ZEALOT
+        assert (warped_in.ability, warped_in.target) == (AbilityId.WARP_GATE_WARP_IN_ZEALOT, Point((20.0, 21.0)))
+
+    def test_a_larva_trains_what_it_morphs_into(self) -> None:
+        _, (larva,) = _made_up(UnitReport(1, UnitTypeId.LARVA))
+
+        assert larva.train(UnitTypeId.DRONE).ability is AbilityId.LARVA_MORPH_DRONE
+
+    def test_several_structures_train_with_one_order_where_their_types_share_the_ability(self) -> None:
+        made_up, (command_center, orbital_command) = _made_up(
+            UnitReport(1, UnitTypeId.COMMAND_CENTER), UnitReport(2, UnitTypeId.ORBITAL_COMMAND)
+        )
+
+        order = made_up.orders.train([command_center, orbital_command], UnitTypeId.SCV)
+
+        assert (order.ability, order.units) == (
+            AbilityId.COMMAND_CENTER_TRAIN_SCV,
+            Units([command_center, orbital_command]),
+        )
+
+    def test_types_making_it_with_different_abilities_are_ordered_apart(self) -> None:
+        made_up, (gateway, warp_gate) = _made_up(UnitReport(1, UnitTypeId.GATEWAY), UnitReport(2, UnitTypeId.WARP_GATE))
+
+        with pytest.raises(ValueError, match="a GATEWAY and a WARP_GATE make a ZEALOT with different abilities"):
+            made_up.orders.train([gateway, warp_gate], UnitTypeId.ZEALOT)
+        assert made_up.orders.pending == ()
+
+    def test_a_unit_not_making_the_type_raises_saying_what_does(self) -> None:
+        made_up, (barracks, high_templar) = _made_up(
+            UnitReport(1, UnitTypeId.BARRACKS), UnitReport(2, UnitTypeId.HIGH_TEMPLAR)
+        )
+
+        with pytest.raises(ValueError, match="^a BARRACKS does not make a ZEALOT: a GATEWAY or a WARP_GATE does$"):
+            barracks.train(UnitTypeId.ZEALOT)
+        with pytest.raises(ValueError, match="^nothing makes an ARCHON$"):
+            made_up.orders.train(high_templar, UnitTypeId.ARCHON)
+
+    def test_what_another_method_orders_raises_naming_it(self) -> None:
+        """A command center's orbital is a morph, which `issue` orders, and an SCV's depot a build."""
+        made_up, (command_center, scv) = _made_up(
+            UnitReport(1, UnitTypeId.COMMAND_CENTER), UnitReport(2, UnitTypeId.SCV)
+        )
+
+        with pytest.raises(
+            ValueError, match="COMMAND_CENTER_MORPH_ORBITAL_COMMAND, which `issue` orders, not `train`$"
+        ):
+            command_center.train(UnitTypeId.ORBITAL_COMMAND)
+        with pytest.raises(ValueError, match="SCV_BUILD_SUPPLY_DEPOT, which `build` orders, not `train`$"):
+            made_up.orders.train(scv, UnitTypeId.SUPPLY_DEPOT)
+        with pytest.raises(ValueError, match="COMMAND_CENTER_TRAIN_SCV, which `train` orders, not `build`$"):
+            made_up.orders.build(command_center, UnitTypeId.SCV)
+
+    def test_a_unit_that_trains_nothing_is_rejected_by_the_type_checker(self) -> None:
+        _, (made_up_marine,) = _made_up(UnitReport(1, UnitTypeId.MARINE))
+        marine: OwnUnit[UnitType.Marine] = made_up_marine
+
+        with pytest.raises(ValueError, match="^a MARINE does not make a MARINE: a BARRACKS does$"):
+            marine.train(UnitTypeId.MARINE)  # type: ignore
+
+    def test_no_unit_to_order_raises_as_issue_does(self) -> None:
+        made_up = MadeUpUnits()
+
+        with pytest.raises(ValueError, match="an order needs a unit to give it to"):
+            made_up.orders.train([], UnitTypeId.MARINE)
+
+    def test_a_worker_builds_a_structure_at_a_site_and_a_structure_its_add_on(self) -> None:
+        _, (scv, drone, geyser, barracks, flying_barracks) = _made_up(
+            UnitReport(1, UnitTypeId.SCV),
+            UnitReport(2, UnitTypeId.DRONE),
+            UnitReport(3, UnitTypeId.VESPENE_GEYSER, alliance=Alliance.NEUTRAL, vespene_contents=2250),
+            UnitReport(4, UnitTypeId.BARRACKS),
+            UnitReport(5, UnitTypeId.BARRACKS_FLYING, is_flying=True),
+        )
+
+        depot = scv.build(UnitTypeId.SUPPLY_DEPOT, target=(30.0, 31.0))
+        extractor = drone.build(UnitTypeId.EXTRACTOR, target=geyser)
+        tech_lab = barracks.build(UnitTypeId.TECH_LAB_BARRACKS)
+        landing_reactor = flying_barracks.build(UnitTypeId.REACTOR_BARRACKS, target=(40.5, 41.5))
+
+        assert (depot.ability, depot.target) == (AbilityId.SCV_BUILD_SUPPLY_DEPOT, Point((30.0, 31.0)))
+        assert (extractor.ability, extractor.target) == (AbilityId.DRONE_MORPH_EXTRACTOR, geyser)
+        assert (tech_lab.ability, tech_lab.target) == (AbilityId.BUILD_TECH_LAB, None)
+        assert (landing_reactor.ability, landing_reactor.target) == (AbilityId.BUILD_REACTOR, Point((40.5, 41.5)))
+
+    def test_a_rich_gas_building_is_built_with_its_plain_one_s_ability(self) -> None:
+        """The game's tables give each rich one its plain one's creation ability, whose products name the plain one."""
+        _, (scv, probe, drone, geyser) = _made_up(
+            UnitReport(1, UnitTypeId.SCV),
+            UnitReport(2, UnitTypeId.PROBE),
+            UnitReport(3, UnitTypeId.DRONE),
+            UnitReport(4, UnitTypeId.VESPENE_GEYSER_RICH, alliance=Alliance.NEUTRAL, vespene_contents=2250),
+        )
+
+        assert scv.build(UnitTypeId.REFINERY_RICH, target=geyser).ability is AbilityId.SCV_BUILD_REFINERY
+        assert probe.build(UnitTypeId.ASSIMILATOR_RICH, target=geyser).ability is AbilityId.PROBE_BUILD_ASSIMILATOR
+        assert drone.build(UnitTypeId.EXTRACTOR_RICH, target=geyser).ability is AbilityId.DRONE_MORPH_EXTRACTOR
+
+    def test_a_bare_add_on_raises_naming_the_host_s_own(self) -> None:
+        _, (barracks, starport) = _made_up(UnitReport(1, UnitTypeId.BARRACKS), UnitReport(2, UnitTypeId.STARPORT))
+
+        with pytest.raises(ValueError, match="^nothing makes a bare TECH_LAB: a BARRACKS makes a TECH_LAB_BARRACKS$"):
+            barracks.build(UnitTypeId.TECH_LAB)
+        with pytest.raises(ValueError, match="^nothing makes a bare REACTOR: a STARPORT makes a REACTOR_STARPORT$"):
+            starport.build(UnitTypeId.REACTOR)
+
+    def test_a_build_raises_as_issue_does(self) -> None:
+        """Two workers at one site, and a build aimed at nothing."""
+        made_up, (scv, other_scv) = _made_up(UnitReport(1, UnitTypeId.SCV), UnitReport(2, UnitTypeId.SCV))
+
+        with pytest.raises(ValueError, match="only one of them can carry it out there"):
+            made_up.orders.build([scv, other_scv], UnitTypeId.SUPPLY_DEPOT, target=(30.0, 31.0))
+        with pytest.raises(TypeError, match="SCV_BUILD_SUPPLY_DEPOT"):
+            scv.build(UnitTypeId.SUPPLY_DEPOT)
+
+    def test_a_researcher_researches_an_upgrade_with_its_research_ability(self) -> None:
+        made_up, (tech_lab, lair) = _made_up(
+            UnitReport(1, UnitTypeId.TECH_LAB_BARRACKS), UnitReport(2, UnitTypeId.LAIR)
+        )
+
+        stimpack = tech_lab.research(UpgradeId.STIMPACK)
+        burrow = made_up.orders.research(lair, UpgradeId.BURROW)
+
+        assert (stimpack.ability, stimpack.units) == (AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK, Units([tech_lab]))
+        assert burrow.ability is AbilityId.LAIR_RESEARCH_BURROW
+
+    def test_a_unit_not_researching_the_upgrade_raises_naming_what_does(self) -> None:
+        """A barracks's upgrades are its tech lab's."""
+        _, (barracks, spawning_pool) = _made_up(
+            UnitReport(1, UnitTypeId.BARRACKS), UnitReport(2, UnitTypeId.SPAWNING_POOL)
+        )
+
+        with pytest.raises(ValueError, match="^STIMPACK is researched by a TECH_LAB_BARRACKS, not a BARRACKS$"):
+            barracks.research(UpgradeId.STIMPACK)
+        with pytest.raises(
+            ValueError, match="^BURROW is researched by a HATCHERY, a HIVE or a LAIR, not a SPAWNING_POOL$"
+        ):
+            spawning_pool.research(UpgradeId.BURROW)
+
+    def test_queued_and_force_are_passed_on(self) -> None:
+        made_up, (barracks, tech_lab) = _made_up(
+            UnitReport(1, UnitTypeId.BARRACKS), UnitReport(2, UnitTypeId.TECH_LAB_BARRACKS)
+        )
+
+        marine = barracks.train(UnitTypeId.MARINE, queued=True, force=True)
+        stimpack = tech_lab.research(UpgradeId.STIMPACK, queued=True, force=True)
+
+        assert marine.queued and stimpack.queued
+        assert {marine, stimpack} <= made_up.orders._forced
+
+    @pytest.mark.parametrize(("method", "made_through"), [("train", "units"), ("build", "units"), ("research", "unit")])
+    def test_the_unit_s_method_takes_the_book_s_arguments_but_the_units(self, method: str, made_through: str) -> None:
+        """So that an argument added to the book's method is not left out of the unit's."""
+        book_parameters = list(inspect.signature(getattr(OrderBook, method)).parameters.values())[1:]
+        unit_parameters = list(inspect.signature(getattr(OwnUnit, method)).parameters.values())[1:]
+        assert [parameter for parameter in book_parameters if parameter.name != made_through] == unit_parameters
+
+    def test_each_maker_makes_each_type_with_one_ability(self) -> None:
+        """What the lookup `train` and `build` read rests on: no maker makes a type with two abilities."""
+        products = [
+            (maker, product)
+            for row in load_game_data().abilities.values()
+            for maker, product in row.products.items()
+            if isinstance(product, UnitTypeId)
+        ]
+        assert len(products) == len(set(products))
+
+    def test_train_orders_trains_warp_ins_and_a_larva_s_morphs_and_build_builds_and_add_ons(self) -> None:
+        """What the two methods order, by the game's names for it, over every type the game makes."""
+        book = MadeUpUnits().orders
+        trained = {ability.name for ability in book._trained_abilities.values()}
+        built = {ability.name for ability in book._built_abilities.values()}
+        assert all(any(part in name for part in ("_TRAIN_", "_WARP_IN_", "LARVA_MORPH_")) for name in trained)
+        assert all(name.startswith(("SCV_BUILD_", "PROBE_BUILD_", "DRONE_MORPH_", "BUILD_")) for name in built)
+        assert {"BUILD_CREEP_TUMOR", "RAVEN_SPAWN_AUTO_TURRET", "NYDUS_NETWORK_BUILD_NYDUS_WORM"}.isdisjoint(built)
 
 
 class TestOneOrderAUnitATurn:

@@ -49,6 +49,36 @@ The turn's request also carries `api.camera.move_to(point)`, which centers this 
 turn's orders, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
 `api.camera.center` is where the turn's observation has the camera.
 
+## Training, building and researching
+
+`train`, `build` and `research` take what to make or research in place of the ability, and order the ability the
+unit's type does it with, as `issue` orders it:
+
+```python
+barracks.train(UnitTypeId.MARINE)  # BARRACKS_TRAIN_MARINE
+warp_gate.train(UnitTypeId.ZEALOT, target=point)  # WARP_GATE_WARP_IN_ZEALOT
+larva.train(UnitTypeId.DRONE)  # LARVA_MORPH_DRONE
+scv.build(UnitTypeId.SUPPLY_DEPOT, target=site)  # SCV_BUILD_SUPPLY_DEPOT
+drone.build(UnitTypeId.EXTRACTOR, target=geyser)  # DRONE_MORPH_EXTRACTOR
+barracks.build(UnitTypeId.TECH_LAB_BARRACKS)  # BUILD_TECH_LAB
+api.orders.train(api.units.own.of_type(UnitType.Barracks).idle, UnitTypeId.MARINE)
+if (tech_lab := barracks.add_on) is not None:
+    tech_lab.research(UpgradeId.STIMPACK)  # BARRACKS_TECH_LAB_RESEARCH_STIMPACK
+```
+
+- **`train`** orders what a structure or a larva makes that is not a structure: a train, a warp gate's warp-in, aimed
+  at a point, and a larva's morph.
+- **`build`** orders a structure a worker makes, at a point or on a geyser, and a barracks's, factory's or starport's
+  add-on.
+- **`research`** orders an upgrade's `research_ability`, given to one of its `researchers`. A barracks's upgrades are
+  its tech lab's, so `barracks.research(UpgradeId.STIMPACK)` raises `ValueError` naming the tech lab.
+- **`issue`** orders the rest: a morph, as of an orbital command, a lair or a baneling, and a change of mode, as a lift
+  or a siege.
+
+A unit whose type does not make what it is given raises `ValueError` saying what does, or which of the three orders
+it, and so do units whose types make it with different abilities, as a gateway and a warp gate a zealot: they are
+ordered apart. Each returns the `IssuedOrder`, whose `ability` is the one ordered.
+
 ## One order a unit a turn
 
 A unit carries out only the last order it is given in a turn. Earlier ones are never sent to it. The game does the
