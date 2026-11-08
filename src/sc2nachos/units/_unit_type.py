@@ -21,10 +21,11 @@ class UnitType:
     `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
     geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
-    acceleration zones, the critters, the changelings, the creep tumors, the add-ons, tech labs and reactors, the
-    spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such as a supply
-    depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group that
-    holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a `Structure`.
+    acceleration zones, the critters, the changelings, the creep tumors, the cocoons, the add-ons, tech labs and
+    reactors, the spires, the overlords, or the two forms of a structure or a unit that changes and changes back, such
+    as a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
+    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, and `Townhall` a
+    `Structure`.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -136,6 +137,9 @@ class UnitType:
 
     class AnyCreepTumor(ZergStructure):
         """A creep tumor, a queen's or another tumor's, growing or burrowed."""
+
+    class Cocoon(Zerg):
+        """A cocoon or a lurker egg: a unit on its way to becoming another, as a zergling becomes a baneling."""
 
     class AnyAddOn(TerranStructure):
         """An add-on of any kind: a tech lab or a reactor, attached to its host or plain."""
@@ -287,7 +291,7 @@ class UnitType:
     class BanelingBurrowed(AnyBaneling):
         id = UnitTypeId.BANELING_BURROWED
 
-    class BanelingCocoon(Zerg):
+    class BanelingCocoon(Cocoon):
         id = UnitTypeId.BANELING_COCOON
 
     class BanelingNest(ZergStructure):
@@ -308,7 +312,7 @@ class UnitType:
     class BroodLord(Zerg):
         id = UnitTypeId.BROOD_LORD
 
-    class BroodLordCocoon(Zerg):
+    class BroodLordCocoon(Cocoon):
         id = UnitTypeId.BROOD_LORD_COCOON
 
     class Broodling(Zerg):
@@ -749,7 +753,7 @@ class UnitType:
     class LurkerDen(ZergStructure):
         id = UnitTypeId.LURKER_DEN
 
-    class LurkerEgg(Zerg):
+    class LurkerEgg(Cocoon):
         id = UnitTypeId.LURKER_EGG
 
     class Marauder(Terran):
@@ -848,13 +852,13 @@ class UnitType:
     class Overlord(AnyOverlord):
         id = UnitTypeId.OVERLORD
 
-    class OverlordCocoon(Zerg):
+    class OverlordCocoon(Cocoon):
         id = UnitTypeId.OVERLORD_COCOON
 
     class OverlordTransport(AnyOverlord):
         id = UnitTypeId.OVERLORD_TRANSPORT
 
-    class OverlordTransportCocoon(Zerg):
+    class OverlordTransportCocoon(Cocoon):
         id = UnitTypeId.OVERLORD_TRANSPORT_COCOON
 
     class Overseer(AnyOverseer):
@@ -896,7 +900,7 @@ class UnitType:
     class RavagerBurrowed(AnyRavager):
         id = UnitTypeId.RAVAGER_BURROWED
 
-    class RavagerCocoon(Zerg):
+    class RavagerCocoon(Cocoon):
         id = UnitTypeId.RAVAGER_COCOON
 
     class Raven(Terran):

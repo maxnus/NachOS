@@ -83,7 +83,7 @@ def test_it_is_read_on_the_types_whose_morphs_are_timed_and_no_others() -> None:
     assert read is not None
     (types_read,) = typing.get_args(typing.get_type_hints(read, localns={"Progress": Progress})["self"])
     timed = _MORPHING_STRUCTURE_TYPES | COCOON_PRODUCTS.keys()
-    assert {unit_type.id for unit_type in typing.get_args(types_read)} == timed
+    assert frozenset().union(*(unit_type.type_ids for unit_type in typing.get_args(types_read))) == timed
 
 
 class TestAStructuresMorph:

@@ -638,18 +638,7 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def morph_progress(
-        self: Unit[
-            UnitType.CommandCenter
-            | UnitType.Hatchery
-            | UnitType.Lair
-            | UnitType.Spire
-            | UnitType.BanelingCocoon
-            | UnitType.BroodLordCocoon
-            | UnitType.LurkerEgg
-            | UnitType.OverlordCocoon
-            | UnitType.OverlordTransportCocoon
-            | UnitType.RavagerCocoon
-        ],
+        self: Unit[UnitType.CommandCenter | UnitType.Hatchery | UnitType.Lair | UnitType.Spire | UnitType.Cocoon],
     ) -> Progress[UnitTypeId] | None:
         """How far the unit's morph has got, of those the game reports no progress for: a command center becoming an
         orbital command or a planetary fortress, a hatchery a lair, a lair a hive, a spire a greater spire, and a cocoon
