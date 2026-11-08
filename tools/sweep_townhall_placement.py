@@ -37,6 +37,7 @@ from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Race
+from sc2nachos.orders import OrderBook
 from sc2nachos.run import Installation
 from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._unit_type import UnitType
@@ -229,7 +230,8 @@ def _check_expansions_on(installation: Installation, map_name: str) -> Expansion
         game.client.step(4)
         observation = game.client.observation()
         game_map = GameMap._from_game(game.client.game_info(), observation)
-        tracker = _Tracker(GameData(game.client.game_data()), None)
+        game_data = GameData(game.client.game_data())
+        tracker = _Tracker(game_data, None, order_book=OrderBook(game_data))
         raw, uncurated = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         neutral_units = tracker.unit_tracker.present.neutral

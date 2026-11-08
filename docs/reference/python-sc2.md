@@ -118,10 +118,10 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.orders.issue(unit, AbilityId.MOVE, target=p)` |
-| `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
-| nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
-| `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.issue(AbilityId.MOVE, target=p)`, or `api.orders.issue(units, ...)` for several at once |
+| `bot.do(action)`, `await bot._do_actions(...)` | `unit.issue(...)` or `api.orders.issue(...)`, sent once the turn's handlers have run |
+| nothing | `unit.issue(..., force=True)`, `api.orders.issued_to(unit)` |
+| `bot.do(action, queue=True)` | `unit.issue(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
 | `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
 | `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |

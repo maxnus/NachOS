@@ -6,7 +6,9 @@ from typing import Any
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import GameData
+from sc2nachos.gametime import GameTime
 from sc2nachos.match import Enemy, Race
+from sc2nachos.orders import OrderBook
 from sc2nachos.testing._shipped_game_data import load_game_data
 from sc2nachos.testing._unit_report import ENEMY_PLAYER_ID, UnitReport
 from sc2nachos.units import Unit, Units
@@ -15,7 +17,8 @@ from sc2nachos.units._tracking import _Tracker
 
 class MadeUpUnits:
     """The units of a game made up for a test, taken in one observation after another, as NachOS takes them in from a
-    game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client.
+    game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client. What they are ordered goes into
+    `MadeUpUnits.orders`, and is never sent.
 
     This player is player 1, and the enemy player 2. The units read their types from `game_data`, by default build
     75689's, as `load_game_data` reads it.
@@ -31,13 +34,20 @@ class MadeUpUnits:
             ladder_id=None,
             game_data=game_data,
         )
-        self._tracker = _Tracker(game_data, enemy)
+        self._order_book = OrderBook(game_data)
+        self._tracker = _Tracker(game_data, enemy, order_book=self._order_book)
         self._step: int | None = None
 
     @property
     def game_data(self) -> GameData:
         """The game's data the units read their types from."""
         return self._tracker.game_data
+
+    @property
+    def orders(self) -> OrderBook:
+        """Every order the units were given since they were made up, through `sc2nachos.units.OwnUnit.issue` or this
+        book's `issue`, as `api.orders` holds a turn's. Nothing is sent, so none leaves the book."""
+        return self._order_book
 
     @property
     def units(self) -> Units[Unit[Any]]:
@@ -65,6 +75,7 @@ class MadeUpUnits:
         # Set first: an update that raises partway, as for a type the curated ids leave out, has taken in part of the
         # observation at this step, so the next one must come after it.
         self._step = step
+        self._order_book._observe(GameTime(steps=step), ())
         self._tracker.update(observation, step)
         unit_tracker = self._tracker.unit_tracker
         return [unit_tracker.by_tag(report.tag) for report in reports]

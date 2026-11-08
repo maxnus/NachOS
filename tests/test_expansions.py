@@ -25,17 +25,16 @@ from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import NoStartLocationError
 from sc2nachos.protocol import Client, Recording, Status
 from sc2nachos.units import Alliance, NotReportedError, Unit, Units, UnitType, Visibility
-from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._tracking._unit_tracker import _UnitTracker
 from support import (
     PLAYER_ID,
     FakeTransport,
     make_bytes,
-    make_enemy,
     make_game_info,
     make_observation,
     make_response,
     make_tables,
+    make_tracker,
     make_unit,
 )
 
@@ -114,7 +113,7 @@ class _MapAtStart:
     ) -> None:
         info = make_game_info(*rows, start_locations=opponent_starts, heights=heights)
         self.map = GameMap(info, start_location=Point(start))
-        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
+        self.tracker = make_tracker(_TABLES)
         self.tracker.update(make_observation(units=neutral_units.units).observation.raw_data, 0)
 
     @property
@@ -599,7 +598,7 @@ def _recorded_map_and_units(path: Path) -> tuple[GameMap, _UnitTracker]:
             assert info is not None and data is not None, f"{path.name} has an observation before the map"
             observation = response.observation
             tables = GameData(data)
-            tracker = _Tracker(tables, make_enemy(tables))
+            tracker = make_tracker(tables)
             tracker.update(observation.observation.raw_data, observation.observation.game_loop)
             return GameMap._from_game(info, observation), tracker.unit_tracker
     raise AssertionError(f"{path.name} holds no observation")

@@ -87,7 +87,7 @@ def train_workers(budget: Budget) -> None:
         if api.orders.issued_to(townhall, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
-            api.orders.issue(townhall, AbilityId.COMMAND_CENTER_TRAIN_SCV)
+            townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
             count += 1
 
 
@@ -119,7 +119,7 @@ def _build(ability: AbilityId, site: Point) -> bool:
     scvs = _free_scvs()
     if not scvs:
         return False
-    api.orders.issue(scvs.closest_to(site), ability, target=site)
+    scvs.closest_to(site).issue(ability, target=site)
     return True
 
 
@@ -158,7 +158,7 @@ def _depot_anchor() -> Point:
 @api.on(OwnConstructionFinishedEvent.only(UnitType.SupplyDepot))
 def lower_depot(event: OwnConstructionFinishedEvent) -> None:
     """Lower a finished depot, so it blocks nothing."""
-    api.orders.issue(event.unit, AbilityId.SUPPLY_DEPOT_LOWER)
+    event.unit.issue(AbilityId.SUPPLY_DEPOT_LOWER)
 
 
 def expand(budget: Budget) -> None:
@@ -216,7 +216,7 @@ def train_marines(budget: Budget) -> None:
         if api.orders.issued_to(barracks, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
-            api.orders.issue(barracks, AbilityId.BARRACKS_TRAIN_MARINE)
+            barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
 
 
 # --- The army
@@ -241,7 +241,7 @@ class Army:
             self.attacking = False
         if threats and not self.attacking:
             for marine in marines:
-                api.orders.issue(marine, AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
+                marine.issue(AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
         elif self.attacking:
             api.orders.issue(marines, AbilityId.ATTACK, target=self._attack_target(marines))
         else:

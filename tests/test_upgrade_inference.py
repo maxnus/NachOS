@@ -25,16 +25,16 @@ from support import (
     PLAYER_ID,
     RealGame,
     ScriptedGame,
-    make_enemy,
     make_game_info,
     make_observation,
+    make_tracker,
     make_unit,
     shipped_game_data,
 )
 
 
 def _tracker_against_the_computer(tables: GameData) -> _Tracker:
-    return _Tracker(tables, make_enemy(tables))
+    return make_tracker(tables)
 
 
 def _units_observed(tracker: _Tracker, *units: raw_pb2.Unit, step: int = 0) -> None:

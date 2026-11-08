@@ -14,7 +14,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 As of 2026-11-05:
 
-- **M4 is done** but for slice 7, typed order methods on `OwnUnit`, which is deferred (section 1).
+- **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
   on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
   open.
@@ -54,9 +54,15 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   per-unit ids only in `RawAbilityId`, with no `GENERAL_` prefix, and the leveled researches keep an id per level. An
   ability that behaves differently by its target is split into custom ids, one per behavior: `UNLOAD` and
   `UNLOAD_AT`, `LIBERATOR_SIEGE_AT` (#101, #126).
-- **`api.orders.issue` is the one way to order**, one unit or many, with no `issue_all` (#130): what every unit of a
-  command carries out goes out as one command naming them all, anything else as a command to each. A research, or a
-  placement at one target, given to several raises `ValueError`, since only one of them can carry it out.
+- **`api.orders.issue` orders one unit or many**, with no `issue_all` (#130): what every unit of a command carries
+  out goes out as one command naming them all, anything else as a command to each. A research, or a placement at one
+  target, given to several raises `ValueError`, since only one of them can carry it out.
+- **`unit.issue(ability, ...)` is `api.orders.issue(unit, ability, ...)`** (#240), through the order book its tracker
+  holds: a second spelling for one unit, which the owner chose over the review checklist's rule (2026-11-08). The docs
+  and the demo bot order one unit through it and several through `api.orders.issue`. Every tracker holds a book:
+  `MadeUpUnits` has its own, `orders`, which sends nothing and so holds every order its units were given (the owner,
+  review of #240, over raising for its units, and over emptying it at each observation, code the order book would
+  carry for a test helper alone).
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An
@@ -250,6 +256,19 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **`train` and `research`** (the owner, review of #240), a pull request of its own after #240, its design settled
+  with the owner when it starts: `api.orders.train(units, unit_type)` and `api.orders.research(unit, upgrade)`
+  translate a `UnitTypeId` or an `UpgradeId` into the ability and issue it, and `unit.train` and `unit.research`
+  forward, as `unit.issue` does. A research maps one to one, `api.data.upgrades[upgrade].research_ability`, its
+  researcher a tech lab where it is one, not the barracks. A train depends on the producer's type: a gateway trains a
+  zealot with `GATEWAY_TRAIN_ZEALOT` and a warp gate warps one in with `WARP_GATE_WARP_IN_ZEALOT` at a point, so the
+  translation reads each ability's products by performer in the tech tree. To settle: whether `train` covers a
+  larva's morphs, a morph such as an orbital or a baneling, and a warp-in, and whether `build` joins it.
+- **Drop `data` from orders** (the owner, review of #240), in a pull request of its own after #240: from
+  `api.orders.issue` and `unit.issue`, so that `Order` loses its type parameter, and from the decision above that a bot
+  ranks its orders in `data`. Nothing reads it: not the demo bot, not the extensions (speed mining chose not to, review
+  of #231), not AvocaDOS. A bot keeps its own data per unit in a `UnitDict` (#200). A bot may have to change for it,
+  so its release notes say so.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
@@ -371,8 +390,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## 1. Waiting until something needs them
 
-M5's swap is done, so the items below that waited on it, a narrow context for a unit and typed order methods, can
-be planned with the owner. Keeping the selections still waits on M5's exit gate.
+M5's swap is done, so the items below that waited on it, a narrow context for a unit and shortcuts for common orders,
+can be planned with the owner. Keeping the selections still waits on M5's exit gate.
 
 - A launch passes no data version, only the base build: a replay whose data version is not its base build's default
   may be refused on Windows or macOS (unverified; the owner, review of #160, over passing it untested).
@@ -391,16 +410,19 @@ be planned with the owner. Keeping the selections still waits on M5's exit gate.
 
 - A narrow, read-only context for a unit in place of its tracker, through which it reads the tables, the upgrades,
   units by tag and builders (an agent's review of the codebase, 2026-10-20; the owner chose to wait for M5 to show a
-  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line.
-- Typed order methods on `OwnUnit`, M4's slice 7, to plan with the owner once M5 is done (the owner, 2026-10-31).
-  M4 deferred them (2026-10-18), since a type is offered at most 24 of the 312 abilities and pyright's completion
-  would offer every unit all of them, and AvocaDOS's build orders hold ids. They would not make one id per action
-  unnecessary, since ids also show in `unit.orders` and `unit.abilities`, and a callable target per unit is to
-  reconsider with them (review of #125). Building them is easy, one `api.orders.issue` a method through the unit's
-  tracker once it holds the order book, but their design needs the owner: a small generic set with self types, so a
-  barracks has no `gather`; methods on `Units` for a group, which `issue` sends as one command; the "no second
-  spelling" rule of `docs/maintaining/code-review.md`; and raising for a unit no order book sends, in a finished game
-  or a replay. AvocaDOS keeps its own wrappers, so it will not use them soon.
+  need). The whole of `_tracking` shares the tracker this way, and tests build one in a line. Since #240 the tracker
+  also holds the order book `OwnUnit.issue` orders into, which such a context would carry too.
+- Shortcuts for common orders, `issue_move`, `issue_attack` and `issue_gather`, with self types on new groups,
+  `CanMove` and `CanAttack`, generated from the abilities the tech tree records each type offered; and methods on
+  `Units` for a group. Held until a bot shows a need (the owner, 2026-11-08, building `OwnUnit.issue` alone in #240): a
+  shortcut saves an import and a few characters, its self type checks only a unit whose type was narrowed, and the
+  game already reports the mistake it catches in `api.action_failures`. Found while planning: `MOVE`, `PATROL` and
+  `HOLD_POSITION` are offered to the same 81 types and `ATTACK` to 83, an SCV, a medivac and an overlord among them,
+  so `CanAttack` is no army; a group of exactly those types leaves out `Worker` over the burrowed drone, so a burrowed
+  form was to count as its unit. Since #237, a loop of `unit.issue` goes out as one command, so methods on `Units`
+  save no APM. They would not make one id per action unnecessary, since ids also show in `unit.orders` and
+  `unit.abilities`. A callable target per unit is to reconsider with them (review of #125). `train` and `research`,
+  which translate an id, are planned apart (Next).
 - An enemy structure's add-on, found by position: the game never names it to the enemy, but lists the add-on itself
   at its host's position plus (2.5, -0.5) (`docs/reference/game-behavior/units.md`). `add_on`, `has_reactor` and
   `has_tech_lab` would then move to `Unit` (the owner, review of #185, over doing it there).

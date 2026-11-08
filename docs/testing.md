@@ -147,5 +147,20 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   which NachOS ships, read afresh in about 15 ms for each `MadeUpUnits`. `load_game_data(base_build=75689)` reads it
   once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
 
-The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
-a recorded game, as above.
+The units belong to no game: there is no map and no event, and nothing is sent. What the code under test orders goes
+into `made_up.orders`, an `OrderBook` as `api.orders` is, and stays there, every order since the units were made up:
+
+```python
+def test_the_marine_attacks_the_nearer_zergling() -> None:
+    made_up = MadeUpUnits()
+    marine, near_zergling, far_zergling = made_up.observe(
+        UnitReport(1, UnitTypeId.MARINE, at=(10, 10)),
+        UnitReport(2, UnitTypeId.ZERGLING, at=(13, 10), alliance=Alliance.ENEMY),
+        UnitReport(3, UnitTypeId.ZERGLING, at=(20, 10), alliance=Alliance.ENEMY),
+    )
+    attack_the_nearest(marine, [near_zergling, far_zergling])
+    (order,) = made_up.orders.issued_to(marine)
+    assert order.target is near_zergling
+```
+
+Code that reads the api is tested by playing a recorded game, as above.
