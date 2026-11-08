@@ -140,9 +140,11 @@ def _bay(tag: int, *researching: AbilityId) -> raw_pb2.Unit:
 
 
 def _everything(game: _Game) -> None:
-    """Two turns: the first with the starting units, the second reporting one event of every kind."""
+    """Three turns: the first with no units, the second with units new to it, a zealot warping in among them, and the
+    third reporting one event of every kind."""
+    game.observe(0)
     game.observe(
-        0,
+        8,
         make_unit(16, UnitTypeId.SIEGE_TANK, build_progress=1.0),
         make_unit(1, health=45.0, energy=50.0, build_progress=1.0, buff_ids=[BuffId.MARINE_STIMMED]),
         make_unit(2, UnitTypeId.BARRACKS, build_progress=0.5),
@@ -176,7 +178,7 @@ def _everything(game: _Game) -> None:
         make_unit(2, UnitTypeId.BARRACKS, build_progress=1.0),
         make_unit(3, UnitTypeId.ZEALOT, build_progress=1.0),
         make_unit(4, UnitTypeId.SIEGE_TANK_SIEGED, alliance=_ENEMY, health=90.0),
-        make_unit(6, alliance=Alliance.OWN),
+        make_unit(6, alliance=Alliance.OWN, build_progress=1.0),
         make_unit(9, UnitTypeId.ROACH, alliance=_ENEMY),
         make_unit(10, UnitTypeId.SCV, build_progress=1.0),
         make_unit(11, UnitTypeId.SUPPLY_DEPOT, build_progress=0.1),
@@ -270,7 +272,7 @@ class TestWhatATurnReports:
         assert at_16[EnemyUnitLostBuffEvent] == lost
         assert at_16[EnemyUnitLeftSightEvent] == EnemyUnitLeftSightEvent(units[5], time=GameTime(steps=16))
         idle = [event.unit for event in seen if isinstance(event, OwnUnitBecameIdleEvent) and event.time.steps == 16]
-        assert idle == [own[2], own[3], own[10], own[20]]
+        assert idle == [own[2], own[3], own[6], own[10], own[20]]
         assert at_16[OwnUnitDiedEvent] == OwnUnitDiedEvent(own[8], time=GameTime(steps=16))
         assert at_16[EnemyUnitDiedEvent] == EnemyUnitDiedEvent(units[18], time=GameTime(steps=16))
         assert at_16[NeutralUnitDiedEvent] == NeutralUnitDiedEvent(units[19], time=GameTime(steps=16))
@@ -1411,7 +1413,7 @@ class TestAgainstTheRealGame:
                 (weapons, researcher),
                 (armor, researcher),
             ]
-            assert researches[armor].progress == 0.0
+            assert researches[armor].fraction == 0.0
             game.order(AbilityId.CANCEL_LAST, researcher)
             _until(game, lambda: _of(seen, OwnUpgradeFinishedEvent))
             started = [(event.upgrade, event.unit) for event in _of(seen, OwnUpgradeStartedEvent)]

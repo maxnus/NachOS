@@ -391,10 +391,14 @@ class TestPlaying:
 
     def test_what_is_in_production_is_read_by_a_type_a_group_an_id_or_several(self) -> None:
         warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)
-        client, _ = _joined(*_game_of(make_observation(0, units=[warping]), make_observation(2, (1, Result.VICTORY))))
+        client, _ = _joined(
+            *_game_of(
+                make_observation(0), make_observation(2, units=[warping]), make_observation(4, (1, Result.VICTORY))
+            )
+        )
         api = Api()
         counted: list[tuple[int, int, int, int]] = []
-        zealots: list[tuple[UnitTypeId, int | None, float | None]] = []
+        zealots: list[tuple[UnitTypeId, int | None, float]] = []
         researches: list[Mapping[UpgradeId, Research]] = []
 
         @api.on(TurnEvent)
@@ -409,16 +413,16 @@ class TestPlaying:
                 )
             )
             zealots.extend(
-                (item.type_id, None if item.unit is None else item.unit.tag, item.progress)
+                (item.product, None if item.unit is None else item.unit.tag, item.fraction)
                 for item in api.in_production(UnitType.Zealot)
             )
             researches.append(api.researches)
 
         api.play(client)
 
-        assert counted == [(1, 1, 1, 0)]
+        assert counted == [(0, 0, 0, 0), (1, 1, 1, 0)]
         assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
-        assert researches == [{}]
+        assert researches == [{}, {}]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [

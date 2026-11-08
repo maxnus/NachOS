@@ -854,8 +854,12 @@ class TestARecordedGamesTables:
         assert units[UnitTypeId.SIEGE_TANK_SIEGED].total_cost == units[UnitTypeId.SIEGE_TANK].total_cost
 
     def test_a_total_cost_counts_two_high_templar_for_an_archon_and_nothing_for_energy(self, path: Path) -> None:
+        """An archon's time counts the 192 steps its merge takes besides."""
         units = _tables(path).units
-        assert units[UnitTypeId.ARCHON].total_cost == units[UnitTypeId.HIGH_TEMPLAR].total_cost * 2
+        archon = units[UnitTypeId.ARCHON].total_cost
+        two_templar = units[UnitTypeId.HIGH_TEMPLAR].total_cost * 2
+        assert (archon.resources, archon.supply) == (two_templar.resources, two_templar.supply)
+        assert archon.time == two_templar.time + GameTime(steps=192)
         assert units[UnitTypeId.MULE].total_cost.is_free
         assert units[UnitTypeId.AUTO_TURRET].total_cost.is_free
 

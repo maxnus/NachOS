@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING
 
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
@@ -11,11 +11,10 @@ if TYPE_CHECKING:
     from sc2nachos.gametime import GameTime
 
 
-@final
 @dataclass(frozen=True, slots=True)
 class Progress[T: UnitTypeId | UpgradeId]:
     """How far the making of one unit or upgrade has got: what it makes, how much of it is done and how long it has
-    left."""
+    left. `InProduction` and `Research` are each one, with what makes it."""
 
     product: T
     """What is being made."""
