@@ -49,8 +49,8 @@ class Planner:
     api = Api(extensions=Extensions)
     ```
 
-    It plans from the `GameState` `game_state` reads as `plan_now` is called, unless handed another. The model of the
-    game:
+    It plans from the `GameState` that `game_state()` reads as `plan_now` is called, unless handed another. The model of
+    the game:
 
     - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
       from the game's data; an item is pruned unless the reward values it or it is needed for one that does, or it is
