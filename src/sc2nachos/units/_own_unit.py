@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, overload
 
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId
@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import raw_pb2
 
+    from sc2nachos.geometry import PointLike
+    from sc2nachos.orders import Order
+
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
     """One of this player's units. It also reads what the game reports only to a unit's owner.
@@ -24,6 +27,48 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     """
 
     __slots__ = ()
+
+    @overload
+    def issue(
+        self,
+        ability: AbilityId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> Order[None]: ...
+
+    @overload
+    def issue[T](
+        self,
+        ability: AbilityId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+        data: T,
+    ) -> Order[T]: ...
+
+    def issue(
+        self,
+        ability: AbilityId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+        data: Any = None,
+    ) -> Order[Any]:
+        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Order`, as
+        `OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
+        `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
+
+        Raises as `OrderBook.issue` does, and `RuntimeError` for a unit `sc2nachos.testing` made up, which no game takes
+        orders for.
+        """
+        order_book = self._tracker.order_book
+        if order_book is None:
+            raise RuntimeError(f"{self!r} was made up for a test, and no game takes its orders")
+        return order_book.issue(self, ability, target=target, queued=queued, force=force, data=data)
 
     @property
     def orders(self) -> tuple[UnitOrder, ...]:

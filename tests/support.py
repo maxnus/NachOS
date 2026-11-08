@@ -423,12 +423,12 @@ def played(
 ) -> _Game:
     """Feed `observation` to `game` and hand its events to `events`, as `Api.play` does each turn. With `game` as
     `None`, first build a game over `tracker` the way `_Game.start` does, without asking the client, played as
-    `PLAYER_ID` with `OBSERVER_ID` watching."""
+    `PLAYER_ID` with `OBSERVER_ID` watching, its orders in the tracker's order book, or in a new one if it has none."""
     step = observation.observation.game_loop
     if game is None:
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
-        order_book = OrderBook(tracker.game_data)
+        order_book = tracker.order_book if tracker.order_book is not None else OrderBook(tracker.game_data)
         state = _State(observation, tracker, game_map)
         expansions = Expansion._find_all(game_map, tracker.unit_tracker)
         if tracker.enemy is not None:
@@ -504,7 +504,7 @@ class RealGame:
         self.own_player = Player._from_game(info, player, start_location=None)
         game_data = GameData(client.game_data())
         self.enemy = Enemy._from_game(info, player, game_data=game_data)
-        self.tracker = _Tracker(game_data, self.enemy)
+        self.tracker = _Tracker(game_data, self.enemy, order_book=OrderBook(game_data))
         self.game: _Game | None = None
         self.state = self._observe()
 

@@ -177,6 +177,11 @@ class TestOrders:
             (AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5)
         ]
 
+    def test_a_made_up_unit_cannot_be_ordered(self):
+        (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE))
+        with pytest.raises(RuntimeError, match="made up for a test"):
+            marine.issue(AbilityId.MOVE, target=(20.0, 21.0))
+
 
 class TestObservations:
     """One observation after another, as a game gives them."""

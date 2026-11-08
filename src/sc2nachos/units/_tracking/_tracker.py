@@ -18,19 +18,21 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata import GameData
     from sc2nachos.match import Enemy
+    from sc2nachos.orders import OrderBook
 
 
 @final
 class _Tracker:
     """One game's observations read into: its units, the builder of each of this player's structures, the upgrades
     each side has, a comparison of each unit with the previous update, a watch on the values each unit crosses, and
-    what the last update found changed."""
+    what the last update found changed; and the book this player's units are ordered into."""
 
     __slots__ = (
         "_builder_tracker",
         "_enemy",
         "_game_data",
         "_last_changes",
+        "_order_book",
         "_unit_comparer",
         "_unit_tracker",
         "_unit_watcher",
@@ -38,12 +40,19 @@ class _Tracker:
     )
 
     def __init__(
-        self, game_data: GameData, enemy: Enemy | None, *, id_provider: Callable[[raw_pb2.Unit], int] | None = None
+        self,
+        game_data: GameData,
+        enemy: Enemy | None,
+        *,
+        id_provider: Callable[[raw_pb2.Unit], int] | None = None,
+        order_book: OrderBook | None = None,
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
-        alliance's next id, or under the one `id_provider` gives the report it is first seen in."""
+        alliance's next id, or under the one `id_provider` gives the report it is first seen in. This player's units
+        are ordered into `order_book`, and units with none cannot be ordered."""
         self._game_data = game_data
         self._enemy = enemy
+        self._order_book = order_book
         # What the last update found changed, numbered by update.
         self._last_changes = _TrackerChanges(0)
         self._unit_tracker = _UnitTracker(self, id_provider=id_provider)
@@ -61,6 +70,12 @@ class _Tracker:
     def enemy(self) -> Enemy | None:
         """The other player, and what is known of it, or `None` in a game with no other player."""
         return self._enemy
+
+    @property
+    def order_book(self) -> OrderBook | None:
+        """The book this player's units are ordered into, or `None` for units made up for a test, which no game takes
+        orders for."""
+        return self._order_book
 
     @property
     def last_changes(self) -> _TrackerChanges:

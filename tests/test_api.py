@@ -4,6 +4,7 @@ import itertools
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import closing
 from pathlib import Path
+from typing import Any
 
 import pytest
 from loguru import logger
@@ -32,6 +33,7 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
+from sc2nachos.orders import Order
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
@@ -361,6 +363,32 @@ class TestPlaying:
                 (2, 1, AbilityId.ATTACK, ActionResult.NOT_ENOUGH_FOOD),
             ],
         ]
+
+    def test_a_unit_ordered_through_itself_is_ordered_into_the_api_s_orders(self) -> None:
+        client, transport = _joined(
+            make_response(game_info=make_game_info()),
+            make_response(data=sc2api_pb2.ResponseData()),
+            make_response(observation=make_observation(0, units=[make_unit(1)])),
+            make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success])),
+            make_response(step=sc2api_pb2.ResponseStep()),
+            make_response(Status.ENDED, observation=make_observation(2, (1, Result.VICTORY), units=[make_unit(1)])),
+        )
+        api = Api()
+        issued: list[tuple[Order[None], tuple[Order[Any], ...]]] = []
+
+        @api.on(TurnEvent, once=True)
+        def turn(event: TurnEvent) -> None:
+            order = api.units.own[0].issue(AbilityId.MOVE, target=(20.0, 21.0))
+            issued.append((order, api.orders.pending))
+
+        api.play(client, steps_per_turn=2)
+
+        ((order, pending),) = issued
+        assert pending == (order,)
+        (request,) = [request.action for request in transport.requests if request.HasField("action")]
+        (action,) = request.actions
+        command = action.action_raw.unit_command
+        assert (command.ability_id, list(command.unit_tags)) == (AbilityId.MOVE, [1])
 
     def test_what_is_in_production_is_read_by_a_type_a_group_an_id_or_several(self) -> None:
         warping = make_unit(1, UnitTypeId.ZEALOT, build_progress=0.5)

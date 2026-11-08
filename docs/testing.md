@@ -147,5 +147,5 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   which NachOS ships, read afresh in about 15 ms for each `MadeUpUnits`. `load_game_data(base_build=75689)` reads it
   once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
 
-The units belong to no game: there is no map, no event and no order sent. Code that reads the api is tested by playing
-a recorded game, as above.
+The units belong to no game: there is no map, no event and no order sent, and `unit.issue` raises `RuntimeError`. Code
+that reads the api or orders a unit is tested by playing a recorded game, as above.

@@ -7,7 +7,7 @@ import random
 from collections.abc import Sequence
 from contextlib import closing
 from functools import partial
-from typing import Any
+from typing import Any, assert_type
 
 import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
@@ -109,9 +109,9 @@ class _Game:
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.tracker = _Tracker(tables, make_enemy(tables))
-        self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(tables)
+        self.tracker = _Tracker(tables, make_enemy(tables), order_book=self.book)
+        self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
         """Take in an observation of `units` at `step`, in which the units under the tags `dead` died."""
@@ -286,6 +286,53 @@ class TestGivingAnOrder:
 
         assert request is not None
         assert len(request.actions) == 1
+
+
+class TestOrderingAUnitThroughItself:
+    """`unit.issue(ability, ...)` is `api.orders.issue(unit, ability, ...)`."""
+
+    def test_the_order_goes_into_the_book_as_the_book_would_have_taken_it(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        marine = game.own(1)
+
+        order = marine.issue(_MOVE, target=(20.0, 21.0), queued=True, data="rally")
+
+        assert_type(order, Order[str])
+        assert game.book.pending == (order,)
+        assert (order.ability, order.units, order.target, order.queued, order.data) == (
+            _MOVE,
+            Units([marine]),
+            Point((20.0, 21.0)),
+            True,
+            "rally",
+        )
+        (command,) = _commands(game.flush())
+        assert (command.ability_id, list(command.unit_tags), command.queue_command) == (_MOVE, [1], True)
+
+    def test_an_order_given_no_data_holds_none(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1))
+
+        order = game.own(1).issue(_STIM)
+
+        assert_type(order, Order[None])
+        assert (order.target, order.queued, order.data) == (None, False, None)
+
+    def test_force_sends_it_to_a_unit_already_carrying_it_out(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
+
+        game.own(1).issue(_MOVE, target=(20.0, 21.0), force=True)
+
+        assert len(_commands(game.flush())) == 1
+
+    def test_it_raises_as_the_book_does(self) -> None:
+        game = _Game()
+        game.observe(0, _marine(1))
+
+        with pytest.raises(TypeError, match="STIM takes no target"):
+            game.own(1).issue(_STIM, target=(20.0, 21.0))
 
 
 class TestOneOrderAUnitATurn:

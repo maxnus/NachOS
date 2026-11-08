@@ -55,7 +55,7 @@ def train_scvs(event: TurnEvent) -> None:
         pending = api.orders.pending_cost
         budget = api.resources - pending.resources
         if budget.covers(cost.resources) and api.supply.left - pending.supply >= cost.supply:
-            api.orders.issue(townhall, AbilityId.COMMAND_CENTER_TRAIN_SCV)
+            townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
 run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TERRAN, steps_per_turn=4)

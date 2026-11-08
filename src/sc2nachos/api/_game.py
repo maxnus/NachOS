@@ -143,17 +143,17 @@ class _Game:
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
         enemy = Enemy._from_game(info, player_id, game_data=game_data, ladder_id=enemy_ladder_id)
+        order_book = OrderBook(game_data)
         fog_off_playback = None
         if client.fog_disabled:
-            fog_off_playback = _FogOffPlayback(game_data, enemy)
-            tracker = _Tracker(game_data, enemy, id_provider=fog_off_playback.id_of_unit)
+            fog_off_playback = _FogOffPlayback(game_data, enemy, order_book)
+            tracker = _Tracker(game_data, enemy, id_provider=fog_off_playback.id_of_unit, order_book=order_book)
             observation = fog_off_playback.read(observation, step)
         else:
-            tracker = _Tracker(game_data, enemy)
+            tracker = _Tracker(game_data, enemy, order_book=order_book)
         game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
-        order_book = OrderBook(game_data)
         state = _State(observation, tracker, game_map)
         expansions = Expansion._find_all(game_map, tracker.unit_tracker)
         if enemy is not None:
