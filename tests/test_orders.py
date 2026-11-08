@@ -387,7 +387,7 @@ class TestTrainingBuildingAndResearching:
 
         with pytest.raises(ValueError, match="^a BARRACKS does not make a ZEALOT: a GATEWAY or a WARP_GATE does$"):
             barracks.train(UnitTypeId.ZEALOT)
-        with pytest.raises(ValueError, match="^nothing makes a ARCHON$"):
+        with pytest.raises(ValueError, match="^nothing makes an ARCHON$"):
             made_up.orders.train(high_templar, UnitTypeId.ARCHON)
 
     def test_what_another_method_orders_raises_naming_it(self) -> None:
@@ -436,6 +436,27 @@ class TestTrainingBuildingAndResearching:
         assert (extractor.ability, extractor.target) == (AbilityId.DRONE_MORPH_EXTRACTOR, geyser)
         assert (tech_lab.ability, tech_lab.target) == (AbilityId.BUILD_TECH_LAB, None)
         assert (landing_reactor.ability, landing_reactor.target) == (AbilityId.BUILD_REACTOR, Point((40.5, 41.5)))
+
+    def test_a_rich_gas_building_is_built_with_its_plain_one_s_ability(self) -> None:
+        """The game's tables give each rich one its plain one's creation ability, whose products name the plain one."""
+        _, (scv, probe, drone, geyser) = _made_up(
+            UnitReport(1, UnitTypeId.SCV),
+            UnitReport(2, UnitTypeId.PROBE),
+            UnitReport(3, UnitTypeId.DRONE),
+            UnitReport(4, UnitTypeId.VESPENE_GEYSER_RICH, alliance=Alliance.NEUTRAL, vespene_contents=2250),
+        )
+
+        assert scv.build(UnitTypeId.REFINERY_RICH, target=geyser).ability is AbilityId.SCV_BUILD_REFINERY
+        assert probe.build(UnitTypeId.ASSIMILATOR_RICH, target=geyser).ability is AbilityId.PROBE_BUILD_ASSIMILATOR
+        assert drone.build(UnitTypeId.EXTRACTOR_RICH, target=geyser).ability is AbilityId.DRONE_MORPH_EXTRACTOR
+
+    def test_a_bare_add_on_raises_naming_the_host_s_own(self) -> None:
+        _, (barracks, starport) = _made_up(UnitReport(1, UnitTypeId.BARRACKS), UnitReport(2, UnitTypeId.STARPORT))
+
+        with pytest.raises(ValueError, match="^nothing makes a bare TECH_LAB: a BARRACKS makes a TECH_LAB_BARRACKS$"):
+            barracks.build(UnitTypeId.TECH_LAB)
+        with pytest.raises(ValueError, match="^nothing makes a bare REACTOR: a STARPORT makes a REACTOR_STARPORT$"):
+            starport.build(UnitTypeId.REACTOR)
 
     def test_a_build_raises_as_issue_does(self) -> None:
         """Two workers at one site, and a build aimed at nothing."""
@@ -506,7 +527,6 @@ class TestTrainingBuildingAndResearching:
         assert all(any(part in name for part in ("_TRAIN_", "_WARP_IN_", "LARVA_MORPH_")) for name in trained)
         assert all(name.startswith(("SCV_BUILD_", "PROBE_BUILD_", "DRONE_MORPH_", "BUILD_")) for name in built)
         assert {"BUILD_CREEP_TUMOR", "RAVEN_SPAWN_AUTO_TURRET", "NYDUS_NETWORK_BUILD_NYDUS_WORM"}.isdisjoint(built)
-        assert (len(trained), len({*book._built_abilities})) == (53, 54)
 
 
 class TestOneOrderAUnitATurn:

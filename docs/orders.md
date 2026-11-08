@@ -61,8 +61,9 @@ larva.train(UnitTypeId.DRONE)  # LARVA_MORPH_DRONE
 scv.build(UnitTypeId.SUPPLY_DEPOT, target=site)  # SCV_BUILD_SUPPLY_DEPOT
 drone.build(UnitTypeId.EXTRACTOR, target=geyser)  # DRONE_MORPH_EXTRACTOR
 barracks.build(UnitTypeId.TECH_LAB_BARRACKS)  # BUILD_TECH_LAB
-barracks.add_on.research(UpgradeId.STIMPACK)  # BARRACKS_TECH_LAB_RESEARCH_STIMPACK
-api.orders.train(api.units.own.townhalls.idle, UnitTypeId.SCV)
+api.orders.train(api.units.own.of_type(UnitType.Barracks).idle, UnitTypeId.MARINE)
+if (tech_lab := barracks.add_on) is not None:
+    tech_lab.research(UpgradeId.STIMPACK)  # BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 ```
 
 - **`train`** orders what a structure or a larva makes that is not a structure: a train, a warp gate's warp-in, aimed

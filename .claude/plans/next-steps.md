@@ -80,14 +80,15 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **`train`, `build` and `research` order by what is made or researched** (the owner, 2026-11-08, #245), on
   `api.orders`, which translates, and on each unit, which forwards. Each (maker type, product) pair is made with one
   ability (a test checks it on the game's data), read off each ability's `products`, so a warp gate's zealot is its
-  warp-in where a gateway's is a train. `train` orders what a structure or a larva makes that is not a structure (53
-  abilities), and `build` a structure a worker makes and an add-on (54 maker and product pairs), over one method for
-  everything a unit makes, and over `train` alone; morphs, an orbital, a lair or a baneling, and changes of mode, a
-  lift or a siege, stay `issue`. A research given to a type not among its `researchers` raises `ValueError` naming
-  them, a barracks's tech lab for Stimpack, over passing it to the add-on. Units whose types make one type with
-  different abilities, a gateway and a warp gate, raise and are ordered apart, so each method returns one
-  `IssuedOrder`. Self types keep `train` to a structure or a larva, `build` to a worker or an add-on's host and
-  `research` to a structure. The demo bot keeps `issue`, since its budget and its count of builds go by ability.
+  warp-in where a gateway's is a train, and a rich gas building, which the products leave out, is read off its own
+  creation ability. `train` orders what a structure or a larva makes that is not a structure (53 abilities), and `build`
+  a structure a worker makes and an add-on (57 maker and product pairs), over one method for everything a unit makes,
+  and over `train` alone; morphs, an orbital, a lair or a baneling, and changes of mode, a lift or a siege, stay
+  `issue`. A research given to a type not among its `researchers` raises `ValueError` naming them, a barracks's tech lab
+  for Stimpack, over passing it to the add-on. Units whose types make one type with different abilities, a gateway and a
+  warp gate, raise and are ordered apart, so each method returns one `IssuedOrder`. Self types keep `train` to a
+  structure or a larva, `build` to a worker or an add-on's host and `research` to a structure. The demo bot keeps
+  `issue`, since its budget and its count of builds go by ability.
 - **Orders given apart go out as one command where one order could have named their units** (#237): of an ability
   every unit of a command carries out, sent as one game ability, at one target as the game keeps it and queued alike,
   joined across the whole turn unless that would send a unit's commands out of the order it was given them. An

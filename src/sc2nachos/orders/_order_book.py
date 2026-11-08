@@ -222,7 +222,7 @@ class OrderBook:
             raise ValueError(f"nothing researches {upgrade.name}")
         if unit.type_id not in row.researchers:
             researchers = _listed_with_or(row.researchers)
-            raise ValueError(f"{upgrade.name} is researched by {researchers}, not a {unit.type_id.name}")
+            raise ValueError(f"{upgrade.name} is researched by {researchers}, not {_with_article(unit.type_id)}")
         return self.issue(unit, row.research_ability, queued=queued, force=force)
 
     def _ability_making(
@@ -243,9 +243,10 @@ class OrderBook:
                 raise ValueError(self._why_not_made(maker, product, method))
             makers_by_ability.setdefault(ability, []).append(maker)
         if len(makers_by_ability) > 1:
-            makers = " and ".join(f"a {maker.name}" for makers in makers_by_ability.values() for maker in makers)
+            makers = " and ".join(_with_article(maker) for makers in makers_by_ability.values() for maker in makers)
             used = " and ".join(ability.name for ability in makers_by_ability)
-            raise ValueError(f"{makers} make a {product.name} with different abilities, {used}: order them apart")
+            made = _with_article(product)
+            raise ValueError(f"{makers} make {made} with different abilities, {used}: order them apart")
         return next(iter(makers_by_ability))
 
     def _why_not_made(self, maker: UnitTypeId, product: UnitTypeId, method: str) -> str:
@@ -253,12 +254,14 @@ class OrderBook:
         abilities_making = _abilities_making(self._game_data)
         if (ability := abilities_making.get((maker, product))) is not None:
             ordered_by = "train" if _is_trained(maker, product) else "build" if _is_built(maker, product) else "issue"
-            made_with = f"a {maker.name} makes a {product.name} with {ability.name}"
+            made_with = f"{_with_article(maker)} makes {_with_article(product)} with {ability.name}"
             return f"{made_with}, which `{ordered_by}` orders, not `{method}`"
         makers = {made_by for made_by, made in abilities_making if made is product}
-        if not makers:
-            return f"nothing makes a {product.name}"
-        return f"a {maker.name} does not make a {product.name}: {_listed_with_or(makers)} does"
+        if makers:
+            return f"{_with_article(maker)} does not make {_with_article(product)}: {_listed_with_or(makers)} does"
+        if (own_add_on := _own_add_on_of_kind(maker, product, abilities_making)) is not None:
+            return f"nothing makes a bare {product.name}: {_with_article(maker)} makes {_with_article(own_add_on)}"
+        return f"nothing makes {_with_article(product)}"
 
     def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[IssuedOrder, ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued. Withdrawn orders are left out.
@@ -463,12 +466,19 @@ _NEEDS_A_UNIT = "an order needs a unit to give it to"
 def _abilities_making(game_data: GameData) -> dict[tuple[UnitTypeId, UnitTypeId], AbilityId]:
     """The ability each unit type makes each unit type with, by maker and product: one for each pair (tool
     `sweep_tech_tree`), a warp gate's zealot a warp-in where a gateway's is a train."""
-    return {
+    abilities_making = {
         (maker, product): ability
         for ability, row in game_data.abilities.items()
         for maker, product in row.products.items()
         if isinstance(product, UnitTypeId)
     }
+    # An ability's products name one type for each maker, so a rich gas building, made with its plain one's ability on a
+    # rich geyser, is read off its own creation ability and producers.
+    for unit_type, row in game_data.units.items():
+        if row.creation_ability is not None:
+            for producer in row.producers:
+                abilities_making.setdefault((producer, unit_type), row.creation_ability)
+    return abilities_making
 
 
 def _is_trained(maker: UnitTypeId, product: UnitTypeId) -> bool:
@@ -485,9 +495,27 @@ def _is_built(maker: UnitTypeId, product: UnitTypeId) -> bool:
     return product in UnitType.Structure.type_ids and maker in UnitType.Worker.type_ids
 
 
+def _own_add_on_of_kind(
+    maker: UnitTypeId, add_on: UnitTypeId, abilities_making: Mapping[tuple[UnitTypeId, UnitTypeId], AbilityId]
+) -> UnitTypeId | None:
+    """The add-on of `add_on`'s kind that `maker` makes, a `TECH_LAB_BARRACKS` for a barracks given a bare `TECH_LAB`;
+    `None` for anything but a tech lab or a reactor, or a maker of neither."""
+    for kind in (UnitType.AnyTechLab, UnitType.AnyReactor):
+        if add_on in kind.type_ids:
+            return next(
+                (made for made_by, made in abilities_making if made_by is maker and made in kind.type_ids), None
+            )
+    return None
+
+
+def _with_article(unit_type: UnitTypeId) -> str:
+    """The type's name with "a" or "an" before it, by its first letter: "a BARRACKS", "an ORBITAL_COMMAND"."""
+    return f"{'an' if unit_type.name[0] in 'AEIOU' else 'a'} {unit_type.name}"
+
+
 def _listed_with_or(unit_types: Collection[UnitTypeId]) -> str:
     """`unit_types` as a phrase, in alphabetical order: "a HATCHERY, a HIVE or a LAIR"."""
-    names = [f"a {unit_type.name}" for unit_type in sorted(unit_types, key=lambda unit_type: unit_type.name)]
+    names = [_with_article(unit_type) for unit_type in sorted(unit_types, key=lambda unit_type: unit_type.name)]
     return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
 
 
