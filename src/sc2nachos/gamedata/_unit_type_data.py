@@ -239,6 +239,14 @@ class UnitTypeData:
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
+    base_form: UnitTypeId
+    """The type of which this is a form, which a unit of this type counts as. Back along `morphed_from` through each
+    step that costs nothing: a barracks for a flying barracks, a siege tank for a sieged one, a supply depot for a
+    lowered one, a roach for a burrowed one, a gateway for a warp gate. A refinery for a rich refinery, as for each rich
+    gas building. A hellion for a hellbat, a locust for a flying locust, a creep tumor for a burrowed or a queen's one,
+    and a changeling for a disguised one. The type itself for any other: a marine; an orbital command, a lair or a
+    baneling, whose morphs cost something; a cocoon, an adept's shade or an archon. The types of each `UnitType` group
+    of one unit's forms, such as `UnitType.AnySiegeTank`, share one."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
@@ -332,6 +340,8 @@ class UnitTypeData:
             producers=in_tree.producers or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
             tech_requirements=in_tree.tech_requirements,
             morphed_from=in_tree.morphed_from,
+            # Until `GameData` works out what it is a form of, from every type's costs.
+            base_form=unit_type,
             ability_requirements=in_tree.ability_requirements,
             needs_power=in_tree.needs_power,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),

@@ -290,6 +290,27 @@ MERGE_SOURCES: Final[Mapping[UnitTypeId, tuple[UnitTypeId, ...]]] = MappingProxy
 """The units used up making each of these unit types, which `morphed_from` cannot name, as its `total_cost` counts
 them: two high templar for an archon (stated)."""
 
+UNRECORDED_BASE_FORMS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
+    {
+        # The factory trains both, and each turns into the other for nothing, by an ability that is neither type's
+        # creation ability, so the tech tree records no product for it.
+        UnitTypeId.HELLBAT: UnitTypeId.HELLION,
+        # The game lifts a locust into the air and lands it, a creep tumor burrows once grown, whether a tumor or a
+        # queen spread it, and a changeling takes on a disguise, each by itself (stated).
+        UnitTypeId.LOCUST_FLYING: UnitTypeId.LOCUST,
+        UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
+        UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR,
+        UnitTypeId.CHANGELING_MARINE: UnitTypeId.CHANGELING,
+        UnitTypeId.CHANGELING_MARINE_SHIELD: UnitTypeId.CHANGELING,
+        UnitTypeId.CHANGELING_ZEALOT: UnitTypeId.CHANGELING,
+        UnitTypeId.CHANGELING_ZERGLING: UnitTypeId.CHANGELING,
+        UnitTypeId.CHANGELING_ZERGLING_WINGS: UnitTypeId.CHANGELING,
+    }
+)
+"""The `base_form` of each unit type that is a form of another, where the tech tree records no `morphed_from` and its
+creation ability makes no other type. `tests/test_gamedata.py` checks that each still has neither, so an entry goes as
+soon as a new sweep records one."""
+
 # The abilities besides a build that put a structure or a unit at the point they are aimed at, where only one of several
 # units given it can, as `AbilityData.places_at_target` reads them: a landing, a rooting and a warp-in (tool
 # `sweep_orders`, `one-command-each`). The game's tables mark none of them as placing anything.

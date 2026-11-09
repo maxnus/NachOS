@@ -25,6 +25,11 @@ def _unit_types_generator() -> Any:
     return load_tool("generate_unit_types")
 
 
+# The groups of one unit's forms beside the generator's two-form groups: the creep tumors, a queen's or another tumor's,
+# growing or burrowed, and the changelings, plain or disguised.
+_OTHER_GROUPS_OF_ONE_UNITS_FORMS = ("AnyCreepTumor", "AnyChangeling")
+
+
 @pytest.fixture(scope="module")
 def counted_as() -> dict[UnitTypeId, frozenset[UnitTypeId]]:
     """The types the corpus's tables count each type as, its tech aliases."""
@@ -102,6 +107,50 @@ class TestUnitType:
             for one, other in ((first, second), (second, first))
         ]
         assert any(linked), (first, second)
+
+    @pytest.mark.parametrize("group", [*sorted(_unit_types_generator().TWO_FORMS), *_OTHER_GROUPS_OF_ONE_UNITS_FORMS])
+    def test_the_types_of_a_group_of_one_units_forms_share_a_base_form_in_the_group(
+        self, group: str, first_corpus_tables: GameData
+    ) -> None:
+        type_ids = getattr(UnitType, group).type_ids
+        base_forms = {first_corpus_tables.units[type_id].base_form for type_id in type_ids}
+        assert len(base_forms) == 1
+        assert base_forms <= type_ids
+
+    def test_types_share_a_base_form_only_in_a_group_of_one_units_forms_or_as_gas_buildings(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        """A rich gas building is built as its plain one, and no group holds just the two."""
+        forms_by_base: dict[UnitTypeId, set[UnitTypeId]] = {}
+        for unit_type, row in first_corpus_tables.units.items():
+            forms_by_base.setdefault(row.base_form, set()).add(unit_type)
+        shared = sorted(sorted(forms) for forms in forms_by_base.values() if len(forms) > 1)
+        groups = [*_unit_types_generator().TWO_FORMS, *_OTHER_GROUPS_OF_ONE_UNITS_FORMS]
+        gas_buildings = [
+            {UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH},
+            {UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH},
+            {UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH},
+        ]
+        expected = [*(getattr(UnitType, group).type_ids for group in groups), *gas_buildings]
+        assert shared == sorted(sorted(forms) for forms in expected)
+
+    def test_a_base_form_is_what_the_tables_call_a_form_of_but_for_a_shade_a_warp_gate_and_a_hellbat(
+        self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+    ) -> None:
+        """The tables call an adept's shade a form of the adept, and a warp gate and a hellbat a form of nothing. They
+        call a rock or a geyser of the map's a form of a plain one, which NachOS takes as no form of a unit's."""
+        differing = {
+            unit_type: (row.base_form, form_of.get(unit_type, unit_type))
+            for unit_type, row in first_corpus_tables.units.items()
+            if row.race is not Race.NONE and row.base_form is not form_of.get(unit_type, unit_type)
+        }
+        assert differing == {
+            UnitTypeId.ADEPT_SHADE: (UnitTypeId.ADEPT_SHADE, UnitTypeId.ADEPT),
+            UnitTypeId.WARP_GATE: (UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE),
+            UnitTypeId.HELLBAT: (UnitTypeId.HELLION, UnitTypeId.HELLBAT),
+        }
+        map_objects = [row for row in first_corpus_tables.units.values() if row.race is Race.NONE]
+        assert all(row.base_form is row.id for row in map_objects)
 
     def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self) -> None:
         generator = _unit_types_generator()

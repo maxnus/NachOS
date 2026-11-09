@@ -17,6 +17,7 @@ from sc2nachos.gamedata._techtree._overrides import (
     UNIT_TYPE_BUILD_TIME_OVERRIDES,
     UNIT_TYPE_COST_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
+    UNRECORDED_BASE_FORMS,
 )
 from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbility, TechTreeUnitType, TechTreeUpgrade
 
@@ -37,6 +38,7 @@ __all__ = [
     "UNIT_TYPE_BUILD_TIME_OVERRIDES",
     "UNIT_TYPE_COST_OVERRIDES",
     "UNNAMED_CREATION_ABILITIES",
+    "UNRECORDED_BASE_FORMS",
     "TechTree",
     "TechTreeAbility",
     "TechTreeUnitType",
