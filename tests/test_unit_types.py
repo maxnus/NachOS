@@ -138,7 +138,7 @@ class TestUnitType:
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """The tables call an adept's shade a form of the adept, and a warp gate and a hellbat a form of nothing. They
-        call a rock or a geyser of the map's a form of a plain one, which NachOS takes as no form of a unit's."""
+        call a rock or a geyser of the map's a form of a plain one, but each is its own base form."""
         differing = {
             unit_type: (row.base_form, form_of.get(unit_type, unit_type))
             for unit_type, row in first_corpus_tables.units.items()
