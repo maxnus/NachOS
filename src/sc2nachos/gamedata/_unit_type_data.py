@@ -15,6 +15,7 @@ from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
+from sc2nachos.gamedata._unit_type import UNIT_TYPE_FORMS, UnitType
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.gametime import FASTER_PER_NORMAL_SPEED, GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -239,33 +240,13 @@ class UnitTypeData:
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
-    base_form: UnitTypeId
-    """The type of which this is a form, which a unit of this type counts as:
-
-    | Base form | Its other forms |
-    |---|---|
-    | a command center, an orbital command, a barracks, a factory, a starport | the flying one |
-    | a supply depot | the lowered one |
-    | a refinery, an extractor, an assimilator | the rich one |
-    | a siege tank, a liberator, an overseer, an observer | the sieged one |
-    | a viking | the landed one |
-    | a thor | the one in high impact mode |
-    | a hellion | a hellbat |
-    | a widow mine, and each Zerg unit that burrows | the burrowed one |
-    | a creep tumor | the burrowed one and a queen's |
-    | a spine crawler, a spore crawler | the uprooted one |
-    | a locust | the flying one |
-    | a changeling | each disguise |
-    | a gateway | a warp gate |
-    | a warp prism | the phasing one |
-
-    Every other type is its own: a marine; a lair, a baneling or an overlord transport, whose morphs cost something; a
-    cocoon, an adept's shade or an archon. Each base form but the hellion's, the locust's, the creep tumor's and the
-    changeling's lies back along `morphed_from`, through steps that cost nothing, or is the plain gas building of a rich
-    one. The types of each `UnitType` group of two forms, such as `UnitType.AnySiegeTank`, share one, as do those of
-    `UnitType.AnyCreepTumor` and `UnitType.AnyChangeling`; those of `UnitType.AnyOverlord`, `AnySpire` or
-    `AnyZergTownhall` do not. Always a type the same tables hold a row of: in tables made up for a test, a type is its
-    own where they hold no row of the other."""
+    forms: type[UnitType.AnyType]
+    """The `UnitType` group of this type and every other form of the same structure or unit, which count as one: a
+    group of two forms, such as `UnitType.AnySiegeTank` for a siege tank sieged or not and `UnitType.AnyHellion` for a
+    hellion and a hellbat; `UnitType.AnyChangeling` and `UnitType.AnyCreepTumor`; and `UnitType.AnyRefinery`,
+    `AnyExtractor` and `AnyAssimilator`, each on a plain or a rich geyser. The type's own class for a type of one form,
+    such as `UnitType.Marine`, and for a lair, a baneling's cocoon or an overlord transport, whose morph costs
+    something: `UnitType.AnyOrbitalCommand` holds no command center. `forms.type_ids` holds every type of it."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
@@ -359,8 +340,7 @@ class UnitTypeData:
             producers=in_tree.producers or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
             tech_requirements=in_tree.tech_requirements,
             morphed_from=in_tree.morphed_from,
-            # Until `GameData` works out what it is a form of, from every type's costs.
-            base_form=unit_type,
+            forms=UNIT_TYPE_FORMS[unit_type],
             ability_requirements=in_tree.ability_requirements,
             needs_power=in_tree.needs_power,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),

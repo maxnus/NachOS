@@ -28,11 +28,9 @@ from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
-    TECH_TREE,
     UNIT_TYPE_BUILD_TIME_OVERRIDES,
     UNIT_TYPE_COST_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
-    UNRECORDED_BASE_FORMS,
 )
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Footprint
@@ -40,6 +38,7 @@ from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
+from sc2nachos.units import UnitType
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -519,155 +518,64 @@ _RICH_GAS_BUILDINGS = {
     UnitTypeId.ASSIMILATOR_RICH: UnitTypeId.ASSIMILATOR,
 }
 
-# Every type of the first corpus game's tables that is a form of another, and its base form, in the order of the table
-# in `UnitTypeData.base_form`'s docstring.
-_EVERY_FORMS_BASE_FORM = {
-    UnitTypeId.COMMAND_CENTER_FLYING: UnitTypeId.COMMAND_CENTER,
-    UnitTypeId.ORBITAL_COMMAND_FLYING: UnitTypeId.ORBITAL_COMMAND,
-    UnitTypeId.BARRACKS_FLYING: UnitTypeId.BARRACKS,
-    UnitTypeId.FACTORY_FLYING: UnitTypeId.FACTORY,
-    UnitTypeId.STARPORT_FLYING: UnitTypeId.STARPORT,
-    UnitTypeId.SUPPLY_DEPOT_LOWERED: UnitTypeId.SUPPLY_DEPOT,
-    **_RICH_GAS_BUILDINGS,
-    UnitTypeId.SIEGE_TANK_SIEGED: UnitTypeId.SIEGE_TANK,
-    UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
-    UnitTypeId.OVERSEER_SIEGED: UnitTypeId.OVERSEER,
-    UnitTypeId.OBSERVER_SIEGED: UnitTypeId.OBSERVER,
-    UnitTypeId.VIKING_LANDED: UnitTypeId.VIKING,
-    UnitTypeId.THOR_HIGH_IMPACT: UnitTypeId.THOR,
-    UnitTypeId.HELLBAT: UnitTypeId.HELLION,
-    UnitTypeId.WIDOW_MINE_BURROWED: UnitTypeId.WIDOW_MINE,
-    UnitTypeId.DRONE_BURROWED: UnitTypeId.DRONE,
-    UnitTypeId.ZERGLING_BURROWED: UnitTypeId.ZERGLING,
-    UnitTypeId.BANELING_BURROWED: UnitTypeId.BANELING,
-    UnitTypeId.ROACH_BURROWED: UnitTypeId.ROACH,
-    UnitTypeId.RAVAGER_BURROWED: UnitTypeId.RAVAGER,
-    UnitTypeId.HYDRALISK_BURROWED: UnitTypeId.HYDRALISK,
-    UnitTypeId.LURKER_BURROWED: UnitTypeId.LURKER,
-    UnitTypeId.INFESTOR_BURROWED: UnitTypeId.INFESTOR,
-    UnitTypeId.SWARM_HOST_BURROWED: UnitTypeId.SWARM_HOST,
-    UnitTypeId.ULTRALISK_BURROWED: UnitTypeId.ULTRALISK,
-    UnitTypeId.QUEEN_BURROWED: UnitTypeId.QUEEN,
-    UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
-    UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR,
-    UnitTypeId.SPINE_CRAWLER_UPROOTED: UnitTypeId.SPINE_CRAWLER,
-    UnitTypeId.SPORE_CRAWLER_UPROOTED: UnitTypeId.SPORE_CRAWLER,
-    UnitTypeId.LOCUST_FLYING: UnitTypeId.LOCUST,
-    UnitTypeId.CHANGELING_MARINE: UnitTypeId.CHANGELING,
-    UnitTypeId.CHANGELING_MARINE_SHIELD: UnitTypeId.CHANGELING,
-    UnitTypeId.CHANGELING_ZERGLING: UnitTypeId.CHANGELING,
-    UnitTypeId.CHANGELING_ZERGLING_WINGS: UnitTypeId.CHANGELING,
-    UnitTypeId.CHANGELING_ZEALOT: UnitTypeId.CHANGELING,
-    UnitTypeId.WARP_GATE: UnitTypeId.GATEWAY,
-    UnitTypeId.WARP_PRISM_PHASING: UnitTypeId.WARP_PRISM,
-}
+
+def _type_or_class_name(value: UnitTypeId | type) -> str:
+    """A unit type's name, or a `UnitType` class's, to name a test case by."""
+    return value.name if isinstance(value, UnitTypeId) else value.__name__
 
 
-class TestBaseForms:
+class TestForms:
     @pytest.mark.parametrize(
-        ("form", "base_form"),
+        ("unit_type", "forms"),
         [
-            (UnitTypeId.BARRACKS_FLYING, UnitTypeId.BARRACKS),
-            (UnitTypeId.ORBITAL_COMMAND_FLYING, UnitTypeId.ORBITAL_COMMAND),
-            (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitTypeId.SUPPLY_DEPOT),
-            (UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.SIEGE_TANK),
-            (UnitTypeId.VIKING_LANDED, UnitTypeId.VIKING),
-            (UnitTypeId.ROACH_BURROWED, UnitTypeId.ROACH),
-            (UnitTypeId.SPINE_CRAWLER_UPROOTED, UnitTypeId.SPINE_CRAWLER),
-            (UnitTypeId.OVERSEER_SIEGED, UnitTypeId.OVERSEER),
-            (UnitTypeId.WARP_GATE, UnitTypeId.GATEWAY),
-            (UnitTypeId.WARP_PRISM_PHASING, UnitTypeId.WARP_PRISM),
+            (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitType.AnySupplyDepot),
+            (UnitTypeId.BARRACKS_FLYING, UnitType.AnyBarracks),
+            (UnitTypeId.ORBITAL_COMMAND, UnitType.AnyOrbitalCommand),
+            (UnitTypeId.REFINERY_RICH, UnitType.AnyRefinery),
+            (UnitTypeId.SIEGE_TANK, UnitType.AnySiegeTank),
+            (UnitTypeId.HELLBAT, UnitType.AnyHellion),
+            (UnitTypeId.ROACH_BURROWED, UnitType.AnyRoach),
+            (UnitTypeId.CREEP_TUMOR_QUEEN, UnitType.AnyCreepTumor),
+            (UnitTypeId.LOCUST_FLYING, UnitType.AnyLocust),
+            (UnitTypeId.CHANGELING_ZEALOT, UnitType.AnyChangeling),
+            (UnitTypeId.WARP_GATE, UnitType.AnyGateway),
         ],
-        ids=lambda unit_type: unit_type.name,
+        ids=_type_or_class_name,
     )
-    def test_a_form_a_unit_switches_to_for_nothing_has_the_type_it_switches_from_as_its_base_form(
-        self, first_corpus_tables: GameData, form: UnitTypeId, base_form: UnitTypeId
+    def test_a_form_of_a_structure_or_unit_has_the_group_of_its_forms(
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, forms: type[UnitType.AnyType]
     ) -> None:
-        assert first_corpus_tables.units[form].base_form is base_form
-
-    def test_a_rich_gas_building_has_its_plain_one_as_its_base_form(self, first_corpus_tables: GameData) -> None:
-        for rich, plain in _RICH_GAS_BUILDINGS.items():
-            assert first_corpus_tables.units[rich].base_form is plain, rich.name
+        assert first_corpus_tables.units[unit_type].forms is forms
 
     @pytest.mark.parametrize(
-        ("form", "base_form"),
+        ("unit_type", "own_class"),
         [
-            (UnitTypeId.HELLBAT, UnitTypeId.HELLION),
-            (UnitTypeId.LOCUST_FLYING, UnitTypeId.LOCUST),
-            (UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CREEP_TUMOR),
-            (UnitTypeId.CREEP_TUMOR_QUEEN, UnitTypeId.CREEP_TUMOR),
-            (UnitTypeId.CHANGELING_ZEALOT, UnitTypeId.CHANGELING),
+            (UnitTypeId.MARINE, UnitType.Marine),
+            (UnitTypeId.LAIR, UnitType.Lair),
+            (UnitTypeId.BANELING_COCOON, UnitType.BanelingCocoon),
+            (UnitTypeId.OVERLORD_TRANSPORT, UnitType.OverlordTransport),
+            (UnitTypeId.ADEPT_SHADE, UnitType.AdeptShade),
+            (UnitTypeId.ARCHON, UnitType.Archon),
         ],
-        ids=lambda unit_type: unit_type.name,
+        ids=_type_or_class_name,
     )
-    def test_a_form_the_tech_tree_does_not_link_has_the_base_form_written_down(
-        self, first_corpus_tables: GameData, form: UnitTypeId, base_form: UnitTypeId
+    def test_a_type_of_one_form_has_its_own_class(
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, own_class: type[UnitType.AnyType]
     ) -> None:
-        assert first_corpus_tables.units[form].base_form is base_form
+        """A lair, a cocoon and an overlord transport each cost something to morph into, an adept's shade stands apart
+        from its adept, and an archon is made of two templar."""
+        assert first_corpus_tables.units[unit_type].forms is own_class
 
-    @pytest.mark.parametrize(
-        "unit_type",
-        [
-            UnitTypeId.MARINE,
-            UnitTypeId.HELLION,
-            UnitTypeId.ORBITAL_COMMAND,
-            UnitTypeId.LAIR,
-            UnitTypeId.GREATER_SPIRE,
-            UnitTypeId.BANELING,
-            UnitTypeId.OVERSEER,
-            UnitTypeId.BANELING_COCOON,
-            UnitTypeId.EGG,
-            UnitTypeId.LARVA,
-            UnitTypeId.ADEPT_SHADE,
-            UnitTypeId.ARCHON,
-        ],
-        ids=lambda unit_type: unit_type.name,
-    )
-    def test_a_type_that_is_no_other_types_form_is_its_own_base_form(
-        self, first_corpus_tables: GameData, unit_type: UnitTypeId
-    ) -> None:
-        """An orbital command, a lair, a greater spire, a baneling and an overseer each cost something to morph into."""
-        assert first_corpus_tables.units[unit_type].base_form is unit_type
-
-    def test_an_overlord_transport_is_its_own_base_form_though_its_row_reads_an_overlords(
-        self, first_corpus_tables: GameData
-    ) -> None:
-        """Its morph costs 25/25, as `UNIT_TYPE_COST_OVERRIDES` corrects."""
-        units = first_corpus_tables.units
-        assert units[UnitTypeId.OVERLORD_TRANSPORT].morphed_from is UnitTypeId.OVERLORD
-        assert units[UnitTypeId.OVERLORD_TRANSPORT].base_form is UnitTypeId.OVERLORD_TRANSPORT
-
-    def test_the_forms_are_those_the_docstrings_table_lists(self, first_corpus_tables: GameData) -> None:
-        """A recorded corpus that changes one fails this until the table in `UnitTypeData.base_form` is changed too."""
-        units = first_corpus_tables.units
-        forms = {unit_type: row.base_form for unit_type, row in units.items() if row.base_form is not unit_type}
-        assert forms == _EVERY_FORMS_BASE_FORM
-
-    def test_a_base_form_is_its_own(self, first_corpus_tables: GameData) -> None:
+    def test_a_type_is_in_its_forms_and_shares_them_with_each_of_them(self, first_corpus_tables: GameData) -> None:
         units = first_corpus_tables.units
         for unit_type, row in units.items():
-            assert units[row.base_form].base_form is row.base_form, unit_type.name
+            assert unit_type in row.forms.type_ids, unit_type.name
+            assert all(units[form].forms is row.forms for form in row.forms.type_ids), unit_type.name
 
-    def test_a_base_form_is_written_down_only_where_the_tech_tree_links_the_form_to_nothing(self) -> None:
-        """Once a sweep records a source for one of these, or its creation ability making another type, the entry can
-        go."""
-        for form in UNRECORDED_BASE_FORMS:
-            in_tree = TECH_TREE.unit_type(form)
-            assert in_tree.morphed_from is None, form.name
-            if in_tree.creation_ability is not None:
-                products = TECH_TREE.ability(in_tree.creation_ability).products.values()
-                assert form in products, form.name
-
-    @pytest.mark.parametrize(
-        "form",
-        [UnitTypeId.HELLBAT, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.REFINERY_RICH],
-        ids=lambda unit_type: unit_type.name,
-    )
-    def test_a_form_is_its_own_base_form_in_tables_holding_no_row_of_the_other(self, form: UnitTypeId) -> None:
-        """Whether the other is written down, a source or what its creation ability makes, as a table made up for a
-        test may leave it out."""
-        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=form)]))
-        assert data.units[form].base_form is form
+    def test_a_types_forms_are_the_same_in_tables_holding_no_row_of_its_other_forms(self) -> None:
+        """They are curated, not read from the tables, so tables made up for a test give them too."""
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=UnitTypeId.HELLBAT)]))
+        assert data.units[UnitTypeId.HELLBAT].forms is UnitType.AnyHellion
 
 
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
@@ -738,14 +646,16 @@ class TestARecordedGamesTables:
         for rich, plain in _RICH_GAS_BUILDINGS.items():
             assert data.units[rich].build_time.steps == data.units[plain].build_time.steps == 480, rich.name
 
-    def test_every_types_base_form_is_the_one_the_first_games_tables_give(
-        self, path: Path, first_corpus_tables: GameData
-    ) -> None:
-        """So what the base forms are checked against on the first game's tables holds for every game's."""
+    def test_a_morph_that_costs_nothing_keeps_a_unit_in_its_forms_and_one_that_costs_does_not(self, path: Path) -> None:
+        """As the step costs read it, the overlord transport's 25/25 corrected: a siege keeps a tank in
+        `UnitType.AnySiegeTank`, and an orbital command, morphed for 150, is in `UnitType.AnyOrbitalCommand`, apart from
+        the command center."""
         units = _tables(path).units
-        assert {unit_type: row.base_form for unit_type, row in units.items()} == {
-            unit_type: row.base_form for unit_type, row in first_corpus_tables.units.items()
-        }
+        step_costs = _step_costs(units)
+        for unit_type, row in units.items():
+            if row.morphed_from is not None and row.morphed_from in units:
+                kept = row.forms is units[row.morphed_from].forms
+                assert kept is step_costs[unit_type].is_free, unit_type.name
 
     def test_a_type_grants_the_techs_the_tables_name_it_and_its_tech_aliases_after(self, path: Path) -> None:
         """The techs named after the types back along `morphed_from` are those named after the type and its

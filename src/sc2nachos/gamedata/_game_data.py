@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
-from itertools import pairwise
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
@@ -19,7 +18,6 @@ from sc2nachos.gamedata._techtree import (
     TECH_TREE,
     UNIT_TYPE_BUILD_TIME_OVERRIDES,
     UNIT_TYPE_COST_OVERRIDES,
-    UNRECORDED_BASE_FORMS,
 )
 from sc2nachos.gamedata._turning import FIRE_WITHOUT_TURNING_UNITS, TURN_BEFORE_MOVE_UNITS, TURN_RATE_UNITS
 from sc2nachos.gamedata._unit_type_data import Attribute, UnitTypeData
@@ -60,7 +58,7 @@ class GameData:
         unit_rows = _with_build_times_borrowed(_with_build_times_corrected(unit_rows), TECH_TREE)
         unit_rows = _with_build_times_in_whole_costs(_with_turning(with_missing_attacks(unit_rows)))
         step_costs = _step_costs(unit_rows)
-        self._units = _with_base_forms(_with_costs_from_steps(unit_rows, step_costs), step_costs, TECH_TREE)
+        self._units = _with_costs_from_steps(unit_rows, step_costs)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
         behaviors = order_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
@@ -127,26 +125,17 @@ def _with_build_times_borrowed(
     `sweep_orders`)."""
     rows_with_build_times = dict(units)
     for unit_type, row in units.items():
-        if row.build_time or (built_as_type := _other_type_its_creation_ability_makes(row, tech_tree)) is None:
+        if row.build_time or row.creation_ability is None:
             continue
-        if (built_as := units.get(built_as_type)) is not None:
+        products = tech_tree.ability(row.creation_ability).products.values()
+        types_made = {product for product in products if isinstance(product, UnitTypeId)}
+        if len(types_made) != 1 or unit_type in types_made:
+            continue
+        if (built_as := units.get(types_made.pop())) is not None:
             rows_with_build_times[unit_type] = replace(
                 row, build_time=built_as.build_time, _unrounded_build_time=built_as._unrounded_build_time
             )
     return MappingProxyType(rows_with_build_times)
-
-
-def _other_type_its_creation_ability_makes(type_row: UnitTypeData, tech_tree: TechTree) -> UnitTypeId | None:
-    """The one type the creation ability of `type_row`'s type makes, where that is another type: a refinery, for a rich
-    refinery. `None` where it makes the type itself, several types or none, or where the type has no creation
-    ability."""
-    if type_row.creation_ability is None:
-        return None
-    products = tech_tree.ability(type_row.creation_ability).products.values()
-    types_made = {product for product in products if isinstance(product, UnitTypeId)}
-    if len(types_made) != 1 or type_row.id in types_made:
-        return None
-    return types_made.pop()
 
 
 def _with_build_times_corrected(units: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[UnitTypeId, UnitTypeData]:
@@ -289,48 +278,6 @@ def _total_cost_of(
         ),
         start=step_costs[unit_type],
     )
-
-
-def _with_base_forms(
-    unit_rows: Mapping[UnitTypeId, UnitTypeData], step_costs: Mapping[UnitTypeId, Cost], tech_tree: TechTree
-) -> Mapping[UnitTypeId, UnitTypeData]:
-    """`unit_rows`, each given its `base_form`, each step's cost read from `step_costs`, which hold what
-    `UNIT_TYPE_COST_OVERRIDES` corrects: an overlord transport, whose row reads an overlord's, is its own. A row whose
-    type is its own base form already holds it."""
-    rows_with_base_forms = dict(unit_rows)
-    for unit_type, type_row in unit_rows.items():
-        if (base_form := _base_form_of(unit_type, unit_rows, step_costs, tech_tree)) is not unit_type:
-            rows_with_base_forms[unit_type] = replace(type_row, base_form=base_form)
-    return MappingProxyType(rows_with_base_forms)
-
-
-def _base_form_of(
-    unit_type: UnitTypeId,
-    unit_rows: Mapping[UnitTypeId, UnitTypeData],
-    step_costs: Mapping[UnitTypeId, Cost],
-    tech_tree: TechTree,
-) -> UnitTypeId:
-    """The type of which `unit_type` is a form: what `_form_named_for` gives, followed back along `morphed_from`
-    through each step that costs nothing to a source the table holds a row of."""
-    form = _form_named_for(unit_type, unit_rows, tech_tree)
-    for stage, source in pairwise(tech_tree.morph_stages_of(form)):
-        if source not in unit_rows or not step_costs[stage].is_free:
-            break
-        form = source
-    return form
-
-
-def _form_named_for(
-    unit_type: UnitTypeId, unit_rows: Mapping[UnitTypeId, UnitTypeData], tech_tree: TechTree
-) -> UnitTypeId:
-    """The type `UNRECORDED_BASE_FORMS` names for `unit_type`, or else the one other type its creation ability makes,
-    where the table holds a row of it; `unit_type` itself otherwise."""
-    if (written_down := UNRECORDED_BASE_FORMS.get(unit_type)) is not None and written_down in unit_rows:
-        return written_down
-    built_as = _other_type_its_creation_ability_makes(unit_rows[unit_type], tech_tree)
-    if built_as is not None and built_as in unit_rows:
-        return built_as
-    return unit_type
 
 
 def _types_granting_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Tech, frozenset[UnitTypeId]]:

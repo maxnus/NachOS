@@ -290,28 +290,6 @@ MERGE_SOURCES: Final[Mapping[UnitTypeId, tuple[UnitTypeId, ...]]] = MappingProxy
 """The units used up making each of these unit types, which `morphed_from` cannot name, as its `total_cost` counts
 them: two high templar for an archon (stated)."""
 
-UNRECORDED_BASE_FORMS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
-    {
-        # The factory trains both, and each morphs into the other (stated), by an ability that is neither type's
-        # creation ability, so the tech tree records no product for it.
-        UnitTypeId.HELLBAT: UnitTypeId.HELLION,
-        # A swarm host's locust comes out on the ground and takes off by itself, and a flying one lands when ordered
-        # to swoop; a creep tumor, a queen's or a plain one, burrows by itself (in game); and a changeling disguises
-        # itself (stated). A queen plants a queen's creep tumor and a burrowed one a plain one, by one ability.
-        UnitTypeId.LOCUST_FLYING: UnitTypeId.LOCUST,
-        UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
-        UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR,
-        UnitTypeId.CHANGELING_MARINE: UnitTypeId.CHANGELING,
-        UnitTypeId.CHANGELING_MARINE_SHIELD: UnitTypeId.CHANGELING,
-        UnitTypeId.CHANGELING_ZEALOT: UnitTypeId.CHANGELING,
-        UnitTypeId.CHANGELING_ZERGLING: UnitTypeId.CHANGELING,
-        UnitTypeId.CHANGELING_ZERGLING_WINGS: UnitTypeId.CHANGELING,
-    }
-)
-"""The `base_form` of each unit type that is a form of another, where the tech tree records no `morphed_from` and its
-creation ability makes no other type. `tests/test_gamedata.py` checks that each still has neither, so an entry goes as
-soon as a new sweep records one."""
-
 # The abilities besides a build that put a structure or a unit at the point they are aimed at, where only one of several
 # units given it can, as `AbilityData.places_at_target` reads them: a landing, a rooting and a warp-in (tool
 # `sweep_orders`, `one-command-each`). The game's tables mark none of them as placing anything.
