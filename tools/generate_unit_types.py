@@ -54,8 +54,9 @@ class UnitType:
     production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
     supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
     that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A group of two forms, `AnyChangeling`, `AnyCreepTumor` and a race's gas
-    building on either geyser, such as `AnyRefinery`, is each of its types' `UnitTypeData.forms`.
+    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.forms` is the group of two forms it is in,
+    `AnyChangeling`, `AnyCreepTumor` or its race's gas building on either geyser, such as `AnyRefinery`, or else its own
+    class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -211,8 +212,7 @@ GAS_BUILDINGS_ON_EITHER_GEYSER = {
     "AnyExtractor": frozenset({UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}),
     "AnyAssimilator": frozenset({UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}),
 }
-# The groups of one structure's or unit's forms, each the `UnitTypeData.forms` of every type in it, with those types. A
-# type in none is its own forms.
+# The groups a type's `UnitTypeData.forms` may be, each with its types. A type in none has its own class as its forms.
 FORMS_GROUPS = {
     **GAS_BUILDINGS_ON_EITHER_GEYSER,
     "AnyChangeling": CHANGELINGS,
@@ -346,11 +346,8 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTy
         ("CollapsibleTower", COLLAPSIBLE_TOWERS),
         ("CollapsibleTowerDebris", COLLAPSIBLE_TOWER_DEBRIS),
         ("Critter", CRITTERS),
-        ("AnyChangeling", CHANGELINGS),
-        ("AnyCreepTumor", CREEP_TUMORS),
         ("Cocoon", COCOON_PRODUCTS.keys()),
-        *GAS_BUILDINGS_ON_EITHER_GEYSER.items(),
-        *TWO_FORMS.items(),
+        *FORMS_GROUPS.items(),
     )
     found = [role for role, members in curated if unit_type in members]
     if unit_type in TOWNHALLS and row.race in RACE_TOWNHALLS:

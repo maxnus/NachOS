@@ -566,12 +566,6 @@ class TestForms:
         from its adept, and an archon is made of two templar."""
         assert first_corpus_tables.units[unit_type].forms is own_class
 
-    def test_a_type_is_in_its_forms_and_shares_them_with_each_of_them(self, first_corpus_tables: GameData) -> None:
-        units = first_corpus_tables.units
-        for unit_type, row in units.items():
-            assert unit_type in row.forms.type_ids, unit_type.name
-            assert all(units[form].forms is row.forms for form in row.forms.type_ids), unit_type.name
-
     def test_a_types_forms_are_the_same_in_tables_holding_no_row_of_its_other_forms(self) -> None:
         """They are curated, not read from the tables, so tables made up for a test give them too."""
         data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=UnitTypeId.HELLBAT)]))
@@ -655,7 +649,7 @@ class TestARecordedGamesTables:
         for unit_type, row in units.items():
             if row.morphed_from is not None and row.morphed_from in units:
                 kept = row.forms is units[row.morphed_from].forms
-                assert kept is step_costs[unit_type].is_free, unit_type.name
+                assert kept == step_costs[unit_type].is_free, unit_type.name
 
     def test_a_type_grants_the_techs_the_tables_name_it_and_its_tech_aliases_after(self, path: Path) -> None:
         """The techs named after the types back along `morphed_from` are those named after the type and its

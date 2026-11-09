@@ -120,7 +120,7 @@ class TestUnitType:
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
         """The tables call an adept's shade a form of the adept, and a warp gate and a hellbat a form of nothing. They
-        call a rock or a geyser of the map's a form of a plain one, but each is its own forms."""
+        call a rock or a geyser of the map's a form of a plain one, but each has its own class as its forms."""
         race_rows = [row for row in first_corpus_tables.units.values() if row.race is not Race.NONE]
         types_by_alias: dict[UnitTypeId, set[UnitTypeId]] = {}
         for row in race_rows:

@@ -28,8 +28,9 @@ class UnitType:
     production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
     supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
     that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A group of two forms, `AnyChangeling`, `AnyCreepTumor` and a race's gas
-    building on either geyser, such as `AnyRefinery`, is each of its types' `UnitTypeData.forms`.
+    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.forms` is the group of two forms it is in,
+    `AnyChangeling`, `AnyCreepTumor` or its race's gas building on either geyser, such as `AnyRefinery`, or else its own
+    class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """

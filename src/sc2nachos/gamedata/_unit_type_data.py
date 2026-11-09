@@ -241,12 +241,14 @@ class UnitTypeData:
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
     forms: type[UnitType.AnyType]
-    """The `UnitType` group of this type and every other form of the same structure or unit, which count as one: a
-    group of two forms, such as `UnitType.AnySiegeTank` for a siege tank sieged or not and `UnitType.AnyHellion` for a
-    hellion and a hellbat; `UnitType.AnyChangeling` and `UnitType.AnyCreepTumor`; and `UnitType.AnyRefinery`,
-    `AnyExtractor` and `AnyAssimilator`, each on a plain or a rich geyser. The type's own class for a type of one form,
-    such as `UnitType.Marine`, and for a lair, a baneling's cocoon or an overlord transport, whose morph costs
-    something: `UnitType.AnyOrbitalCommand` holds no command center. `forms.type_ids` holds every type of it."""
+    """The `UnitType` group of the types a unit of this type counts as one with: a group of two forms, such as
+    `UnitType.AnySiegeTank` for a siege tank sieged or not and `UnitType.AnyHellion` for a hellion and a hellbat;
+    `UnitType.AnyChangeling`, plain or disguised; `UnitType.AnyCreepTumor`, a queen's or another tumor's, growing or
+    burrowed; and `UnitType.AnyRefinery`, `AnyExtractor` and `AnyAssimilator`, each on a plain or a rich geyser. A type
+    in none has its own class, such as `UnitType.Marine`. A morph that costs something makes another unit: a lair, a
+    baneling's cocoon and an overlord transport have their own class, and `UnitType.AnyOrbitalCommand` holds no command
+    center. `forms.type_ids` holds every type of it, the same in any tables, though tables made up for a test may hold
+    no row of some."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
