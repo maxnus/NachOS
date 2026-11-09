@@ -6,11 +6,11 @@ import math
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar, cast, final, overload
 
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.geometry import Area, Point, Tile
 from sc2nachos.ids import AbilityId, BuffId, UnitTypeId
 from sc2nachos.units._own_unit import OwnUnit
 from sc2nachos.units._unit import Unit
-from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Alliance, Visibility
 
 if TYPE_CHECKING:

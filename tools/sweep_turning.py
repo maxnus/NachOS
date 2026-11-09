@@ -42,13 +42,13 @@ from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
 from sc2nachos.gamedata import GameData, TargetDomain
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Race
 from sc2nachos.run import Installation
-from sc2nachos.units._unit_type import UnitType
 
 REPO = Path(__file__).parents[1]
 OUTPUT = REPO / "data" / "turning.json"

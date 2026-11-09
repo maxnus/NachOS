@@ -46,6 +46,7 @@ from record_corpus import GAMES
 from s2clientprotocol import data_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, TargetType
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Footprint, Point, Tile
@@ -58,7 +59,6 @@ from sc2nachos.protocol import GameEndedError
 from sc2nachos.run import Installation
 from sc2nachos.state._state import _State
 from sc2nachos.units._tracking import _Tracker
-from sc2nachos.units._unit_type import UnitType
 
 REPO = Path(__file__).parents[1]
 FOOTPRINTS = REPO / "data" / "footprints.json"

@@ -1,4 +1,4 @@
-"""Generate `sc2nachos/units/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group.
+"""Generate `sc2nachos/gamedata/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group.
 
 A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. A mineral
 field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab,
@@ -21,7 +21,7 @@ from sc2nachos.protocol import Recording
 
 REPO = Path(__file__).parents[1]
 CORPUS = REPO / "tests" / "corpus"
-OUTPUT = REPO / "src" / "sc2nachos" / "units" / "_unit_type.py"
+OUTPUT = REPO / "src" / "sc2nachos" / "gamedata" / "_unit_type.py"
 
 HEADER = '''"""Every type of unit, and the groups it is in, as classes for the type checker.
 

@@ -10,13 +10,13 @@ import pytest
 from s2clientprotocol import data_pb2
 
 from sc2nachos.gamedata import Attribute, GameData
+from sc2nachos.gamedata import _unit_type as unit_type_module
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.testing import MadeUpUnits, UnitReport
 from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType
-from sc2nachos.units import _unit_type as unit_type_module
 from support import load_tool, make_tables
 
 

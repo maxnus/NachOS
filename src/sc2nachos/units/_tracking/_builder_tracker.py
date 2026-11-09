@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._own_unit import OwnUnit
-from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2

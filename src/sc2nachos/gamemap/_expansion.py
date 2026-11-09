@@ -12,13 +12,13 @@ from scipy.sparse import coo_array
 from scipy.sparse.csgraph import connected_components
 
 from sc2nachos.gamedata._footprints import FOOTPRINTS
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gamemap._errors import NoExpansionError, NoMainRampError
 from sc2nachos.gamemap._expansion_locations import _ExpansionLocations
 from sc2nachos.gamemap._ramp import _HALF_A_LEVEL
 from sc2nachos.geometry import Point, TileSet
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units import Units
-from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
