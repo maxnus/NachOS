@@ -246,7 +246,10 @@ class UnitTypeData:
     gas building. A hellion for a hellbat, a locust for a flying locust, a creep tumor for a burrowed or a queen's one,
     and a changeling for a disguised one. The type itself for any other: a marine; an orbital command, a lair or a
     baneling, whose morphs cost something; a cocoon, an adept's shade or an archon. The types of each `UnitType` group
-    of one unit's forms, such as `UnitType.AnySiegeTank`, share one."""
+    of two forms, such as `UnitType.AnySiegeTank`, share one, as do those of `UnitType.AnyCreepTumor` and
+    `UnitType.AnyChangeling`; those of `UnitType.AnyOverlord`, `AnySpire` or `AnyZergTownhall` do not. Always a type
+    the same tables hold a row of: in tables made up for a test, a type is its own where they hold no row of the
+    other."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
@@ -345,7 +348,9 @@ class UnitTypeData:
             ability_requirements=in_tree.ability_requirements,
             needs_power=in_tree.needs_power,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
-            techs_granted=_techs_granted_by(unit_type, tech_tree),
+            techs_granted=frozenset(
+                Tech(stage) for stage in tech_tree.stages_back_along_morphed_from(unit_type) if stage in Tech
+            ),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),
@@ -354,17 +359,3 @@ class UnitTypeData:
             _whole_cost=Cost(unit.mineral_cost, unit.vespene_cost, unit.food_required),
             _unrounded_build_time=GameTime(steps=unit.build_time),
         )
-
-
-def _techs_granted_by(unit_type: UnitTypeId, tech_tree: TechTree) -> frozenset[Tech]:
-    """The tech named after `unit_type` and after each type back along its `morphed_from` in `tech_tree`, where there is
-    one."""
-    techs: set[Tech] = set()
-    stage: UnitTypeId | None = unit_type
-    stages_passed: set[UnitTypeId] = set()
-    while stage is not None and stage not in stages_passed:
-        if stage in Tech:
-            techs.add(Tech(stage))
-        stages_passed.add(stage)
-        stage = tech_tree.unit_type(stage).morphed_from
-    return frozenset(techs)

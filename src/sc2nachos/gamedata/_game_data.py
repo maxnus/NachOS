@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from itertools import pairwise
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
@@ -309,32 +310,27 @@ def _base_form_of(
     step_costs: Mapping[UnitTypeId, Cost],
     tech_tree: TechTree,
 ) -> UnitTypeId:
-    """The type of which `unit_type` is a form, followed one form back at a time to one that is no other's form."""
-    form, forms_passed = unit_type, {unit_type}
-    while (form_before := _form_before(form, unit_rows, step_costs, tech_tree)) is not None:
-        if form_before in forms_passed:
+    """The type of which `unit_type` is a form: what `_form_named_for` gives, followed back along `morphed_from`
+    through each step that costs nothing to a source the table holds a row of."""
+    form = _form_named_for(unit_type, unit_rows, tech_tree)
+    for stage, source in pairwise(tech_tree.stages_back_along_morphed_from(form)):
+        if source not in unit_rows or not step_costs[stage].is_free:
             break
-        form = form_before
-        forms_passed.add(form_before)
+        form = source
     return form
 
 
-def _form_before(
-    form: UnitTypeId,
-    unit_rows: Mapping[UnitTypeId, UnitTypeData],
-    step_costs: Mapping[UnitTypeId, Cost],
-    tech_tree: TechTree,
-) -> UnitTypeId | None:
-    """The type of which `form` is directly a form: the one `UNRECORDED_BASE_FORMS` names, its source where the step
-    from it costs nothing, or the one other type its creation ability makes. `None` for a type that is no other's form,
-    and for one with no row."""
-    if (written_down := UNRECORDED_BASE_FORMS.get(form)) is not None:
+def _form_named_for(
+    unit_type: UnitTypeId, unit_rows: Mapping[UnitTypeId, UnitTypeData], tech_tree: TechTree
+) -> UnitTypeId:
+    """The type `UNRECORDED_BASE_FORMS` names for `unit_type`, or else the one other type its creation ability makes,
+    where the table holds a row of it; `unit_type` itself otherwise."""
+    if (written_down := UNRECORDED_BASE_FORMS.get(unit_type)) is not None and written_down in unit_rows:
         return written_down
-    if (type_row := unit_rows.get(form)) is None:
-        return None
-    if type_row.morphed_from in unit_rows and step_costs[form].is_free:
-        return type_row.morphed_from
-    return _other_type_its_creation_ability_makes(type_row, tech_tree)
+    built_as = _other_type_its_creation_ability_makes(unit_rows[unit_type], tech_tree)
+    if built_as is not None and built_as in unit_rows:
+        return built_as
+    return unit_type
 
 
 def _types_granting_each(unit_rows: Mapping[UnitTypeId, UnitTypeData]) -> Mapping[Tech, frozenset[UnitTypeId]]:

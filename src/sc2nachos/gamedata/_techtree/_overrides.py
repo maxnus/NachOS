@@ -292,11 +292,11 @@ them: two high templar for an archon (stated)."""
 
 UNRECORDED_BASE_FORMS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
     {
-        # The factory trains both, and each turns into the other for nothing, by an ability that is neither type's
+        # The factory trains both, and each morphs into the other (stated), by an ability that is neither type's
         # creation ability, so the tech tree records no product for it.
         UnitTypeId.HELLBAT: UnitTypeId.HELLION,
-        # The game lifts a locust into the air and lands it, a creep tumor burrows once grown, whether a tumor or a
-        # queen spread it, and a changeling takes on a disguise, each by itself (stated).
+        # The game lifts a locust into the air, burrows a creep tumor and disguises a changeling by itself (stated). A
+        # queen and a burrowed creep tumor each make a creep tumor of their own type by one ability.
         UnitTypeId.LOCUST_FLYING: UnitTypeId.LOCUST,
         UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
         UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR,

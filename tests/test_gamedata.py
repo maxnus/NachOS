@@ -609,17 +609,16 @@ class TestBaseForms:
                 products = TECH_TREE.ability(in_tree.creation_ability).products.values()
                 assert form in products, form.name
 
-    def test_a_base_form_written_down_needs_no_row_of_its_own(self) -> None:
-        """A table made up for a test may leave it out."""
-        hellbat = data_pb2.UnitTypeData(unit_id=UnitTypeId.HELLBAT, mineral_cost=100)
-        data = GameData(sc2api_pb2.ResponseData(units=[hellbat]))
-        assert data.units[UnitTypeId.HELLBAT].base_form is UnitTypeId.HELLION
-
-    def test_a_form_whose_source_has_no_row_is_its_own_base_form(self) -> None:
-        """What the step from its source cost is not known."""
-        sieged = data_pb2.UnitTypeData(unit_id=UnitTypeId.SIEGE_TANK_SIEGED)
-        data = GameData(sc2api_pb2.ResponseData(units=[sieged]))
-        assert data.units[UnitTypeId.SIEGE_TANK_SIEGED].base_form is UnitTypeId.SIEGE_TANK_SIEGED
+    @pytest.mark.parametrize(
+        "form",
+        [UnitTypeId.HELLBAT, UnitTypeId.SIEGE_TANK_SIEGED, UnitTypeId.REFINERY_RICH],
+        ids=lambda unit_type: unit_type.name,
+    )
+    def test_a_form_is_its_own_base_form_in_tables_holding_no_row_of_the_other(self, form: UnitTypeId) -> None:
+        """Whether the other is written down, a source or what its creation ability makes, as a table made up for a
+        test may leave it out."""
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=form)]))
+        assert data.units[form].base_form is form
 
 
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
@@ -689,6 +688,15 @@ class TestARecordedGamesTables:
         assert borrowed - UNIT_TYPE_BUILD_TIME_OVERRIDES.keys() <= set(_RICH_GAS_BUILDINGS)
         for rich, plain in _RICH_GAS_BUILDINGS.items():
             assert data.units[rich].build_time.steps == data.units[plain].build_time.steps == 480, rich.name
+
+    def test_every_types_base_form_is_the_one_the_first_games_tables_give(
+        self, path: Path, first_corpus_tables: GameData
+    ) -> None:
+        """So what the base forms are checked against on the first game's tables holds for every game's."""
+        units = _tables(path).units
+        assert {unit_type: row.base_form for unit_type, row in units.items()} == {
+            unit_type: row.base_form for unit_type, row in first_corpus_tables.units.items()
+        }
 
     def test_a_type_grants_the_techs_the_tables_name_it_and_its_tech_aliases_after(self, path: Path) -> None:
         """The techs named after the types back along `morphed_from` are those named after the type and its
