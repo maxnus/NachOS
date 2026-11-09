@@ -729,9 +729,9 @@ class TestTheBuildSwept:
         assert logged == []
 
 
-class TestStagesBackAlongMorphedFrom:
+class TestMorphStagesOf:
     def test_a_type_comes_first_and_then_each_it_was_morphed_from(self) -> None:
-        assert TECH_TREE.stages_back_along_morphed_from(UnitTypeId.HIVE) == (
+        assert TECH_TREE.morph_stages_of(UnitTypeId.HIVE) == (
             UnitTypeId.HIVE,
             UnitTypeId.LAIR,
             UnitTypeId.HATCHERY,
@@ -740,8 +740,8 @@ class TestStagesBackAlongMorphedFrom:
         )
 
     def test_a_type_morphed_from_nothing_or_unknown_to_the_tree_is_alone(self) -> None:
-        assert TECH_TREE.stages_back_along_morphed_from(UnitTypeId.MARINE) == (UnitTypeId.MARINE,)
-        assert TECH_TREE.stages_back_along_morphed_from(UnitTypeId.MINERAL_FIELD) == (UnitTypeId.MINERAL_FIELD,)
+        assert TECH_TREE.morph_stages_of(UnitTypeId.MARINE) == (UnitTypeId.MARINE,)
+        assert TECH_TREE.morph_stages_of(UnitTypeId.MINERAL_FIELD) == (UnitTypeId.MINERAL_FIELD,)
 
     def test_a_loop_is_followed_round_once(self) -> None:
         looping = TechTree(
@@ -755,7 +755,7 @@ class TestStagesBackAlongMorphedFrom:
             abilities=MappingProxyType({}),
             upgrades=MappingProxyType({}),
         )
-        assert looping.stages_back_along_morphed_from(UnitTypeId.GATEWAY) == (UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE)
+        assert looping.morph_stages_of(UnitTypeId.GATEWAY) == (UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE)
 
 
 def _abilities_offered(transport: WebSocketTransport, unit: Unit) -> set[int]:

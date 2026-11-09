@@ -515,8 +515,51 @@ class TestReadingTheTables:
 # Each gas building on a rich geyser, and the one on a plain geyser it is built as.
 _RICH_GAS_BUILDINGS = {
     UnitTypeId.REFINERY_RICH: UnitTypeId.REFINERY,
-    UnitTypeId.ASSIMILATOR_RICH: UnitTypeId.ASSIMILATOR,
     UnitTypeId.EXTRACTOR_RICH: UnitTypeId.EXTRACTOR,
+    UnitTypeId.ASSIMILATOR_RICH: UnitTypeId.ASSIMILATOR,
+}
+
+# Every type of the first corpus game's tables that is a form of another, and its base form, in the order of the table
+# in `UnitTypeData.base_form`'s docstring.
+_EVERY_FORMS_BASE_FORM = {
+    UnitTypeId.COMMAND_CENTER_FLYING: UnitTypeId.COMMAND_CENTER,
+    UnitTypeId.ORBITAL_COMMAND_FLYING: UnitTypeId.ORBITAL_COMMAND,
+    UnitTypeId.BARRACKS_FLYING: UnitTypeId.BARRACKS,
+    UnitTypeId.FACTORY_FLYING: UnitTypeId.FACTORY,
+    UnitTypeId.STARPORT_FLYING: UnitTypeId.STARPORT,
+    UnitTypeId.SUPPLY_DEPOT_LOWERED: UnitTypeId.SUPPLY_DEPOT,
+    **_RICH_GAS_BUILDINGS,
+    UnitTypeId.SIEGE_TANK_SIEGED: UnitTypeId.SIEGE_TANK,
+    UnitTypeId.LIBERATOR_SIEGED: UnitTypeId.LIBERATOR,
+    UnitTypeId.OVERSEER_SIEGED: UnitTypeId.OVERSEER,
+    UnitTypeId.OBSERVER_SIEGED: UnitTypeId.OBSERVER,
+    UnitTypeId.VIKING_LANDED: UnitTypeId.VIKING,
+    UnitTypeId.THOR_HIGH_IMPACT: UnitTypeId.THOR,
+    UnitTypeId.HELLBAT: UnitTypeId.HELLION,
+    UnitTypeId.WIDOW_MINE_BURROWED: UnitTypeId.WIDOW_MINE,
+    UnitTypeId.DRONE_BURROWED: UnitTypeId.DRONE,
+    UnitTypeId.ZERGLING_BURROWED: UnitTypeId.ZERGLING,
+    UnitTypeId.BANELING_BURROWED: UnitTypeId.BANELING,
+    UnitTypeId.ROACH_BURROWED: UnitTypeId.ROACH,
+    UnitTypeId.RAVAGER_BURROWED: UnitTypeId.RAVAGER,
+    UnitTypeId.HYDRALISK_BURROWED: UnitTypeId.HYDRALISK,
+    UnitTypeId.LURKER_BURROWED: UnitTypeId.LURKER,
+    UnitTypeId.INFESTOR_BURROWED: UnitTypeId.INFESTOR,
+    UnitTypeId.SWARM_HOST_BURROWED: UnitTypeId.SWARM_HOST,
+    UnitTypeId.ULTRALISK_BURROWED: UnitTypeId.ULTRALISK,
+    UnitTypeId.QUEEN_BURROWED: UnitTypeId.QUEEN,
+    UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
+    UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR,
+    UnitTypeId.SPINE_CRAWLER_UPROOTED: UnitTypeId.SPINE_CRAWLER,
+    UnitTypeId.SPORE_CRAWLER_UPROOTED: UnitTypeId.SPORE_CRAWLER,
+    UnitTypeId.LOCUST_FLYING: UnitTypeId.LOCUST,
+    UnitTypeId.CHANGELING_MARINE: UnitTypeId.CHANGELING,
+    UnitTypeId.CHANGELING_MARINE_SHIELD: UnitTypeId.CHANGELING,
+    UnitTypeId.CHANGELING_ZERGLING: UnitTypeId.CHANGELING,
+    UnitTypeId.CHANGELING_ZERGLING_WINGS: UnitTypeId.CHANGELING,
+    UnitTypeId.CHANGELING_ZEALOT: UnitTypeId.CHANGELING,
+    UnitTypeId.WARP_GATE: UnitTypeId.GATEWAY,
+    UnitTypeId.WARP_PRISM_PHASING: UnitTypeId.WARP_PRISM,
 }
 
 
@@ -593,6 +636,12 @@ class TestBaseForms:
         units = first_corpus_tables.units
         assert units[UnitTypeId.OVERLORD_TRANSPORT].morphed_from is UnitTypeId.OVERLORD
         assert units[UnitTypeId.OVERLORD_TRANSPORT].base_form is UnitTypeId.OVERLORD_TRANSPORT
+
+    def test_the_forms_are_those_the_docstrings_table_lists(self, first_corpus_tables: GameData) -> None:
+        """A recorded corpus that changes one fails this until the table in `UnitTypeData.base_form` is changed too."""
+        units = first_corpus_tables.units
+        forms = {unit_type: row.base_form for unit_type, row in units.items() if row.base_form is not unit_type}
+        assert forms == _EVERY_FORMS_BASE_FORM
 
     def test_a_base_form_is_its_own(self, first_corpus_tables: GameData) -> None:
         units = first_corpus_tables.units

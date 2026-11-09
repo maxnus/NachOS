@@ -313,7 +313,7 @@ def _base_form_of(
     """The type of which `unit_type` is a form: what `_form_named_for` gives, followed back along `morphed_from`
     through each step that costs nothing to a source the table holds a row of."""
     form = _form_named_for(unit_type, unit_rows, tech_tree)
-    for stage, source in pairwise(tech_tree.stages_back_along_morphed_from(form)):
+    for stage, source in pairwise(tech_tree.morph_stages_of(form)):
         if source not in unit_rows or not step_costs[stage].is_free:
             break
         form = source

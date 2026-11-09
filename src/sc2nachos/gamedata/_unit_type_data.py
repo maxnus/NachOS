@@ -240,16 +240,32 @@ class UnitTypeData:
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
     base_form: UnitTypeId
-    """The type of which this is a form, which a unit of this type counts as. Back along `morphed_from` through each
-    step that costs nothing: a barracks for a flying barracks, a siege tank for a sieged one, a supply depot for a
-    lowered one, a roach for a burrowed one, a gateway for a warp gate. A refinery for a rich refinery, as for each rich
-    gas building. A hellion for a hellbat, a locust for a flying locust, a creep tumor for a burrowed or a queen's one,
-    and a changeling for a disguised one. The type itself for any other: a marine; an orbital command, a lair or a
-    baneling, whose morphs cost something; a cocoon, an adept's shade or an archon. The types of each `UnitType` group
-    of two forms, such as `UnitType.AnySiegeTank`, share one, as do those of `UnitType.AnyCreepTumor` and
-    `UnitType.AnyChangeling`; those of `UnitType.AnyOverlord`, `AnySpire` or `AnyZergTownhall` do not. Always a type
-    the same tables hold a row of: in tables made up for a test, a type is its own where they hold no row of the
-    other."""
+    """The type of which this is a form, which a unit of this type counts as:
+
+    | Base form | Its other forms |
+    |---|---|
+    | a command center, an orbital command, a barracks, a factory, a starport | the flying one |
+    | a supply depot | the lowered one |
+    | a refinery, an extractor, an assimilator | the rich one |
+    | a siege tank, a liberator, an overseer, an observer | the sieged one |
+    | a viking | the landed one |
+    | a thor | the one in high impact mode |
+    | a hellion | a hellbat |
+    | a widow mine, and each Zerg unit that burrows | the burrowed one |
+    | a creep tumor | the burrowed one and a queen's |
+    | a spine crawler, a spore crawler | the uprooted one |
+    | a locust | the flying one |
+    | a changeling | each disguise |
+    | a gateway | a warp gate |
+    | a warp prism | the phasing one |
+
+    Every other type is its own: a marine; a lair, a baneling or an overlord transport, whose morphs cost something; a
+    cocoon, an adept's shade or an archon. Each base form but the hellion's, the locust's, the creep tumor's and the
+    changeling's lies back along `morphed_from`, through steps that cost nothing, or is the plain gas building of a rich
+    one. The types of each `UnitType` group of two forms, such as `UnitType.AnySiegeTank`, share one, as do those of
+    `UnitType.AnyCreepTumor` and `UnitType.AnyChangeling`; those of `UnitType.AnyOverlord`, `AnySpire` or
+    `AnyZergTownhall` do not. Always a type the same tables hold a row of: in tables made up for a test, a type is its
+    own where they hold no row of the other."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
@@ -348,9 +364,7 @@ class UnitTypeData:
             ability_requirements=in_tree.ability_requirements,
             needs_power=in_tree.needs_power,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
-            techs_granted=frozenset(
-                Tech(stage) for stage in tech_tree.stages_back_along_morphed_from(unit_type) if stage in Tech
-            ),
+            techs_granted=frozenset(Tech(stage) for stage in tech_tree.morph_stages_of(unit_type) if stage in Tech),
             has_minerals=unit.has_minerals,
             has_vespene=unit.has_vespene,
             footprint=FOOTPRINTS.get(unit_type),

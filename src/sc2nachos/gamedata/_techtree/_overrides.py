@@ -295,8 +295,9 @@ UNRECORDED_BASE_FORMS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType
         # The factory trains both, and each morphs into the other (stated), by an ability that is neither type's
         # creation ability, so the tech tree records no product for it.
         UnitTypeId.HELLBAT: UnitTypeId.HELLION,
-        # The game lifts a locust into the air, burrows a creep tumor and disguises a changeling by itself (stated). A
-        # queen and a burrowed creep tumor each make a creep tumor of their own type by one ability.
+        # A swarm host's locust comes out on the ground and takes off by itself, and a flying one lands when ordered
+        # to swoop; a creep tumor, a queen's or a plain one, burrows by itself (in game); and a changeling disguises
+        # itself (stated). A queen plants a queen's creep tumor and a burrowed one a plain one, by one ability.
         UnitTypeId.LOCUST_FLYING: UnitTypeId.LOCUST,
         UnitTypeId.CREEP_TUMOR_BURROWED: UnitTypeId.CREEP_TUMOR,
         UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR,

@@ -104,7 +104,7 @@ class TechTree:
         """What it says about `upgrade`: nothing, for an upgrade it holds no record of."""
         return self.upgrades.get(upgrade, _UPGRADE_NOT_IN_THE_TREE)
 
-    def stages_back_along_morphed_from(self, unit_type: UnitTypeId) -> tuple[UnitTypeId, ...]:
+    def morph_stages_of(self, unit_type: UnitTypeId) -> tuple[UnitTypeId, ...]:
         """`unit_type`, then each type back along `morphed_from`, each once: a hive, a lair, a hatchery, a drone and a
         larva, for a hive; a marine alone, for a marine."""
         stages = [unit_type]
