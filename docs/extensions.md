@@ -235,8 +235,10 @@ class ThreatMap:
   plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what each worker at a field or a
   refinery brings in a second, a list from the first worker on, what each orbital command's MULEs mine, what a new
   command center brings, and how long an SCV walks to build each structure. Its defaults are the rates measured
-  speed mining, and a walk of 10 seconds to a command center and 6 to anything else. `free_expansions` caps the
-  command centers a plan starts, none by default. A base about to fall, with no refinery yet, left out, and the
+  speed mining, and a walk of 10 seconds to a command center and 6 to anything else. `new_command_center_limit`
+  caps the command centers a plan starts, none by default: the bot's own count, such as the expansions it means to
+  take less those an SCV is already on its way to build on, which the state holds as worker builds. A base about to
+  fall, with no refinery yet, left out, and the
   MULEs' energy spent on scans:
 
   ```python

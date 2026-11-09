@@ -52,8 +52,8 @@ class PlanProgram:
     the walk there through the build to the walk back, takes its supply at once, and counts as done from the first edge
     at or after its end. Workers mine, collect or build, pooled over every field and refinery, in the tiers of
     `economy`'s rates, and each orbital command adds its MULEs' income. A unit counts as it survives its loss rate in
-    `loss_rates`, for income, supply, the reward and coverage. At most `free_expansions` command centers start, any
-    number if `None`.
+    `loss_rates`, for income, supply, the reward and coverage. At most `new_command_center_limit` command centers
+    start, any number if `None`.
 
     Raises `ValueError` unless `whole_until_seconds` hold one time for each item, and for a negative walk from
     `economy`'s `walk_time`.
@@ -67,7 +67,7 @@ class PlanProgram:
         "_discounts",
         "_economy",
         "_edges",
-        "_free_expansions",
+        "_new_command_center_limit",
         "_index_of_unit_type",
         "_index_of_upgrade",
         "_items",
@@ -96,7 +96,7 @@ class PlanProgram:
         reward: Reward,
         economy: Economy,
         loss_rates: Mapping[UnitTypeId, float],
-        free_expansions: int | None,
+        new_command_center_limit: int | None,
         whole_until_seconds: Sequence[float],
     ) -> None:
         if len(whole_until_seconds) != len(items):
@@ -107,7 +107,7 @@ class PlanProgram:
         self._reward = reward
         self._economy = economy
         self._loss_rates = {model.usual_form(unit_type): rate for unit_type, rate in loss_rates.items()}
-        self._free_expansions = free_expansions
+        self._new_command_center_limit = new_command_center_limit
         built_by_worker = (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         self._walk_seconds = walk_seconds_of(economy, built_by_worker)
         self._completions, self._builders_free_after = self._completions_and_builders()
@@ -209,7 +209,11 @@ class PlanProgram:
     def _most_starts_in_a_bucket(self, item: Item) -> float:
         """The most of `item` that can start in one bucket."""
         state = self._state
-        new_townhalls = _MOST_STARTS_IN_A_BUCKET if self._free_expansions is None else float(self._free_expansions)
+        new_townhalls = (
+            _MOST_STARTS_IN_A_BUCKET
+            if self._new_command_center_limit is None
+            else float(self._new_command_center_limit)
+        )
         townhalls_coming = new_townhalls + _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
         if item.upgrade is not None:
             return 1.0
@@ -483,7 +487,7 @@ class PlanProgram:
 
     def _constrain_counts(self) -> None:
         """What the game's counts bound: workers at the fields and refineries there are, each tier its share of each, an
-        add-on a host, a morph a townhall, command centers the free expansions, a refinery a geyser, and an upgrade
+        add-on a host, a morph a townhall, command centers their limit, a refinery a geyser, and an upgrade
         once."""
         buckets = self._bucket_count
         economy = self._economy
@@ -498,9 +502,9 @@ class PlanProgram:
                 self._constrain_at_most(working, RowExpression(buckets).add_expression(sites, tier.workers_per_site))
         self._constrain_add_ons_and_morphs()
         command_center = self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)
-        if command_center is not None and self._free_expansions is not None:
+        if command_center is not None and self._new_command_center_limit is not None:
             expansions = RowExpression(1).add(self._starts[command_center], 1.0)
-            self._program.constrain(expansions, upper=float(self._free_expansions))
+            self._program.constrain(expansions, upper=float(self._new_command_center_limit))
         if (refinery := self._index_of_unit_type.get(UnitTypeId.REFINERY)) is not None:
             geysers = RowExpression(buckets).add_expression(new_bases, economy.geysers_per_new_base)
             geysers.constant += self._state.free_geysers

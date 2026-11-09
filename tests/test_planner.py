@@ -68,10 +68,10 @@ def _best_plan(
     whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
     economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: dict[UnitTypeId, float] | None = None,
-    free_expansions: int | None = None,
+    new_command_center_limit: int | None = None,
 ) -> Plan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `whole_until`, by
-    `economy`, with `loss_rates` and `free_expansions`, proven best."""
+    `economy`, with `loss_rates` and `new_command_center_limit`, proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
         items=items,
@@ -81,7 +81,7 @@ def _best_plan(
         reward=reward,
         economy=economy,
         loss_rates=loss_rates or {},
-        free_expansions=free_expansions,
+        new_command_center_limit=new_command_center_limit,
         whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
     )
     plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT)
@@ -401,7 +401,7 @@ class TestWholeUntil:
                 reward=reward,
                 economy=Economy(),
                 loss_rates={},
-                free_expansions=None,
+                new_command_center_limit=None,
                 whole_until_seconds=[whole_until.seconds] * len(items),
             )
             return program.linear_program.integral_count
@@ -532,7 +532,7 @@ class TestEconomy:
         )
         assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
 
-    def test_with_no_free_expansion_no_command_center_starts(self) -> None:
+    def test_with_a_limit_of_no_new_command_center_none_starts(self) -> None:
         """The known plan that starts one at 48 seconds."""
         reward = Reward(weights={UnitTypeId.SCV: 2.0, UnitTypeId.COMMAND_CENTER: 1.0})
         plan = _best_plan(
@@ -541,7 +541,7 @@ class TestEconomy:
             horizon_seconds=150,
             grid=TimeGrid.doubling(),
             whole_until=_whole_over_any_horizon,
-            free_expansions=0,
+            new_command_center_limit=0,
         )
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER) == []
 
@@ -939,10 +939,10 @@ class TestPlanner:
 
     @pytest.mark.parametrize(
         "arguments",
-        [{"free_expansions": -1}, {"economy": Economy(walk_time=lambda _: GameTime(seconds=-1))}],
-        ids=["negative free expansions", "a negative walk"],
+        [{"new_command_center_limit": -1}, {"economy": Economy(walk_time=lambda _: GameTime(seconds=-1))}],
+        ids=["a negative command center limit", "a negative walk"],
     )
-    def test_a_negative_count_of_free_expansions_or_walk_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_negative_command_center_limit_or_walk_raises(self, arguments: dict[str, Any]) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
         api = Api(extensions=Planner)
 

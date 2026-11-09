@@ -2,8 +2,8 @@
 14 hand-written items: each solve's time, objective, gap and counts, and the first part of its plan.
 
 Every case plans from the start of a game, twelve SCVs on a main's eight fields beside its command center, 50
-minerals, 12 of 15 supply and three free expansions, over 10 minutes, valuing marines, marauders and medivacs as the
-toy did, with no walks unless the case says so:
+minerals and 12 of 15 supply, with at most three new command centers, over 10 minutes, valuing marines, marauders and
+medivacs as the toy did, with no walks unless the case says so:
 
 - `reference`: the reference configuration, the doubling grid, the planner's default windows of whole starts, and a
   discounted concave reward, at each half-life given by `--half-lives`, with walks: 25 seconds to the expansion and 6
@@ -38,7 +38,7 @@ from sc2nachos.ids import UnitTypeId
 from sc2nachos.testing import load_game_data
 
 _HORIZON = GameTime(seconds=600)
-_FREE_EXPANSIONS = 3
+_NEW_COMMAND_CENTER_LIMIT = 3
 _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
@@ -163,7 +163,7 @@ def _solve_and_print(
         reward=reward,
         economy=_walking(_NO_WALKS) if economy is None else economy,
         loss_rates=loss_rates,
-        free_expansions=_FREE_EXPANSIONS,
+        new_command_center_limit=_NEW_COMMAND_CENTER_LIMIT,
         whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
     )
     built = time.perf_counter() - started

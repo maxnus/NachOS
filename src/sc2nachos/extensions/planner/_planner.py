@@ -135,22 +135,24 @@ class Planner:
         state: GameState | None = None,
         economy: Economy = Economy(),
         loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
-        free_expansions: int | None = None,
+        new_command_center_limit: int | None = None,
     ) -> Plan:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `game_state()` now if `None`, and its time is the plan's start. The plan's workers mine, collect and walk as
         `economy` says. A unit of a type in `loss_rates` is expected lost at that share a second, those alive now and
-        those the plan makes, so that only the share expected alive counts. At most `free_expansions` command centers
-        start, any number if `None`. It solves within the planner's limits, before it returns.
+        those the plan makes, so that only the share expected alive counts. The plan starts at most
+        `new_command_center_limit` command centers, any number if `None`: the bot's own count, such as the expansions it
+        means to take less those an SCV is already on its way to build on, which `state` holds as worker builds. It
+        solves within the planner's limits, before it returns.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate or `free_expansions`, or a negative time from `whole_until` or from `economy`'s
-        `walk_time`; and `NoPlanFoundError` if the solver finds no plan within its limits.
+        than 0, a negative loss rate or `new_command_center_limit`, or a negative time from `whole_until` or from
+        `economy`'s `walk_time`; and `NoPlanFoundError` if the solver finds no plan within its limits.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
-        if free_expansions is not None and free_expansions < 0:
-            raise ValueError(f"free_expansions must not be negative, not {free_expansions}")
+        if new_command_center_limit is not None and new_command_center_limit < 0:
+            raise ValueError(f"new_command_center_limit must not be negative, not {new_command_center_limit}")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
         program = PlanProgram(
@@ -161,7 +163,7 @@ class Planner:
             reward=reward,
             economy=economy,
             loss_rates=loss_rates,
-            free_expansions=free_expansions,
+            new_command_center_limit=new_command_center_limit,
             whole_until_seconds=whole_until_seconds_of(items, whole_until=self._whole_until),
         )
         plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)

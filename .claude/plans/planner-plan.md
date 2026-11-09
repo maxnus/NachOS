@@ -77,15 +77,15 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    warm start from the shifted previous plan or by re-scoring it, and only with the hysteresis; both are required.
    A synchronous mode with a node limit is deterministic for tests and recordings.
 10. **No caps on production structures.** Their number is bounded by the economics; the physical bounds stay: the
-    free expansions the bot passes, none by default, two refineries a base, one add-on a barracks, one of each
-    upgrade, supply 200, and room to build near a base once the map supplies it.
+    command centers the bot lets a plan start, none by default, two refineries a base, one add-on a barracks, one of
+    each upgrade, supply 200, and room to build near a base once the map supplies it.
 11. **Every input is visible and the bot's to change** (the owner, review of #239). What the game shows is a public
     `GameState`, which `Planner.game_state` reads and `plan_now(state=...)` takes back changed, a base about to fall
     left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `Economy`
     handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
     worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and
-    `free_expansions` beside it. The constructor keeps only how to solve: the grid, the limits and the windows.
-    Workers stay pooled over every field and refinery (Open 10).
+    `new_command_center_limit`, the bot's own count, beside it. The constructor keeps only how to solve: the grid, the
+    limits and the windows. Workers stay pooled over every field and refinery (Open 10).
 
 ## Measurements
 
@@ -220,10 +220,10 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    townhalls, production and tech structures whole over the horizon, the concave reward was 7.6% from its bound after
    3 s at a half-life of 240 s and 12% undiscounted, still 7 to 11% after 10 s: the root relaxation of the whole
    structures is what stayed loose, and a tighter big-M did not help. Left for the owner: the incumbent at 3 s, or
-   phase 3's warm start. With no cap on free expansions, a bucket's command centers are bounded by 100, and the
-   prerequisite rows' big-M of a morph and a refinery with them, to about 101 and 202 at a game's start, where three
-   free expansions gave 4 and 8; the reference was no slower, optimal in 7.0 to 11.0 s. A valid tighter bound, if the
-   3 seconds call for one: the command centers the horizon's resources can pay for.
+   phase 3's warm start. With no limit on new command centers, a bucket's are bounded by 100, and the prerequisite
+   rows' big-M of a morph and a refinery with them, to about 101 and 202 at a game's start, where a limit of three
+   gave 4 and 8; the reference was no slower, optimal in 7.0 to 11.0 s. A valid tighter bound, if the 3 seconds call
+   for one: the command centers the horizon's resources can pay for.
 8. **The count-form cut holds only where a bucket's starts are whole** (phase 1, for the owner to confirm). The toy
    applied it in every bucket shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
    buckets a barracks made a marine every 32 seconds, not every 17.86. Held to whole buckets, the toy's linear case
