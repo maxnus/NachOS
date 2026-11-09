@@ -545,7 +545,7 @@ class TestWhatTheTablesSay:
             needs = {units[researcher].ability_requirements[row.research_ability] for researcher in row.researchers}
             assert needs == {row.tech_requirements}, upgrade.name
 
-    def test_a_type_grants_the_tech_named_after_it_and_after_each_type_the_tables_count_it_as(
+    def test_a_type_grants_the_tech_named_after_it_and_after_each_type_back_along_morphed_from(
         self, first_corpus_tables: GameData
     ) -> None:
         units = first_corpus_tables.units
@@ -557,13 +557,13 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.MARINE].techs_granted == frozenset()
 
     def test_a_type_granting_a_tech_grants_every_tech_its_base_type_grants(self, first_corpus_tables: GameData) -> None:
-        """A hive grants `Tech.HATCHERY` as a lair does, though it counts as one only through a lair."""
+        """A hive grants `Tech.HATCHERY` as a lair does, though it is morphed from a hatchery only through a lair."""
         units = first_corpus_tables.units
         for unit_type, row in units.items():
             for tech in row.techs_granted:
                 assert units[tech.base_type].techs_granted <= row.techs_granted, (unit_type.name, tech.name)
 
-    def test_the_types_granting_a_tech_are_its_base_type_and_those_counted_as_it(
+    def test_the_types_granting_a_tech_are_its_base_type_and_those_morphed_from_it(
         self, first_corpus_tables: GameData
     ) -> None:
         assert first_corpus_tables.types_granting(Tech.SPIRE) == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}

@@ -51,5 +51,6 @@ class Tech(Enum):
 
     @property
     def base_type(self) -> UnitTypeId:
-        """The type it is named after, which every other type granting it counts as: a spire, for `SPIRE`."""
+        """The type it is named after, from which every other type granting it is morphed, in one step or more: a spire,
+        for `SPIRE`, from which a greater spire is morphed."""
         return self.value

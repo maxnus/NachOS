@@ -16,6 +16,7 @@ from sc2nachos.gamedata import (
     Resources,
     TargetDomain,
     TargetType,
+    Tech,
     UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _cost_of_making
@@ -688,6 +689,16 @@ class TestARecordedGamesTables:
         assert borrowed - UNIT_TYPE_BUILD_TIME_OVERRIDES.keys() <= set(_RICH_GAS_BUILDINGS)
         for rich, plain in _RICH_GAS_BUILDINGS.items():
             assert data.units[rich].build_time.steps == data.units[plain].build_time.steps == 480, rich.name
+
+    def test_a_type_grants_the_techs_the_tables_name_it_and_its_tech_aliases_after(self, path: Path) -> None:
+        """The techs named after the types back along `morphed_from` are those named after the type and its
+        `tech_alias`, for every curated type."""
+        answer = _answer(path)
+        data = GameData(answer)
+        for row in answer.units:
+            if (unit_type := UnitTypeId.get(row.unit_id)) is not None:
+                aliased = frozenset(Tech(granting) for granting in (row.unit_id, *row.tech_alias) if granting in Tech)
+                assert data.units[unit_type].techs_granted == aliased, unit_type.name
 
     def test_a_build_time_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
         """Once the game's own row gives the time measured, the entry can go."""

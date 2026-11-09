@@ -108,6 +108,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   building's plain one, the creep tumor for a burrowed or a queen's one, and the plain changeling for each disguise. It
   also names the adept for an adept's shade, which stands apart from its adept, the plain geyser for four geyser
   variants and a plain rock for the icy and `_EX1` rocks, and nothing for a warp gate or a hellbat (corpus).
+- Of the types a tech requirement names, `tech_alias` names exactly those a type is morphed from, in one step or more:
+  the lair and the hatchery for a hive, the command center for an orbital command, flying or not, or a planetary
+  fortress, the barracks for a flying barracks, and the gateway for a warp gate (corpus, every curated type).
 - `is_building` means "needs placing"; an add-on's `footprint_radius` is 3.5, the reach past its host's far side; a
   bare tech lab or reactor is a requirement, and no unit is ever built as one (#23).
 - The tables count `AUTO_TURRET` and `REAPER_GRENADE` as terran structures and `STASIS_WARD` as protoss; map units
