@@ -22,14 +22,13 @@ class UnitType:
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
     `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
-    geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
-    destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
-    cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and Protoss
-    production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
-    supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
-    that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.forms` is the group of two forms it is in,
-    `AnyChangeling`, `AnyCreepTumor` or its race's gas building on either geyser, such as `AnyRefinery`, or else its own
+    geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
+    acceleration zones, the critters, the changelings, the creep tumors, the cocoons, the add-ons, tech labs and
+    reactors, the spires, the overlords, the units each Terran and Protoss production structure makes, or the two forms
+    of a structure or a unit that changes and changes back, such as a supply depot raised or lowered, a siege tank
+    sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot`
+    is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, and `Townhall` a `Structure`. A
+    type's `UnitTypeData.forms` is the group of two forms it is in, `AnyChangeling` or `AnyCreepTumor`, or else its own
     class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
@@ -118,15 +117,6 @@ class UnitType:
 
     class GasBuilding(AnyResource):
         """A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race."""
-
-    class AnyRefinery(GasBuilding, TerranStructure):
-        """A refinery, on a plain or a rich geyser."""
-
-    class AnyExtractor(GasBuilding, ZergStructure):
-        """An extractor, on a plain or a rich geyser."""
-
-    class AnyAssimilator(GasBuilding, ProtossStructure):
-        """An assimilator, on a plain or a rich geyser."""
 
     class Destructible(Structure):
         """A destructible rock, debris, ice, unbuildable brick, plate or rock, or a collapsible tower or its debris."""
@@ -308,10 +298,10 @@ class UnitType:
     class Armory(TerranStructure):
         id = UnitTypeId.ARMORY
 
-    class Assimilator(AnyAssimilator):
+    class Assimilator(ProtossStructure, GasBuilding):
         id = UnitTypeId.ASSIMILATOR
 
-    class AssimilatorRich(AnyAssimilator):
+    class AssimilatorRich(ProtossStructure, GasBuilding):
         id = UnitTypeId.ASSIMILATOR_RICH
 
     class AutoTurret(TerranStructure):
@@ -662,10 +652,10 @@ class UnitType:
     class EvolutionChamber(ZergStructure):
         id = UnitTypeId.EVOLUTION_CHAMBER
 
-    class Extractor(AnyExtractor):
+    class Extractor(ZergStructure, GasBuilding):
         id = UnitTypeId.EXTRACTOR
 
-    class ExtractorRich(AnyExtractor):
+    class ExtractorRich(ZergStructure, GasBuilding):
         id = UnitTypeId.EXTRACTOR_RICH
 
     class Factory(AnyFactory):
@@ -956,10 +946,10 @@ class UnitType:
     class ReaperGrenade(TerranStructure):
         id = UnitTypeId.REAPER_GRENADE
 
-    class Refinery(AnyRefinery):
+    class Refinery(TerranStructure, GasBuilding):
         id = UnitTypeId.REFINERY
 
-    class RefineryRich(AnyRefinery):
+    class RefineryRich(TerranStructure, GasBuilding):
         id = UnitTypeId.REFINERY_RICH
 
     class Roach(AnyRoach):
@@ -1138,9 +1128,6 @@ class UnitType:
 
 
 _FORMS_GROUPS: Final[tuple[type[UnitType.AnyType], ...]] = (
-    UnitType.AnyRefinery,
-    UnitType.AnyExtractor,
-    UnitType.AnyAssimilator,
     UnitType.AnyChangeling,
     UnitType.AnyCreepTumor,
     UnitType.AnySupplyDepot,

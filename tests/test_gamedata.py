@@ -514,8 +514,8 @@ class TestReadingTheTables:
 # Each gas building on a rich geyser, and the one on a plain geyser it is built as.
 _RICH_GAS_BUILDINGS = {
     UnitTypeId.REFINERY_RICH: UnitTypeId.REFINERY,
-    UnitTypeId.EXTRACTOR_RICH: UnitTypeId.EXTRACTOR,
     UnitTypeId.ASSIMILATOR_RICH: UnitTypeId.ASSIMILATOR,
+    UnitTypeId.EXTRACTOR_RICH: UnitTypeId.EXTRACTOR,
 }
 
 
@@ -531,7 +531,6 @@ class TestForms:
             (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitType.AnySupplyDepot),
             (UnitTypeId.BARRACKS_FLYING, UnitType.AnyBarracks),
             (UnitTypeId.ORBITAL_COMMAND, UnitType.AnyOrbitalCommand),
-            (UnitTypeId.REFINERY_RICH, UnitType.AnyRefinery),
             (UnitTypeId.SIEGE_TANK, UnitType.AnySiegeTank),
             (UnitTypeId.HELLBAT, UnitType.AnyHellion),
             (UnitTypeId.ROACH_BURROWED, UnitType.AnyRoach),
@@ -556,6 +555,7 @@ class TestForms:
             (UnitTypeId.OVERLORD_TRANSPORT, UnitType.OverlordTransport),
             (UnitTypeId.ADEPT_SHADE, UnitType.AdeptShade),
             (UnitTypeId.ARCHON, UnitType.Archon),
+            (UnitTypeId.REFINERY_RICH, UnitType.RefineryRich),
         ],
         ids=_type_or_class_name,
     )
@@ -563,7 +563,8 @@ class TestForms:
         self, first_corpus_tables: GameData, unit_type: UnitTypeId, own_class: type[UnitType.AnyType]
     ) -> None:
         """A lair, a cocoon and an overlord transport each cost something to morph into, an adept's shade stands apart
-        from its adept, and an archon is made of two templar."""
+        from its adept, an archon is made of two templar, and a refinery on a rich geyser is another structure than one
+        on a plain geyser."""
         assert first_corpus_tables.units[unit_type].forms is own_class
 
     def test_a_types_forms_are_the_same_in_tables_holding_no_row_of_its_other_forms(self) -> None:

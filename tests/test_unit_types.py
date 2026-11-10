@@ -116,11 +116,12 @@ class TestUnitType:
             if unit_type not in in_groups:
                 assert row.forms.type_ids == {unit_type}, unit_type.name
 
-    def test_the_forms_are_what_the_tables_call_a_form_of_but_for_a_shade_a_warp_gate_and_a_hellbat(
+    def test_the_forms_differ_from_what_the_tables_call_a_form_of_in_four_places(
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
-        """The tables call an adept's shade a form of the adept, and a warp gate and a hellbat a form of nothing. They
-        call a rock or a geyser of the map's a form of a plain one, but each has its own class as its forms."""
+        """The tables call an adept's shade a form of the adept, a warp gate and a hellbat a form of nothing, and a gas
+        building on a rich geyser a form of the one on a plain geyser, which is another structure. They call a rock or a
+        geyser of the map's a form of a plain one, but each has its own class as its forms."""
         race_rows = [row for row in first_corpus_tables.units.values() if row.race is not Race.NONE]
         types_by_alias: dict[UnitTypeId, set[UnitTypeId]] = {}
         for row in race_rows:
@@ -133,12 +134,16 @@ class TestUnitType:
             frozenset({UnitTypeId.WARP_GATE}),
             frozenset({UnitTypeId.HELLION}),
             frozenset({UnitTypeId.HELLBAT}),
+            frozenset({UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH}),
+            frozenset({UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}),
+            frozenset({UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}),
         }
         assert by_forms - by_alias == {
             frozenset({UnitTypeId.ADEPT}),
             frozenset({UnitTypeId.ADEPT_SHADE}),
             frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
             frozenset({UnitTypeId.HELLION, UnitTypeId.HELLBAT}),
+            *(frozenset({gas_building}) for gas_building in UnitType.GasBuilding.type_ids),
         }
         map_objects = [row for row in first_corpus_tables.units.values() if row.race is Race.NONE]
         assert all(row.forms.type_ids == {row.id} for row in map_objects)
