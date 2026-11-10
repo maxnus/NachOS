@@ -197,3 +197,91 @@ class ThreatMap:
 
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.
+- **The build planner**, `sc2nachos.extensions.planner.Planner`, for Terran: given a reward, a horizon and the state of
+  the game, what to make and when, as a list of items in order, each with the time it is expected to start. It solves a
+  mixed-integer linear program over a grid of time buckets, which scipy's HiGHS solves, so whether to expand or make
+  marines now follows from the economy it models, not from a rule. The objective stays the bot's: it hands the planner a
+  `Reward` and never the other way round.
+
+  ```python
+  from sc2nachos.extensions.planner import CurveSegment, Planner, Reward
+
+
+  class Extensions:
+      def __init__(self, api: Api) -> None:
+          self.planner = Planner(api)
+
+
+  @api.on(TurnEvent)
+  def replan(event: TurnEvent) -> None:
+      if api.step % 448 == 0:
+          marines = [CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.3)]
+          reward = Reward(curves={UnitTypeId.MARINE: marines}, half_life=GameTime(seconds=240))
+          plan = api.extensions.planner.plan_now(reward, horizon=GameTime(seconds=600))
+  ```
+
+  What the bot supplies is the reward, summed a second at a time over the horizon and discounted by its `half_life`:
+  what each unit alive is worth, a weight for each type or a concave curve of pieces over its count, so that a plan
+  buys a mix rather than only the best type for its cost; what each upgrade done is worth; enemy units covered, each
+  kind a `Coverage` of how many the bot expects from when, how much of one each own type covers and what one covered is
+  worth; counts wanted at least, each a `Floor` with what a unit short costs; how long the state at the horizon counts
+  for after it; and a bonus for each item of the previous plan the new one keeps to. `plan_now` takes the horizon and
+  the share of each unit type the bot expects lost a second, so that only what is expected to survive counts.
+  A unit counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a
+  hellbat as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
+
+  Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `GameState`
+  `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and
+  when it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries and
+  free geysers at its bases, pooled, since the planner never knows which base a worker is at. `plan_now(state=...)`
+  plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what each worker at a field or a
+  refinery brings in a second, a list from the first worker on, what each orbital command's MULEs mine, what a new
+  command center brings, and how long an SCV walks to build each structure. Its defaults are the rates measured
+  speed mining, and a walk of 10 seconds to a command center and 6 to anything else. `new_command_center_limit`
+  caps the command centers a plan starts, none by default: the bot's own count, such as the expansions it means to
+  take less those an SCV is already on its way to build on, which the state holds as worker builds. A base about to
+  fall, with no refinery yet, left out, and the
+  MULEs' energy spent on scans:
+
+  ```python
+  import dataclasses
+
+  from sc2nachos.extensions.planner import Economy
+
+  planner = api.extensions.planner
+  state = planner.game_state()
+  state = dataclasses.replace(
+      state,
+      mineral_fields=state.mineral_fields - len(falling_base.mineral_fields.alive),
+      free_geysers=state.free_geysers - len(falling_base.geysers),
+  )
+  economy = Economy(mule_minerals_per_orbital_second=0.0)
+  plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy)
+  ```
+
+  What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
+  to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and what
+  the planner expects at each of its `times`: the `minerals` and `vespene` in stock, and the `counts` of each unit type
+  alive. `planner.plan` holds the last one. The planner orders nothing and holds no unit: where a structure goes, which
+  SCV builds it, and what to drop once the game moves on stay the bot's.
+
+  `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that
+  much longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a
+  plan the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the
+  items from the game's data, pruned to what the reward needs, the workers pooled over every field and refinery, the
+  SCV away from the walk to a structure through the build to the walk back, and starts on the first second of a bucket
+  of its `TimeGrid`, 2 seconds long at first and doubling every time the time from the plan's start doubles from 45
+  seconds.
+
+  An item starts in whole numbers for a time from the plan's start, and in fractions after it: the solver weighs
+  fractions far faster, and the bot carries out only the near term before it plans again. By default that time grows
+  with what the item costs: 4 minutes for a command center, 1 for a supply depot and 30 seconds for an SCV, and an
+  upgrade is whole throughout. `Planner(api, whole_until=...)` takes a function that returns another time for a unit
+  type, or `None` for its default:
+
+  ```python
+  def whole_until(unit_type: UnitTypeId) -> GameTime | None:
+      return GameTime(seconds=20) if unit_type == UnitTypeId.SUPPLY_DEPOT else None
+  ```
+
+  `GameTime.INFINITE` keeps a type whole throughout. Longer makes a plan exact further ahead, and the solve slower.

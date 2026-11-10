@@ -14,6 +14,10 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 As of 2026-11-08:
 
+- **The build planner is the work in progress**: `sc2nachos.extensions.planner`, a solver of build orders any bot hands
+  its reward. [planner-plan.md](planner-plan.md) holds its decisions, the measurements behind them, its design and its
+  phases, and its toy is `tools/planner_toy/`. Phase 1, the extension for Terran, synchronous, is the pull request that
+  moved them here; phase 2 plays it in AvocaDOS.
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
   on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
@@ -250,6 +254,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   by their kind (the owner, review of #231, over marking its orders through `Order.data`); a refused order lets the
   worker go too, as documented (the owner, over reading the refusals).
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
+- **The build planner is an extension of NachOS's own** (the owner, 2026-11-07), over a package of its own,
+  `sc2nachos-planner`: a solver any bot hands its objective is in scope, as AGENTS.md's scope line now says, and the
+  objective stays the bot's. The plan's decisions stand as [planner-plan.md](planner-plan.md) records them.
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
 - **Upgrade inference reads each turn's observation on `TurnStartEvent`, and not the one the game ended on** (the
   owner, review of #234, over reading that one on `GameEndEvent` too, as #206 did): `api.enemy.upgrades` at the end
@@ -318,10 +325,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
-- The build planner (#239) drops `_note_morph_starts` and `morph_starts` once its branch takes main, which times a
-  command center's morph, and reads `InProduction.product` and `fraction` where it read `type_id` and `progress`. It
-  drops its own `usual_form` too, for `UnitTypeData.equivalent_types`, which puts a hellbat with the hellion where it
-  kept them apart, and chooses itself which type of a group it builds.
+- **The build planner**, a phase at a time, as [planner-plan.md](planner-plan.md) orders them: after phase 1, playing it
+  in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
+  the owner to settle: the 3-second exit, the count-form cut, and workers per base, which the owner wants to come back
+  to.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
