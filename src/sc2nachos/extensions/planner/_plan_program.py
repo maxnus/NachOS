@@ -169,7 +169,9 @@ class PlanProgram:
     def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
         """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
         and the seconds until each SCV building, or walking to build, is back at work after its walk back."""
-        completions = [(unit_type, time_left.seconds) for unit_type, time_left in self._state.unit_completions]
+        completions = [
+            (completion.unit_type, completion.time_left.seconds) for completion in self._state.unit_completions
+        ]
         builders_free_after: list[float] = []
         for build in self._state.worker_builds:
             walk = self._walk_seconds.get(build.unit_type, 0.0)

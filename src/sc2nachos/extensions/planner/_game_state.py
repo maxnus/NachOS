@@ -34,6 +34,17 @@ class Occupation:
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
+class UnitCompletion:
+    """A unit in production but a structure an SCV builds: a train, a morph or an add-on."""
+
+    unit_type: UnitTypeId
+    """The type it counts as."""
+    time_left: GameTime
+    """The time from the state's until it is done, after what its producer makes before it."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
 class WorkerBuild:
     """A structure an SCV builds, going up or on its way."""
 
@@ -70,9 +81,8 @@ class GameState:
     transport included, which the observation leaves out."""
     upgrades: frozenset[UpgradeId] = frozenset()
     """The upgrades done."""
-    unit_completions: tuple[tuple[UnitTypeId, GameTime], ...] = ()
-    """Each unit in production but a structure an SCV builds, as the type it counts as, with the time until it is
-    done."""
+    unit_completions: tuple[UnitCompletion, ...] = ()
+    """Each unit in production but a structure an SCV builds."""
     upgrade_completions: Mapping[UpgradeId, GameTime] = field(default_factory=dict)
     """Each upgrade being researched, with the time until it is done."""
     occupations: tuple[Occupation, ...] = ()
@@ -146,11 +156,11 @@ def _bases_of(api: Api[object]) -> tuple[int, int]:
 
 def _production_of(
     api: Api[object], model: TerranModel
-) -> tuple[list[tuple[UnitTypeId, GameTime]], list[Occupation], list[tuple[WorkerBuild, InProduction]]]:
+) -> tuple[list[UnitCompletion], list[Occupation], list[tuple[WorkerBuild, InProduction]]]:
     """Each unit in production but a structure an SCV builds, with the time until it is done; what keeps each
     producer busy; and each structure an SCV builds, with what it was read from. A structure not begun, or going up
     with no SCV building it, waits for an SCV's walk there."""
-    completions: list[tuple[UnitTypeId, GameTime]] = []
+    completions: list[UnitCompletion] = []
     worker_builds: list[tuple[WorkerBuild, InProduction]] = []
     by_producer: dict[int, list[InProduction]] = {}
     producers: dict[int, OwnUnit[Any]] = {}
@@ -162,7 +172,7 @@ def _production_of(
             build = WorkerBuild(unit_type=unit_type, time_left=in_production.time_left, builder_walks_there=walks_there)
             worker_builds.append((build, in_production))
         elif producer is None:
-            completions.append((unit_type, in_production.time_left))
+            completions.append(UnitCompletion(unit_type=unit_type, time_left=in_production.time_left))
         else:
             by_producer.setdefault(producer.id, []).append(in_production)
             producers[producer.id] = producer
@@ -175,7 +185,7 @@ def _production_of(
             lane = lanes.index(min(lanes))
             start = lanes[lane]
             lanes[lane] = start + in_production.time_left
-            completions.append((unit_type, lanes[lane]))
+            completions.append(UnitCompletion(unit_type=unit_type, time_left=lanes[lane]))
             occupations.append(
                 Occupation(
                     producer=model.counted_as(producer.type_id),

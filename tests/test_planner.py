@@ -23,6 +23,7 @@ from sc2nachos.extensions.planner import (
     Planner,
     Reward,
     TimeGrid,
+    UnitCompletion,
     WorkerBuild,
 )
 from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
@@ -252,6 +253,21 @@ class TestKnownPlans:
         )
         plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=60)
         assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
+
+    def test_a_unit_in_production_counts_from_the_first_edge_after_it_is_done(self) -> None:
+        """With nothing to spend, a marine 9 seconds from done is the plan's only one, alive from the edge at 10."""
+        marine = UnitCompletion(unit_type=UnitTypeId.MARINE, time_left=GameTime(seconds=9))
+        state = _game_start(
+            minerals=0.0,
+            supply_used=1.0,
+            supply_cap=100.0,
+            counts={UnitTypeId.BARRACKS: 1},
+            mineral_fields=0,
+            unit_completions=(marine,),
+        )
+        plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=16)
+        assert plan.items == ()
+        assert plan.counts[UnitTypeId.MARINE] == (0, 0, 0, 0, 0, 1, 1, 1, 1)
 
     def test_a_reward_on_hellbats_plans_hellions(self) -> None:
         """A factory with no vespene for a reactor, over a minute: a hellion started at 44 seconds would not be done by
@@ -753,6 +769,11 @@ def _states_of(*observations: sc2api_pb2.ResponseObservation) -> list[GameState]
     return states[: len(observations)]
 
 
+def _unit_completions_in_seconds(state: GameState) -> list[tuple[UnitTypeId, float]]:
+    """`state`'s unit completions, each as its type and its seconds left."""
+    return [(completion.unit_type, completion.time_left.seconds) for completion in state.unit_completions]
+
+
 def _worker_builds_in_seconds(state: GameState) -> list[tuple[UnitTypeId, float, bool]]:
     """`state`'s worker builds, each as its type, its seconds left to a hundredth, and whether its SCV walks there."""
     return [
@@ -797,7 +818,7 @@ class TestGameState:
         depot = _TERRAN_MODEL.unit_items[UnitTypeId.SUPPLY_DEPOT].build_seconds
         stimpack = _TERRAN_MODEL.upgrade_items[UpgradeId.STIMPACK].build_seconds
 
-        assert sorted((unit_type, time.seconds) for unit_type, time in state.unit_completions) == pytest.approx(
+        assert sorted(_unit_completions_in_seconds(state)) == pytest.approx(
             sorted(
                 [
                     (UnitTypeId.SCV, 0.75 * scv),
@@ -868,10 +889,10 @@ class TestGameState:
         states = _states_of(_main_base_at(0), _main_base_at(224, morphing=True), _main_base_at(448, morphing=True))[1:]
         orbital = _TERRAN_MODEL.unit_items[UnitTypeId.ORBITAL_COMMAND].build_seconds
         left = [
-            time
+            completion.time_left
             for state in states
-            for unit_type, time in state.unit_completions
-            if unit_type == UnitTypeId.ORBITAL_COMMAND
+            for completion in state.unit_completions
+            if completion.unit_type == UnitTypeId.ORBITAL_COMMAND
         ]
         assert [time.seconds for time in left] == pytest.approx([orbital - 10, orbital - 20])
         assert all(
