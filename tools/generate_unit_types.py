@@ -48,14 +48,14 @@ class UnitType:
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
     `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
-    geysers, the gas buildings, the collapsible towers and their debris, the destructible rocks, the inhibitor and
-    acceleration zones, the critters, the changelings, the creep tumors, the cocoons, the add-ons, tech labs and
-    reactors, the spires, the overlords, the units each Terran and Protoss production structure makes, or the two forms
-    of a structure or a unit that changes and changes back, such as a supply depot raised or lowered, a siege tank
-    sieged or not, or a roach burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot`
-    is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, and `Townhall` a `Structure`. A
-    type's `UnitTypeData.forms` is the group of two forms it is in, `AnyChangeling` or `AnyCreepTumor`, or else its own
-    class.
+    geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
+    destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
+    cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and Protoss
+    production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
+    supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
+    that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
+    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.forms` is the group of two forms it is in,
+    `AnyChangeling` or `AnyCreepTumor`, or else its own class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -205,6 +205,13 @@ TWO_FORMS = {
         )
     },
 }
+# Each race's gas building, on a plain geyser or a rich one, by its group. A rich one is another structure, never a form
+# of the plain one.
+GAS_BUILDINGS_ON_EITHER_GEYSER = {
+    "AnyRefinery": frozenset({UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH}),
+    "AnyExtractor": frozenset({UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}),
+    "AnyAssimilator": frozenset({UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}),
+}
 # The groups a type's `UnitTypeData.forms` may be, each with the types one unit changes between. A type in none has
 # its own class as its forms.
 FORMS_GROUPS = {"AnyChangeling": CHANGELINGS, "AnyCreepTumor": CREEP_TUMORS, **TWO_FORMS}
@@ -252,6 +259,9 @@ ROLES = {
     "AnyMineralField": "A mineral field of any kind: one the game's tables say holds minerals.",
     "AnyVespeneGeyser": "A vespene geyser of any kind: one the game's tables say holds vespene, of no race.",
     "GasBuilding": "A refinery, an assimilator or an extractor: one the game's tables say holds vespene, of a race.",
+    "AnyRefinery": "A refinery, on a plain or a rich geyser.",
+    "AnyExtractor": "An extractor, on a plain or a rich geyser.",
+    "AnyAssimilator": "An assimilator, on a plain or a rich geyser.",
     "Destructible": (
         "A destructible rock, debris, ice, unbuildable brick, plate or rock, or a collapsible tower or its debris."
     ),
@@ -333,6 +343,7 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTy
         ("CollapsibleTowerDebris", COLLAPSIBLE_TOWER_DEBRIS),
         ("Critter", CRITTERS),
         ("Cocoon", COCOON_PRODUCTS.keys()),
+        *GAS_BUILDINGS_ON_EITHER_GEYSER.items(),
         *FORMS_GROUPS.items(),
     )
     found = [role for role, members in curated if unit_type in members]

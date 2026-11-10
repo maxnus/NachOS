@@ -248,8 +248,9 @@ class UnitTypeData:
     type in none has its own class, such as `UnitType.Marine`. A morph that costs something makes another unit: a lair,
     a baneling's cocoon and an overlord transport have their own class, and `UnitType.AnyOrbitalCommand` holds no
     command center. A gas building on a rich geyser is another structure than one on a plain geyser, and has its own
-    class, though both are built by the same `creation_ability`. `forms.type_ids` holds every type of it, the same in
-    any tables, though tables made up for a test may hold no row of some."""
+    class, though both are built by the same `creation_ability`, and `UnitType.AnyRefinery`, `AnyExtractor` and
+    `AnyAssimilator` hold both. `forms.type_ids` holds every type of it, the same in any tables, though tables made up
+    for a test may hold no row of some."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool

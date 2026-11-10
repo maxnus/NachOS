@@ -229,6 +229,11 @@ class TestUnitType:
     def test_any_type_is_every_type(self) -> None:
         assert UnitType.AnyType.type_ids == set(UnitTypeId)
 
+    def test_each_races_gas_building_on_a_plain_or_a_rich_geyser_is_a_group(self) -> None:
+        assert UnitType.AnyRefinery.type_ids == {UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH}
+        assert UnitType.AnyExtractor.type_ids == {UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}
+        assert UnitType.AnyAssimilator.type_ids == {UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}
+
     def test_the_workers_and_townhalls_are_those_curated(self) -> None:
         assert UnitType.Worker.type_ids == {
             UnitTypeId.SCV,
