@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
-from sc2nachos.units._unit_type import UnitType
 from sc2nachos.units._values import Order, Passenger, RallyTarget
 
 if TYPE_CHECKING:

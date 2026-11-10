@@ -13,9 +13,9 @@ from sc2nachos.placement._townhall_zones import _keep_townhalls_off_resources
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from sc2nachos.gamedata._unit_type import UnitType
     from sc2nachos.geometry import PointLike
     from sc2nachos.units import Unit, Units
-    from sc2nachos.units._unit_type import UnitType
 
 _TOWNHALL_FOOTPRINT = Footprint.square(5)
 # A base's townhall stands at most 5.86 from its resources' mean along an axis (corpus).

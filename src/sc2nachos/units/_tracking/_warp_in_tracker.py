@@ -6,10 +6,10 @@ import itertools
 from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos._shared.errors import NotReportedError
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.units._progress import Progress
-from sc2nachos.units._unit_type import UnitType
 
 if TYPE_CHECKING:
     from sc2nachos.units._tracking._tracker import _Tracker

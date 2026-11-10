@@ -3,7 +3,7 @@
 import json
 from contextlib import closing
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 from typing import cast
 
 import pytest
@@ -15,6 +15,7 @@ from sc2nachos.gamedata._techtree import (
     TECH_TREE,
     UNNAMED_CREATION_ABILITIES,
     TechTree,
+    TechTreeUnitType,
 )
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
@@ -545,7 +546,7 @@ class TestWhatTheTablesSay:
             needs = {units[researcher].ability_requirements[row.research_ability] for researcher in row.researchers}
             assert needs == {row.tech_requirements}, upgrade.name
 
-    def test_a_type_grants_the_tech_named_after_it_and_after_each_type_the_tables_count_it_as(
+    def test_a_type_grants_the_tech_named_after_it_and_after_each_type_back_along_morphed_from(
         self, first_corpus_tables: GameData
     ) -> None:
         units = first_corpus_tables.units
@@ -557,13 +558,13 @@ class TestWhatTheTablesSay:
         assert units[UnitTypeId.MARINE].techs_granted == frozenset()
 
     def test_a_type_granting_a_tech_grants_every_tech_its_base_type_grants(self, first_corpus_tables: GameData) -> None:
-        """A hive grants `Tech.HATCHERY` as a lair does, though it counts as one only through a lair."""
+        """A hive grants `Tech.HATCHERY` as a lair does, though it is morphed from a hatchery only through a lair."""
         units = first_corpus_tables.units
         for unit_type, row in units.items():
             for tech in row.techs_granted:
                 assert units[tech.base_type].techs_granted <= row.techs_granted, (unit_type.name, tech.name)
 
-    def test_the_types_granting_a_tech_are_its_base_type_and_those_counted_as_it(
+    def test_the_types_granting_a_tech_are_its_base_type_and_those_morphed_from_it(
         self, first_corpus_tables: GameData
     ) -> None:
         assert first_corpus_tables.types_granting(Tech.SPIRE) == {UnitTypeId.SPIRE, UnitTypeId.GREATER_SPIRE}
@@ -726,6 +727,35 @@ class TestTheBuildSwept:
     def test_a_game_on_the_build_swept_is_not(self, logged: list[str]) -> None:
         TECH_TREE.warn_if_not_swept_on(TECH_TREE.base_build)
         assert logged == []
+
+
+class TestMorphStagesOf:
+    def test_a_type_comes_first_and_then_each_it_was_morphed_from(self) -> None:
+        assert TECH_TREE.morph_stages_of(UnitTypeId.HIVE) == (
+            UnitTypeId.HIVE,
+            UnitTypeId.LAIR,
+            UnitTypeId.HATCHERY,
+            UnitTypeId.DRONE,
+            UnitTypeId.LARVA,
+        )
+
+    def test_a_type_morphed_from_nothing_or_unknown_to_the_tree_is_alone(self) -> None:
+        assert TECH_TREE.morph_stages_of(UnitTypeId.MARINE) == (UnitTypeId.MARINE,)
+        assert TECH_TREE.morph_stages_of(UnitTypeId.MINERAL_FIELD) == (UnitTypeId.MINERAL_FIELD,)
+
+    def test_a_loop_is_followed_round_once(self) -> None:
+        looping = TechTree(
+            base_build=1,
+            unit_types=MappingProxyType(
+                {
+                    UnitTypeId.GATEWAY: TechTreeUnitType(morphed_from=UnitTypeId.WARP_GATE),
+                    UnitTypeId.WARP_GATE: TechTreeUnitType(morphed_from=UnitTypeId.GATEWAY),
+                }
+            ),
+            abilities=MappingProxyType({}),
+            upgrades=MappingProxyType({}),
+        )
+        assert looping.morph_stages_of(UnitTypeId.GATEWAY) == (UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE)
 
 
 def _abilities_offered(transport: WebSocketTransport, unit: Unit) -> set[int]:
