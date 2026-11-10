@@ -125,7 +125,9 @@ class Extensions:
   producers and their capacity, tech requirements, morphs and add-ons; the race's rules on top: what occupies a
   townhall (a Terran morph, a Zerg queen), the builder's interval, MULE income, chrono boost and warp-in later. The
   item set is pruned to what the reward names, their prerequisites, producers, supply, workers, expansions and
-  refineries.
+  refineries. Each unit type counts as one of its `equivalent_types` (#248): the one an order makes rather than one
+  morphed from another, and of two, the one needing fewer techs, so a hellbat counts as a hellion (the owner: one unit
+  to a planner); a rich refinery counts as the refinery its order makes.
 - `_grid.py`: bucket edges from segments. Each item's integrality window comes from its cost, or from the bot.
 - `_game_state.py`: the state as plain values, `GameState`, read from the api when `plan_now` asks: resources, supply,
   the alive count of each type, each item in production with its time left, each structure an SCV builds and whether

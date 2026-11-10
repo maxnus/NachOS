@@ -55,6 +55,10 @@ class Planner:
     - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
       from the game's data; an item is pruned unless the reward values it or it is needed for one that does, or it is
       the economy: SCVs, supply depots, command centers, orbital commands and refineries.
+    - A unit counts as one type of its `equivalent_types`, in the reward, the loss rates and the state alike: the one an
+      order makes rather than one morphed from another, and of two, the one needing fewer techs. So a flying barracks
+      counts as a barracks, and a hellbat as a hellion, which needs no armory: a plan makes hellions, and an armory
+      only if the reward values one. A rich refinery counts as a refinery, which its order makes.
     - What workers mine and collect, what each orbital command's MULEs add, what a new command center brings, and how
       far an SCV walks to build: the `Economy` handed to `plan_now`. The workers are pooled over every field and
       refinery, as if each could work anywhere at once.

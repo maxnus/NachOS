@@ -227,6 +227,8 @@ class ThreatMap:
   worth; counts wanted at least, each a `Floor` with what a unit short costs; how long the state at the horizon counts
   for after it; and a bonus for each item of the previous plan the new one keeps to. `plan_now` takes the horizon and
   the share of each unit type the bot expects lost a second, so that only what is expected to survive counts.
+  A unit counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a
+  hellbat as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
   Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `GameState`
   `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and

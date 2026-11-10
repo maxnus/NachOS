@@ -329,10 +329,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
   the owner to settle: the 3-second exit, the count-form cut, and workers per base, which the owner wants to come back
   to.
-- The build planner (#239) drops `_note_morph_starts` and `morph_starts` once its branch takes main, which times a
-  command center's morph, and reads `InProduction.product` and `fraction` where it read `type_id` and `progress`. It
-  drops its own `usual_form` too, for `UnitTypeData.equivalent_types`, which puts a hellbat with the hellion where it
-  kept them apart, and chooses itself which type of a group it builds.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.

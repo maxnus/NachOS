@@ -106,7 +106,7 @@ class PlanProgram:
         self._state = state
         self._reward = reward
         self._economy = economy
-        self._loss_rates = {model.usual_form(unit_type): rate for unit_type, rate in loss_rates.items()}
+        self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
         self._new_command_center_limit = new_command_center_limit
         built_by_worker = (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         self._walk_seconds = walk_seconds_of(economy, built_by_worker)
@@ -564,11 +564,11 @@ class PlanProgram:
         worth = RowExpression(self._bucket_count)
         identity = np.eye(self._bucket_count)
         for unit_type, weight in reward.weights.items():
-            worth.add_expression(self._count_alive(self._model.usual_form(unit_type), at_end=True), weight)
+            worth.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), weight)
         for upgrade, weight in reward.upgrade_weights.items():
             worth.add_expression(self._upgrade_done(upgrade, at_end=True), weight)
         for unit_type, segments in reward.curves.items():
-            worth.add(self._curve_values(self._model.usual_form(unit_type), segments), identity)
+            worth.add(self._curve_values(self._model.counted_as(unit_type), segments), identity)
         for coverage in reward.coverages:
             worth.add(self._enemy_units_covered(coverage), identity * coverage.value)
         for floor in reward.floors:
@@ -603,7 +603,7 @@ class PlanProgram:
         covered = self._program.add_variables(self._bucket_count, upper=np.maximum(np.asarray(expected), 0.0))
         worth = RowExpression(self._bucket_count)
         for unit_type, effectiveness in coverage.effectiveness.items():
-            worth.add_expression(self._count_alive(self._model.usual_form(unit_type), at_end=True), effectiveness)
+            worth.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), effectiveness)
         self._constrain_at_most(RowExpression(self._bucket_count).add(covered, np.eye(self._bucket_count)), worth)
         return covered
 
@@ -612,7 +612,7 @@ class PlanProgram:
         wanted = [count_at(floor.counts, self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:]]
         shortfalls = self._program.add_variables(self._bucket_count)
         short = RowExpression(self._bucket_count).add(shortfalls, -np.eye(self._bucket_count))
-        short.add_expression(self._count_alive(self._model.usual_form(floor.unit_type), at_end=True), -1.0)
+        short.add_expression(self._count_alive(self._model.counted_as(floor.unit_type), at_end=True), -1.0)
         self._program.constrain(short, upper=-np.asarray(wanted, dtype=float))
         return shortfalls
 

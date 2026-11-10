@@ -31,6 +31,7 @@ from sc2nachos.extensions.planner._planner import whole_until_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
+from sc2nachos.match import Race
 from sc2nachos.testing import load_game_data
 from sc2nachos.units import Alliance
 from support import ScriptedGame, make_game_info, make_observation, make_unit, shipped_game_data
@@ -170,11 +171,33 @@ class TestTerranModel:
         }
         assert {UnitTypeId.ENGINEERING_BAY, UnitTypeId.ARMORY} <= {item.unit_type for item in items}
 
-    def test_a_form_counts_as_the_type_it_switches_from_at_no_cost(self) -> None:
-        assert _TERRAN_MODEL.usual_form(UnitTypeId.BARRACKS_FLYING) == UnitTypeId.BARRACKS
-        assert _TERRAN_MODEL.usual_form(UnitTypeId.SUPPLY_DEPOT_LOWERED) == UnitTypeId.SUPPLY_DEPOT
-        assert _TERRAN_MODEL.usual_form(UnitTypeId.REFINERY_RICH) == UnitTypeId.REFINERY
-        assert _TERRAN_MODEL.usual_form(UnitTypeId.ORBITAL_COMMAND) == UnitTypeId.ORBITAL_COMMAND
+    def test_a_unit_counts_as_the_type_an_order_makes_of_its_equivalent_types(self) -> None:
+        """Not one morphed from another of them, and of two an order makes, the one needing fewer techs: a hellion,
+        which needs no armory. A rich refinery counts as the refinery its order makes."""
+        expected = {
+            UnitTypeId.BARRACKS_FLYING: UnitTypeId.BARRACKS,
+            UnitTypeId.SUPPLY_DEPOT_LOWERED: UnitTypeId.SUPPLY_DEPOT,
+            UnitTypeId.SIEGE_TANK_SIEGED: UnitTypeId.SIEGE_TANK,
+            UnitTypeId.ORBITAL_COMMAND: UnitTypeId.ORBITAL_COMMAND,
+            UnitTypeId.ORBITAL_COMMAND_FLYING: UnitTypeId.ORBITAL_COMMAND,
+            UnitTypeId.HELLBAT: UnitTypeId.HELLION,
+            UnitTypeId.HELLION: UnitTypeId.HELLION,
+            UnitTypeId.REFINERY_RICH: UnitTypeId.REFINERY,
+        }
+        assert {unit_type: _TERRAN_MODEL.counted_as(unit_type) for unit_type in expected} == expected
+
+    def test_every_terran_type_counts_as_one_of_its_equivalent_types_but_a_rich_refinery(self) -> None:
+        game_data = _TERRAN_MODEL.game_data
+        for unit_type, row in game_data.units.items():
+            if row.race == Race.TERRAN and unit_type != UnitTypeId.REFINERY_RICH:
+                assert _TERRAN_MODEL.counted_as(unit_type) in row.equivalent_types.type_ids, unit_type.name
+
+    def test_a_hellbat_is_no_item_and_a_reward_on_it_brings_hellions_and_no_armory(self) -> None:
+        items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.HELLBAT], upgrades=[])
+        unit_types = {item.unit_type for item in items}
+        assert UnitTypeId.HELLBAT not in _TERRAN_MODEL.unit_items
+        assert UnitTypeId.HELLION in unit_types
+        assert UnitTypeId.ARMORY not in unit_types
 
     def test_an_orbital_command_is_a_morph_of_a_command_center_that_adds_no_supply(self) -> None:
         orbital = _TERRAN_MODEL.unit_items[UnitTypeId.ORBITAL_COMMAND]
@@ -229,6 +252,20 @@ class TestKnownPlans:
         )
         plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=60)
         assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
+
+    def test_a_reward_on_hellbats_plans_hellions(self) -> None:
+        """A factory with no vespene for a reactor, over a minute: a hellion started at 44 seconds would not be done by
+        its end."""
+        state = _game_start(
+            minerals=1000.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            counts={UnitTypeId.FACTORY: 1},
+            mineral_fields=0,
+        )
+        plan = _best_plan(state, Reward(weights={UnitTypeId.HELLBAT: 1.0}), horizon_seconds=60)
+        assert _start_seconds(plan, UnitTypeId.HELLION) == [0.0, 22.0]
+        assert UnitTypeId.HELLBAT not in plan.counts
 
     def test_a_command_center_starts_at_48_seconds_after_uninterrupted_scv_production(self) -> None:
         """SCVs worth more than a command center, which is built as soon as it does not hold one up, on the doubling
@@ -738,7 +775,7 @@ def _occupations_in_seconds(state: GameState) -> list[tuple[UnitTypeId, float, f
 
 
 class TestGameState:
-    def test_it_reads_stock_supply_and_finished_units_by_their_usual_form(self) -> None:
+    def test_it_reads_stock_supply_and_finished_units_by_the_type_each_counts_as(self) -> None:
         (state,) = _states_of(_main_base_at(0))
 
         assert (state.minerals, state.vespene, state.supply_used, state.supply_cap) == (200, 25, 15, 23)

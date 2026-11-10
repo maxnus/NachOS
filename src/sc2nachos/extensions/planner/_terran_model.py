@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.gamedata import Tech
 from sc2nachos.gametime import GameTime
-from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
+from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 from sc2nachos.units import UnitType
 
@@ -53,8 +53,8 @@ class Item:
     supply_provided: float
     """The supply it adds to the cap once done, less what the type it morphs from provided."""
     producers: frozenset[UnitTypeId]
-    """The types that make or research it, each in its usual form, a barracks rather than a flying one; empty for a
-    structure a worker builds."""
+    """The types that make or research it, each as the type it counts as, a barracks rather than a flying one; empty
+    for a structure a worker builds."""
     needs_tech_lab: bool
     """Whether its producer must have a tech lab."""
     techs: frozenset[Tech]
@@ -92,25 +92,28 @@ class Item:
 @final
 class TerranModel:
     """Every item Terran can make, from the game's data: what it costs, how long it takes, the supply it takes and
-    gives, what makes it and what it needs first. A form a unit switches to at no cost, a flying barracks or a sieged
-    tank, is no item: it counts as the form it came from. Of the types one ability makes for one producer, a refinery
-    and a rich refinery, the first by id is the item."""
+    gives, what makes it and what it needs first.
 
-    __slots__ = ("_game_data", "_items_by_type", "_items_by_upgrade", "_usual_forms")
+    Each Terran unit type counts as one item's, of its `equivalent_types`: the one an order makes rather than one
+    morphed from another of them, and of two, the one needing fewer techs. So a flying barracks counts as a barracks, a
+    sieged tank as a siege tank, and a hellbat as a hellion, which needs no armory; a bot that wants hellbats values an
+    armory itself. A type its order makes as another, a rich refinery, counts as that, a refinery."""
+
+    __slots__ = ("_counted_types", "_game_data", "_items_by_type", "_items_by_upgrade")
 
     def __init__(self, game_data: GameData) -> None:
         self._game_data = game_data
-        self._usual_forms = _usual_forms_of_terran_types(game_data)
+        self._counted_types = _counted_types_of_terran_types(game_data)
         item_rows = [
             row
             for unit_type, row in game_data.units.items()
-            if self._usual_forms.get(unit_type) == unit_type and _is_made_by_an_order(row)
+            if self._counted_types.get(unit_type) == unit_type and _is_made_by_an_order(row)
         ]
         items_by_type = {row.id: self._unit_item(row) for row in item_rows}
         self._items_by_type: Mapping[UnitTypeId, Item] = MappingProxyType(items_by_type)
         items_by_upgrade: dict[UpgradeId, Item] = {}
         for upgrade, upgrade_row in game_data.upgrades.items():
-            researchers = frozenset(self.usual_form(researcher) for researcher in upgrade_row.researchers)
+            researchers = frozenset(self.counted_as(researcher) for researcher in upgrade_row.researchers)
             if researchers and researchers <= items_by_type.keys():
                 items_by_upgrade[upgrade] = Item(
                     unit_type=None,
@@ -145,18 +148,19 @@ class TerranModel:
         return self._items_by_upgrade
 
     @property
-    def forms_of_items(self) -> frozenset[UnitTypeId]:
-        """Every unit type whose usual form is an item's: the items' types, and the forms that count as them."""
-        return frozenset(unit_type for unit_type, usual in self._usual_forms.items() if usual in self._items_by_type)
+    def types_counted_as_items(self) -> frozenset[UnitTypeId]:
+        """Every unit type that counts as an item's: the items' types, and the types that count as them."""
+        counted_types = self._counted_types.items()
+        return frozenset(unit_type for unit_type, counted in counted_types if counted in self._items_by_type)
 
-    def usual_form(self, unit_type: UnitTypeId) -> UnitTypeId:
-        """The form of `unit_type` that is an item, or whose count it adds to: a barracks for a flying one, a refinery
-        for a rich one; `unit_type` itself for a type of another race or one nothing makes."""
-        return self._usual_forms.get(unit_type, unit_type)
+    def counted_as(self, unit_type: UnitTypeId) -> UnitTypeId:
+        """The type a unit of `unit_type` counts as, an item's or one nothing makes: a barracks for a flying one, a
+        hellion for a hellbat, a refinery for a rich one; `unit_type` itself for a type of another race."""
+        return self._counted_types.get(unit_type, unit_type)
 
     def types_granting(self, tech: Tech) -> frozenset[UnitTypeId]:
-        """The items' unit types that grant `tech`, in their usual forms."""
-        return frozenset(self.usual_form(granting) for granting in self._game_data.types_granting(tech))
+        """The types that grant `tech`, each as the type it counts as."""
+        return frozenset(self.counted_as(granting) for granting in self._game_data.types_granting(tech))
 
     def tech_lab_of(self, host: UnitTypeId) -> UnitTypeId | None:
         """The tech lab type `host` builds, or `None` if it builds none."""
@@ -200,11 +204,11 @@ class TerranModel:
         )
 
     def _item_type_of(self, unit_type: UnitTypeId) -> UnitTypeId:
-        """The usual form of `unit_type`, raising `ValueError` unless it is an item."""
-        usual = self.usual_form(unit_type)
-        if usual not in self._items_by_type:
+        """The type `unit_type` counts as, raising `ValueError` unless it is an item's."""
+        counted = self.counted_as(unit_type)
+        if counted not in self._items_by_type:
             raise ValueError(f"the planner cannot make {unit_type.name} for Terran")
-        return usual
+        return counted
 
     def _needs_of(self, item: Item, wanted_types: set[UnitTypeId]) -> list[Item]:
         """The items `item` cannot be made without, beside `wanted_types`: a producer, the cheapest of its producers if
@@ -216,7 +220,7 @@ class TerranModel:
         needed_types = set(producers)
         if item.morphed_from is not None:
             needed_types.add(item.morphed_from)
-        needed_types.update(self.usual_form(tech.base_type) for tech in item.techs)
+        needed_types.update(self.counted_as(tech.base_type) for tech in item.techs)
         add_on_of = self.tech_lab_of if item.needs_tech_lab else self.reactor_of
         if item.unit_type is not None and not _is_structure(self._game_data.units[item.unit_type]):
             needed_types.update(add_on for producer in producers if (add_on := add_on_of(producer)) is not None)
@@ -227,8 +231,8 @@ class TerranModel:
 
     def _unit_item(self, row: UnitTypeData) -> Item:
         """The item making the unit type of `row`."""
-        producers = frozenset(self.usual_form(producer) for producer in row.producers)
-        morphed_from = None if row.morphed_from is None else self.usual_form(row.morphed_from)
+        producers = frozenset(self.counted_as(producer) for producer in row.producers)
+        morphed_from = None if row.morphed_from is None else self.counted_as(row.morphed_from)
         provided_before = 0.0 if morphed_from is None else self._game_data.units[morphed_from].supply_provided
         return Item(
             unit_type=row.id,
@@ -257,26 +261,33 @@ def _is_made_by_an_order(row: UnitTypeData) -> bool:
     return bool(row.producers) and not row.cost.is_free
 
 
-def _usual_forms_of_terran_types(game_data: GameData) -> dict[UnitTypeId, UnitTypeId]:
-    """The usual form of each Terran unit type: the form it switches from at no cost, followed back to the first, and of
-    the types one ability makes for one producer, the first by id."""
+def _counted_types_of_terran_types(game_data: GameData) -> dict[UnitTypeId, UnitTypeId]:
+    """The type each Terran unit type counts as: of the `equivalent_types` of what its order makes, the one an order
+    makes rather than one morphed from another of them, and of two, the one needing fewer techs."""
     rows = {unit_type: row for unit_type, row in game_data.units.items() if row.race == Race.TERRAN}
-    usual_forms: dict[UnitTypeId, UnitTypeId] = {}
-    first_made_by: dict[tuple[AbilityId | None, frozenset[UnitTypeId]], UnitTypeId] = {}
-    for unit_type in sorted(rows):
-        row = rows[unit_type]
-        usual = unit_type
-        while (source := rows[usual].morphed_from) is not None and _switches_to_at_no_cost(rows, source, usual):
-            usual = source
-        if usual == unit_type and row.creation_ability is not None and row.producers:
-            usual = first_made_by.setdefault((row.creation_ability, row.producers), unit_type)
-        usual_forms[unit_type] = usual
-    return usual_forms
+    counted_types: dict[UnitTypeId, UnitTypeId] = {}
+    for unit_type, row in rows.items():
+        made = _made_by_its_order(game_data, row)
+        if made not in rows:
+            made = unit_type
+        equivalents = {equivalent for equivalent in rows[made].equivalent_types.type_ids if equivalent in rows}
+        made_first = [equivalent for equivalent in equivalents if rows[equivalent].morphed_from not in equivalents]
+        counted_types[unit_type] = min(
+            made_first or [made], key=lambda equivalent: (len(rows[equivalent].tech_requirements.techs), equivalent)
+        )
+    return counted_types
 
 
-def _switches_to_at_no_cost(rows: Mapping[UnitTypeId, UnitTypeData], source: UnitTypeId, form: UnitTypeId) -> bool:
-    """Whether `source`, a Terran type, switches to `form` at no cost, as a barracks lifts off."""
-    return source in rows and rows[form].total_cost == rows[source].total_cost
+def _made_by_its_order(game_data: GameData, row: UnitTypeData) -> UnitTypeId:
+    """The type the order that makes the unit type of `row` makes: a refinery for a rich one, since the geyser
+    and not the order makes it rich; the type itself where an order makes it, or nothing does."""
+    ability = None if row.creation_ability is None else game_data.abilities.get(row.creation_ability)
+    if ability is not None:
+        for producer in sorted(row.producers):
+            made = ability.products.get(producer)
+            if isinstance(made, UnitTypeId) and made != row.id and made in game_data.units:
+                return made
+    return row.id
 
 
 def _add_on_of(

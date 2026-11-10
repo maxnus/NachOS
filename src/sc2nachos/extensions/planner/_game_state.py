@@ -23,7 +23,7 @@ class Occupation:
     """A producer kept busy by what it makes now: a train, a morph, an add-on or a research."""
 
     producer: UnitTypeId
-    """The producer's type, in its usual form."""
+    """The type the producer counts as."""
     time_until_start: GameTime
     """The time from the state's until it starts: zero for one running, more for one queued behind another."""
     time_left: GameTime
@@ -38,7 +38,7 @@ class WorkerBuild:
     """A structure an SCV builds, going up or on its way."""
 
     unit_type: UnitTypeId
-    """Its type, in its usual form."""
+    """The type it counts as."""
     time_left: GameTime
     """The building it has left: its whole build time if not begun."""
     builder_walks_there: bool
@@ -50,7 +50,10 @@ class WorkerBuild:
 class GameState:
     """The state of the game a plan starts from, as plain values: what `Planner.game_state` reads, which a bot may
     change with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The
-    planner pools what it holds: it never knows which base a field, a refinery or a worker is at."""
+    planner pools what it holds: it never knows which base a field, a refinery or a worker is at.
+
+    It holds each unit as the type it counts as, as `Planner` says: a barracks for a flying one, a siege tank for a
+    sieged one, a hellion for a hellbat, a refinery for a rich one."""
 
     time: GameTime
     """The game time it was taken at, from which the plan's times count."""
@@ -63,12 +66,12 @@ class GameState:
     supply_cap: float
     """The supply cap, up to the game's limit."""
     counts: Mapping[UnitTypeId, int]
-    """The number of this player's finished units alive of each type, in its usual form, those inside a gas building or
-    a transport included, which the observation leaves out."""
+    """The number of this player's finished units alive counted as each type, those inside a gas building or a
+    transport included, which the observation leaves out."""
     upgrades: frozenset[UpgradeId] = frozenset()
     """The upgrades done."""
     unit_completions: tuple[tuple[UnitTypeId, GameTime], ...] = ()
-    """Each unit in production but a structure an SCV builds, of its type in its usual form, with the time until it is
+    """Each unit in production but a structure an SCV builds, as the type it counts as, with the time until it is
     done."""
     upgrade_completions: Mapping[UpgradeId, GameTime] = field(default_factory=dict)
     """Each upgrade being researched, with the time until it is done."""
@@ -113,16 +116,16 @@ def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
 
 
 def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[UnitTypeId, int], int]:
-    """The number of this player's finished units of each type, in its usual form, and of its finished refineries with
-    vespene left. Those known alive count, an SCV inside a refinery and a marine in a bunker among them, which the last
+    """The number of this player's finished units counted as each type, and of its finished refineries with vespene
+    left. Those known alive count, an SCV inside a refinery and a marine in a bunker among them, which the last
     observation leaves out (in game)."""
     counts: dict[UnitTypeId, int] = {}
     refineries_with_vespene = 0
     for unit in api.known_units.own:
         if not unit.is_complete:
             continue
-        usual = model.usual_form(unit.type_id)
-        counts[usual] = counts.get(usual, 0) + 1
+        counted = model.counted_as(unit.type_id)
+        counts[counted] = counts.get(counted, 0) + 1
         if UnitType.GasBuilding.includes(unit) and unit.vespene_contents > 0:
             refineries_with_vespene += 1
     return counts, refineries_with_vespene
@@ -151,8 +154,8 @@ def _production_of(
     worker_builds: list[tuple[WorkerBuild, InProduction]] = []
     by_producer: dict[int, list[InProduction]] = {}
     producers: dict[int, OwnUnit[Any]] = {}
-    for in_production in api.in_production(model.forms_of_items):
-        unit_type = model.usual_form(in_production.product)
+    for in_production in api.in_production(model.types_counted_as_items):
+        unit_type = model.counted_as(in_production.product)
         producer = in_production.producer
         if model.unit_items[unit_type].is_built_by_worker:
             walks_there = in_production.unit is None or producer is None
@@ -168,14 +171,14 @@ def _production_of(
         producer = producers[producer_id]
         lanes = [GameTime.ZERO] * max(producer.production_capacity, 1)
         for in_production in sorted(queue, key=lambda queued: queued.fraction == 0):
-            unit_type = model.usual_form(in_production.product)
+            unit_type = model.counted_as(in_production.product)
             lane = lanes.index(min(lanes))
             start = lanes[lane]
             lanes[lane] = start + in_production.time_left
             completions.append((unit_type, lanes[lane]))
             occupations.append(
                 Occupation(
-                    producer=model.usual_form(producer.type_id),
+                    producer=model.counted_as(producer.type_id),
                     time_until_start=start,
                     time_left=lanes[lane],
                     needs_tech_lab=model.unit_items[unit_type].needs_tech_lab,
@@ -198,7 +201,7 @@ def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId
         completions[upgrade] = end
         occupations.append(
             Occupation(
-                producer=model.usual_form(research.unit.type_id),
+                producer=model.counted_as(research.unit.type_id),
                 time_until_start=start,
                 time_left=end,
                 needs_tech_lab=False,
