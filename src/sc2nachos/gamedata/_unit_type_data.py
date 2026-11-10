@@ -241,15 +241,15 @@ class UnitTypeData:
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
     equivalent_types: type[UnitType.AnyType]
-    """The `UnitType` group of the types a unit of this type converts between and back: `UnitType.AnySiegeTank` for a
-    siege tank sieged or not, `UnitType.AnyHellion` for a hellion and a hellbat, and `UnitType.AnyLocust` for a locust,
-    which takes off by itself and lands by a swoop (in game). A type in none has its own class, such as
-    `UnitType.Marine`. A morph that costs something makes another unit, so a lair, a baneling's cocoon and an overlord
-    transport have their own class, and `UnitType.AnyOrbitalCommand` holds no command center. A changeling and a creep
-    tumor each change one way only, as the game disguises a changeling (stated) and burrows a tumor (in game), so each
-    of their types has its own class too, and `UnitType.AnyChangeling` and `AnyCreepTumor` hold them. A gas building on
-    a rich geyser is another structure than one on a plain geyser and has its own class, though both are built by the
-    same `creation_ability`, and `UnitType.AnyRefinery`, `AnyExtractor` and `AnyAssimilator` hold both.
+    """The `UnitType` group of the types a unit of this type converts between and back, at will:
+    `UnitType.AnySiegeTank` for a siege tank sieged or not, and `UnitType.AnyHellion` for a hellion and a hellbat. A
+    type in none has its own class, such as `UnitType.Marine`. A morph that costs something makes another unit, so a
+    lair, a baneling's cocoon and an overlord transport have their own class, and `UnitType.AnyOrbitalCommand` holds no
+    command center. A changeling, a creep tumor and a locust are not converted back and forth: the game disguises a
+    changeling (stated) and burrows a tumor, and a locust takes off by itself and a swoop lands it (in game). So each of
+    their types has its own class too, and `UnitType.AnyChangeling`, `AnyCreepTumor` and `AnyLocust` hold them. A gas
+    building on a rich geyser is another structure than one on a plain geyser and has its own class, though both are
+    built by the same `creation_ability`, and `UnitType.AnyRefinery`, `AnyExtractor` and `AnyAssimilator` hold both.
     `equivalent_types.type_ids` holds every type of it, the same in any tables, though tables made up for a test may
     hold no row of some."""
     ability_requirements: Mapping[AbilityId, TechRequirements]

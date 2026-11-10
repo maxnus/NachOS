@@ -123,10 +123,11 @@ The issue, discussion or pull request named holds the reasons, and the alternati
 - **`UnitTypeData.equivalent_types` is the `UnitType` group of the types a unit converts between and back** (the
   owner, 2026-11-09 and 2026-11-10, #248), such as a siege tank sieged or not: the groups of two forms, and else the
   type's own class. Not one type chosen as theirs: the owner reversed `base_form`, since which form is the base is not
-  clear for every unit. Not a change that goes one way, a changeling's disguise or a creep tumor's burrow, nor a morph
-  that costs, an orbital command, nor a gas building on a rich geyser, another structure than the plain one;
-  `UnitType.AnyChangeling`, `AnyCreepTumor`, `AnyRefinery`, `AnyExtractor` and `AnyAssimilator` hold those. A locust
-  is in `AnyLocust`: it takes off by itself and lands by a swoop. The groups are curated in
+  clear for every unit. Only a change made at will both ways counts: not a changeling's disguise, a creep tumor's
+  burrow or a locust's flight, which it takes off into by itself and a swoop ends; not a morph that costs, as into an
+  orbital command; and not a gas building on a rich geyser, another structure than the plain one.
+  `UnitType.AnyChangeling`, `AnyCreepTumor`, `AnyLocust`, `AnyRefinery`, `AnyExtractor` and `AnyAssimilator` hold
+  those. The groups are curated in
   `tools/generate_unit_types.py`, over a new enum of the same groups, and checked against each corpus game's morphs. A
   hellbat is in `AnyHellion` (the owner: one unit to a planner); read through `unit.type_data` alone. Named
   `equivalent_types` by the owner, over `forms`, `unit_group`, `type_group` and `form_group`. `UnitType` moved into

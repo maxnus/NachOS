@@ -24,10 +24,10 @@ class UnitType:
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
     geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
     destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
-    cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and Protoss
-    production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
-    supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
-    that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
+    locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and
+    Protoss production structure makes, or the two forms of a structure or a unit that changes and changes back, such as
+    a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
+    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
     `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.equivalent_types` is the group of two forms it
     is in, or else its own class.
 
@@ -151,6 +151,9 @@ class UnitType:
     class AnyCreepTumor(ZergStructure):
         """A creep tumor, a queen's or another tumor's, growing or burrowed."""
 
+    class AnyLocust(Zerg):
+        """A locust, on the ground or flying."""
+
     class Cocoon(Zerg):
         """A cocoon or a lurker egg: a unit on its way to becoming another, as a zergling becomes a baneling."""
 
@@ -240,9 +243,6 @@ class UnitType:
 
     class AnyWarpPrism(RoboticsFacilityUnit):
         """A warp prism, phasing or not."""
-
-    class AnyLocust(Zerg):
-        """A locust, on the ground or flying."""
 
     class AnyDrone(Worker, Zerg):
         """A drone, burrowed or not."""
@@ -1155,7 +1155,6 @@ _GROUPS_OF_TWO_FORMS: Final[tuple[type[UnitType.AnyType], ...]] = (
     UnitType.AnyObserver,
     UnitType.AnyOverseer,
     UnitType.AnyWarpPrism,
-    UnitType.AnyLocust,
     UnitType.AnyDrone,
     UnitType.AnyZergling,
     UnitType.AnyBaneling,

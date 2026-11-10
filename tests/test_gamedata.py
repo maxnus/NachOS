@@ -534,7 +534,6 @@ class TestEquivalentTypes:
             (UnitTypeId.SIEGE_TANK, UnitType.AnySiegeTank),
             (UnitTypeId.HELLBAT, UnitType.AnyHellion),
             (UnitTypeId.ROACH_BURROWED, UnitType.AnyRoach),
-            (UnitTypeId.LOCUST_FLYING, UnitType.AnyLocust),
             (UnitTypeId.WARP_GATE, UnitType.AnyGateway),
         ],
         ids=_type_or_class_name,
@@ -556,6 +555,7 @@ class TestEquivalentTypes:
             (UnitTypeId.REFINERY_RICH, UnitType.RefineryRich),
             (UnitTypeId.CHANGELING_ZEALOT, UnitType.ChangelingZealot),
             (UnitTypeId.CREEP_TUMOR_QUEEN, UnitType.CreepTumorQueen),
+            (UnitTypeId.LOCUST_FLYING, UnitType.LocustFlying),
         ],
         ids=_type_or_class_name,
     )
@@ -564,7 +564,7 @@ class TestEquivalentTypes:
     ) -> None:
         """A lair, a cocoon and an overlord transport each cost something to morph into, an adept's shade stands apart
         from its adept, an archon is made of two templar, a refinery on a rich geyser is another structure than one on a
-        plain geyser, and a changeling's disguise and a creep tumor's burrow go one way only."""
+        plain geyser, and a changeling, a creep tumor and a locust are not converted back and forth."""
         assert first_corpus_tables.units[unit_type].equivalent_types is own_class
 
     def test_a_types_equivalent_types_are_the_same_in_tables_holding_no_row_of_the_others(self) -> None:

@@ -116,13 +116,14 @@ class TestUnitType:
             if unit_type not in in_groups:
                 assert row.equivalent_types.type_ids == {unit_type}, unit_type.name
 
-    def test_the_equivalent_types_differ_from_what_the_tables_call_a_form_of_in_six_places(
+    def test_the_equivalent_types_differ_from_what_the_tables_call_a_form_of_in_seven_places(
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
-        """The tables call an adept's shade a form of the adept; a disguised changeling a form of a plain one, and a
-        queen's or a burrowed creep tumor a form of a plain one, though each changes one way only; a gas building on a
-        rich geyser a form of the one on a plain geyser, which is another structure; and a warp gate and a hellbat a
-        form of nothing. They call a rock or a geyser of the map's a form of a plain one, but each has its own class."""
+        """The tables call an adept's shade a form of the adept; a disguised changeling a form of a plain one, a
+        queen's or a burrowed creep tumor a form of a plain one, and a flying locust a form of one on the ground, though
+        none is converted back and forth; a gas building on a rich geyser a form of the one on a plain geyser, which is
+        another structure; and a warp gate and a hellbat a form of nothing. They call a rock or a geyser of the map's a
+        form of a plain one, but each has its own class."""
         race_rows = [row for row in first_corpus_tables.units.values() if row.race is not Race.NONE]
         types_by_alias: dict[UnitTypeId, set[UnitTypeId]] = {}
         for row in race_rows:
@@ -133,6 +134,7 @@ class TestUnitType:
             {UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE},
             UnitType.AnyChangeling.type_ids,
             UnitType.AnyCreepTumor.type_ids,
+            UnitType.AnyLocust.type_ids,
             UnitType.AnyRefinery.type_ids,
             UnitType.AnyExtractor.type_ids,
             UnitType.AnyAssimilator.type_ids,

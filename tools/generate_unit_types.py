@@ -50,10 +50,10 @@ class UnitType:
     workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
     geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
     destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
-    cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and Protoss
-    production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
-    supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
-    that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
+    locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and
+    Protoss production structure makes, or the two forms of a structure or a unit that changes and changes back, such as
+    a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
+    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
     `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.equivalent_types` is the group of two forms it
     is in, or else its own class.
 
@@ -164,6 +164,9 @@ CHANGELINGS = frozenset(
 )
 # The creep tumors, a queen's or another tumor's, growing or burrowed.
 CREEP_TUMORS = frozenset({UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CREEP_TUMOR_QUEEN})
+# The locusts, on the ground or flying. One takes off by itself and a swoop lands it, so none changes back and forth at
+# will.
+LOCUSTS = frozenset({UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING})
 # The structures and units that change to another form and back, by their group: lowered, lifted, uprooted, in another
 # mode, or burrowed. An egg or a cocoon becomes another type and never changes back. Each group is the
 # `UnitTypeData.equivalent_types` of its types, and a type in none is its own.
@@ -186,7 +189,6 @@ TWO_FORMS = {
     "AnyObserver": frozenset({UnitTypeId.OBSERVER, UnitTypeId.OBSERVER_SIEGED}),
     "AnyOverseer": frozenset({UnitTypeId.OVERSEER, UnitTypeId.OVERSEER_SIEGED}),
     "AnyWarpPrism": frozenset({UnitTypeId.WARP_PRISM, UnitTypeId.WARP_PRISM_PHASING}),
-    "AnyLocust": frozenset({UnitTypeId.LOCUST, UnitTypeId.LOCUST_FLYING}),
     **{
         f"Any{''.join(part.capitalize() for part in name.split('_'))}": frozenset(
             {UnitTypeId[name], UnitTypeId[f"{name}_BURROWED"]}
@@ -233,7 +235,6 @@ TWO_FORM_DOCSTRINGS = {
     "AnyObserver": "An observer, in surveillance mode or not.",
     "AnyOverseer": "An overseer, in oversight mode or not.",
     "AnyWarpPrism": "A warp prism, phasing or not.",
-    "AnyLocust": "A locust, on the ground or flying.",
     "AnyDrone": "A drone, burrowed or not.",
     "AnyZergling": "A zergling, burrowed or not.",
     "AnyBaneling": "A baneling, burrowed or not.",
@@ -270,6 +271,7 @@ ROLES = {
     "Critter": "One of a map's critters: an animal or a robot that wanders and covers no ground.",
     "AnyChangeling": "A changeling, plain or in the shape of a marine, a zealot or a zergling.",
     "AnyCreepTumor": "A creep tumor, a queen's or another tumor's, growing or burrowed.",
+    "AnyLocust": "A locust, on the ground or flying.",
     "Cocoon": "A cocoon or a lurker egg: a unit on its way to becoming another, as a zergling becomes a baneling.",
     "AnyAddOn": "An add-on of any kind: a tech lab or a reactor, attached to its host or plain.",
     "AnyTechLab": "A tech lab of any kind: a barracks', a factory's or a starport's, or a plain one.",
@@ -342,6 +344,7 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTy
         ("Critter", CRITTERS),
         ("AnyChangeling", CHANGELINGS),
         ("AnyCreepTumor", CREEP_TUMORS),
+        ("AnyLocust", LOCUSTS),
         ("Cocoon", COCOON_PRODUCTS.keys()),
         *GAS_BUILDINGS_ON_EITHER_GEYSER.items(),
         *TWO_FORMS.items(),
