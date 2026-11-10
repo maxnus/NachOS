@@ -16,7 +16,7 @@ from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.testing import MadeUpUnits, UnitReport
-from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType
+from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType, UnitTypeKind
 from support import load_tool, make_tables
 
 
@@ -115,6 +115,20 @@ class TestUnitType:
         for unit_type, row in first_corpus_tables.units.items():
             if unit_type not in in_groups:
                 assert row.equivalent_types.type_ids == {unit_type}, unit_type.name
+
+    def test_a_type_is_a_single_type_though_its_group_is_of_equivalent_types(self) -> None:
+        assert UnitType.AnySiegeTank.kind is UnitTypeKind.EQUIVALENT_TYPES
+        assert UnitType.SiegeTank.kind is UnitTypeKind.SINGLE_TYPE
+        assert [cls.__name__ for cls in _classes_of_one_type() if cls.kind is not UnitTypeKind.SINGLE_TYPE] == []
+
+    def test_a_group_of_two_forms_and_no_other_is_of_equivalent_types(self) -> None:
+        two_forms = {getattr(UnitType, group) for group in _unit_types_generator().TWO_FORMS}
+        groups = [member for member in vars(UnitType).values() if isinstance(member, type) and "id" not in vars(member)]
+        assert {group for group in groups if group.kind is UnitTypeKind.EQUIVALENT_TYPES} == two_forms
+        assert all(group.kind is UnitTypeKind.OTHER_GROUP for group in groups if group not in two_forms)
+        assert UnitType.AnyType.kind is UnitTypeKind.OTHER_GROUP
+        assert UnitType.AnyLocust.kind is UnitTypeKind.OTHER_GROUP
+        assert UnitType.AnyRefinery.kind is UnitTypeKind.OTHER_GROUP
 
     def test_the_equivalent_types_differ_from_what_the_tables_call_a_form_of_in_seven_places(
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]

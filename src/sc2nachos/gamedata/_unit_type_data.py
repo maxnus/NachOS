@@ -243,7 +243,9 @@ class UnitTypeData:
     equivalent_types: type[UnitType.AnyType]
     """The `UnitType` group of the types a unit of this type converts between and back, at will:
     `UnitType.AnySiegeTank` for a siege tank sieged or not, and `UnitType.AnyHellion` for a hellion and a hellbat. A
-    type in none has its own class, such as `UnitType.Marine`. A morph that costs something makes another unit, so a
+    type in none has its own class, such as `UnitType.Marine`. Its `kind` tells the two apart:
+    `UnitTypeKind.EQUIVALENT_TYPES` for a group, and `UnitTypeKind.SINGLE_TYPE` for a type's own class, never
+    `UnitTypeKind.OTHER_GROUP`. A morph that costs something makes another unit, so a
     lair, a baneling's cocoon and an overlord transport have their own class, and `UnitType.AnyOrbitalCommand` holds no
     command center. A changeling, a creep tumor and a locust are not converted back and forth: the game disguises a
     changeling (stated) and burrows a tumor, and a locust takes off by itself and a swoop lands it (in game). So each of
