@@ -1,5 +1,5 @@
 """Generate `sc2nachos/gamedata/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group,
-and `UNIT_TYPE_FORMS`, each type's `UnitTypeData.forms`.
+and `EQUIVALENT_UNIT_TYPES`, each type's `UnitTypeData.equivalent_types`.
 
 A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. A mineral
 field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab,
@@ -54,8 +54,8 @@ class UnitType:
     production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
     supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
     that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.forms` is the group of two forms it is in,
-    `AnyChangeling` or `AnyCreepTumor`, or else its own class.
+    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.equivalent_types` is the group of two forms it
+    is in, or else its own class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -165,7 +165,8 @@ CHANGELINGS = frozenset(
 # The creep tumors, a queen's or another tumor's, growing or burrowed.
 CREEP_TUMORS = frozenset({UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_BURROWED, UnitTypeId.CREEP_TUMOR_QUEEN})
 # The structures and units that change to another form and back, by their group: lowered, lifted, uprooted, in another
-# mode, or burrowed. An egg or a cocoon becomes another type and never changes back.
+# mode, or burrowed. An egg or a cocoon becomes another type and never changes back. Each group is the
+# `UnitTypeData.equivalent_types` of its types, and a type in none is its own.
 TWO_FORMS = {
     "AnySupplyDepot": frozenset({UnitTypeId.SUPPLY_DEPOT, UnitTypeId.SUPPLY_DEPOT_LOWERED}),
     "AnyBarracks": frozenset({UnitTypeId.BARRACKS, UnitTypeId.BARRACKS_FLYING}),
@@ -205,16 +206,13 @@ TWO_FORMS = {
         )
     },
 }
-# Each race's gas building, on a plain geyser or a rich one, by its group. A rich one is another structure, never a form
-# of the plain one.
+# Each race's gas building, on a plain geyser or a rich one, by its group. A rich one is another structure, never
+# equivalent to the plain one.
 GAS_BUILDINGS_ON_EITHER_GEYSER = {
     "AnyRefinery": frozenset({UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH}),
     "AnyExtractor": frozenset({UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}),
     "AnyAssimilator": frozenset({UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}),
 }
-# The groups a type's `UnitTypeData.forms` may be, each with the types one unit changes between. A type in none has
-# its own class as its forms.
-FORMS_GROUPS = {"AnyChangeling": CHANGELINGS, "AnyCreepTumor": CREEP_TUMORS, **TWO_FORMS}
 # The docstring of each group of `TWO_FORMS`.
 TWO_FORM_DOCSTRINGS = {
     "AnySupplyDepot": "A supply depot, raised or lowered.",
@@ -342,9 +340,11 @@ def roles(unit_type: UnitTypeId, row: UnitTypeData, counted_as: frozenset[UnitTy
         ("CollapsibleTower", COLLAPSIBLE_TOWERS),
         ("CollapsibleTowerDebris", COLLAPSIBLE_TOWER_DEBRIS),
         ("Critter", CRITTERS),
+        ("AnyChangeling", CHANGELINGS),
+        ("AnyCreepTumor", CREEP_TUMORS),
         ("Cocoon", COCOON_PRODUCTS.keys()),
         *GAS_BUILDINGS_ON_EITHER_GEYSER.items(),
-        *FORMS_GROUPS.items(),
+        *TWO_FORMS.items(),
     )
     found = [role for role, members in curated if unit_type in members]
     if unit_type in TOWNHALLS and row.race in RACE_TOWNHALLS:
@@ -437,30 +437,30 @@ def render(answer: sc2api_pb2.ResponseData) -> str:
         # A base named before a subclass of it has no consistent method resolution order.
         type_bases = ", ".join(narrowest([table_groups[unit_type], *found[unit_type]], bases))
         blocks.append(f"    class {name}({type_bases}):\n        id = UnitTypeId.{unit_type.name}\n")
-    blocks.append(forms_source())
+    blocks.append(equivalent_types_source())
     return "\n".join(blocks)
 
 
-def forms_source() -> str:
-    """The source of `UNIT_TYPE_FORMS`, from the groups of `FORMS_GROUPS`, each type in one of them at most."""
+def equivalent_types_source() -> str:
+    """The source of `EQUIVALENT_UNIT_TYPES`, from the groups of `TWO_FORMS`, each type in one of them at most."""
     seen: set[UnitTypeId] = set()
-    for group, types in FORMS_GROUPS.items():
+    for group, types in TWO_FORMS.items():
         if shared := seen & types:
-            raise ValueError(f"{group} holds {sorted(shared)}, which another group of forms holds")
+            raise ValueError(f"{group} holds {sorted(shared)}, which another group of two forms holds")
         seen |= types
-    groups = "".join(f"    UnitType.{group},\n" for group in FORMS_GROUPS)
+    groups = "".join(f"    UnitType.{group},\n" for group in TWO_FORMS)
     return f'''
-_FORMS_GROUPS: Final[tuple[type[UnitType.AnyType], ...]] = (
+_GROUPS_OF_TWO_FORMS: Final[tuple[type[UnitType.AnyType], ...]] = (
 {groups})
-"""The groups of one structure's or unit's forms."""
+"""The groups of the two forms of a structure or a unit that changes and changes back."""
 
-UNIT_TYPE_FORMS: Final[Mapping[UnitTypeId, type[UnitType.AnyType]]] = MappingProxyType(
+EQUIVALENT_UNIT_TYPES: Final[Mapping[UnitTypeId, type[UnitType.AnyType]]] = MappingProxyType(
     {{
         **{{cls.id: cls for cls in vars(UnitType).values() if isinstance(cls, type) and "id" in vars(cls)}},
-        **{{type_id: group for group in _FORMS_GROUPS for type_id in group.type_ids}},
+        **{{type_id: group for group in _GROUPS_OF_TWO_FORMS for type_id in group.type_ids}},
     }}
 )
-"""Each type's `UnitTypeData.forms`: the group of `_FORMS_GROUPS` it is in, or else its own class."""
+"""Each type's `UnitTypeData.equivalent_types`: the group of `_GROUPS_OF_TWO_FORMS` it is in, or else its own class."""
 '''
 
 

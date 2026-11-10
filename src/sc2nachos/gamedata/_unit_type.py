@@ -28,8 +28,8 @@ class UnitType:
     production structure makes, or the two forms of a structure or a unit that changes and changes back, such as a
     supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every group
     that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.forms` is the group of two forms it is in,
-    `AnyChangeling` or `AnyCreepTumor`, or else its own class.
+    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.equivalent_types` is the group of two forms it
+    is in, or else its own class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, and `type_ids` holds its ids.
     """
@@ -1136,9 +1136,7 @@ class UnitType:
         id = UnitTypeId.ZERGLING_BURROWED
 
 
-_FORMS_GROUPS: Final[tuple[type[UnitType.AnyType], ...]] = (
-    UnitType.AnyChangeling,
-    UnitType.AnyCreepTumor,
+_GROUPS_OF_TWO_FORMS: Final[tuple[type[UnitType.AnyType], ...]] = (
     UnitType.AnySupplyDepot,
     UnitType.AnyBarracks,
     UnitType.AnyFactory,
@@ -1170,12 +1168,12 @@ _FORMS_GROUPS: Final[tuple[type[UnitType.AnyType], ...]] = (
     UnitType.AnyUltralisk,
     UnitType.AnyQueen,
 )
-"""The groups of one structure's or unit's forms."""
+"""The groups of the two forms of a structure or a unit that changes and changes back."""
 
-UNIT_TYPE_FORMS: Final[Mapping[UnitTypeId, type[UnitType.AnyType]]] = MappingProxyType(
+EQUIVALENT_UNIT_TYPES: Final[Mapping[UnitTypeId, type[UnitType.AnyType]]] = MappingProxyType(
     {
         **{cls.id: cls for cls in vars(UnitType).values() if isinstance(cls, type) and "id" in vars(cls)},
-        **{type_id: group for group in _FORMS_GROUPS for type_id in group.type_ids},
+        **{type_id: group for group in _GROUPS_OF_TWO_FORMS for type_id in group.type_ids},
     }
 )
-"""Each type's `UnitTypeData.forms`: the group of `_FORMS_GROUPS` it is in, or else its own class."""
+"""Each type's `UnitTypeData.equivalent_types`: the group of `_GROUPS_OF_TWO_FORMS` it is in, or else its own class."""

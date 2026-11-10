@@ -524,9 +524,9 @@ def _type_or_class_name(value: UnitTypeId | type) -> str:
     return value.name if isinstance(value, UnitTypeId) else value.__name__
 
 
-class TestForms:
+class TestEquivalentTypes:
     @pytest.mark.parametrize(
-        ("unit_type", "forms"),
+        ("unit_type", "equivalent_types"),
         [
             (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitType.AnySupplyDepot),
             (UnitTypeId.BARRACKS_FLYING, UnitType.AnyBarracks),
@@ -534,17 +534,15 @@ class TestForms:
             (UnitTypeId.SIEGE_TANK, UnitType.AnySiegeTank),
             (UnitTypeId.HELLBAT, UnitType.AnyHellion),
             (UnitTypeId.ROACH_BURROWED, UnitType.AnyRoach),
-            (UnitTypeId.CREEP_TUMOR_QUEEN, UnitType.AnyCreepTumor),
             (UnitTypeId.LOCUST_FLYING, UnitType.AnyLocust),
-            (UnitTypeId.CHANGELING_ZEALOT, UnitType.AnyChangeling),
             (UnitTypeId.WARP_GATE, UnitType.AnyGateway),
         ],
         ids=_type_or_class_name,
     )
-    def test_a_form_of_a_structure_or_unit_has_the_group_of_its_forms(
-        self, first_corpus_tables: GameData, unit_type: UnitTypeId, forms: type[UnitType.AnyType]
+    def test_a_type_converted_to_another_and_back_has_the_group_of_both(
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, equivalent_types: type[UnitType.AnyType]
     ) -> None:
-        assert first_corpus_tables.units[unit_type].forms is forms
+        assert first_corpus_tables.units[unit_type].equivalent_types is equivalent_types
 
     @pytest.mark.parametrize(
         ("unit_type", "own_class"),
@@ -556,21 +554,23 @@ class TestForms:
             (UnitTypeId.ADEPT_SHADE, UnitType.AdeptShade),
             (UnitTypeId.ARCHON, UnitType.Archon),
             (UnitTypeId.REFINERY_RICH, UnitType.RefineryRich),
+            (UnitTypeId.CHANGELING_ZEALOT, UnitType.ChangelingZealot),
+            (UnitTypeId.CREEP_TUMOR_QUEEN, UnitType.CreepTumorQueen),
         ],
         ids=_type_or_class_name,
     )
-    def test_a_type_of_one_form_has_its_own_class(
+    def test_a_type_converted_to_no_other_and_back_has_its_own_class(
         self, first_corpus_tables: GameData, unit_type: UnitTypeId, own_class: type[UnitType.AnyType]
     ) -> None:
         """A lair, a cocoon and an overlord transport each cost something to morph into, an adept's shade stands apart
-        from its adept, an archon is made of two templar, and a refinery on a rich geyser is another structure than one
-        on a plain geyser."""
-        assert first_corpus_tables.units[unit_type].forms is own_class
+        from its adept, an archon is made of two templar, a refinery on a rich geyser is another structure than one on a
+        plain geyser, and a changeling's disguise and a creep tumor's burrow go one way only."""
+        assert first_corpus_tables.units[unit_type].equivalent_types is own_class
 
-    def test_a_types_forms_are_the_same_in_tables_holding_no_row_of_its_other_forms(self) -> None:
+    def test_a_types_equivalent_types_are_the_same_in_tables_holding_no_row_of_the_others(self) -> None:
         """They are curated, not read from the tables, so tables made up for a test give them too."""
         data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=UnitTypeId.HELLBAT)]))
-        assert data.units[UnitTypeId.HELLBAT].forms is UnitType.AnyHellion
+        assert data.units[UnitTypeId.HELLBAT].equivalent_types is UnitType.AnyHellion
 
 
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
@@ -641,7 +641,9 @@ class TestARecordedGamesTables:
         for rich, plain in _RICH_GAS_BUILDINGS.items():
             assert data.units[rich].build_time.steps == data.units[plain].build_time.steps == 480, rich.name
 
-    def test_a_morph_that_costs_nothing_keeps_a_unit_in_its_forms_and_one_that_costs_does_not(self, path: Path) -> None:
+    def test_a_morph_that_costs_nothing_keeps_a_units_equivalent_types_and_one_that_costs_does_not(
+        self, path: Path
+    ) -> None:
         """As the step costs read it, the overlord transport's 25/25 corrected: a siege keeps a tank in
         `UnitType.AnySiegeTank`, and an orbital command, morphed for 150, is in `UnitType.AnyOrbitalCommand`, apart from
         the command center."""
@@ -649,7 +651,7 @@ class TestARecordedGamesTables:
         step_costs = _step_costs(units)
         for unit_type, row in units.items():
             if row.morphed_from is not None and row.morphed_from in units:
-                kept = row.forms is units[row.morphed_from].forms
+                kept = row.equivalent_types is units[row.morphed_from].equivalent_types
                 assert kept == step_costs[unit_type].is_free, unit_type.name
 
     def test_a_type_grants_the_techs_the_tables_name_it_and_its_tech_aliases_after(self, path: Path) -> None:

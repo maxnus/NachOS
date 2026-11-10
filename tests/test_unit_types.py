@@ -103,50 +103,49 @@ class TestUnitType:
         ]
         assert any(linked), (first, second)
 
-    @pytest.mark.parametrize("group", sorted(_unit_types_generator().FORMS_GROUPS), ids=str)
-    def test_a_group_of_one_units_forms_is_the_forms_of_each_of_its_types(
+    @pytest.mark.parametrize("group", sorted(_unit_types_generator().TWO_FORMS), ids=str)
+    def test_a_group_of_two_forms_is_the_equivalent_types_of_each_of_its_types(
         self, group: str, first_corpus_tables: GameData
     ) -> None:
-        forms = getattr(UnitType, group)
-        assert all(first_corpus_tables.units[type_id].forms is forms for type_id in forms.type_ids)
+        two_forms = getattr(UnitType, group)
+        assert all(first_corpus_tables.units[type_id].equivalent_types is two_forms for type_id in two_forms.type_ids)
 
-    def test_a_type_in_no_group_of_forms_is_its_own_forms(self, first_corpus_tables: GameData) -> None:
-        in_groups = set().union(*_unit_types_generator().FORMS_GROUPS.values())
+    def test_a_type_in_no_group_of_two_forms_is_its_own_equivalent_types(self, first_corpus_tables: GameData) -> None:
+        in_groups = set().union(*_unit_types_generator().TWO_FORMS.values())
         for unit_type, row in first_corpus_tables.units.items():
             if unit_type not in in_groups:
-                assert row.forms.type_ids == {unit_type}, unit_type.name
+                assert row.equivalent_types.type_ids == {unit_type}, unit_type.name
 
-    def test_the_forms_differ_from_what_the_tables_call_a_form_of_in_four_places(
+    def test_the_equivalent_types_differ_from_what_the_tables_call_a_form_of_in_six_places(
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
     ) -> None:
-        """The tables call an adept's shade a form of the adept, a warp gate and a hellbat a form of nothing, and a gas
-        building on a rich geyser a form of the one on a plain geyser, which is another structure. They call a rock or a
-        geyser of the map's a form of a plain one, but each has its own class as its forms."""
+        """The tables call an adept's shade a form of the adept; a disguised changeling a form of a plain one, and a
+        queen's or a burrowed creep tumor a form of a plain one, though each changes one way only; a gas building on a
+        rich geyser a form of the one on a plain geyser, which is another structure; and a warp gate and a hellbat a
+        form of nothing. They call a rock or a geyser of the map's a form of a plain one, but each has its own class."""
         race_rows = [row for row in first_corpus_tables.units.values() if row.race is not Race.NONE]
         types_by_alias: dict[UnitTypeId, set[UnitTypeId]] = {}
         for row in race_rows:
             types_by_alias.setdefault(form_of.get(row.id, row.id), set()).add(row.id)
         by_alias = {frozenset(types) for types in types_by_alias.values()}
-        by_forms = {frozenset(row.forms.type_ids) for row in race_rows}
-        assert by_alias - by_forms == {
-            frozenset({UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE}),
-            frozenset({UnitTypeId.GATEWAY}),
-            frozenset({UnitTypeId.WARP_GATE}),
-            frozenset({UnitTypeId.HELLION}),
-            frozenset({UnitTypeId.HELLBAT}),
-            frozenset({UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH}),
-            frozenset({UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}),
-            frozenset({UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}),
+        by_equivalence = {frozenset(row.equivalent_types.type_ids) for row in race_rows}
+        aliased_but_apart = [
+            {UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE},
+            UnitType.AnyChangeling.type_ids,
+            UnitType.AnyCreepTumor.type_ids,
+            UnitType.AnyRefinery.type_ids,
+            UnitType.AnyExtractor.type_ids,
+            UnitType.AnyAssimilator.type_ids,
+        ]
+        equivalent_but_unaliased = [UnitType.AnyGateway.type_ids, UnitType.AnyHellion.type_ids]
+        assert by_alias - by_equivalence == {frozenset(types) for types in aliased_but_apart} | {
+            frozenset({unit_type}) for types in equivalent_but_unaliased for unit_type in types
         }
-        assert by_forms - by_alias == {
-            frozenset({UnitTypeId.ADEPT}),
-            frozenset({UnitTypeId.ADEPT_SHADE}),
-            frozenset({UnitTypeId.GATEWAY, UnitTypeId.WARP_GATE}),
-            frozenset({UnitTypeId.HELLION, UnitTypeId.HELLBAT}),
-            *(frozenset({gas_building}) for gas_building in UnitType.GasBuilding.type_ids),
+        assert by_equivalence - by_alias == {frozenset(types) for types in equivalent_but_unaliased} | {
+            frozenset({unit_type}) for types in aliased_but_apart for unit_type in types
         }
         map_objects = [row for row in first_corpus_tables.units.values() if row.race is Race.NONE]
-        assert all(row.forms.type_ids == {row.id} for row in map_objects)
+        assert all(row.equivalent_types.type_ids == {row.id} for row in map_objects)
 
     def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self) -> None:
         generator = _unit_types_generator()

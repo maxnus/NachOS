@@ -15,7 +15,7 @@ from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
 from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
-from sc2nachos.gamedata._unit_type import UNIT_TYPE_FORMS, UnitType
+from sc2nachos.gamedata._unit_type import EQUIVALENT_UNIT_TYPES, UnitType
 from sc2nachos.gamedata._unit_type_upgrade import UnitTypeUpgrade, WeaponUpgrade
 from sc2nachos.gametime import FASTER_PER_NORMAL_SPEED, GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -240,17 +240,18 @@ class UnitTypeData:
     morphed_from: UnitTypeId | None
     """The unit type used up to make one: a command center for an orbital command, a larva for a zergling, `None` for
     a marine."""
-    forms: type[UnitType.AnyType]
-    """The `UnitType` group of the types a unit of this type changes between at no cost, back and forth or once by
-    itself: a group of two forms, such as `UnitType.AnySiegeTank` for a siege tank sieged or not and
-    `UnitType.AnyHellion` for a hellion and a hellbat; `UnitType.AnyChangeling`, plain or disguised; and
-    `UnitType.AnyCreepTumor`, a queen's or another tumor's, growing or burrowed, as both burrow into the same type. A
-    type in none has its own class, such as `UnitType.Marine`. A morph that costs something makes another unit: a lair,
-    a baneling's cocoon and an overlord transport have their own class, and `UnitType.AnyOrbitalCommand` holds no
-    command center. A gas building on a rich geyser is another structure than one on a plain geyser, and has its own
-    class, though both are built by the same `creation_ability`, and `UnitType.AnyRefinery`, `AnyExtractor` and
-    `AnyAssimilator` hold both. `forms.type_ids` holds every type of it, the same in any tables, though tables made up
-    for a test may hold no row of some."""
+    equivalent_types: type[UnitType.AnyType]
+    """The `UnitType` group of the types a unit of this type converts between and back: `UnitType.AnySiegeTank` for a
+    siege tank sieged or not, `UnitType.AnyHellion` for a hellion and a hellbat, and `UnitType.AnyLocust` for a locust,
+    which takes off by itself and lands by a swoop (in game). A type in none has its own class, such as
+    `UnitType.Marine`. A morph that costs something makes another unit, so a lair, a baneling's cocoon and an overlord
+    transport have their own class, and `UnitType.AnyOrbitalCommand` holds no command center. A changeling and a creep
+    tumor each change one way only, as the game disguises a changeling (stated) and burrows a tumor (in game), so each
+    of their types has its own class too, and `UnitType.AnyChangeling` and `AnyCreepTumor` hold them. A gas building on
+    a rich geyser is another structure than one on a plain geyser and has its own class, though both are built by the
+    same `creation_ability`, and `UnitType.AnyRefinery`, `AnyExtractor` and `AnyAssimilator` hold both.
+    `equivalent_types.type_ids` holds every type of it, the same in any tables, though tables made up for a test may
+    hold no row of some."""
     ability_requirements: Mapping[AbilityId, TechRequirements]
     """The abilities a unit of this type can be offered, with the tech each needs first."""
     needs_power: bool
@@ -344,7 +345,7 @@ class UnitTypeData:
             producers=in_tree.producers or PRODUCERS_FALLBACK.get(unit_type, frozenset()),
             tech_requirements=in_tree.tech_requirements,
             morphed_from=in_tree.morphed_from,
-            forms=UNIT_TYPE_FORMS[unit_type],
+            equivalent_types=EQUIVALENT_UNIT_TYPES[unit_type],
             ability_requirements=in_tree.ability_requirements,
             needs_power=in_tree.needs_power,
             creep_requirement=CREEP_REQUIREMENTS.get(unit_type),
