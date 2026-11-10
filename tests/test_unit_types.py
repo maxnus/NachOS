@@ -16,7 +16,7 @@ from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.testing import MadeUpUnits, UnitReport
-from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType, UnitTypeKind
+from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType
 from support import load_tool, make_tables
 
 
@@ -116,19 +116,27 @@ class TestUnitType:
             if unit_type not in in_groups:
                 assert row.equivalent_types.type_ids == {unit_type}, unit_type.name
 
-    def test_a_type_is_a_single_type_though_its_group_is_of_equivalent_types(self) -> None:
-        assert UnitType.AnySiegeTank.kind is UnitTypeKind.EQUIVALENT_TYPES
-        assert UnitType.SiegeTank.kind is UnitTypeKind.SINGLE_TYPE
-        assert [cls.__name__ for cls in _classes_of_one_type() if cls.kind is not UnitTypeKind.SINGLE_TYPE] == []
+    def test_a_type_and_a_group_of_two_forms_have_equivalent_types(self) -> None:
+        assert UnitType.AnySiegeTank.types_are_equivalent
+        assert UnitType.SiegeTank.types_are_equivalent
+        assert [cls.__name__ for cls in _classes_of_one_type() if not cls.types_are_equivalent] == []
 
-    def test_a_group_of_two_forms_and_no_other_is_of_equivalent_types(self) -> None:
+    def test_a_group_of_two_forms_and_no_other_has_equivalent_types(self) -> None:
         two_forms = {getattr(UnitType, group) for group in _unit_types_generator().TWO_FORMS}
         groups = [member for member in vars(UnitType).values() if isinstance(member, type) and "id" not in vars(member)]
-        assert {group for group in groups if group.kind is UnitTypeKind.EQUIVALENT_TYPES} == two_forms
-        assert all(group.kind is UnitTypeKind.OTHER_GROUP for group in groups if group not in two_forms)
-        assert UnitType.AnyType.kind is UnitTypeKind.OTHER_GROUP
-        assert UnitType.AnyLocust.kind is UnitTypeKind.OTHER_GROUP
-        assert UnitType.AnyRefinery.kind is UnitTypeKind.OTHER_GROUP
+        assert {group for group in groups if group.types_are_equivalent} == two_forms
+        assert not UnitType.AnyType.types_are_equivalent
+        assert not UnitType.AnyLocust.types_are_equivalent
+        assert not UnitType.AnyRefinery.types_are_equivalent
+
+    def test_no_class_reads_false_in_a_group_that_reads_true(self) -> None:
+        """A class keeps what every group it is in promises, as a subclass must."""
+        classes = [member for member in vars(UnitType).values() if isinstance(member, type)]
+        in_groups_of_equivalent_types = [
+            cls for cls in classes if any(group.types_are_equivalent for group in cls.__mro__[1:-1])
+        ]
+        assert len(in_groups_of_equivalent_types) == 58
+        assert [cls.__name__ for cls in in_groups_of_equivalent_types if not cls.types_are_equivalent] == []
 
     def test_the_equivalent_types_differ_from_what_the_tables_call_a_form_of_in_seven_places(
         self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
