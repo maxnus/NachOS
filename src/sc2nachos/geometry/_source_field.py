@@ -9,7 +9,7 @@ import numpy
 
 from sc2nachos.geometry._circle import Circle
 from sc2nachos.geometry._point import Point
-from sc2nachos.geometry._shapes import Rectangle
+from sc2nachos.geometry._shapes import Rectangle, Tile
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -95,7 +95,7 @@ class SourceField[T: float]:
                 return
             self._rectangles.append(_RectangleSource(shape.x, shape.y, shape.right, shape.top, float(value)))
         else:
-            hint = "; add a tile's bounding_rectangle()" if type(shape).__name__ == "Tile" else ""
+            hint = "; add a tile's bounding_rectangle()" if type(shape) is Tile else ""
             raise TypeError(f"a source field adds circles and rectangles, not a {type(shape).__name__}{hint}")
 
     def _add_circle(self, circle: Circle, value: T, full_within: float | None) -> None:
