@@ -1,4 +1,4 @@
-"""`SourceField`: circles and rectangles, each adding its value over the ground it covers, read as a `Field`."""
+"""`SourceField`: circles, each adding its value over the ground it covers, read as a `Field`."""
 
 import math
 import random
@@ -10,30 +10,28 @@ from test_geometry import OVERLAP_PROBES
 
 
 def _threat() -> SourceField[float]:
-    """A cone of 8 at (10, 10), falling to 0 at 4 away, and 3 over the rectangle from (11, 9) to (14, 12)."""
+    """A cone of 8 at (10, 10), falling to 0 at 4 away, and 3 within 1.5 of (13, 10)."""
     field = SourceField()
-    field.add(Circle((10.0, 10.0), 4.0), 8.0, full_within=0.0)
-    field.add(Rectangle(11.0, 9.0, 3.0, 3.0), 3.0)
+    field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, falloff=4.0)
+    field.add_circle(Circle((13.0, 10.0), 1.5), 3.0)
     return field
 
 
 def _mixed_field() -> SourceField[float]:
-    """Circles that fall off and that do not, one of them negative, and a rectangle, over the shapes of
-    `OVERLAP_PROBES`."""
+    """Circles that fall off and that do not, one of them negative, over the shapes of `OVERLAP_PROBES`."""
     field = SourceField()
-    field.add(Circle((3.0, 3.0), 2.5), 4.0, full_within=1.0)
-    field.add(Circle((6.2, 1.1), 1.5), -2.0, full_within=0.0)
-    field.add(Circle((1.0, 5.0), 1.2), 1.5)
-    field.add(Rectangle(2.0, 0.5, 1.5, 2.0), 2.5)
+    field.add_circle(Circle((3.0, 3.0), 2.5), 4.0, falloff=1.5)
+    field.add_circle(Circle((6.2, 1.1), 1.5), -2.0, falloff=1.5)
+    field.add_circle(Circle((1.0, 5.0), 1.2), 1.5)
+    field.add_circle(Circle((2.75, 1.5), 1.0), 2.5)
     return field
 
 
 def _mixed_mask() -> SourceField[bool]:
-    """The shapes of `_mixed_field`, as booleans."""
+    """The circles of `_mixed_field`, as booleans."""
     field = SourceField(dtype=bool)
-    field.add(Circle((3.0, 3.0), 2.5), True)
-    field.add(Circle((6.2, 1.1), 1.5), True)
-    field.add(Rectangle(2.0, 0.5, 1.5, 2.0), True)
+    for center, radius in (((3.0, 3.0), 2.5), ((6.2, 1.1), 1.5), ((1.0, 5.0), 1.2), ((2.75, 1.5), 1.0)):
+        field.add_circle(Circle(center, radius), True)
     return field
 
 
@@ -60,44 +58,35 @@ class TestBuilding:
         assert SourceField().spacing == 0.25
         assert SourceField(spacing=0.5).spacing == 0.5
 
-    def test_a_field_adds_circles_and_rectangles_alone(self) -> None:
-        field = SourceField()
-        with pytest.raises(TypeError, match=r"not a Tile; add a tile's bounding_rectangle\(\)"):
-            field.add(Tile(1, 1), 2.0)  # pyright: ignore[reportArgumentType]
-        with pytest.raises(TypeError, match="not a TileSet$"):
-            field.add(TileSet([Tile(1, 1)]), 2.0)  # pyright: ignore[reportArgumentType]
-        field.add(Tile(1, 1).bounding_rectangle(), 2.0)
-        assert field.value_at((1.5, 1.5)) == 2.0
+    @pytest.mark.parametrize("shape", [Tile(1, 1), Rectangle(0.0, 0.0, 2.0, 2.0), TileSet([Tile(1, 1)])], ids=repr)
+    def test_a_field_adds_circles_alone(self, shape: Area) -> None:
+        with pytest.raises(TypeError, match=f"adds circles, not a {type(shape).__name__}$"):
+            SourceField().add_circle(shape, 2.0)  # pyright: ignore[reportArgumentType]
 
-    def test_only_a_circle_of_floats_falls_off(self) -> None:
-        with pytest.raises(ValueError, match="rectangle holds its value throughout"):
-            SourceField().add(Rectangle(0, 0, 2, 2), 1.0, full_within=1.0)
+    def test_a_circle_of_booleans_takes_no_falloff(self) -> None:
         with pytest.raises(ValueError, match="booleans"):
-            SourceField(dtype=bool).add(Circle((0, 0), 2), True, full_within=1.0)
+            SourceField(dtype=bool).add_circle(Circle((0, 0), 2), True, falloff=1.0)
 
-    @pytest.mark.parametrize("full_within", [-0.5, 2.5])
-    def test_a_circle_falls_off_within_its_radius(self, full_within: float) -> None:
+    @pytest.mark.parametrize("falloff", [-0.5, 2.5])
+    def test_a_falloff_lies_within_the_radius(self, falloff: float) -> None:
         with pytest.raises(ValueError, match="between 0 and the radius"):
-            SourceField().add(Circle((0, 0), 2), 1.0, full_within=full_within)
+            SourceField().add_circle(Circle((0, 0), 2), 1.0, falloff=falloff)
 
     def test_repr(self) -> None:
-        assert repr(_threat()) == "SourceField(floats, 1 circles, 1 rectangles)"
-        assert repr(SourceField(dtype=bool)) == "SourceField(booleans, 0 circles, 0 rectangles)"
+        assert repr(_threat()) == "SourceField(floats, 2 circles)"
+        assert repr(SourceField(dtype=bool)) == "SourceField(booleans, 0 circles)"
 
 
 class TestValueAt:
-    def test_a_circle_covers_its_edge_and_a_rectangle_its_lower_edges_alone(self) -> None:
+    def test_a_circle_covers_its_edge(self) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 2.0), 1.0)
-        field.add(Rectangle(5.0, 5.0, 1.0, 1.0), 2.0)
+        field.add_circle(Circle((0.0, 0.0), 2.0), 1.0)
         assert field.value_at((2.0, 0.0)) == 1.0
         assert field.value_at((2.0, 0.01)) == 0.0
-        assert field.value_at((5.0, 5.0)) == field.value_at((5.99, 5.99)) == 2.0
-        assert field.value_at((6.0, 5.5)) == field.value_at((5.5, 6.0)) == 0.0
 
-    def test_a_circle_holds_its_value_out_to_full_within_then_falls_linearly_to_zero_at_its_radius(self) -> None:
+    def test_a_circle_holds_its_value_out_to_its_falloff_then_falls_linearly_to_zero_at_its_edge(self) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 4.0), 6.0, full_within=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, falloff=2.0)
         distances_and_values = [(0.0, 6.0), (1.5, 6.0), (2.0, 6.0), (3.0, 3.0), (3.5, 1.5), (4.0, 0.0), (5.0, 0.0)]
         assert [field.value_at((distance, 0.0)) for distance, _ in distances_and_values] == [
             value for _, value in distances_and_values
@@ -105,30 +94,30 @@ class TestValueAt:
         assert field.value_at((0.0, -3.0)) == 3.0
         assert field.value_at((1.8, 2.4)) == pytest.approx(3.0)
 
-    def test_a_cone_peaks_at_its_center(self) -> None:
+    def test_a_falloff_of_the_radius_makes_a_cone(self) -> None:
         field = SourceField()
-        field.add(Circle((10.0, 10.0), 4.0), 8.0, full_within=0.0)
+        field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, falloff=4.0)
         assert field.value_at((10.0, 10.0)) == 8.0
         assert field.value_at((12.0, 10.0)) == 4.0
 
-    def test_overlapping_shapes_add_up(self) -> None:
+    def test_overlapping_circles_add_up(self) -> None:
         threat = _threat()
         assert threat.value_at((12.0, 10.0)) == 4.0 + 3.0
         assert threat.value_at((10.0, 10.0)) == 8.0
         assert threat.value_at((13.0, 11.0)) == pytest.approx(8.0 * (4.0 - math.sqrt(10.0)) / 4.0 + 3.0)
-        threat.add(Circle((12.0, 10.0), 1.0), -5.0)
+        threat.add_circle(Circle((12.0, 10.0), 1.0), -5.0)
         assert threat.value_at((12.0, 10.0)) == 2.0
 
     def test_booleans_are_or_ed(self) -> None:
         mask = SourceField(dtype=bool)
-        mask.add(Circle((0.0, 0.0), 2.0), True)
-        mask.add(Rectangle(1.0, -1.0, 3.0, 2.0), True)
-        mask.add(Circle((10.0, 10.0), 2.0), False)
+        mask.add_circle(Circle((0.0, 0.0), 2.0), True)
+        mask.add_circle(Circle((3.0, 0.0), 2.0), True)
+        mask.add_circle(Circle((10.0, 10.0), 2.0), False)
         assert mask.value_at((1.5, 0.0)) is True
-        assert mask.value_at((3.5, 0.0)) is True
+        assert mask.value_at((4.5, 0.0)) is True
         assert mask.value_at((-1.5, 0.0)) is True
         assert mask.value_at((10.0, 10.0)) is False
-        assert repr(mask) == "SourceField(booleans, 1 circles, 1 rectangles)"
+        assert repr(mask) == "SourceField(booleans, 2 circles)"
 
     def test_the_value_is_a_python_scalar(self) -> None:
         assert type(_threat().value_at((12.0, 10.0))) is float
@@ -139,7 +128,7 @@ class TestValueAt:
 class TestGradient:
     def test_a_falling_circle_slopes_up_toward_its_center(self) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 4.0), 6.0, full_within=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, falloff=2.0)
         assert field.gradient_at((3.0, 0.0)) == (-3.0, 0.0)
         assert field.gradient_at((0.0, -3.0)) == (0.0, 3.0)
         slope_x, slope_y = field.gradient_at((2.1, 2.1))
@@ -148,36 +137,36 @@ class TestGradient:
 
     def test_a_negative_circle_slopes_up_away_from_its_center(self) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 4.0), -6.0, full_within=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), -6.0, falloff=2.0)
         assert field.gradient_at((3.0, 0.0)) == (3.0, 0.0)
 
     @pytest.mark.parametrize(
         ("point", "slope"),
         [
-            ((1.0, 0.0), (0.0, 0.0)),  # on the plateau
+            ((1.0, 0.0), (0.0, 0.0)),  # holding its whole value
             ((2.0, 0.0), (0.0, 0.0)),  # where the falloff begins
             ((4.0, 0.0), (-3.0, 0.0)),  # on the edge, which slopes
-            ((4.5, 0.0), (0.0, 0.0)),  # beyond the radius
+            ((4.5, 0.0), (0.0, 0.0)),  # beyond the edge
         ],
     )
-    def test_a_circle_slopes_from_beyond_full_within_out_to_its_edge(
+    def test_a_circle_slopes_over_its_falloff_out_to_its_edge(
         self, point: PointLike, slope: tuple[float, float]
     ) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 4.0), 6.0, full_within=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, falloff=2.0)
         assert field.gradient_at(point) == slope
 
     def test_a_cone_and_a_constant_circle_are_flat_at_their_center(self) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 4.0), 8.0, full_within=0.0)
-        field.add(Circle((10.0, 0.0), 4.0), 8.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 8.0, falloff=4.0)
+        field.add_circle(Circle((10.0, 0.0), 4.0), 8.0)
         assert field.gradient_at((0.0, 0.0)) == (0.0, 0.0)
-        assert field.gradient_at((10.0, 0.0)) == field.gradient_at((13.0, 0.0)) == (0.0, 0.0)
+        assert field.gradient_at((10.0, 0.0)) == (0.0, 0.0)
 
-    def test_a_rectangle_is_flat_even_at_its_edge(self) -> None:
+    def test_a_constant_circle_is_flat_even_at_its_edge(self) -> None:
         field = SourceField()
-        field.add(Rectangle(11.0, 9.0, 3.0, 3.0), 3.0)
-        assert field.gradient_at((11.0, 10.0)) == field.gradient_at((12.0, 10.0)) == (0.0, 0.0)
+        field.add_circle(Circle((10.0, 0.0), 4.0), 8.0)
+        assert field.gradient_at((14.0, 0.0)) == field.gradient_at((13.0, 0.0)) == (0.0, 0.0)
 
     @pytest.mark.parametrize("point", [(2.2, 3.7), (4.6, 2.1), (5.9, 0.4), (3.1, 1.9), (2.0, 4.5)], ids=repr)
     def test_the_gradient_is_the_slope_of_the_values_around_it(self, point: tuple[float, float]) -> None:
@@ -213,7 +202,7 @@ class TestAreaReads:
 
     def test_one_circles_largest_value_is_exact_where_the_spaced_points_miss_it(self) -> None:
         field = SourceField()
-        field.add(Circle((5.0, 0.0), 4.0), 8.0, full_within=0.0)
+        field.add_circle(Circle((5.0, 0.0), 4.0), 8.0, falloff=4.0)
         area = Circle((0.0, 0.0), 2.0)
         assert field.max(within=area) == 2.0
         assert field.argmax(within=area) == Point((2.0, 0.0))
@@ -232,7 +221,7 @@ class TestAreaReads:
         self, area: Area, circle: Circle
     ) -> None:
         mask = SourceField(dtype=bool)
-        mask.add(circle, True)
+        mask.add_circle(circle, True)
         assert mask.max(within=area) is True
         point = mask.argmax(within=area)
         assert point in area
@@ -249,7 +238,7 @@ class TestAreaReads:
             reach = unit.radius + radius - 0.001
             splash = Circle((unit.center.x + reach * math.cos(angle), unit.center.y + reach * math.sin(angle)), radius)
             mask = SourceField(dtype=bool)
-            mask.add(splash, True)
+            mask.add_circle(splash, True)
             assert mask.max(within=unit) is True, (unit, splash)
 
     def test_the_smallest_value_and_where_come_within_the_spacing(self) -> None:
@@ -257,7 +246,7 @@ class TestAreaReads:
         `10 - sqrt(18)`, and no point read is farther than half the spacing along each axis from it."""
         for spacing in (0.25, 0.05):
             field = SourceField(spacing=spacing)
-            field.add(Circle((0.0, 0.0), 10.0), 10.0, full_within=0.0)
+            field.add_circle(Circle((0.0, 0.0), 10.0), 10.0, falloff=10.0)
             area = Rectangle(1.0, 1.0, 2.0, 2.0)
             smallest_at_the_corner = 10.0 - math.sqrt(18.0)
             assert smallest_at_the_corner < field.min(within=area) <= smallest_at_the_corner + spacing / math.sqrt(2)
@@ -265,8 +254,8 @@ class TestAreaReads:
 
     def test_overlapping_circles_add_up_where_both_reach(self) -> None:
         field = SourceField()
-        field.add(Circle((0.0, 0.0), 1.0), 1.0)
-        field.add(Circle((1.5, 0.0), 1.0), 1.0)
+        field.add_circle(Circle((0.0, 0.0), 1.0), 1.0)
+        field.add_circle(Circle((1.5, 0.0), 1.0), 1.0)
         area = Rectangle(-1.0, -1.0, 3.5, 2.0)
         assert field.max(within=area) == 2.0
         point = field.argmax(within=area)
@@ -276,30 +265,30 @@ class TestAreaReads:
     def test_points_that_tie_go_to_the_lowest_x_then_y(self) -> None:
         """Every point reads true, and the point nearest the circle's center lies left of every spaced one."""
         mask = SourceField(dtype=bool)
-        mask.add(Circle((0.01, 0.5), 5.0), True)
+        mask.add_circle(Circle((0.01, 0.5), 5.0), True)
         assert mask.argmax(within=Rectangle(0.0, 0.0, 1.0, 1.0)) == Point((0.01, 0.5))
         assert mask.argmin(within=Rectangle(0.0, 0.0, 1.0, 1.0)) == Point((0.01, 0.5))
         assert SourceField().argmin(within=Rectangle(2.0, 3.0, 1.0, 1.0)) == Point((2.125, 3.125))
 
     @pytest.mark.parametrize("area", [Tile(0, 0), Rectangle(0.0, 0.0, 1.0, 1.0)], ids=repr)
-    def test_a_shape_touching_only_an_edge_the_area_leaves_out_reads_nothing(self, area: Area) -> None:
-        """As a grid leaves out a tile an area touches only at an edge, and as `in` has it."""
+    def test_a_circle_touching_only_an_edge_the_area_leaves_out_reads_nothing(self, area: Area) -> None:
+        """As a grid leaves out a tile an area touches only at an edge, and as `in` has it: the circle's leftmost
+        point, (1, 0.5), is the next tile's."""
         field = SourceField()
-        field.add(Rectangle(1.0, 0.0, 1.0, 1.0), 5.0)
+        field.add_circle(Circle((1.75, 0.5), 0.75), 5.0)
         assert field.max(within=area) == 0.0
-        assert field.argmax(within=area) == Point((0.125, 0.125))
         assert field.max(within=Tile(1, 0)) == 5.0
 
-    def test_a_shape_touching_a_circle_reads_where_they_touch(self) -> None:
-        """A circle holds its edge, so the point the two share is the circle's."""
+    def test_a_circle_touching_a_circle_reads_where_they_touch(self) -> None:
+        """A circle holds its edge, so the point the two share is both circles'."""
         field = SourceField()
-        field.add(Circle((2.0, 0.5), 1.0), 7.0)
+        field.add_circle(Circle((2.0, 0.5), 1.0), 7.0)
         assert field.max(within=Circle((0.0, 0.5), 1.0)) == 7.0
         assert field.argmax(within=Circle((0.0, 0.5), 1.0)) == Point((1.0, 0.5))
 
     def test_a_falling_circle_beyond_an_edge_the_area_leaves_out_reads_just_inside_it(self) -> None:
         field = SourceField()
-        field.add(Circle((3.0, 0.5), 4.0), 8.0, full_within=0.0)
+        field.add_circle(Circle((3.0, 0.5), 4.0), 8.0, falloff=4.0)
         area = Rectangle(0.0, 0.0, 1.0, 1.0)
         point = field.argmax(within=area)
         assert point == Point((math.nextafter(1.0, 0.0), 0.5))
@@ -307,7 +296,7 @@ class TestAreaReads:
 
     def test_a_tile_set_reads_its_tiles_alone(self) -> None:
         field = SourceField()
-        field.add(Circle((5.5, 5.5), 2.0), 4.0, full_within=0.0)
+        field.add_circle(Circle((5.5, 5.5), 2.0), 4.0, falloff=2.0)
         assert field.max(within=TileSet([Tile(0, 0), Tile(5, 5)])) == 4.0
         assert field.argmax(within=TileSet([Tile(0, 0), Tile(5, 5)])) == Point((5.5, 5.5))
         assert field.max(within=TileSet([Tile(0, 0), Tile(9, 9)])) == 0.0

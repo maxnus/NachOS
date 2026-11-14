@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class Field[T: float](Protocol):
     """A value at every position on the map, such as a threat or a mask: read at a point, as the smallest or the
     largest over an area and where it lies, or as its slope. `Grid` holds one value per tile, and `SourceField` adds up
-    circles and rectangles.
+    circles.
 
     A point or an area the field does not cover raises `IndexError`, and an empty area `ValueError`.
     """
