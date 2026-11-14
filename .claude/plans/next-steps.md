@@ -207,6 +207,12 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   share no code. Named over `Layer`, `Surface` and `ScalarField`, though "field" also names a mineral field;
   `SourceField`, each shape a source, the sources adding up, over `ShapeField`, `AreaField`, `KernelField` and others
   (the owner: snappy but accurate).
+- **A rectangle holds its lower edges and not its upper ones, as a tile does** (the owner, 2026-11-14, over closed
+  rectangles): the convention of graphics libraries, whose rectangles sit on a grid of pixels, so that rectangles on
+  whole tiles tile, agree with their tiles, and hold a point exactly where a grid's `bounds` covers it. What an area
+  hands out agrees with `in` (#249): `closest_point_to` and `random_point` answer a point the area holds, the least a
+  float can move inside an upper edge, and a circle's stepped toward its center, where rounding had left about half
+  its edge points just outside.
 
 ### Running, recordings and replays
 
@@ -357,11 +363,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      reaches the area, and up to the spacing off for the rest, min and rectangles included (the owner, building it,
      kept the rule and had the plan's "exact for booleans and for one shape" corrected, over also reading each
      rectangle's point nearest the area's center, and over the spaced points alone). Every point read is one the area
-     holds, as `in` has it, a point on an edge it leaves out moved by the least a float can move, so a shape touching
-     only such an edge reads nothing, as a grid leaves out a tile touched only at an edge; ties go to the lowest x,
-     then y, as a grid's go to the lowest address. For it, `Circle.closest_point_to` answers a point the circle holds,
-     where rounding had left about half just outside. Measured 2026-11-14: a read over a unit's circle costs some 30
-     to 55 µs where shapes reach it, against a grid's 4 to 8, and 1.5 to 3 where none does.
+     holds, as `in` has it (below), so a shape touching only an edge the area leaves out reads nothing, as a grid
+     leaves out a tile touched only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address.
+     Measured 2026-11-14: a read over a unit's circle costs some 30 to 55 µs where shapes reach it, against a grid's 4
+     to 8, and 1.5 to 3 where none does.
   3. AvocaDOS takes them after a release: its effect threat and splash zone as `SourceField`s, a unit reading the max
      within its own circle; `grid.argmin()` answers a point now, so `cropped(around).argmin().center` drops `.center`
      and `grid_argmin` takes `argmin_tile()`. Its `melee_effect_threat` adds the effect threat to a grid, which a

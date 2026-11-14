@@ -457,7 +457,13 @@ class TestRectangle:
     def test_closest_point_to(self) -> None:
         rect = Rectangle(0, 0, 10, 10)
         assert rect.closest_point_to((5, 5)) == ((5, 5), 0.0)
-        assert rect.closest_point_to((13, 5)) == ((10, 5), 3.0)
+        assert rect.closest_point_to((-3, 5)) == ((0, 5), 3.0)
+
+    def test_closest_point_beyond_an_upper_edge_is_the_least_a_float_can_move_inside_it(self) -> None:
+        """The rectangle leaves out its right and top edges, so the point on one is not its own."""
+        point, distance = Rectangle(0, 0, 10, 10).closest_point_to((13, 15))
+        assert point == (math.nextafter(10, 0), math.nextafter(10, 0))
+        assert distance == pytest.approx(math.hypot(3, 5))
 
     def test_random_point_is_inside(self) -> None:
         rect = Rectangle(3, 7, 2, 4)
@@ -633,7 +639,10 @@ class TestTile:
         assert all(tile.random_point() in tile for _ in range(100))
 
     def test_closest_point_to(self) -> None:
-        assert Tile(0, 0).closest_point_to((5, 0.5)) == ((1, 0.5), 4.0)
+        assert Tile(0, 0).closest_point_to((-5, 0.5)) == ((0, 0.5), 5.0)
+        point, distance = Tile(0, 0).closest_point_to((5, 0.5))
+        assert point == (math.nextafter(1, 0), 0.5), "the right edge is the next tile's"
+        assert distance == pytest.approx(4.0)
 
 
 class TestAreaLayout:
@@ -659,6 +668,13 @@ OVERLAP_PROBES = (
     Rectangle(2, 2, 1, 1),  # a tile's own square, touching its eight neighbors
     Rectangle(1.5, 2, 2, 0.5),
 )
+
+
+class _LargestDraws(random.Random):
+    """A generator whose every draw is the largest float below 1."""
+
+    def random(self) -> float:
+        return 1 - 2**-53
 
 
 def _tiles_held(tiles: TileMask) -> set[Tile]:
@@ -769,6 +785,34 @@ class TestAreaAgreement:
         }
         assert _tiles_held(area._overlapped_tile_mask()) == holding
 
+    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=lambda area: repr(area))
+    def test_every_shapes_closest_point_is_one_it_holds(self, area: Area) -> None:
+        """A rectangle, a tile and a tile set answered points on the upper edges they leave out, and a circle about
+        half its points on the edge just outside it. Probed a quarter apart around each shape, which meets its edges."""
+        bounds = area.bounding_rectangle()
+        for i in range(round((bounds.width + 4) / 0.25) + 1):
+            for j in range(round((bounds.height + 4) / 0.25) + 1):
+                probe = (math.floor(bounds.x) - 2 + i * 0.25, math.floor(bounds.y) - 2 + j * 0.25)
+                point, _ = area.closest_point_to(probe)
+                assert point in area, probe
+
+    @pytest.mark.parametrize(
+        "area",
+        [
+            *EVERY_SHAPE,
+            Rectangle(200.0, 3.0, 1.0, 1.0),
+            Tile(200, 3),
+            TileSet([Tile(200, 3)]),
+            Circle((130.32, 157.74), 1.68),
+            Circle((46.62, 46.17), 3.52),
+        ],
+        ids=lambda area: repr(area),
+    )
+    def test_every_shapes_random_point_is_one_it_holds_at_the_largest_draw(self, area: Area) -> None:
+        """A draw of the largest float below 1 rounded onto the upper edge of each shape here but the first four, or
+        just outside the circle."""
+        assert area.random_point(rng=_LargestDraws()) in area
+
     @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1, 1, 0, 2), Rectangle(1.5, 1, 3, 0)], ids=repr)
     def test_an_empty_shape_overlaps_no_tile(self, area: Area) -> None:
         assert not area._overlapped_tile_mask().mask.any()
@@ -874,7 +918,7 @@ class TestTileSet:
         tiles = Rectangle(0, 0, 2, 2).tiles()
         assert tiles.closest_point_to((0.5, 0.5)) == ((0.5, 0.5), 0.0)
         point, distance = tiles.closest_point_to((10, 1.5))
-        assert point == (2, 1.5), "the near edge of the covered ground, not a tile center"
+        assert point == (math.nextafter(2, 0), 1.5), "the near edge of the covered ground, not a tile center"
         assert distance == pytest.approx(8.0)
 
     def test_random_point_is_inside(self) -> None:

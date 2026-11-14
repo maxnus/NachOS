@@ -50,11 +50,10 @@ class SourceField[T: float]:
     every point, so no read raises `IndexError`.
 
     `min`, `max`, `argmin` and `argmax` read the field at points at most `spacing` apart, along x and along y, over
-    the area, and at the area's point nearest the center of each shape that reaches it, moved by the least a float can
-    move where it lies on an edge the area leaves out. So where one circle of a positive value reaches the area alone,
-    the largest value is exact, and so is whether a circle of a field of booleans reaches the area. Anything else may be
-    off by as much as the field changes over the spacing, and a value held only on a patch narrower than that may be
-    missed.
+    the area, and at the area's point nearest the center of each shape that reaches it, as `closest_point_to` gives
+    it. So where one circle of a positive value reaches the area alone, the largest value is exact, and so is whether a
+    circle of a field of booleans reaches the area. Anything else may be off by as much as the field changes over the
+    spacing, and a value held only on a patch narrower than that may be missed.
     """
 
     __slots__ = ("_circles", "_holds_booleans", "_rectangles", "_spacing")
@@ -211,18 +210,16 @@ class SourceField[T: float]:
     ) -> tuple[ndarray, ndarray]:
         """The x and the y of the points read in `area`, whose bounding rectangle is `bounds`: those `spacing` apart,
         by ascending x, then y, then the area's point nearest the center of each of `circles` that reaches it and of
-        each of `rectangles`, as `_held_point_nearest` gives it."""
+        each of `rectangles`."""
         xs, ys = _points_spaced_over(area, bounds, self._spacing)
         nearest_points: list[Point] = []
         for circle in circles:
-            point = _held_point_nearest((circle.x, circle.y), area, within=circle.radius)
-            if point is not None:
+            point, distance = area.closest_point_to((circle.x, circle.y))
+            if distance <= circle.radius:
                 nearest_points.append(point)
         for rectangle in rectangles:
             center = ((rectangle.left + rectangle.right) / 2, (rectangle.bottom + rectangle.top) / 2)
-            point = _held_point_nearest(center, area)
-            if point is not None:
-                nearest_points.append(point)
+            nearest_points.append(area.closest_point_to(center)[0])
         if not nearest_points:
             return xs, ys
         nearest = numpy.array(nearest_points)
@@ -298,8 +295,8 @@ def _bounding_rectangle_of_nonempty(area: Area) -> Rectangle:
 
 def _points_spaced_over(area: Area, bounds: Rectangle, spacing: float) -> tuple[ndarray, ndarray]:
     """The x and the y of the centers of the cells, at most `spacing` wide and high, that split `bounds`, the area's
-    bounding rectangle, of those in `area`, by ascending x, then y. If none is, the point `_held_point_nearest` gives
-    for the middle of `bounds`, if any."""
+    bounding rectangle, of those in `area`, by ascending x, then y. If none is, the area's point nearest the middle
+    of `bounds`."""
     columns = max(1, math.ceil(bounds.width / spacing))
     rows = max(1, math.ceil(bounds.height / spacing))
     xs = bounds.x + (numpy.arange(columns) + 0.5) * (bounds.width / columns)
@@ -307,24 +304,5 @@ def _points_spaced_over(area: Area, bounds: Rectangle, spacing: float) -> tuple[
     column_indices, row_indices = numpy.nonzero(area._contains_each(xs[:, None], ys[None, :]))
     if len(column_indices):
         return xs[column_indices], ys[row_indices]
-    point = _held_point_nearest(bounds.center, area)
-    if point is None:
-        return numpy.empty(0), numpy.empty(0)
+    point, _ = area.closest_point_to(bounds.center)
     return numpy.array([point[0]]), numpy.array([point[1]])
-
-
-def _held_point_nearest(point: PointLike, area: Area, *, within: float = math.inf) -> Point | None:
-    """The area's point nearest to `point`, if it lies `within` that distance, moved down, left or both by the least a
-    float can move where the area leaves out the edge it lies on, so that the area holds it; `None` if none does."""
-    nearest, distance = area.closest_point_to(point)
-    if distance > within:
-        return None
-    if nearest in area:
-        return nearest
-    x, y = nearest
-    below_x = math.nextafter(x, -math.inf)
-    below_y = math.nextafter(y, -math.inf)
-    for moved in ((below_x, y), (x, below_y), (below_x, below_y)):
-        if moved in area:
-            return Point(moved)
-    return None

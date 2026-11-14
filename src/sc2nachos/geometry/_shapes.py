@@ -73,7 +73,8 @@ class Tile(Area):
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the tile, by `rng` or the `random` module's own generator."""
         random_fraction = random.random if rng is None else rng.random
-        return Point((self.x + random_fraction(), self.y + random_fraction()))
+        x, y = self.x, self.y
+        return _nearest_point_held_within(x + random_fraction(), y + random_fraction(), x, y, x + 1, y + 1)
 
     @property
     def neighbors4(self) -> tuple[Tile, Tile, Tile, Tile]:
@@ -114,13 +115,10 @@ class Tile(Area):
         return Tile.at((self.x + 0.5 + ground_offset[0], self.y + 0.5 + ground_offset[1]))
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the tile nearest to `point`, and the distance to it."""
-        closest = Point(
-            (
-                max(self.x, min(point[0], self.x + 1)),
-                max(self.y, min(point[1], self.y + 1)),
-            )
-        )
+        """The point of the tile nearest to `point`, and the distance to it, kept off the upper edges as `Area` has
+        it."""
+        x, y = self.x, self.y
+        closest = _nearest_point_held_within(point[0], point[1], x, y, x + 1, y + 1)
         return closest, closest.distance_to(point)
 
     def bounding_rectangle(self) -> Rectangle:
@@ -148,6 +146,17 @@ def coordinates_or_tile_center(value: PointLike | Tile) -> PointLike:
     if type(value) is Tile:
         return value.center
     raise not_a_point_error(value)
+
+
+def _nearest_point_held_within(x: float, y: float, left: float, bottom: float, right: float, top: float) -> Point:
+    """The point nearest to `x` and `y` from `left` to `right` and from `bottom` to `top`, on the lower edges but not
+    the upper ones: on an upper edge, the least a float can move inside it."""
+    return Point(
+        (
+            float(max(left, min(x, math.nextafter(right, -math.inf)))),
+            float(max(bottom, min(y, math.nextafter(top, -math.inf)))),
+        )
+    )
 
 
 @final
@@ -305,17 +314,17 @@ class Rectangle(Area):
         """A point drawn uniformly from the rectangle, by `rng` or the `random` module's own generator."""
         self._raise_if_empty("points to draw from")
         uniform = random.uniform if rng is None else rng.uniform
-        return Point((self.left + uniform(0, self.width), self.bottom + uniform(0, self.height)))
+        x, y = self.x, self.y
+        drawn_x = x + uniform(0, self.width)
+        drawn_y = y + uniform(0, self.height)
+        return _nearest_point_held_within(drawn_x, drawn_y, x, y, x + self.width, y + self.height)
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the rectangle nearest to `point`, and the distance to it."""
+        """The point of the rectangle nearest to `point`, and the distance to it, kept off the upper edges as `Area`
+        has it."""
         self._raise_if_empty("closest point")
-        closest = Point(
-            (
-                max(self.left, min(point[0], self.right)),
-                max(self.bottom, min(point[1], self.top)),
-            )
-        )
+        x, y = self.x, self.y
+        closest = _nearest_point_held_within(point[0], point[1], x, y, x + self.width, y + self.height)
         return closest, closest.distance_to(point)
 
     def bounding_rectangle(self) -> Rectangle:

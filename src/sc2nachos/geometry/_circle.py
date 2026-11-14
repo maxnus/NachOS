@@ -79,12 +79,8 @@ class Circle(Area):
         # sqrt, because a uniform radius would crowd the points toward the center.
         distance = self._radius * math.sqrt(random_fraction())
         angle = 2 * math.pi * random_fraction()
-        return Point(
-            (
-                self._center[0] + distance * math.cos(angle),
-                self._center[1] + distance * math.sin(angle),
-            )
-        )
+        drawn = Point((self._center[0] + distance * math.cos(angle), self._center[1] + distance * math.sin(angle)))
+        return self._stepped_inside(drawn)
 
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the circle nearest to `point`, and the distance to it.
@@ -97,12 +93,17 @@ class Circle(Area):
         distance = offset.length
         if distance <= self._radius:
             return position, 0.0
+        return self._stepped_inside(self._center + offset * (self._radius / distance)), distance - self._radius
+
+    def _stepped_inside(self, point: Point) -> Point:
+        """`point`, on or near the edge, moved toward the center by as little as rounding needs for the circle to hold
+        it."""
+        # Rounding leaves about half the points worked out on the edge just outside, almost always by a step of each
+        # coordinate.
         center_x, center_y = self._center
-        nearest = self._center + offset * (self._radius / distance)
-        # Rounding leaves about half of these just outside, almost always by a step of each coordinate.
-        while nearest not in self:
-            nearest = Point((math.nextafter(nearest[0], center_x), math.nextafter(nearest[1], center_y)))
-        return nearest, distance - self._radius
+        while point not in self:
+            point = Point((math.nextafter(point[0], center_x), math.nextafter(point[1], center_y)))
+        return point
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing the circle."""

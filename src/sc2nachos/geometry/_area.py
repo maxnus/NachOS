@@ -38,7 +38,7 @@ class Area(ABC):
     @abstractmethod
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the area, by `rng`, or if none is given by the `random` module's own
-        generator, which the whole process shares."""
+        generator, which the whole process shares: always one the area holds, as `in` has it."""
 
     @abstractmethod
     def __contains__(self, point: PointLike | Tile) -> bool:
@@ -52,10 +52,8 @@ class Area(ABC):
 
     @abstractmethod
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the area nearest to `point`, and the distance to it.
-
-        May lie on an edge the area excludes, so it is not necessarily in the area.
-        """
+        """The point of the area nearest to `point`, and the distance to it: always one the area holds, as `in` has
+        it, so on an edge the area leaves out, the least a float can move inside it."""
 
     @abstractmethod
     def bounding_rectangle(self) -> Rectangle:
