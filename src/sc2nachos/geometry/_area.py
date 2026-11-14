@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Self
 if TYPE_CHECKING:
     import random
 
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import Point, PointLike
     from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
     from sc2nachos.geometry._tile_mask import TileMask
@@ -62,6 +64,10 @@ class Area(ABC):
     @abstractmethod
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
+
+    @abstractmethod
+    def _contains_each(self, xs: ndarray, ys: ndarray) -> ndarray:
+        """Whether each point lies inside, as `in` has it, their x and y given as arrays that broadcast together."""
 
     @abstractmethod
     def _overlapped_tile_mask(self) -> TileMask:

@@ -14,6 +14,8 @@ from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet, coordinates_or_
 from sc2nachos.geometry._tile_mask import TileMask
 
 if TYPE_CHECKING:
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import PointLike
 
 
@@ -61,6 +63,12 @@ class Circle(Area):
         dy = position[1] - self._center[1]
         return dx * dx + dy * dy <= self._radius**2
 
+    def _contains_each(self, xs: ndarray, ys: ndarray) -> ndarray:
+        """Whether each point lies in the circle, boundary included."""
+        dx = xs - self._center[0]
+        dy = ys - self._center[1]
+        return dx * dx + dy * dy <= self._radius**2
+
     def translated(self, offset: PointLike) -> Circle:
         """The circle shifted by `offset`, keeping its radius. Raises `ValueError` for an offset with a height."""
         return Circle(self._center + checked_ground_offset(offset), self._radius)
@@ -81,14 +89,20 @@ class Circle(Area):
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
         """The point of the circle nearest to `point`, and the distance to it.
 
-        A point inside the circle is its own nearest point, at distance zero.
+        A point inside the circle is its own nearest point, at distance zero. For one outside, the point on the edge
+        is moved toward the center by as little as rounding needs for the circle to hold it.
         """
         position = Point(point[:2])
         offset = position - self._center
         distance = offset.length
         if distance <= self._radius:
             return position, 0.0
-        return self._center + offset * (self._radius / distance), distance - self._radius
+        center_x, center_y = self._center
+        nearest = self._center + offset * (self._radius / distance)
+        # Rounding leaves about half of these just outside, almost always by a step of each coordinate.
+        while nearest not in self:
+            nearest = Point((math.nextafter(nearest[0], center_x), math.nextafter(nearest[1], center_y)))
+        return nearest, distance - self._radius
 
     def bounding_rectangle(self) -> Rectangle:
         """The smallest rectangle containing the circle."""

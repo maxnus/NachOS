@@ -98,6 +98,11 @@ class Tile(Area):
         Raises `TypeError` on anything but a point or a tile."""
         return Tile._address_at(point) == (self.x, self.y)
 
+    def _contains_each(self, xs: ndarray, ys: ndarray) -> ndarray:
+        """Whether each point falls on this tile, on the lower edges but not the upper ones."""
+        x, y = self.x, self.y
+        return (x <= xs) & (xs < x + 1) & (y <= ys) & (ys < y + 1)
+
     def shifted(self, dx: int, dy: int) -> Tile:
         """The tile `dx` across and `dy` up from this one. Raises `TypeError` for a shift that is not a whole number."""
         return Tile(self.x + dx, self.y + dy)
@@ -242,6 +247,11 @@ class Rectangle(Area):
         # The fields rather than the edge properties, a call each; the arithmetic is the same as `right` and `top`.
         x, y = self.x, self.y
         return x <= position[0] < x + self.width and y <= position[1] < y + self.height
+
+    def _contains_each(self, xs: ndarray, ys: ndarray) -> ndarray:
+        """Whether each point lies inside, on the lower edges but not the upper ones."""
+        x, y = self.x, self.y
+        return (x <= xs) & (xs < x + self.width) & (y <= ys) & (ys < y + self.height)
 
     def encloses(self, other: Rectangle) -> bool:
         """Whether the whole of `other` lies inside."""
@@ -425,6 +435,18 @@ class TileSet(Area):
     def __contains__(self, point: PointLike | Tile) -> bool:
         """Whether the tile containing `point` is covered."""
         return Tile._address_at(point) in self._addresses
+
+    def _contains_each(self, xs: ndarray, ys: ndarray) -> ndarray:
+        """Whether the tile containing each point is covered."""
+        covered_tiles = self._mask_over_bounds
+        columns = numpy.floor(xs).astype(int) - covered_tiles.origin.x
+        rows = numpy.floor(ys).astype(int) - covered_tiles.origin.y
+        columns, rows = numpy.broadcast_arrays(columns, rows)
+        width, height = covered_tiles.mask.shape
+        on_mask = (columns >= 0) & (columns < width) & (rows >= 0) & (rows < height)
+        contained = numpy.zeros(columns.shape, dtype=bool)
+        contained[on_mask] = covered_tiles.mask[columns[on_mask], rows[on_mask]]
+        return contained
 
     @cached_property
     def _spatial_index(self) -> tuple[KDTree, list[Tile]]:

@@ -11,7 +11,8 @@ if TYPE_CHECKING:
 
 class Field[T: float](Protocol):
     """A value at every position on the map, such as a threat or a mask: read at a point, as the smallest or the
-    largest over an area and where it lies, or as its slope. `Grid` holds one value per tile.
+    largest over an area and where it lies, or as its slope. `Grid` holds one value per tile, and `SourceField` adds up
+    circles and rectangles.
 
     A point or an area the field does not cover raises `IndexError`, and an empty area `ValueError`.
     """
@@ -30,7 +31,7 @@ class Field[T: float](Protocol):
 
     def argmin(self, *, within: Area) -> Point:
         """A point where the value within `within` is smallest. A grid answers the center of that tile, which
-        `within` may not hold."""
+        `within` may not hold, and a source field one of the points it reads, which `within` holds."""
         ...
 
     def argmax(self, *, within: Area) -> Point:
