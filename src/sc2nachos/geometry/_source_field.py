@@ -118,11 +118,10 @@ class SourceField:
 
     def _extreme_value(self, area: Area, *, largest: bool) -> float:
         """The largest value read in `area`, or the smallest."""
+        _refuse_empty(area)
         if not self._circles:
-            if not area.area:
-                raise ValueError(f"{area!r} is empty, so it has no smallest or largest value")
             return 0.0
-        bounds = _bounding_rectangle_of_nonempty(area)
+        bounds = area.bounding_rectangle()
         circles = self._circles_near(bounds)
         reaching = _reaching(area, circles)
         if not reaching:
@@ -137,7 +136,8 @@ class SourceField:
 
     def _extreme_point(self, area: Area, *, largest: bool) -> Point:
         """The point read in `area` with the largest value, or the smallest, the lowest x, then y, where several tie."""
-        bounds = _bounding_rectangle_of_nonempty(area)
+        _refuse_empty(area)
+        bounds = area.bounding_rectangle()
         circles = self._circles_near(bounds)
         xs, ys = self._points_read(area, bounds, [point for _, point in _reaching(area, circles)])
         values = _values_at(xs, ys, circles)
@@ -218,11 +218,10 @@ def _reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSou
     return reaching
 
 
-def _bounding_rectangle_of_nonempty(area: Area) -> Rectangle:
-    """The bounding rectangle of `area`. Raises `ValueError` if the area is empty."""
+def _refuse_empty(area: Area) -> None:
+    """Raise `ValueError` if `area` is empty, so that it has no smallest or largest value."""
     if not area.area:
         raise ValueError(f"{area!r} is empty, so it has no smallest or largest value")
-    return area.bounding_rectangle()
 
 
 def _points_spaced_over(area: Area, bounds: Rectangle, spacing: float) -> tuple[ndarray, ndarray]:
