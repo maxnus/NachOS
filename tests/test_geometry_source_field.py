@@ -181,6 +181,19 @@ class TestAreaReads:
             assert point in area
             assert field.value_at(point) == extreme(within=area)
 
+    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=repr)
+    @pytest.mark.parametrize(("value", "falloff"), [(3.0, 0.0), (3.0, 1.5), (-3.0, 2.0)], ids=repr)
+    def test_a_circle_reaching_an_area_alone_reads_as_every_point_read_does(
+        self, area: Area, value: float, falloff: float
+    ) -> None:
+        """`max` of a positive circle reaching an area alone, and `min` of a negative one, read only the area's point
+        nearest its center, where `argmax` and `argmin` read every point. A second circle is near no probe."""
+        field = SourceField()
+        field.add_circle(Circle((3.5, 3.0), 2.0), value, falloff=falloff)
+        field.add_circle(Circle((40.0, 40.0), 1.0), 5.0)
+        for extreme, where in ((field.min, field.argmin), (field.max, field.argmax)):
+            assert field.value_at(where(within=area)) == extreme(within=area)
+
     def test_one_circles_largest_value_is_exact_where_the_spaced_points_miss_it(self) -> None:
         field = SourceField()
         field.add_circle(Circle((5.0, 0.0), 4.0), 8.0, falloff=4.0)

@@ -124,9 +124,14 @@ class SourceField:
             return 0.0
         bounds = _bounding_rectangle_of_nonempty(area)
         circles = self._circles_near(bounds)
-        if not circles:
+        reaching = _reaching(area, circles)
+        if not reaching:
             return 0.0
-        xs, ys = self._points_read(area, bounds, circles)
+        if len(reaching) == 1 and largest == (reaching[0][0].value > 0):
+            # A circle reaching the area alone holds its value farthest from 0 at the area's point nearest its center,
+            # which is one of the points read, and the others near reach none of them.
+            return self.value_at(reaching[0][1])
+        xs, ys = self._points_read(area, bounds, [point for _, point in reaching])
         values = _values_at(xs, ys, circles)
         return (values.max() if largest else values.min()).item()
 
@@ -134,7 +139,7 @@ class SourceField:
         """The point read in `area` with the largest value, or the smallest, the lowest x, then y, where several tie."""
         bounds = _bounding_rectangle_of_nonempty(area)
         circles = self._circles_near(bounds)
-        xs, ys = self._points_read(area, bounds, circles)
+        xs, ys = self._points_read(area, bounds, [point for _, point in _reaching(area, circles)])
         values = _values_at(xs, ys, circles)
         tied = numpy.flatnonzero(values == (values.max() if largest else values.min()))
         picked = tied[numpy.lexsort((ys[tied], xs[tied]))[0]]
@@ -154,15 +159,11 @@ class SourceField:
             and circle.y + circle.radius >= bottom
         ]
 
-    def _points_read(self, area: Area, bounds: Rectangle, circles: list[_CircleSource]) -> tuple[ndarray, ndarray]:
+    def _points_read(self, area: Area, bounds: Rectangle, nearest_points: list[Point]) -> tuple[ndarray, ndarray]:
         """The x and the y of the points read in `area`, whose bounding rectangle is `bounds`: those `spacing` apart,
-        by ascending x, then y, then the area's point nearest the center of each of `circles` that reaches it."""
+        by ascending x, then y, then `nearest_points`, the area's points nearest the centers of the circles reaching
+        it."""
         xs, ys = _points_spaced_over(area, bounds, self._spacing)
-        nearest_points: list[Point] = []
-        for circle in circles:
-            point, distance = area.closest_point_to((circle.x, circle.y))
-            if distance <= circle.radius:
-                nearest_points.append(point)
         if not nearest_points:
             return xs, ys
         nearest = numpy.array(nearest_points)
@@ -205,6 +206,16 @@ def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
         else:
             totals += numpy.where(distances_squared <= circle.radius_squared, circle.value, 0.0)
     return totals
+
+
+def _reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSource, Point]]:
+    """Each of `circles` that reaches `area`, with the area's point nearest its center."""
+    reaching = []
+    for circle in circles:
+        point, distance = area.closest_point_to((circle.x, circle.y))
+        if distance <= circle.radius:
+            reaching.append((circle, point))
+    return reaching
 
 
 def _bounding_rectangle_of_nonempty(area: Area) -> Rectangle:
