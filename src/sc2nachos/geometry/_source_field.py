@@ -118,6 +118,10 @@ class SourceField:
 
     def _extreme_value(self, area: Area, *, largest: bool) -> float:
         """The largest value read in `area`, or the smallest."""
+        if not self._circles:
+            if not area.area:
+                raise ValueError(f"{area!r} is empty, so it has no smallest or largest value")
+            return 0.0
         bounds = _bounding_rectangle_of_nonempty(area)
         circles = self._circles_near(bounds)
         if not circles:

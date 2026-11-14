@@ -2,6 +2,7 @@
 
 import math
 import random
+from collections.abc import Callable
 
 import pytest
 
@@ -285,8 +286,9 @@ class TestAreaReads:
         assert SourceField(spacing=3.0).argmin(within=tiles) in tiles
 
     @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1.0, 1.0, 0.0, 2.0)], ids=repr)
-    def test_an_empty_area_raises(self, area: Area) -> None:
-        field = _threat()
+    @pytest.mark.parametrize("make_field", [_threat, SourceField], ids=["circles", "no circle"])
+    def test_an_empty_area_raises(self, area: Area, make_field: Callable[[], SourceField]) -> None:
+        field = make_field()
         for read in (field.min, field.max, field.argmin, field.argmax):
             with pytest.raises(ValueError, match="empty"):
                 read(within=area)
