@@ -30,16 +30,16 @@ As of 2026-11-14:
 - **0.4.0 is out** (2026-11-05, from 9f56f9a), with #236 and #237: orders given apart go out as one command where one
   order could have named their units. Its notes say a bot changes nothing in its code, only what `api.action_failures`
   lists. AvocaDOS took it in AvocaDOS #95.
-- **Since 0.4.0**, on main: #238 and #240 to #249. The next release, 0.5.0 since #241, #242 and #247 remove and
-  rename what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its
-  own data per unit in a `UnitDict`; the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was an
+- **Since 0.4.0**, on main: #238 and #240 to #249. The next release, 0.5.0 since #241, #242 and #247 remove and rename
+  what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its own
+  data per unit in a `UnitDict`; the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was an
   `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242);
   `InProduction` and `Research` are a `Progress`, whose `product` and `fraction` were their `type_id` or `upgrade` and
   their `progress` (#247); and a grid's `argmin()` and `argmax()` answer the center of the tile, a `Point`, where they
   answered the `Tile`, which `argmin_tile()` and `argmax_tile()` answer now (#238). It adds `unit.issue` (#240),
-  `Unit.morph_progress` (#243), `train`, `build` and `research` (#245), `UnitTypeData.equivalent_types` (#248), and
-  the `Field` protocol, which `Grid` satisfies (#238) and `SourceField` too (#249). AvocaDOS #97, a draft, takes it: its production trains a unit,
-  builds an add-on and morphs an orbital command, and it bumps its pin once 0.5.0 is out.
+  `Unit.morph_progress` (#243), `train`, `build` and `research` (#245), `UnitTypeData.equivalent_types` (#248), and the
+  `Field` protocol, which `Grid` satisfies (#238) and `SourceField` too (#249). AvocaDOS #97, a draft, takes it: its
+  production trains a unit, builds an add-on and morphs an orbital command, and it bumps its pin once 0.5.0 is out.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -354,24 +354,25 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      booleans out would make a boolean grid no `Field` at all, or need a second protocol for the gradient (the owner,
      review of #238, over both and over a deprecated overload).
   2. Done in #249: `SourceField`, circles alone (the owner, review of #249, reversing circles and rectangles: no bot
-     needs a rectangle yet), each with a value, summed where they overlap (the owner, over the largest), or-ed for
-     booleans, and 0 or false beyond every circle, of floats or booleans alone. A bot builds one by
+     needs a rectangle yet), each with a value, summed where they overlap (the owner, over the largest), and 0 beyond
+     every circle, of floats alone (the owner, review of #249, over booleans or-ed, which a bot writes as circles of
+     1.0: whether `max` reads above 0 is as exact, and a read over a unit's circle some 6% slower). A bot builds one by
      `add_circle(circle, value, *, falloff=0.0)`, so it is mutable (the owner, over one built whole from a list of
      sources), and named for its shape so that `add_rectangle` can follow (the owner, review of #249, over `add`). A
      circle holds its value out to `falloff` inside its edge and falls linearly to 0 at the edge, so a constant circle,
-     a cone and a threat fading near its range are one code path; a boolean stays constant (the owner, over two kinds
-     of circle). The ramp lies inside the circle, so the circle is all the ground the field reaches and a falloff of
-     the radius makes a cone, and is named for its width (the owner, review of #249, over `full_within`,
-     `inner_radius` and a ramp beyond the circle, which reaches past the shape given and has no cone). Its gradient is
-     exact. Its max and min within an area are read at points `spacing` apart over the area, set on the field, 0.25
-     by default (the owner, over a keyword on each read, and review of #249, over `resolution`, which reads both ways),
-     and at the area's point nearest each touching circle's center: exact for the largest value of a field of
-     booleans and of one circle of a positive value alone, and up to the spacing off for the rest, min included (the
-     owner, building it, kept the rule and had the plan's "exact for booleans and for one shape" corrected). Every
-     point read is one the area holds, as `in` has it (below), so a circle touching only an edge the area leaves out
-     reads nothing, as a grid leaves out a tile touched only at an edge; ties go to the lowest x, then y, as a grid's
-     go to the lowest address. Measured 2026-11-14: a read over a unit's circle costs some 30 to 55 µs where circles
-     reach it, against a grid's 4 to 8, and 1.5 to 3 where none does.
+     a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The ramp lies
+     inside the circle, so the circle is all the ground the field reaches and a falloff of the radius makes a cone, and
+     is named for its width (the owner, review of #249, over `full_within`, `inner_radius` and a ramp beyond the circle,
+     which reaches past the shape given and has no cone). Its gradient is exact. Its max and min within an area are read
+     at points `spacing` apart over the area, set on the field, 0.25 by default (the owner, over a keyword on each read,
+     and review of #249, over `resolution`, which reads both ways), and at the area's point nearest each touching
+     circle's center: where every circle's value is positive, exact in whether `max` reads above 0 and in the largest
+     value of one circle alone, and up to the spacing off for the rest, min included (the owner, building it, kept the
+     rule and had the plan's "exact for booleans and for one shape" corrected). Every point read is one the area holds,
+     as `in` has it (below), so a circle touching only an edge the area leaves out reads nothing, as a grid leaves out a
+     tile touched only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address. Measured
+     2026-11-14: a read over a unit's circle costs some 30 to 55 µs where circles reach it, against a grid's 4 to 8, and
+     1.5 to 3 where none does.
   3. AvocaDOS takes them after a release: its effect threat and splash zone as `SourceField`s, a unit reading the max
      within its own circle; `grid.argmin()` answers a point now, so `cropped(around).argmin().center` drops `.center`
      and `grid_argmin` takes `argmin_tile()`. Its `melee_effect_threat` adds the effect threat to a grid, which a

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast, final
+from typing import TYPE_CHECKING, final
 
 import numpy
 
@@ -35,34 +35,30 @@ class _CircleSource:
 
 
 @final
-class SourceField[T: float]:
-    """A `Field` made of circles, each adding its value over the ground it covers, its edge included, such as a threat
-    around each enemy: 0 beyond every circle, or false in a field of booleans. A circle given a `falloff` holds its
-    value out to that distance inside its edge, then falls linearly to 0 at the edge; a circle without one, and every
-    circle of a field of booleans, holds its value throughout. Where circles overlap, their values add up, and booleans
-    are or-ed. The field covers every point, so no read raises `IndexError`.
+class SourceField:
+    """A `Field` of floats made of circles, each adding its value over the ground it covers, its edge included, such as
+    a threat around each enemy, and 0 beyond every circle. A circle given a `falloff` holds its value out to that
+    distance inside its edge, then falls linearly to 0 at the edge; a circle without one holds its value throughout, so
+    a mask is circles of 1.0. Where circles overlap, their values add up. The field covers every point, so no read
+    raises `IndexError`.
 
     `min`, `max`, `argmin` and `argmax` read the field at points at most `spacing` apart, along x and along y, over
-    the area, and at the area's point nearest the center of each circle that reaches it. So the largest value of a
-    field of booleans is exact, and so is the largest value where one circle of a positive value reaches the area
+    the area, and at the area's point nearest the center of each circle that reaches it. So where every circle's value
+    is positive, whether `max` reads above 0 is exact, and so is the largest value where one circle reaches the area
     alone. Anything else may be off by as much as the field changes over the spacing, and a value held only on a patch
     narrower than that may be missed.
     """
 
-    __slots__ = ("_boolean", "_circles", "_spacing")
+    __slots__ = ("_circles", "_spacing")
 
-    _boolean: bool
     _circles: list[_CircleSource]
     _spacing: float
 
-    def __init__(self, *, dtype: type[T] = float, spacing: float = 0.25) -> None:
-        """An empty field of `dtype`, `float` or `bool`, whose reads over an area take points at most `spacing` apart.
-        Raises `TypeError` for any other dtype, and `ValueError` for a spacing that is not positive."""
-        if dtype is not float and dtype is not bool:
-            raise TypeError(f"a source field holds floats or booleans, not {dtype.__name__}")
+    def __init__(self, *, spacing: float = 0.25) -> None:
+        """An empty field, whose reads over an area take points at most `spacing` apart. Raises `ValueError` for a
+        spacing that is not positive."""
         if spacing <= 0:
             raise ValueError(f"a source field reads points a positive spacing apart, got {spacing}")
-        self._boolean = dtype is bool
         self._circles = []
         self._spacing = spacing
 
@@ -71,20 +67,15 @@ class SourceField[T: float]:
         """How far apart, at most, along x and along y, `min`, `max`, `argmin` and `argmax` read the field."""
         return self._spacing
 
-    def add_circle(self, circle: Circle, value: T, *, falloff: float = 0.0) -> None:
+    def add_circle(self, circle: Circle, value: float, *, falloff: float = 0.0) -> None:
         """Add `circle`, holding `value`: throughout, or with a `falloff`, out to that distance inside its edge, falling
         linearly from there to 0 at the edge, so that a falloff of the radius makes a cone. Raises `TypeError` for
-        anything but a `Circle`, and `ValueError` for a falloff below 0 or beyond the radius, or for any falloff in a
-        field of booleans."""
+        anything but a `Circle`, and `ValueError` for a falloff below 0 or beyond the radius."""
         if not isinstance(circle, Circle):
             raise TypeError(f"a source field adds circles, not a {type(circle).__name__}")
         radius = circle.radius
-        if falloff and self._boolean:
-            raise ValueError("a field of booleans holds each circle's value throughout, so it takes no falloff")
         if not 0 <= falloff <= radius:
             raise ValueError(f"a falloff lies between 0 and the radius of {circle!r}, got {falloff}")
-        if self._boolean and not value:
-            return
         x, y = circle.center
         full_within = radius - falloff
         self._circles.append(
@@ -93,15 +84,10 @@ class SourceField[T: float]:
 
     # --- Reads
 
-    def value_at(self, point: PointLike) -> T:
-        """The value at `point`: the sum of the values of the circles covering it, or in a field of booleans whether
-        any does."""
+    def value_at(self, point: PointLike) -> float:
+        """The value at `point`: the sum of the values of the circles covering it."""
         x = point[0]
         y = point[1]
-        return cast("T", self._boolean_at(x, y) if self._boolean else self._float_at(x, y))
-
-    def _float_at(self, x: float, y: float) -> float:
-        """The sum of the values of the circles covering the point at `x` and `y`."""
         total = 0.0
         for circle in self._circles:
             dx = x - circle.x
@@ -113,20 +99,11 @@ class SourceField[T: float]:
                 total += circle.value * ((circle.radius - math.sqrt(distance_squared)) / circle.falloff)
         return total
 
-    def _boolean_at(self, x: float, y: float) -> bool:
-        """Whether any circle covers the point at `x` and `y`."""
-        for circle in self._circles:
-            dx = x - circle.x
-            dy = y - circle.y
-            if dx * dx + dy * dy <= circle.radius_squared:
-                return True
-        return False
-
-    def min(self, *, within: Area) -> T:
+    def min(self, *, within: Area) -> float:
         """The smallest value read in `within`, as the class says. Raises `ValueError` for an empty area."""
         return self._extreme_value(within, largest=False)
 
-    def max(self, *, within: Area) -> T:
+    def max(self, *, within: Area) -> float:
         """The largest value read in `within`, as the class says. Raises `ValueError` for an empty area."""
         return self._extreme_value(within, largest=True)
 
@@ -139,14 +116,14 @@ class SourceField[T: float]:
         """The point, of those read in `within` as the class says, with the largest value, as `argmin` picks one."""
         return self._extreme_point(within, largest=True)
 
-    def _extreme_value(self, area: Area, *, largest: bool) -> T:
+    def _extreme_value(self, area: Area, *, largest: bool) -> float:
         """The largest value read in `area`, or the smallest."""
         bounds = _bounding_rectangle_of_nonempty(area)
         circles = self._circles_near(bounds)
         if not circles:
-            return cast("T", False if self._boolean else 0.0)
+            return 0.0
         xs, ys = self._points_read(area, bounds, circles)
-        values = self._values_at(xs, ys, circles)
+        values = _values_at(xs, ys, circles)
         return (values.max() if largest else values.min()).item()
 
     def _extreme_point(self, area: Area, *, largest: bool) -> Point:
@@ -154,7 +131,7 @@ class SourceField[T: float]:
         bounds = _bounding_rectangle_of_nonempty(area)
         circles = self._circles_near(bounds)
         xs, ys = self._points_read(area, bounds, circles)
-        values = self._values_at(xs, ys, circles)
+        values = _values_at(xs, ys, circles)
         tied = numpy.flatnonzero(values == (values.max() if largest else values.min()))
         picked = tied[numpy.lexsort((ys[tied], xs[tied]))[0]]
         return Point((xs[picked].item(), ys[picked].item()))
@@ -187,16 +164,10 @@ class SourceField[T: float]:
         nearest = numpy.array(nearest_points)
         return numpy.concatenate((xs, nearest[:, 0])), numpy.concatenate((ys, nearest[:, 1]))
 
-    def _values_at(self, xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarray:
-        """The value at each point of `xs` and `ys` of `circles` alone, worked out as `value_at` works out one."""
-        return _booleans_at(xs, ys, circles) if self._boolean else _floats_at(xs, ys, circles)
-
     def gradient_at(self, point: PointLike) -> tuple[float, float]:
         """How fast the value rises at `point`, per map unit, along x and along y, together pointing the way it rises
         fastest. Exact: a circle slopes over its falloff, beyond where that begins and out to its edge, which slopes
-        too, and is flat elsewhere. Raises `TypeError` for a field of booleans."""
-        if self._boolean:
-            raise TypeError(f"{self!r} holds booleans, which have no gradient")
+        too, and is flat elsewhere."""
         x = point[0]
         y = point[1]
         slope_x = 0.0
@@ -212,12 +183,11 @@ class SourceField[T: float]:
         return slope_x, slope_y
 
     def __repr__(self) -> str:
-        kind = "booleans" if self._boolean else "floats"
-        return f"SourceField({kind}, {len(self._circles)} circles)"
+        return f"SourceField({len(self._circles)} circles)"
 
 
-def _floats_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarray:
-    """The sum of the values of `circles` covering each point of `xs` and `ys`, worked out as `_float_at` works out
+def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarray:
+    """The sum of the values of `circles` covering each point of `xs` and `ys`, worked out as `value_at` works out
     one."""
     totals = numpy.zeros(len(xs))
     for circle in circles:
@@ -231,16 +201,6 @@ def _floats_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
         else:
             totals += numpy.where(distances_squared <= circle.radius_squared, circle.value, 0.0)
     return totals
-
-
-def _booleans_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarray:
-    """Whether any of `circles` covers each point of `xs` and `ys`."""
-    covered = numpy.zeros(len(xs), dtype=bool)
-    for circle in circles:
-        dx = xs - circle.x
-        dy = ys - circle.y
-        covered |= dx * dx + dy * dy <= circle.radius_squared
-    return covered
 
 
 def _bounding_rectangle_of_nonempty(area: Area) -> Rectangle:

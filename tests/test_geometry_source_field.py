@@ -9,7 +9,7 @@ from sc2nachos.geometry import Area, Circle, Field, Point, PointLike, Rectangle,
 from test_geometry import OVERLAP_PROBES
 
 
-def _threat() -> SourceField[float]:
+def _threat() -> SourceField:
     """A cone of 8 at (10, 10), falling to 0 at 4 away, and 3 within 1.5 of (13, 10)."""
     field = SourceField()
     field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, falloff=4.0)
@@ -17,7 +17,7 @@ def _threat() -> SourceField[float]:
     return field
 
 
-def _mixed_field() -> SourceField[float]:
+def _mixed_field() -> SourceField:
     """Circles that fall off and that do not, one of them negative, over the shapes of `OVERLAP_PROBES`."""
     field = SourceField()
     field.add_circle(Circle((3.0, 3.0), 2.5), 4.0, falloff=1.5)
@@ -27,27 +27,21 @@ def _mixed_field() -> SourceField[float]:
     return field
 
 
-def _mixed_mask() -> SourceField[bool]:
-    """The circles of `_mixed_field`, as booleans."""
-    field = SourceField(dtype=bool)
+def _mask() -> SourceField:
+    """The circles of `_mixed_field`, each of 1.0."""
+    field = SourceField()
     for center, radius in (((3.0, 3.0), 2.5), ((6.2, 1.1), 1.5), ((1.0, 5.0), 1.2), ((2.75, 1.5), 1.0)):
-        field.add_circle(Circle(center, radius), True)
+        field.add_circle(Circle(center, radius), 1.0)
     return field
 
 
 class TestBuilding:
     def test_a_new_field_reads_nothing_everywhere(self) -> None:
-        floats = SourceField()
-        booleans = SourceField(dtype=bool)
-        assert floats.value_at((3.0, 4.0)) == 0.0
-        assert booleans.value_at((3.0, 4.0)) is False
-        assert floats.max(within=Circle((3.0, 4.0), 2.0)) == 0.0
-        assert booleans.min(within=Circle((3.0, 4.0), 2.0)) is False
-        assert floats.gradient_at((3.0, 4.0)) == (0.0, 0.0)
-
-    def test_a_field_holds_floats_or_booleans(self) -> None:
-        with pytest.raises(TypeError, match="floats or booleans, not int"):
-            SourceField(dtype=int)
+        field = SourceField()
+        assert field.value_at((3.0, 4.0)) == 0.0
+        assert field.max(within=Circle((3.0, 4.0), 2.0)) == 0.0
+        assert field.min(within=Circle((3.0, 4.0), 2.0)) == 0.0
+        assert field.gradient_at((3.0, 4.0)) == (0.0, 0.0)
 
     @pytest.mark.parametrize("spacing", [0.0, -0.25])
     def test_the_spacing_is_positive(self, spacing: float) -> None:
@@ -63,18 +57,14 @@ class TestBuilding:
         with pytest.raises(TypeError, match=f"adds circles, not a {type(shape).__name__}$"):
             SourceField().add_circle(shape, 2.0)  # pyright: ignore[reportArgumentType]
 
-    def test_a_circle_of_booleans_takes_no_falloff(self) -> None:
-        with pytest.raises(ValueError, match="booleans"):
-            SourceField(dtype=bool).add_circle(Circle((0, 0), 2), True, falloff=1.0)
-
     @pytest.mark.parametrize("falloff", [-0.5, 2.5])
     def test_a_falloff_lies_within_the_radius(self, falloff: float) -> None:
         with pytest.raises(ValueError, match="between 0 and the radius"):
             SourceField().add_circle(Circle((0, 0), 2), 1.0, falloff=falloff)
 
     def test_repr(self) -> None:
-        assert repr(_threat()) == "SourceField(floats, 2 circles)"
-        assert repr(SourceField(dtype=bool)) == "SourceField(booleans, 0 circles)"
+        assert repr(_threat()) == "SourceField(2 circles)"
+        assert repr(SourceField()) == "SourceField(0 circles)"
 
 
 class TestValueAt:
@@ -108,21 +98,17 @@ class TestValueAt:
         threat.add_circle(Circle((12.0, 10.0), 1.0), -5.0)
         assert threat.value_at((12.0, 10.0)) == 2.0
 
-    def test_booleans_are_or_ed(self) -> None:
-        mask = SourceField(dtype=bool)
-        mask.add_circle(Circle((0.0, 0.0), 2.0), True)
-        mask.add_circle(Circle((3.0, 0.0), 2.0), True)
-        mask.add_circle(Circle((10.0, 10.0), 2.0), False)
-        assert mask.value_at((1.5, 0.0)) is True
-        assert mask.value_at((4.5, 0.0)) is True
-        assert mask.value_at((-1.5, 0.0)) is True
-        assert mask.value_at((10.0, 10.0)) is False
-        assert repr(mask) == "SourceField(booleans, 2 circles)"
+    def test_a_mask_of_ones_reads_truthy_wherever_a_circle_covers_the_point(self) -> None:
+        mask = SourceField()
+        mask.add_circle(Circle((0.0, 0.0), 2.0), 1.0)
+        mask.add_circle(Circle((3.0, 0.0), 2.0), 1.0)
+        assert mask.value_at((1.5, 0.0)) == 2.0
+        assert mask.value_at((4.5, 0.0)) == mask.value_at((-1.5, 0.0)) == 1.0
+        assert not mask.value_at((10.0, 10.0))
 
     def test_the_value_is_a_python_scalar(self) -> None:
         assert type(_threat().value_at((12.0, 10.0))) is float
         assert type(_threat().value_at((50.0, 50.0))) is float
-        assert type(_mixed_mask().value_at((3.0, 3.0))) is bool
 
 
 class TestGradient:
@@ -177,10 +163,6 @@ class TestGradient:
         finite_difference_y = (field.value_at((x, y + step)) - field.value_at((x, y - step))) / (2 * step)
         assert field.gradient_at(point) == pytest.approx((finite_difference_x, finite_difference_y), abs=1e-6)
 
-    def test_a_field_of_booleans_has_no_gradient(self) -> None:
-        with pytest.raises(TypeError, match="booleans"):
-            _mixed_mask().gradient_at((3.0, 3.0))
-
 
 class TestAreaReads:
     def test_a_source_field_is_a_field(self) -> None:
@@ -188,11 +170,9 @@ class TestAreaReads:
             return field.max(within=Circle(point, 1.0)), field.argmax(within=Circle(point, 1.0))
 
         assert largest_near(_threat(), (10.0, 10.0)) == (8.0, Point((10.0, 10.0)))
-        mask: Field[bool] = SourceField(dtype=bool)
-        assert mask.max(within=Tile(1, 1)) is False
 
     @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=repr)
-    @pytest.mark.parametrize("field", [_mixed_field(), _mixed_mask()], ids=["floats", "booleans"])
+    @pytest.mark.parametrize("field", [_mixed_field(), _mask()], ids=["mixed", "mask"])
     def test_every_read_is_the_value_at_a_point_the_area_holds(self, field: SourceField, area: Area) -> None:
         """An area's reads work out many values at once, `value_at` one, and the two must agree to the last bit."""
         for extreme, where in ((field.min, field.argmin), (field.max, field.argmax)):
@@ -217,17 +197,15 @@ class TestAreaReads:
         ],
         ids=repr,
     )
-    def test_a_boolean_circle_reaching_the_area_is_found_however_little_it_reaches_in(
-        self, area: Area, circle: Circle
-    ) -> None:
-        mask = SourceField(dtype=bool)
-        mask.add_circle(circle, True)
-        assert mask.max(within=area) is True
+    def test_a_circle_reaching_the_area_is_found_however_little_it_reaches_in(self, area: Area, circle: Circle) -> None:
+        mask = SourceField()
+        mask.add_circle(circle, 1.0)
+        assert mask.max(within=area) == 1.0
         point = mask.argmax(within=area)
         assert point in area
         assert point in circle
 
-    def test_a_boolean_circle_reaching_a_units_circle_from_any_side_is_found(self) -> None:
+    def test_a_circle_reaching_a_units_circle_from_any_side_is_found(self) -> None:
         """200 seeded circles, each reaching 0.001 into a unit's circle from its own angle. The point of the unit's
         circle nearest each one's center rounded outside the unit's about half the time, and was dropped."""
         rng = random.Random(5)
@@ -237,9 +215,9 @@ class TestAreaReads:
             angle = rng.uniform(0, 2 * math.pi)
             reach = unit.radius + radius - 0.001
             splash = Circle((unit.center.x + reach * math.cos(angle), unit.center.y + reach * math.sin(angle)), radius)
-            mask = SourceField(dtype=bool)
-            mask.add_circle(splash, True)
-            assert mask.max(within=unit) is True, (unit, splash)
+            mask = SourceField()
+            mask.add_circle(splash, 1.0)
+            assert mask.max(within=unit) == 1.0, (unit, splash)
 
     def test_the_smallest_value_and_where_come_within_the_spacing(self) -> None:
         """The smallest lies at the far corner, (3, 3), which the rectangle leaves out: the field there is
@@ -263,9 +241,9 @@ class TestAreaReads:
         assert point.distance_to((1.5, 0.0)) <= 1.0
 
     def test_points_that_tie_go_to_the_lowest_x_then_y(self) -> None:
-        """Every point reads true, and the point nearest the circle's center lies left of every spaced one."""
-        mask = SourceField(dtype=bool)
-        mask.add_circle(Circle((0.01, 0.5), 5.0), True)
+        """Every point reads 1, and the point nearest the circle's center lies left of every spaced one."""
+        mask = SourceField()
+        mask.add_circle(Circle((0.01, 0.5), 5.0), 1.0)
         assert mask.argmax(within=Rectangle(0.0, 0.0, 1.0, 1.0)) == Point((0.01, 0.5))
         assert mask.argmin(within=Rectangle(0.0, 0.0, 1.0, 1.0)) == Point((0.01, 0.5))
         assert SourceField().argmin(within=Rectangle(2.0, 3.0, 1.0, 1.0)) == Point((2.125, 3.125))
@@ -316,6 +294,4 @@ class TestAreaReads:
     def test_the_answer_is_a_python_scalar(self) -> None:
         assert type(_threat().max(within=Tile(10, 10))) is float
         assert type(_threat().min(within=Tile(50, 50))) is float
-        assert type(_mixed_mask().min(within=Tile(3, 3))) is bool
-        assert type(_mixed_mask().max(within=Tile(50, 50))) is bool
         assert all(type(coordinate) is float for coordinate in _threat().argmax(within=Tile(10, 10)))
