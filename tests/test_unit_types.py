@@ -53,6 +53,7 @@ def _classes_of_one_type() -> list[Any]:
 # The groups the tables give a type: a race, the structures, or a race's structures.
 _TABLE_GROUPS = [
     UnitType.Structure,
+    UnitType.NonStructure,
     UnitType.Terran,
     UnitType.Zerg,
     UnitType.Protoss,
@@ -202,6 +203,11 @@ class TestUnitType:
         assert group.type_ids == {row.id for row in rows if row.race is race}
         assert structures.type_ids == group.type_ids & UnitType.Structure.type_ids
         assert UnitType.Structure.type_ids == {row.id for row in rows if Attribute.STRUCTURE in row.attributes}
+        assert UnitType.NonStructure.type_ids == {row.id for row in rows if Attribute.STRUCTURE not in row.attributes}
+
+    def test_every_type_is_a_structure_or_a_non_structure_and_not_both(self) -> None:
+        for unit_type in _classes_of_one_type():
+            assert issubclass(unit_type, UnitType.Structure) != issubclass(unit_type, UnitType.NonStructure), unit_type
 
     @pytest.mark.parametrize("group", _curated_groups(), ids=lambda group: group.__name__)
     def test_a_group_is_in_another_when_all_its_types_are(self, group: Any) -> None:
