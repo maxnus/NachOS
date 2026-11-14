@@ -13,7 +13,6 @@ import semita
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
-from sc2nachos.geometry._point import Point
 from sc2nachos.geometry._shapes import Rectangle, Tile
 from sc2nachos.geometry._tile_path import TilePath
 
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
     from numpy import ndarray
 
     from sc2nachos.geometry._footprint import Footprint, Margin
-    from sc2nachos.geometry._point import PointLike
+    from sc2nachos.geometry._point import Point, PointLike
     from sc2nachos.geometry._tile_mask import TileMask
 
 _ORIGIN = Tile(0, 0)
@@ -468,39 +467,35 @@ class Grid[T: float]:
             return self._data.max().item()
         return self._values_of_tiles_held(within._overlapped_tile_mask(), within).max().item()
 
-    @overload
-    def argmin(self) -> Tile: ...
-    @overload
-    def argmin(self, *, within: Area) -> Point: ...
+    def argmin(self, *, within: Area | None = None) -> Point:
+        """The center of the tile `argmin_tile` gives, which `within` may not hold."""
+        return self.argmin_tile(within=within).center
 
-    def argmin(self, *, within: Area | None = None) -> Tile | Point:
-        """The tile with the smallest value, the lowest address if several tie. With `within`, a point of the area
-        inside the tile it overlaps with the smallest value, as `min` takes them, the lowest address if several tie:
-        that tile's center where the area holds it, or else another point of the area inside it."""
+    def argmax(self, *, within: Area | None = None) -> Point:
+        """The center of the tile `argmax_tile` gives, which `within` may not hold."""
+        return self.argmax_tile(within=within).center
+
+    def argmin_tile(self, *, within: Area | None = None) -> Tile:
+        """The tile with the smallest value, or with `within`, the one with the smallest of those the area overlaps,
+        as `min` takes them; the lowest address if several tie."""
         if within is None:
             return self._tile_at(int(numpy.argmin(self._data)))
-        return self._point_in_extreme_tile(within, largest=False)
+        return self._extreme_tile(within, largest=False)
 
-    @overload
-    def argmax(self) -> Tile: ...
-    @overload
-    def argmax(self, *, within: Area) -> Point: ...
-
-    def argmax(self, *, within: Area | None = None) -> Tile | Point:
-        """The tile with the largest value, the lowest address if several tie; or with `within`, a point of the area
-        inside the tile with the largest value of those it overlaps, as `argmin` picks one."""
+    def argmax_tile(self, *, within: Area | None = None) -> Tile:
+        """The tile with the largest value, or with `within`, the one with the largest of those the area overlaps, as
+        `argmin_tile` picks one."""
         if within is None:
             return self._tile_at(int(numpy.argmax(self._data)))
-        return self._point_in_extreme_tile(within, largest=True)
+        return self._extreme_tile(within, largest=True)
 
-    def _point_in_extreme_tile(self, area: Area, *, largest: bool) -> Point:
-        """A point of `area` inside the tile it overlaps with the largest value, or the smallest, the lowest address if
-        several tie."""
+    def _extreme_tile(self, area: Area, *, largest: bool) -> Tile:
+        """The tile `area` overlaps with the largest value, or the smallest, the lowest address if several tie."""
         overlapped = area._overlapped_tile_mask()
         values = self._values_of_tiles_held(overlapped, area)
         picked = numpy.argmax(values) if largest else numpy.argmin(values)
         x, y = numpy.unravel_index(int(numpy.flatnonzero(overlapped.mask)[picked]), overlapped.mask.shape)
-        return area._point_in_tile(overlapped.origin.shifted(int(x), int(y)))
+        return overlapped.origin.shifted(int(x), int(y))
 
     def _values_of_tiles_held(self, tiles: TileMask, area: Area) -> ndarray:
         """The values of the tiles `tiles` holds, by ascending x, then y, `outside` for one beyond the grid. Raises
@@ -530,9 +525,10 @@ class Grid[T: float]:
         padded[mask_slices] = on_grid
         return padded
 
-    def gradient_at(self, point: PointLike) -> Point:
-        """How fast the values rise at `point`, per map unit, pointing the way they rise fastest: along each axis, the
-        difference between the neighbors on either side of the tile holding it, over the two units between them. A
+    def gradient_at(self, point: PointLike) -> tuple[float, float]:
+        """How fast the values rise at `point`, per map unit, along x and along y, together pointing the way they rise
+        fastest: along each axis, the difference between the neighbors on either side of the tile holding it, over the
+        two units between them. A
         neighbor beyond the grid reads `outside`; where that is `None`, the difference is taken on the side the grid
         holds, over one unit, and is 0 along an axis the grid is one tile across. Raises `IndexError` for a point
         beyond the grid when `outside` is `None`, and `TypeError` for a grid of booleans."""
@@ -546,7 +542,7 @@ class Grid[T: float]:
         slope_y = _finite_difference(
             self._value_or_outside_at(tile_x, tile_y - 1), value_here, self._value_or_outside_at(tile_x, tile_y + 1)
         )
-        return Point((slope_x, slope_y))
+        return slope_x, slope_y
 
     def _value_or_outside_at(self, tile_x: int, tile_y: int) -> T | None:
         """The value of the tile at `tile_x` and `tile_y`, or `outside` beyond the grid, which may be `None`."""

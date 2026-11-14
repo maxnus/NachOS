@@ -264,13 +264,17 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      grid's max and min within an area read every tile the area overlaps, a tile it only touches at an edge or a corner
      left out, so a tile's own rectangle reads that tile alone; a tile beyond the grid reads `outside`, and raises
      `IndexError` without one (the owner, over clipping to the grid, as `grid[area]` does); an empty area raises
-     `ValueError`. `argmin` and `argmax` within an area answer a point of the area inside the extreme tile, the tile's
-     center where the area holds it, the lowest address on a tie; without one they still answer a `Tile`. Its gradient
-     is the central difference across the tile's neighbors, per map unit; a neighbor beyond the grid reads `outside`,
-     the difference one-sided where there is none (the owner, over raising); a grid of booleans raises `TypeError` (the
-     owner, over reading 0 and 1), at run time only: a self type ruling booleans out would make a boolean grid no
-     `Field` at all, or need a second protocol for the gradient (the owner, review of #238, over both and over a
-     deprecated overload).
+     `ValueError`. A grid's `argmin` and `argmax` answer a `Point`, the center of the extreme tile, the lowest address
+     on a tie, which `within` may not hold (the owner, second review of #238, over a point of the area inside the tile,
+     which each shape picked by its own rule, and over the middle of the part the area covers), and `argmin_tile` and
+     `argmax_tile` answer the `Tile`, with or without an area (the owner, over `Tile` from `argmin` without an area,
+     and over the field naming its own reads). This breaks `grid.argmin()`, a `Tile` until now, for the release notes.
+     Its gradient is the central difference across the tile's neighbors, per map unit, a `tuple[float, float]` (the
+     owner, over `Point`, which is a position, and over `tuple[T, T]`, since an integer grid's slope can be 1.5); a
+     neighbor beyond the grid reads `outside`, the difference one-sided where there is none (the owner, over raising);
+     a grid of booleans raises `TypeError` (the owner, over reading 0 and 1), at run time only: a self type ruling
+     booleans out would make a boolean grid no `Field` at all, or need a second protocol for the gradient (the owner,
+     review of #238, over both and over a deprecated overload).
   2. `SourceField`: circles and rectangles (the owner, over circles alone and over any area), each with a value,
      summed where they overlap (the owner, over the largest), or-ed for booleans, and 0 or false beyond every shape.
      A circle holds its value out to `full_within` and falls linearly to 0 at its radius, so a constant circle, a
@@ -281,12 +285,16 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      spacing where sloped shapes overlap. Proposed, to settle at the step: built by `add(shape, value, *,
      full_within=None)`, rather than from tuples.
   3. AvocaDOS takes them after a release: its effect threat and splash zone as `SourceField`s, a unit reading the max
-     within its own circle.
+     within its own circle; `grid.argmin()` answers a point now, so `cropped(around).argmin().center` drops `.center`
+     and `grid_argmin` takes `argmin_tile()`.
 
-  Later, when a bot needs it: a `SourceField` drawn onto a `Grid`, for paths and grid arithmetic; and `values_at`,
-  many points in one numpy pass. For 100 points and 10 circles that was 52 µs against 423 µs for a Python loop, but on
-  a grid it is no faster than looping `grid[point]` unless the points already are an array: 44 µs looped, 10 µs from
-  an array (2026-11-06).
+  Later, when a bot needs it: a `SourceField` drawn onto a `Grid`, for paths and grid arithmetic, planned together
+  with public tile rules returning `TileSet`s, their first caller: every tile whose center an area holds, as `tiles()`
+  gives, every tile it overlaps, and every tile it holds whole once a use shows; `TileMask` stays private (the owner,
+  second review of #238, over the rules now, a public `TileMask` and conversions, and leaving all private). And
+  `values_at`, many points in one numpy pass. For 100 points and 10 circles that was 52 µs against 423 µs for a Python
+  loop, but on a grid it is no faster than looping `grid[point]` unless the points already are an array: 44 µs
+  looped, 10 µs from an array (2026-11-06).
 
   Also later, only if a bot reads scattered tile sets often (the owner, review of #238): a grid reading a `TileSet` by
   its addresses rather than its cached mask. It pays only where the set fills little of its bounding box and that box

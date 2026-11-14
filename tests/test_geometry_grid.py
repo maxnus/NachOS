@@ -506,7 +506,7 @@ class TestDerivedGrids:
         grid = Grid.zeros(9, 9)
         grid[Tile(4, 4)] = 100.0
         blurred = grid.smoothed(1.0)
-        assert blurred.argmax() == Tile(4, 4)
+        assert blurred.argmax_tile() == Tile(4, 4)
         assert blurred[Tile(4, 4)] < 100.0
         assert blurred[Tile(3, 4)] > 0.0
         assert blurred.sum() == pytest.approx(100.0, rel=1e-3)
@@ -644,9 +644,10 @@ class TestSummaries:
 
     def test_argmin_and_argmax_answer_in_map_coordinates(self) -> None:
         grid = playable_grid()
-        assert grid.argmin() == grid.origin
-        assert grid.argmax() == Tile(13, 13)
-        assert grid[grid.argmax()] == grid.max()
+        assert grid.argmin_tile() == grid.origin
+        assert grid.argmax_tile() == Tile(13, 13)
+        assert grid[grid.argmax_tile()] == grid.max()
+        assert (grid.argmin(), grid.argmax()) == (grid.origin.center, Tile(13, 13).center)
 
     def test_distance_from(self) -> None:
         grid = Grid.zeros(3, 3)
@@ -679,8 +680,7 @@ class TestFieldReads:
             return field.max(within=Circle(point, 1.0)), field.argmax(within=Circle(point, 1.0))
 
         # The circle overlaps the nine tiles around Tile(8, 9), from (7, 8), 3 * 8 + 2, to (9, 10), 5 * 8 + 4.
-        largest, where = largest_near(playable_grid(), (8.5, 9.5))
-        assert (largest, Tile.at(where)) == (44.0, Tile(9, 10))
+        assert largest_near(playable_grid(), (8.5, 9.5)) == (44.0, Point((9.5, 10.5)))
         assert playable_grid().min(within=Circle((8.5, 9.5), 1.0)) == 26.0
         mask: Field[float] = Grid.zeros(3, 3, dtype=bool)
         assert mask.max(within=Tile(1, 1)) is False
@@ -745,45 +745,40 @@ class TestFieldReads:
         ],
         ids=repr,
     )
-    def test_argmin_and_argmax_answer_a_point_of_the_area_reading_the_extreme(self, area: Area) -> None:
+    def test_argmin_and_argmax_answer_the_center_of_the_extreme_tile(self, area: Area) -> None:
         values = numpy.random.default_rng(3).random((10, 8))
         grid = Grid(values, origin=Tile(4, 6))
-        for where, extreme in (
-            (grid.argmin(within=area), grid.min(within=area)),
-            (grid.argmax(within=area), grid.max(within=area)),
-        ):
-            assert type(where) is Point
-            assert where in area
-            assert grid.value_at(where) == extreme
+        lowest = grid.argmin_tile(within=area)
+        highest = grid.argmax_tile(within=area)
+        assert (grid[lowest], grid[highest]) == (grid.min(within=area), grid.max(within=area))
+        assert (grid.argmin(within=area), grid.argmax(within=area)) == (lowest.center, highest.center)
+        assert type(grid.argmin(within=area)) is Point
 
-    def test_argmin_and_argmax_answer_the_tile_center_where_the_area_holds_it(self) -> None:
-        grid = playable_grid()
-        assert grid.argmax(within=Rectangle(5, 7, 3, 2)) == Point((7.5, 8.5))
-        assert grid.argmin(within=Circle((8.5, 9.5), 0.4)) == Point((8.5, 9.5))
-
-    def test_argmin_inside_a_tile_whose_center_lies_outside(self) -> None:
+    def test_argmin_answers_a_tile_center_the_area_may_not_hold(self) -> None:
+        """A bile's circle at a corner holds none of the centers of the four tiles it overlaps."""
         grid = Grid.zeros(6, 6)
         for value, tile in enumerate((Tile(2, 2), Tile(3, 2), Tile(2, 3), Tile(3, 3)), start=1):
             grid[tile] = value
         bile = Circle((3.0, 3.0), 0.5)
-        lowest = grid.argmin(within=bile)
-        assert lowest in bile and Tile.at(lowest) == Tile(2, 2)
-        assert Tile.at(grid.argmax(within=bile)) == Tile(3, 3)
+        assert grid.argmin(within=bile) == Point((2.5, 2.5))
+        assert grid.argmin(within=bile) not in bile
+        assert grid.argmax_tile(within=bile) == Tile(3, 3)
 
     def test_argmin_and_argmax_pick_the_lowest_address_on_a_tie(self) -> None:
         grid = Grid.zeros(4, 4)
-        assert (
-            grid.argmin(within=Rectangle(1, 1, 2, 2)) == grid.argmax(within=Rectangle(1, 1, 2, 2)) == Point((1.5, 1.5))
-        )
+        square = Rectangle(1, 1, 2, 2)
+        assert grid.argmin_tile(within=square) == grid.argmax_tile(within=square) == Tile(1, 1)
+        assert grid.argmin(within=square) == grid.argmax(within=square) == Point((1.5, 1.5))
 
     def test_argmin_reaches_a_tile_beyond_the_grid_reading_outside(self) -> None:
         reaching_past = Circle((0.0, 2.0), 1.0)
-        lowest = Grid.zeros(4, 4, outside=-1.0).argmin(within=reaching_past)
-        assert lowest in reaching_past and Tile.at(lowest) == Tile(-1, 1)
+        grid = Grid.zeros(4, 4, outside=-1.0)
+        assert grid.argmin_tile(within=reaching_past) == Tile(-1, 1)
+        assert grid.argmin(within=reaching_past) == Point((-0.5, 1.5))
         with pytest.raises(IndexError, match="reaches past"):
             Grid.zeros(4, 4).argmax(within=reaching_past)
         with pytest.raises(ValueError, match="empty"):
-            Grid.zeros(4, 4).argmin(within=TileSet([]))
+            Grid.zeros(4, 4).argmin_tile(within=TileSet([]))
 
 
 def _rising_grid() -> Grid[float]:
@@ -796,27 +791,27 @@ def _rising_grid() -> Grid[float]:
 class TestGradient:
     def test_the_gradient_is_the_rise_per_map_unit(self) -> None:
         gradient = _rising_grid().gradient_at((5.2, 6.7))
-        assert type(gradient) is Point
-        assert gradient == Point((2.0, -1.0))
+        assert type(gradient) is tuple
+        assert gradient == (2.0, -1.0)
 
     def test_every_point_of_a_tile_shares_its_gradient(self) -> None:
         grid = Grid(numpy.array([[0.0, 1.0, 5.0], [2.0, 3.0, 7.0], [9.0, 4.0, 6.0]]))
-        assert grid.gradient_at((1.01, 1.01)) == grid.gradient_at((1.99, 1.5)) == Point(((4.0 - 1.0) / 2, (7 - 2) / 2))
+        assert grid.gradient_at((1.01, 1.01)) == grid.gradient_at((1.99, 1.5)) == ((4.0 - 1.0) / 2, (7 - 2) / 2)
 
     def test_at_the_edge_without_outside_the_difference_is_one_sided(self) -> None:
         grid = Grid(numpy.array([[0.0], [1.0], [4.0]]))
         assert [grid.gradient_at((x + 0.5, 0.5)) for x in range(3)] == [
-            Point((1.0, 0.0)),
-            Point((2.0, 0.0)),
-            Point((3.0, 0.0)),
+            (1.0, 0.0),
+            (2.0, 0.0),
+            (3.0, 0.0),
         ]
-        assert _rising_grid().gradient_at((3.5, 4.5)) == Point((2.0, -1.0))
+        assert _rising_grid().gradient_at((3.5, 4.5)) == (2.0, -1.0)
 
     def test_at_the_edge_a_neighbor_beyond_reads_outside(self) -> None:
         grid = Grid(numpy.array([[5.0], [1.0], [4.0]]), outside=0.0)
-        assert grid.gradient_at((0.5, 0.5)) == Point((0.5, 0.0))
-        assert grid.gradient_at((2.5, 0.5)) == Point((-0.5, 0.0))
-        assert grid.gradient_at((-0.5, 0.5)) == Point((2.5, 0.0))
+        assert grid.gradient_at((0.5, 0.5)) == (0.5, 0.0)
+        assert grid.gradient_at((2.5, 0.5)) == (-0.5, 0.0)
+        assert grid.gradient_at((-0.5, 0.5)) == (2.5, 0.0)
 
     def test_a_point_beyond_the_grid_raises_without_outside(self) -> None:
         with pytest.raises(IndexError):
@@ -825,7 +820,7 @@ class TestGradient:
     def test_an_integer_grid_has_one(self) -> None:
         grid = Grid(numpy.array([[0], [1], [3]]))
         gradient = grid.gradient_at((1.5, 0.5))
-        assert gradient == Point((1.5, 0.0))
+        assert gradient == (1.5, 0.0)
         assert all(type(component) is float for component in gradient)
 
     def test_a_grid_of_booleans_has_none(self) -> None:

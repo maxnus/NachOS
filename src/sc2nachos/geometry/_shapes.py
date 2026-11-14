@@ -130,10 +130,6 @@ class Tile(Area):
         """The tile alone."""
         return TileMask(self, numpy.ones((1, 1), dtype=bool))
 
-    def _point_in_tile(self, tile: Tile) -> Point:
-        """The tile's center."""
-        return tile.center
-
     def __repr__(self) -> str:
         return f"Tile({self.x}, {self.y})"
 
@@ -350,17 +346,6 @@ class Rectangle(Area):
         rows = math.ceil(self.top) - first_y
         return TileMask(Tile(first_x, first_y), numpy.ones((columns, rows), dtype=bool))
 
-    def _point_in_tile(self, tile: Tile) -> Point:
-        """The tile's center where the rectangle holds it, or else the center of the part of the tile it covers."""
-        tile_center = tile.center
-        if tile_center in self:
-            return tile_center
-        left = max(self.x, tile.x)
-        bottom = max(self.y, tile.y)
-        right = min(self.right, tile.x + 1)
-        top = min(self.top, tile.y + 1)
-        return Point(((left + right) / 2, (bottom + top) / 2))
-
 
 def _mask_of_addresses(xs: ndarray, ys: ndarray) -> TileMask:
     """The tiles at `xs` and `ys`, masked over their bounding rectangle: an empty mask at `Tile(0, 0)` for none."""
@@ -495,10 +480,6 @@ class TileSet(Area):
     def _overlapped_tile_mask(self) -> TileMask:
         """The covered tiles."""
         return self._mask_over_bounds
-
-    def _point_in_tile(self, tile: Tile) -> Point:
-        """The tile's center."""
-        return tile.center
 
     def _lies_within(self, within: Rectangle) -> bool:
         """Whether every covered tile lies within `within`, a rectangle on whole tiles. The set is not empty."""

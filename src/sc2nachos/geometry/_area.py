@@ -68,10 +68,7 @@ class Area(ABC):
         """Every tile whose inside the area overlaps, a tile it only touches at an edge or a corner left out. An empty
         area holds none."""
 
-    @abstractmethod
-    def _point_in_tile(self, tile: Tile) -> Point:
-        """A point of the area inside `tile`, which it must overlap: the tile's center where the area holds it."""
-
     def _tile_mask(self, within: Rectangle | None = None) -> TileMask:
-        """The tiles `tiles` gives that lie `within` a rectangle on whole tiles, if one is given."""
+        """Every tile whose center lies in the area, as `tiles` gives them, of those that lie `within` a rectangle on
+        whole tiles, if one is given."""
         return self.tiles()._tile_mask(within)

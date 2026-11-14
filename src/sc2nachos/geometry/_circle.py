@@ -139,23 +139,6 @@ class Circle(Area):
                 overlapped[column, lowest_row : math.ceil(center_y + reach) - first_y] = True
         return TileMask(Tile(first_x, first_y), overlapped)
 
-    def _point_in_tile(self, tile: Tile) -> Point:
-        """The tile's center where the circle holds it, or else the tile's point nearest the circle's center, moved
-        toward the tile's center by half its distance from the circle's edge, and at most halfway there."""
-        tile_center = tile.center
-        if tile_center in self:
-            return tile_center
-        nearest = Point(
-            (
-                min(max(self._center[0], tile.x), tile.x + 1),
-                min(max(self._center[1], tile.y), tile.y + 1),
-            )
-        )
-        toward_tile_center = tile_center - nearest
-        room_inside = self._radius - nearest.distance_to(self._center)
-        share = min(0.5, room_inside / (2 * toward_tile_center.length))
-        return nearest + toward_tile_center * share
-
     def intersections_with(self, other: Circle) -> tuple[Point, ...]:
         """The points where the two boundaries cross: two, one where the circles touch, none otherwise.
 

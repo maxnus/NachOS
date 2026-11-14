@@ -29,14 +29,15 @@ class Field[T: float](Protocol):
         ...
 
     def argmin(self, *, within: Area) -> Point:
-        """A point of `within` where the value is smallest."""
+        """A point where the value within `within` is smallest. A grid answers the center of that tile, which
+        `within` may not hold."""
         ...
 
     def argmax(self, *, within: Area) -> Point:
-        """A point of `within` where the value is largest."""
+        """A point where the value within `within` is largest, as `argmin` answers one."""
         ...
 
-    def gradient_at(self, point: PointLike) -> Point:
-        """How fast the value rises at `point`, per map unit, pointing the way it rises fastest. Raises `TypeError` for
-        a field of booleans."""
+    def gradient_at(self, point: PointLike) -> tuple[float, float]:
+        """How fast the value rises at `point`, per map unit, along x and along y, together pointing the way it rises
+        fastest. Raises `TypeError` for a field of booleans."""
         ...

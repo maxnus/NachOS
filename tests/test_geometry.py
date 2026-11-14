@@ -773,18 +773,6 @@ class TestAreaAgreement:
     def test_an_empty_shape_overlaps_no_tile(self, area: Area) -> None:
         assert not area._overlapped_tile_mask().mask.any()
 
-    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=lambda area: repr(area))
-    def test_every_shape_gives_a_point_of_itself_inside_each_tile_it_overlaps(self, area: Area) -> None:
-        """A grid's `argmin` and `argmax` within an area answer with this point, which must read the tile it was asked
-        for: strictly inside it, not on an edge it shares with a neighbor, and the tile's center wherever the shape
-        holds that."""
-        for tile in _tiles_held(area._overlapped_tile_mask()):
-            point = area._point_in_tile(tile)
-            assert point in area, (tile, point)
-            assert tile.x < point[0] < tile.x + 1 and tile.y < point[1] < tile.y + 1, (tile, point)
-            if tile.center in area:
-                assert point == tile.center, tile
-
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
         """`tile in rectangle` and `tile in circle` raised, while `tile in tile_set` answered."""
