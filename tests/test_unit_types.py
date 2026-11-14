@@ -50,7 +50,7 @@ def _classes_of_one_type() -> list[Any]:
     return [member for member in vars(UnitType).values() if isinstance(member, type) and "id" in vars(member)]
 
 
-# The groups the tables give a type: a race, the structures, or a race's structures.
+# The groups the tables give a type: a race, the structures, the non-structures, or a race's structures.
 _TABLE_GROUPS = [
     UnitType.Structure,
     UnitType.NonStructure,

@@ -21,17 +21,15 @@ class UnitType:
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
     `UnitTypeId`. A group is a race, the structures, the types that are not, or the structures of a race, as the game's
-    tables give them; or the
-    workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
-    geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
-    destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
-    locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and
-    Protoss production structure makes, or the two forms of a structure or a unit that changes and changes back, such as
-    a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
-    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, `Townhall` a `Structure`, and `Worker` a `NonStructure`. A type's `UnitTypeData.equivalent_types` is
-    the group of two forms it
-    is in, or else its own class.
+    tables give them; or the workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the
+    mineral fields, the vespene geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible
+    towers and their debris, the destructible rocks, the inhibitor and acceleration zones, the critters, the
+    changelings, the creep tumors, the locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the
+    overlords, the units each Terran and Protoss production structure makes, or the two forms of a structure or a unit
+    that changes and changes back, such as a supply depot raised or lowered, a siege tank sieged or not, or a roach
+    burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot` is a `TerranStructure`,
+    `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, `Townhall` a `Structure`, and `Worker` a `NonStructure`. A
+    type's `UnitTypeData.equivalent_types` is the group of two forms it is in, or else its own class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, `type_ids` holds its ids, and
     `types_are_equivalent` whether a unit converts between its types and back at will.
