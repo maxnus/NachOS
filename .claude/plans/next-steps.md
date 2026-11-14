@@ -38,8 +38,9 @@ As of 2026-11-14:
   43625063574), and AvocaDOS's tests failed only on the renamed `InProduction` reads. AvocaDOS #97 takes it: its
   production trains a unit, builds an add-on and morphs an orbital command, and its `units_in_production` leaves out
   what makes a structure, which it had left out by a progress of `None`.
-- **Since 0.5.0**, on main: #250 and #251. The next release, 0.5.1, only adds: `UnitType.NonStructure` (#251), which
-  AvocaDOS's `units_in_production` asks `api.in_production` for once it pins it, in place of its check of `Structure`.
+- **Since 0.5.0**, on main: #250 to #252. The next release, 0.5.1, only adds and speeds up: `UnitType.NonStructure`
+  (#251), which AvocaDOS's `units_in_production` asks `api.in_production` for once it pins it, in place of its check of
+  `Structure`; and a `SourceField`'s `max` and `min` read quicker (#252), for AvocaDOS's effect threat (Fields, step 3).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -377,11 +378,21 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      as `in` has it (below), so a circle touching only an edge the area leaves out reads nothing, as a grid leaves out a
      tile touched only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address. Measured
      2026-11-14: a read over a unit's circle costs some 30 to 55 µs where circles reach it, against a grid's 4 to 8, and
-     1.5 to 3 where none does.
-  3. AvocaDOS takes them, now that 0.5.0 is out: its effect threat and splash zone as `SourceField`s, a unit reading
-     the max within its own circle. AvocaDOS #97 already reads `grid.argmin()` as a point and has `grid_argmin` take
-     `argmin_tile()`. Its `melee_effect_threat` adds the effect threat to a grid, which a `SourceField` cannot join: it
-     reads the two apart, or waits for a field drawn onto a grid (below).
+     1.5 to 3 where none does. Since #252, `max` and `min` read 0 at once from a field of no circle, and where one
+     circle reaches the area alone, read the area's point nearest its center alone when that holds the answer, as for
+     the largest value of a positive circle: an empty field's read over a unit's circle 0.40 µs, from 1.28.
+  3. AvocaDOS takes its effect threat, biles, storms and reapers' grenades, as a `SourceField`, each unit reading the
+     max within its own circle, and reads its melee grid apart, `melee_effect_threat` gone; it flees to the tile of
+     least melee threat plus the field's value at its center. Prototyped on its branch `ccr-614226b3-szxe0s`, to take
+     0.5.1. Over its seven recorded games, played through the bot, the step avoiding effects took 290 µs a step with
+     #252's return from an empty field and the melee grid read first, against main's 304 in runs interleaved with it,
+     where it took 313 against 286 with neither. A storm on 20 marines takes 78 µs to build and read, a grid of the
+     map's tiles 29, and several effects overlapping a clump some 0.5 ms more than the grid, since a marine two circles
+     reach reads the spaced points: the owner accepted it (2026-11-14), over reading each unit's center alone, which
+     misses a unit whose body alone is in an effect, and over a read in NachOS of whether any circle reaches an area.
+     The field finds 16 marines in that storm, the grid 13, and a bile on a tile's corner, which covers no tile's
+     center. Its splash zone waits: `squad_splash_spacing` is 0, so only the debug overlay reads it. Its strength threat
+     stays a grid, smoothed and read in paths and grid arithmetic.
 
   Later, when a bot needs one: rectangles in a `SourceField`, by `add_rectangle` (the owner, review of #249). And a
   `SourceField` drawn onto a `Grid`, for paths and grid arithmetic, planned together with public tile rules returning
