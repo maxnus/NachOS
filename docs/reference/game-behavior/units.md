@@ -5,6 +5,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 ## What an observation lists
 
 - The first observation lists every starting unit (tested).
+- On one map and start, the starting units stand on bit-identical spots in every game, whatever the race, stepped or
+  realtime. Only the workers' facing differs, and the seed sets it, as it does the start. In a stepped game the workers
+  still stand alike 22 steps on, whatever their facing. Each worker already carries a gather order in the first
+  observation, all of them at one mineral field. Seen in 210 games against the computer, 5 for each race on each of the
+  pool's 7 maps, stepped and realtime alike (#250, build 75689).
 - A radar blip, of type `NotAUnit`, and a structure placed but not started have no tag. A tagless placeholder stands
   where a structure was ordered from the moment of the order, before a worker reaches the spot (#25; tested).
 - A structure or mineral field that leaves sight is replaced, in the same observation, by a remembered copy under a
@@ -193,6 +198,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
   and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
   `sweep_movement`, build 75689).
+- **A realtime game reports a moving unit partway along its last step, as far along as the current step has run**,
+  where a stepped game reports the step's own position. Asked some 160 times within one step, every worker's position
+  slid together from where the stepped game had it a step before, at the first ask, to where it has it at this step,
+  at the last, while its facing read the stepped game's at this step throughout. So a moving unit can read up to a
+  step's move behind the step the observation reports, 0.18 for an SCV at speed, and realtime games of one seed differ
+  by when they asked. Seen with SCVs in four realtime games and a stepped one, all of one seed, on PylonAIE_v4 (#250,
+  build 75689).
 
 ## Units coming, changing and going
 
