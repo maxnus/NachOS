@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Self
 if TYPE_CHECKING:
     import random
 
+    from numpy import ndarray
+
     from sc2nachos.geometry._point import Point, PointLike
     from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
     from sc2nachos.geometry._tile_mask import TileMask
@@ -36,7 +38,7 @@ class Area(ABC):
     @abstractmethod
     def random_point(self, *, rng: random.Random | None = None) -> Point:
         """A point drawn uniformly from the area, by `rng`, or if none is given by the `random` module's own
-        generator, which the whole process shares."""
+        generator, which the whole process shares: always one the area holds, as `in` has it."""
 
     @abstractmethod
     def __contains__(self, point: PointLike | Tile) -> bool:
@@ -50,10 +52,8 @@ class Area(ABC):
 
     @abstractmethod
     def closest_point_to(self, point: PointLike) -> tuple[Point, float]:
-        """The point of the area nearest to `point`, and the distance to it.
-
-        May lie on an edge the area excludes, so it is not necessarily in the area.
-        """
+        """The point of the area nearest to `point`, and the distance to it: always one the area holds, as `in` has
+        it, so on an edge the area leaves out, the least a float can move inside it."""
 
     @abstractmethod
     def bounding_rectangle(self) -> Rectangle:
@@ -62,6 +62,10 @@ class Area(ABC):
     @abstractmethod
     def tiles(self) -> TileSet:
         """Every tile whose center lies in the area."""
+
+    @abstractmethod
+    def _contains_each(self, xs: ndarray, ys: ndarray) -> ndarray:
+        """Whether each point lies inside, as `in` has it, their x and y given as arrays that broadcast together."""
 
     @abstractmethod
     def _overlapped_tile_mask(self) -> TileMask:

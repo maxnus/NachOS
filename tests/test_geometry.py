@@ -457,7 +457,13 @@ class TestRectangle:
     def test_closest_point_to(self) -> None:
         rect = Rectangle(0, 0, 10, 10)
         assert rect.closest_point_to((5, 5)) == ((5, 5), 0.0)
-        assert rect.closest_point_to((13, 5)) == ((10, 5), 3.0)
+        assert rect.closest_point_to((-3, 5)) == ((0, 5), 3.0)
+
+    def test_closest_point_beyond_an_upper_edge_is_the_least_a_float_can_move_inside_it(self) -> None:
+        """The rectangle leaves out its right and top edges, so the point on one is not its own."""
+        point, distance = Rectangle(0, 0, 10, 10).closest_point_to((13, 15))
+        assert point == (math.nextafter(10, 0), math.nextafter(10, 0))
+        assert distance == pytest.approx(math.hypot(3, 5))
 
     def test_random_point_is_inside(self) -> None:
         rect = Rectangle(3, 7, 2, 4)
@@ -633,7 +639,10 @@ class TestTile:
         assert all(tile.random_point() in tile for _ in range(100))
 
     def test_closest_point_to(self) -> None:
-        assert Tile(0, 0).closest_point_to((5, 0.5)) == ((1, 0.5), 4.0)
+        assert Tile(0, 0).closest_point_to((-5, 0.5)) == ((0, 0.5), 5.0)
+        point, distance = Tile(0, 0).closest_point_to((5, 0.5))
+        assert point == (math.nextafter(1, 0), 0.5), "the right edge is the next tile's"
+        assert distance == pytest.approx(4.0)
 
 
 class TestAreaLayout:
@@ -659,6 +668,13 @@ OVERLAP_PROBES = (
     Rectangle(2, 2, 1, 1),  # a tile's own square, touching its eight neighbors
     Rectangle(1.5, 2, 2, 0.5),
 )
+
+
+class _LargestDraws(random.Random):
+    """A generator whose every draw is the largest float below 1."""
+
+    def random(self) -> float:
+        return 1 - 2**-53
 
 
 def _tiles_held(tiles: TileMask) -> set[Tile]:
@@ -769,9 +785,48 @@ class TestAreaAgreement:
         }
         assert _tiles_held(area._overlapped_tile_mask()) == holding
 
+    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=lambda area: repr(area))
+    def test_every_shapes_closest_point_is_one_it_holds(self, area: Area) -> None:
+        """A rectangle, a tile and a tile set answered points on the upper edges they leave out, and a circle about
+        half its points on the edge just outside it. Probed a quarter apart around each shape, which meets its edges."""
+        bounds = area.bounding_rectangle()
+        for i in range(round((bounds.width + 4) / 0.25) + 1):
+            for j in range(round((bounds.height + 4) / 0.25) + 1):
+                probe = (math.floor(bounds.x) - 2 + i * 0.25, math.floor(bounds.y) - 2 + j * 0.25)
+                point, _ = area.closest_point_to(probe)
+                assert point in area, probe
+
+    @pytest.mark.parametrize(
+        "area",
+        [
+            *EVERY_SHAPE,
+            Rectangle(200.0, 3.0, 1.0, 1.0),
+            Tile(200, 3),
+            TileSet([Tile(200, 3)]),
+            Circle((130.32, 157.74), 1.68),
+            Circle((46.62, 46.17), 3.52),
+        ],
+        ids=lambda area: repr(area),
+    )
+    def test_every_shapes_random_point_is_one_it_holds_at_the_largest_draw(self, area: Area) -> None:
+        """A draw of the largest float below 1 rounded onto the upper edge of each shape here but the first four, or
+        just outside the circle."""
+        assert area.random_point(rng=_LargestDraws()) in area
+
     @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1, 1, 0, 2), Rectangle(1.5, 1, 3, 0)], ids=repr)
     def test_an_empty_shape_overlaps_no_tile(self, area: Area) -> None:
         assert not area._overlapped_tile_mask().mask.any()
+
+    @pytest.mark.parametrize("area", [*OVERLAP_PROBES, TileSet([])], ids=lambda area: repr(area))
+    def test_every_shape_holds_points_given_as_arrays_as_in_holds_each(self, area: Area) -> None:
+        """A source field keeps the points it reads in an area through `_contains_each`. Probed on a lattice a quarter
+        apart, which meets the tiles' edges and corners, given as a column and a row that broadcast together."""
+        xs = numpy.arange(-1.0, 11.0, 0.25)
+        ys = numpy.arange(-1.0, 11.0, 0.25)
+        held = area._contains_each(xs[:, None], ys[None, :])
+        assert held.shape == (len(xs), len(ys))
+        expected = [[(x, y) in area for y in ys.tolist()] for x in xs.tolist()]
+        assert held.tolist() == expected
 
     @pytest.mark.parametrize("area", EVERY_SHAPE, ids=lambda area: type(area).__name__)
     def test_every_shape_reads_a_tile_as_its_center(self, area: Area) -> None:
@@ -863,7 +918,7 @@ class TestTileSet:
         tiles = Rectangle(0, 0, 2, 2).tiles()
         assert tiles.closest_point_to((0.5, 0.5)) == ((0.5, 0.5), 0.0)
         point, distance = tiles.closest_point_to((10, 1.5))
-        assert point == (2, 1.5), "the near edge of the covered ground, not a tile center"
+        assert point == (math.nextafter(2, 0), 1.5), "the near edge of the covered ground, not a tile center"
         assert distance == pytest.approx(8.0)
 
     def test_random_point_is_inside(self) -> None:
@@ -947,6 +1002,20 @@ class TestCircle:
         point, distance = Circle((0, 0), 2).closest_point_to((10, 0))
         assert point == (2, 0)
         assert distance == pytest.approx(8.0)
+
+    def test_closest_point_to_an_outside_point_is_one_the_circle_holds(self) -> None:
+        """Rounding left about half of these just outside the circle, so a source field dropped a circle that reached
+        a unit's. 1,000 seeded probes, each from 0.001 to 50 beyond the edge."""
+        rng = random.Random(2)
+        for _ in range(1000):
+            circle = Circle((rng.uniform(0, 200), rng.uniform(0, 200)), rng.uniform(0.3, 15))
+            angle = rng.uniform(0, 2 * math.pi)
+            reach = circle.radius + rng.uniform(0.001, 50)
+            probe = (circle.center.x + reach * math.cos(angle), circle.center.y + reach * math.sin(angle))
+            point, distance = circle.closest_point_to(probe)
+            assert point in circle, (circle, probe)
+            assert point.distance_to(circle.center) == pytest.approx(circle.radius)
+            assert distance == pytest.approx(point.distance_to(probe))
 
     def test_closest_point_to_an_inside_point_is_itself(self) -> None:
         assert Circle((0, 0), 5).closest_point_to((1, 1)) == ((1, 1), 0.0)
