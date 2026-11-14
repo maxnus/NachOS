@@ -104,6 +104,14 @@ class TechTree:
         """What it says about `upgrade`: nothing, for an upgrade it holds no record of."""
         return self.upgrades.get(upgrade, _UPGRADE_NOT_IN_THE_TREE)
 
+    def morph_stages_of(self, unit_type: UnitTypeId) -> tuple[UnitTypeId, ...]:
+        """`unit_type`, then each type back along `morphed_from`, each once: a hive, a lair, a hatchery, a drone and a
+        larva, for a hive; a marine alone, for a marine."""
+        stages = [unit_type]
+        while (source := self.unit_type(stages[-1]).morphed_from) is not None and source not in stages:
+            stages.append(source)
+        return tuple(stages)
+
     def warn_if_not_swept_on(self, base_build: int) -> None:
         """Log a warning if `base_build`, the build a game plays on, is not the one swept."""
         if base_build != self.base_build:

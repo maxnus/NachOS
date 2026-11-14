@@ -254,6 +254,19 @@ command 150 of its row's 550, with its cancel giving back 113 (tool `sweep_order
 25/25. The time is the type's build time. `tests/test_gamedata.py` checks that every entry differs from what the tables
 derive."""
 
+UNIT_TYPE_BUILD_TIME_OVERRIDES: Final[Mapping[UnitTypeId, GameTime]] = MappingProxyType(
+    {
+        # Two high templar merged into one 192 steps after it was first listed, at build progress 0, twice; its row
+        # gives none (probe in #189, build 75689).
+        UnitTypeId.ARCHON: GameTime(steps=192),
+        # Two lurkers each hatched 403 steps after the order, against the row's 553.33 (probe in #159, build 75689).
+        UnitTypeId.LURKER: GameTime(steps=403),
+    }
+)
+"""The build time of each of these unit types where the tables get it wrong: what making one takes in game. Every other
+morph measured took its row's time, to within a step (in game). `tests/test_gamedata.py` checks that every entry differs
+from what the tables give, so an entry goes as soon as a patch makes it unnecessary."""
+
 COCOON_PRODUCTS: Final[Mapping[UnitTypeId, UnitTypeId]] = MappingProxyType(
     {
         UnitTypeId.BANELING_COCOON: UnitTypeId.BANELING,

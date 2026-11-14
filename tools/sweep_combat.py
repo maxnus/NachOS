@@ -76,13 +76,13 @@ from s2clientprotocol import debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos.gamedata import GameData, TargetDomain, Weapon
 from sc2nachos.gamedata._missing_attacks import MISSING_WEAPONS
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawBuffId
 from sc2nachos.match import Race
 from sc2nachos.run import Installation
-from sc2nachos.units._unit_type import UnitType
 
 # How many steps a unit is given to fire at a target placed within its reach: a planetary fortress turning its turret
 # toward one took 22 (in game). And how many it is given to settle once made.

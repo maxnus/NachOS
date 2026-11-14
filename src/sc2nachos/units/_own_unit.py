@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
-from sc2nachos.units._unit_type import UnitType
-from sc2nachos.units._values import Passenger, RallyTarget, UnitOrder
+from sc2nachos.units._values import Order, Passenger, RallyTarget
 
 if TYPE_CHECKING:
     from collections.abc import Collection
 
     from s2clientprotocol import raw_pb2
+
+    from sc2nachos.geometry import PointLike
+    from sc2nachos.ids import UnitTypeId, UpgradeId
+    from sc2nachos.orders import IssuedOrder
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -25,20 +29,79 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     __slots__ = ()
 
+    def issue(
+        self,
+        ability: AbilityId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `IssuedOrder`, as
+        `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
+        `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
+
+        Raises as `OrderBook.issue` does.
+        """
+        return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force)
+
+    def train(
+        self: OwnUnit[UnitType.Structure | UnitType.Larva],
+        unit_type: UnitTypeId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order the structure or larva to make a unit of `unit_type` and return the `IssuedOrder`, as
+        `sc2nachos.orders.OrderBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
+        `api.orders.train(barracks, UnitTypeId.MARINE)`.
+
+        Raises as `OrderBook.train` does.
+        """
+        return self._tracker.order_book.train(self, unit_type, target=target, queued=queued, force=force)
+
+    def build(
+        self: OwnUnit[UnitType.Worker | UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport],
+        unit_type: UnitTypeId,
+        *,
+        target: PointLike | Unit[Any] | None = None,
+        queued: bool = False,
+        force: bool = False,
+    ) -> IssuedOrder:
+        """Order the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
+        return the `IssuedOrder`, as `sc2nachos.orders.OrderBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
+        target=site)` is `api.orders.build(scv, UnitTypeId.BUNKER, target=site)`.
+
+        Raises as `OrderBook.build` does.
+        """
+        return self._tracker.order_book.build(self, unit_type, target=target, queued=queued, force=force)
+
+    def research(
+        self: OwnUnit[UnitType.Structure], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
+    ) -> IssuedOrder:
+        """Order the structure to research `upgrade` and return the `IssuedOrder`, as
+        `sc2nachos.orders.OrderBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
+        `api.orders.research(tech_lab, UpgradeId.STIMPACK)`.
+
+        Raises as `OrderBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
+        """
+        return self._tracker.order_book.research(self, upgrade, queued=queued, force=force)
+
     @property
-    def orders(self) -> tuple[UnitOrder, ...]:
+    def orders(self) -> tuple[Order, ...]:
         """The unit's current order, then its queued orders."""
         update = self._tracker.last_changes.update
         # Read off the snapshot's fields rather than through `at`, to spare a call on the common path.
         if (cached := self._orders).update == update:
             return cached.value
         reported = self._latest_report.orders
-        orders = tuple(UnitOrder._from_proto(order, self._unit_target_of_order) for order in reported)
+        orders = tuple(Order._from_proto(order, self._unit_target_of_order) for order in reported)
         self._orders = _Snapshot(orders, update)
         return orders
 
     @property
-    def current_order(self) -> UnitOrder | None:
+    def current_order(self) -> Order | None:
         """The order the unit is carrying out, the first of `orders`, or `None` for an idle unit."""
         orders = self.orders
         return orders[0] if orders else None

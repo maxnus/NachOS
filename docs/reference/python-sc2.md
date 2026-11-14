@@ -118,29 +118,32 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `api.orders.issue(unit, AbilityId.MOVE, target=p)` |
-| `bot.do(action)`, `await bot._do_actions(...)` | `api.orders.issue(...)`, sent once the turn's handlers have run |
-| nothing | `api.orders.issue(..., force=True)`, `api.orders.issued_to(unit)` |
-| `bot.do(action, queue=True)` | `api.orders.issue(..., queued=True)` |
-| `unit.orders`, `unit.is_idle` | the same, each order a `UnitOrder` |
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.issue(AbilityId.MOVE, target=p)`, or `api.orders.issue(units, ...)` for several at once |
+| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.orders.train(units, t)` and so on for several at once ([orders](../orders.md#training-building-and-researching)) |
+| `bot.do(action)`, `await bot._do_actions(...)` | `unit.issue(...)` or `api.orders.issue(...)`, sent once the turn's handlers have run |
+| nothing | `unit.issue(..., force=True)`, `api.orders.issued_to(unit)` |
+| `bot.do(action, queue=True)` | `unit.issue(..., queued=True)` |
+| `unit.orders`, `unit.is_idle` | the same, each order an `Order`, which python-sc2 calls a `UnitOrder` |
 | `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
 | `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
 | `unit.is_using_ability(a)`, `is_collecting` | `unit.is_doing(a)`, one ability or several: `is_doing({AbilityId.GATHER, AbilityId.RETURN})`, each one id whatever the unit's type |
 | `order.target`, a tag or a point | `order.target`, the unit or the point, raising `NotReportedError` for a unit the game names by a tag it never reports, and `order.known_target`, `None` there |
-| nothing | `order.data`, `order.withdraw()` |
+| nothing | `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
-- **An order is something you hold on to until it is sent.** `issue` returns an `Order` that carries the bot's own
-  `data` and can be withdrawn while the turn's handlers run; python-sc2 returns nothing. What the game refused shows
-  in `api.action_failures` on the next turn, and what a unit then did, in its orders and in events.
+- **An order is something you hold on to until it is sent.** `issue` returns an `IssuedOrder` that can be withdrawn
+  while the turn's handlers run; python-sc2 returns nothing. What the game refused shows in `api.action_failures` on the
+  next turn, and what a unit then did, in its orders and in events.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game. A
   structure is no exception: of two trains given in a turn only the last goes out, and a reactor's second marine
   needs `queued=True` ([orders](../orders.md#one-order-a-unit-a-turn)). python-sc2 sends both, and the game queues and
   charges both.
-- **A drone's morph is given to a larva.** python-sc2's `train` picks a larva itself. In NachOS, as in the game, a
-  larva's morph given to a hatchery is refused `NotSupported` (in game), so pick a larva from
-  `api.units.own.of_type(UnitType.Larva)`.
+- **A drone's morph is given to a larva, and a barracks's research to its tech lab.** python-sc2's `train` and
+  `research` pick the unit themselves. In NachOS, as in the game, a larva's morph given to a hatchery is refused
+  `NotSupported` (in game), so pick a larva from `api.units.own.of_type(UnitType.Larva)` and order
+  `larva.train(UnitTypeId.DRONE)`. `hatchery.train(UnitTypeId.DRONE)` and `barracks.research(UpgradeId.STIMPACK)`
+  raise `ValueError`, naming what does.
 - **Each unit given an order carries it out.** What every unit of a command carries out, a move, an attack, a stim,
   goes out as one command naming them all, and so do orders of it given apart to one target in a turn, where
   python-sc2's `combine_actions` joins only neighboring ones ([orders](../orders.md#orders-sent-together)); anything
@@ -295,6 +298,7 @@ it.
 | `unit.is_snapshot`, `is_visible` | `unit.visibility is Visibility.IN_FOG`, `unit.is_visible`, which is false once the unit leaves the observation; `unit.is_listed` while the observation lists it, cloaked or remembered in the fog included |
 | `unit.age`, `age_in_frames`, `is_memory`, of a unit kept from an earlier step | nothing: a unit is updated in place every observation, and `unit.is_listed` false once the observation leaves it out; `unit.first_seen` and `unit.last_seen`, the first and the last observation that showed it visible, each `None` if none has |
 | `unit.is_ready`, `weapon_cooldown` | `unit.is_complete`, `weapon_cooldown`, a `GameTime` |
+| nothing | `unit.morph_progress` of a command center, hatchery, lair or spire morphing, or of a cocoon or a lurker egg, whose progress the game does not report: a `Progress` with what it becomes, its `fraction` and its `time_left`, timed from the observation before the one that first showed it |
 | `unit.buff_duration_remain`, `buff_duration_max` | `buff_duration_remaining`, `buff_duration_max`, on this player's own units alone, as the game reports them to no one else: each a `GameTime`, or `None` where nothing is timed |
 | `unit.health_percentage`, `shield_percentage`, `energy_percentage` | `unit.health_fraction`, `shield_fraction`, `energy_fraction` |
 | `unit.repairable` | `unit.is_repairable`, with `unit.total_repair_cost` and `unit.required_repair_cost` from its health now, each a `Cost` with its steps; not for the other races' mechanical units, which python-sc2 calls repairable, since none was measured |
@@ -468,8 +472,8 @@ it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction` with its `producer`, its `unit` once it stands, its `progress` and its `time_left` |
-| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research` with its structure, `progress` and `time_left`; once done, `u in api.upgrades` |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
+| `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research`, a `Progress` with its `fraction` and `time_left`, and its structure; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]`, the step it was last in sight |
 | `state.creep` | `api.creep` |
 | `state.effects` | `api.effects` |
@@ -586,12 +590,12 @@ it.
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
 | `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
-| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
+| `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step, and the lurker's the 403 steps it took in game, where python-sc2 reads its row's 553.33, and the archon's the 192 it took, where python-sc2 reads its row's none; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_used`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
 | `unit_data._proto.weapons` | `unit_data.weapons`, with the battlecruiser's, oracle's, void ray's and sentry's, which the rows leave out, as measured |
-| `unit_data.unit_alias` | nothing: `unit_data.morphed_from` gives the type a form is made from, a siege tank for a sieged tank |
-| `unit_data.tech_alias` | `unit_data.techs_granted`, the `Tech`s it grants rather than the types it counts as; the `UnitType.Any…` groups for a unit's forms |
+| `unit_data.unit_alias` | `unit_data.equivalent_types`, the `UnitType` group of the types a unit converts between and back rather than one type they count as: `UnitType.AnySiegeTank` for a siege tank sieged or not, and the type's own class for any other type, where python-sc2 reads `None`. Test a type with `UnitTypeId.SIEGE_TANK in unit_data.equivalent_types.type_ids`. A warp gate is with the gateway and a hellbat with the hellion, where python-sc2 reads `None`. Apart, where python-sc2 reads another type: an adept's shade, from its adept; a disguised changeling, a queen's or a burrowed creep tumor and a flying locust, none converted back and forth at will, from a plain one, though `UnitType.AnyChangeling`, `AnyCreepTumor` and `AnyLocust` hold them; a gas building on a rich geyser, from the plain one, though `UnitType.AnyRefinery`, `AnyExtractor` and `AnyAssimilator` hold both; and each rock or geyser of the map's, from a plain one |
+| `unit_data.tech_alias` | `unit_data.techs_granted`, the `Tech`s it grants rather than the types it counts as; `unit_data.equivalent_types` for the types a unit converts between |
 | `unit_data.creation_ability.exact_id` | `unit_data.creation_ability` |
 | `upgrade_data.research_ability.exact_id` | `upgrade_data.research_ability` |
 | `upgrade_data.cost.time`, in steps | `upgrade_data.cost.time`, a `GameTime` |

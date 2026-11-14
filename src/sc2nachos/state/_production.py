@@ -10,6 +10,7 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
 from sc2nachos.state._research import Research
+from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
@@ -31,6 +32,8 @@ class _Production:
     A train's progress, an egg's, and a structure's build progress, are the steps done over the tables' build time,
     sent as a 32-bit float, and it is done once that time rounded up has passed: so rounding the progress times the
     unrounded time gives the steps done exactly, and the rounded-up time less those the steps left (in game).
+
+    Raises `NotReportedError` for a morph or a warp-in under way in the api's first observation, which no game has.
     """
 
     __slots__ = ("_items", "_researches")
@@ -44,7 +47,7 @@ class _Production:
 
     def of_types(self, unit_types: Collection[UnitTypeId]) -> tuple[InProduction, ...]:
         """What is being made of `unit_types`, in the order the observation lists the units it is read from."""
-        return tuple(item for item in self._items if item.type_id in unit_types)
+        return tuple(item for item in self._items if item.product in unit_types)
 
     @property
     def researches(self) -> Mapping[UpgradeId, Research]:
@@ -56,7 +59,7 @@ class _Production:
         """Read what `unit` makes: itself while it goes up, and what its orders make."""
         report = unit._latest_report
         if report.build_progress < 1.0:
-            self._items.append(_going_up(unit, report.build_progress, game_data))
+            self._items.append(_going_up(unit, game_data))
         for order in report.orders:
             row = game_data.abilities.get(AbilityId.get(order.ability_id) or AbilityId.NULL)
             if row is None or not (row.cost.minerals or row.cost.vespene):
@@ -68,32 +71,44 @@ class _Production:
                     # The game's progress is the steps done over the total, as a 32-bit float (in game).
                     steps_left = round((1 - order.progress) * total_steps)
                     self._researches[product] = Research(
-                        product, unit, GameTime(steps=total_steps), GameTime(steps=steps_left)
+                        product, order.progress, GameTime(steps=total_steps), GameTime(steps=steps_left), unit
                     )
             elif product is not None and not (row.needs_placement and _construction_has_started(unit)):
                 progress = _order_progress(row, unit.type_id, order.progress)
-                self._items.append(_made_by_order(product, unit, progress, game_data))
+                if (item := _made_by_order(product, unit, progress, game_data)) is not None:
+                    self._items.append(item)
 
 
-def _going_up(unit: OwnUnit[Any], build_progress: float, game_data: GameData) -> InProduction:
-    """`unit` itself while it goes up at `build_progress`: a structure, made by its builder in its row's time, or a
-    unit warping in or merging into an archon, made by nothing in a time its row does not give (in game). A type the
-    tables give no row is taken for a unit, as events take it."""
-    row = game_data.units.get(unit.type_id)
-    if row is None or Attribute.STRUCTURE not in row.attributes:
-        return InProduction(unit.type_id, None, unit, build_progress, None, None)
+def _going_up(unit: OwnUnit[Any], game_data: GameData) -> InProduction:
+    """`unit` itself while it goes up: a unit warping in, made by nothing, in a time how fast it goes up tells; or a
+    structure, made by its builder, or an archon two high templar merged into, made by nothing, each in its row's
+    time. A gateway's unit is listed going up only while it warps in, a gateway training one listing it only once it
+    is done (in game)."""
+    if unit.type_id in UnitType.GatewayUnit.type_ids:
+        warp_in = unit._tracker.warp_in_tracker.progress_of(unit)
+        return InProduction(unit.type_id, warp_in.fraction, warp_in.total_time, warp_in.time_left, None, unit)
+    row = game_data.units[unit.type_id]
+    build_progress = unit._latest_report.build_progress
     total_time, time_left = _total_time_and_time_left(row, build_progress)
-    return InProduction(unit.type_id, unit.builder, unit, build_progress, total_time, time_left)
+    builder = unit.builder if Attribute.STRUCTURE in row.attributes else None
+    return InProduction(unit.type_id, build_progress, total_time, time_left, builder, unit)
 
 
 def _made_by_order(
     product: UnitTypeId, producer: OwnUnit[Any], progress: float | None, game_data: GameData
-) -> InProduction:
-    """A `product` of `producer`'s order at `progress`, or at no known progress, as for a morph other than a larva's."""
+) -> InProduction | None:
+    """A `product` of `producer`'s order at `progress`, or, where the order reports none, at the progress of
+    `producer`'s morph, `None` where it shows none under way, as a lair still showing the lair morph does in its last
+    step (in game)."""
     if progress is None:
-        return InProduction(product, producer, None, None, None, None)
+        morph_progress = producer.morph_progress
+        if morph_progress is None:
+            return None
+        return InProduction(
+            product, morph_progress.fraction, morph_progress.total_time, morph_progress.time_left, producer, None
+        )
     total_time, time_left = _total_time_and_time_left(game_data.units[product], progress)
-    return InProduction(product, producer, None, progress, total_time, time_left)
+    return InProduction(product, progress, total_time, time_left, producer, None)
 
 
 def _total_time_and_time_left(row: UnitTypeData, progress: float) -> tuple[GameTime, GameTime]:

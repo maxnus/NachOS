@@ -110,7 +110,7 @@ reviewing code.
   and no game swept so far gave a player a `player_name` (the ladder unverified).
 - **The game leaves out what a player could not know, and the field then reads zero**: a remembered unit's health,
   an enemy's orders. Answer from the last report that had it, or raise `NotReportedError`; never answer the zero.
-- **An `Order` is what the bot asked for; a `UnitOrder` is what the game reports a unit doing.** Never name one
+- **An `IssuedOrder` is what the bot asked for; an `Order` is what the game reports a unit doing.** Never name one
   for the other.
 - **An order's effect can show up an observation late.** On the ladder, and in any realtime game, an add-on or a
   stim buff may appear two observations after the order rather than in the next. Never write code, or a test, that

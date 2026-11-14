@@ -16,6 +16,7 @@ from sc2nachos.gamedata import (
     Resources,
     TargetDomain,
     TargetType,
+    Tech,
     UnitTypeUpgrade,
 )
 from sc2nachos.gamedata._ability_data import _cost_of_making
@@ -27,6 +28,7 @@ from sc2nachos.gamedata._techtree import (
     COST_OVERRIDES,
     KEEPS_ORDERS_ABILITIES,
     MISNAMED_RESEARCH_ABILITIES,
+    UNIT_TYPE_BUILD_TIME_OVERRIDES,
     UNIT_TYPE_COST_OVERRIDES,
     UNNAMED_CREATION_ABILITIES,
 )
@@ -36,6 +38,7 @@ from sc2nachos.ids import AbilityId, EffectId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import Recording
+from sc2nachos.units import UnitType
 
 CORPUS = sorted((Path(__file__).parent / "corpus").glob("*.sc2rec"))
 
@@ -516,6 +519,60 @@ _RICH_GAS_BUILDINGS = {
 }
 
 
+def _type_or_class_name(value: UnitTypeId | type) -> str:
+    """A unit type's name, or a `UnitType` class's, to name a test case by."""
+    return value.name if isinstance(value, UnitTypeId) else value.__name__
+
+
+class TestEquivalentTypes:
+    @pytest.mark.parametrize(
+        ("unit_type", "equivalent_types"),
+        [
+            (UnitTypeId.SUPPLY_DEPOT_LOWERED, UnitType.AnySupplyDepot),
+            (UnitTypeId.BARRACKS_FLYING, UnitType.AnyBarracks),
+            (UnitTypeId.ORBITAL_COMMAND, UnitType.AnyOrbitalCommand),
+            (UnitTypeId.SIEGE_TANK, UnitType.AnySiegeTank),
+            (UnitTypeId.HELLBAT, UnitType.AnyHellion),
+            (UnitTypeId.ROACH_BURROWED, UnitType.AnyRoach),
+            (UnitTypeId.WARP_GATE, UnitType.AnyGateway),
+        ],
+        ids=_type_or_class_name,
+    )
+    def test_a_type_converted_to_another_and_back_has_the_group_of_both(
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, equivalent_types: type[UnitType.AnyType]
+    ) -> None:
+        assert first_corpus_tables.units[unit_type].equivalent_types is equivalent_types
+
+    @pytest.mark.parametrize(
+        ("unit_type", "own_class"),
+        [
+            (UnitTypeId.MARINE, UnitType.Marine),
+            (UnitTypeId.LAIR, UnitType.Lair),
+            (UnitTypeId.BANELING_COCOON, UnitType.BanelingCocoon),
+            (UnitTypeId.OVERLORD_TRANSPORT, UnitType.OverlordTransport),
+            (UnitTypeId.ADEPT_SHADE, UnitType.AdeptShade),
+            (UnitTypeId.ARCHON, UnitType.Archon),
+            (UnitTypeId.REFINERY_RICH, UnitType.RefineryRich),
+            (UnitTypeId.CHANGELING_ZEALOT, UnitType.ChangelingZealot),
+            (UnitTypeId.CREEP_TUMOR_QUEEN, UnitType.CreepTumorQueen),
+            (UnitTypeId.LOCUST_FLYING, UnitType.LocustFlying),
+        ],
+        ids=_type_or_class_name,
+    )
+    def test_a_type_converted_to_no_other_and_back_has_its_own_class(
+        self, first_corpus_tables: GameData, unit_type: UnitTypeId, own_class: type[UnitType.AnyType]
+    ) -> None:
+        """A lair, a cocoon and an overlord transport each cost something to morph into, an adept's shade stands apart
+        from its adept, an archon is made of two templar, a refinery on a rich geyser is another structure than one on a
+        plain geyser, and a changeling, a creep tumor and a locust are not converted back and forth."""
+        assert first_corpus_tables.units[unit_type].equivalent_types is own_class
+
+    def test_a_types_equivalent_types_are_the_same_in_tables_holding_no_row_of_the_others(self) -> None:
+        """They are curated, not read from the tables, so tables made up for a test give them too."""
+        data = GameData(sc2api_pb2.ResponseData(units=[data_pb2.UnitTypeData(unit_id=UnitTypeId.HELLBAT)]))
+        assert data.units[UnitTypeId.HELLBAT].equivalent_types is UnitType.AnyHellion
+
+
 def _answer(path: Path) -> sc2api_pb2.ResponseData:
     """The `ResponseData` of a recorded game."""
     for exchange in Recording(path):
@@ -575,14 +632,51 @@ class TestARecordedGamesTables:
 
     def test_only_a_rich_gas_building_takes_its_build_time_from_another_type(self, path: Path) -> None:
         """Each takes as long as its plain one (tool `sweep_orders`), whether its row reads that or nothing. Every other
-        type takes its row's, rounded up."""
+        type takes its row's, rounded up, but where a build time is written down."""
         answer = _answer(path)
         data = GameData(answer)
         tabled = {row.unit_id: math.ceil(row.build_time) for row in answer.units}
         borrowed = {unit_type for unit_type, row in data.units.items() if row.build_time.steps != tabled[unit_type]}
-        assert borrowed <= set(_RICH_GAS_BUILDINGS)
+        assert borrowed - UNIT_TYPE_BUILD_TIME_OVERRIDES.keys() <= set(_RICH_GAS_BUILDINGS)
         for rich, plain in _RICH_GAS_BUILDINGS.items():
             assert data.units[rich].build_time.steps == data.units[plain].build_time.steps == 480, rich.name
+
+    def test_a_morph_that_costs_nothing_keeps_a_units_equivalent_types_and_one_that_costs_does_not(
+        self, path: Path
+    ) -> None:
+        """As the step costs read it, the overlord transport's 25/25 corrected: a siege keeps a tank in
+        `UnitType.AnySiegeTank`, and an orbital command, morphed for 150, is in `UnitType.AnyOrbitalCommand`, apart from
+        the command center."""
+        units = _tables(path).units
+        step_costs = _step_costs(units)
+        for unit_type, row in units.items():
+            if row.morphed_from is not None and row.morphed_from in units:
+                kept = row.equivalent_types is units[row.morphed_from].equivalent_types
+                assert kept == step_costs[unit_type].is_free, unit_type.name
+
+    def test_a_type_grants_the_techs_the_tables_name_it_and_its_tech_aliases_after(self, path: Path) -> None:
+        """The techs named after the types back along `morphed_from` are those named after the type and its
+        `tech_alias`, for every curated type."""
+        answer = _answer(path)
+        data = GameData(answer)
+        for row in answer.units:
+            if (unit_type := UnitTypeId.get(row.unit_id)) is not None:
+                aliased = frozenset(Tech(granting) for granting in (row.unit_id, *row.tech_alias) if granting in Tech)
+                assert data.units[unit_type].techs_granted == aliased, unit_type.name
+
+    def test_a_build_time_is_written_down_only_where_the_tables_get_it_wrong(self, path: Path) -> None:
+        """Once the game's own row gives the time measured, the entry can go."""
+        tabled = {row.unit_id: math.ceil(row.build_time) for row in _answer(path).units}
+        for unit_type, build_time in UNIT_TYPE_BUILD_TIME_OVERRIDES.items():
+            assert tabled[unit_type] != build_time.steps, f"the tables now give {unit_type.name} {build_time}"
+
+    def test_a_build_time_written_down_is_the_types_own_its_costs_and_its_whole_costs(self, path: Path) -> None:
+        """A lurker takes 403 steps, and so does its cost, and its whole cost a hydralisk's and those."""
+        units = _tables(path).units
+        lurker = units[UnitTypeId.LURKER]
+        assert (lurker.build_time.steps, lurker._unrounded_build_time.steps, lurker.cost.time.steps) == (403, 403, 403)
+        hydralisk = units[UnitTypeId.HYDRALISK]
+        assert lurker.total_cost.time == hydralisk.total_cost.time + GameTime(steps=403)
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
         """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.
@@ -839,8 +933,12 @@ class TestARecordedGamesTables:
         assert units[UnitTypeId.SIEGE_TANK_SIEGED].total_cost == units[UnitTypeId.SIEGE_TANK].total_cost
 
     def test_a_total_cost_counts_two_high_templar_for_an_archon_and_nothing_for_energy(self, path: Path) -> None:
+        """An archon's time counts the 192 steps its merge takes besides."""
         units = _tables(path).units
-        assert units[UnitTypeId.ARCHON].total_cost == units[UnitTypeId.HIGH_TEMPLAR].total_cost * 2
+        archon = units[UnitTypeId.ARCHON].total_cost
+        two_templar = units[UnitTypeId.HIGH_TEMPLAR].total_cost * 2
+        assert (archon.resources, archon.supply) == (two_templar.resources, two_templar.supply)
+        assert archon.time == two_templar.time + GameTime(steps=192)
         assert units[UnitTypeId.MULE].total_cost.is_free
         assert units[UnitTypeId.AUTO_TURRET].total_cost.is_free
 

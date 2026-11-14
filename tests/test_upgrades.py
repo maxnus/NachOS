@@ -28,7 +28,16 @@ from sc2nachos.protocol import Client, PlaybackTransport, Recording, WebSocketTr
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.units import Alliance, Unit, Visibility
 from sc2nachos.units._tracking import _Tracker
-from support import RealGame, load_tool, make_enemy, make_observation, make_tables, make_unit, require_enemy
+from support import (
+    RealGame,
+    load_tool,
+    make_enemy,
+    make_observation,
+    make_tables,
+    make_tracker,
+    make_unit,
+    require_enemy,
+)
 
 _REPOSITORY_ROOT = Path(__file__).parents[1]
 _CORPUS_GAMES = sorted((_REPOSITORY_ROOT / "tests" / "corpus").glob("*.sc2rec"))
@@ -360,7 +369,7 @@ class TestWhatTheTablesSay:
 
 
 def _tracker_against_the_computer(tables: GameData) -> _Tracker:
-    return _Tracker(tables, make_enemy(tables))
+    return make_tracker(tables)
 
 
 def _units_observed(

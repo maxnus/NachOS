@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, final
 
 from sc2nachos.units._tracking._builder_tracker import _BuilderTracker
+from sc2nachos.units._tracking._morph_tracker import _MorphTracker
 from sc2nachos.units._tracking._tracker_changes import _TrackerChanges
 from sc2nachos.units._tracking._unit_comparer import _UnitComparer
 from sc2nachos.units._tracking._unit_tracker import _UnitTracker
 from sc2nachos.units._tracking._unit_watcher import _UnitWatcher
 from sc2nachos.units._tracking._upgrade_tracker import _UpgradeTracker
+from sc2nachos.units._tracking._warp_in_tracker import _WarpInTracker
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -18,36 +20,50 @@ if TYPE_CHECKING:
 
     from sc2nachos.gamedata import GameData
     from sc2nachos.match import Enemy
+    from sc2nachos.orders import OrderBook
 
 
 @final
 class _Tracker:
-    """One game's observations read into: its units, the builder of each of this player's structures, the upgrades
-    each side has, a comparison of each unit with the previous update, a watch on the values each unit crosses, and
-    what the last update found changed."""
+    """One game's observations read into: its units, the builder of each of this player's structures, when each morph
+    and warp-in began, the upgrades each side has, a comparison of each unit with the previous update, a watch on the
+    values each unit crosses, and what the last update found changed; and the book this player's units are ordered
+    into."""
 
     __slots__ = (
         "_builder_tracker",
         "_enemy",
         "_game_data",
         "_last_changes",
+        "_morph_tracker",
+        "_order_book",
         "_unit_comparer",
         "_unit_tracker",
         "_unit_watcher",
         "_upgrade_tracker",
+        "_warp_in_tracker",
     )
 
     def __init__(
-        self, game_data: GameData, enemy: Enemy | None, *, id_provider: Callable[[raw_pb2.Unit], int] | None = None
+        self,
+        game_data: GameData,
+        enemy: Enemy | None,
+        *,
+        id_provider: Callable[[raw_pb2.Unit], int] | None = None,
+        order_book: OrderBook,
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
-        alliance's next id, or under the one `id_provider` gives the report it is first seen in."""
+        alliance's next id, or under the one `id_provider` gives the report it is first seen in. This player's units
+        are ordered into `order_book`."""
         self._game_data = game_data
         self._enemy = enemy
+        self._order_book = order_book
         # What the last update found changed, numbered by update.
         self._last_changes = _TrackerChanges(0)
         self._unit_tracker = _UnitTracker(self, id_provider=id_provider)
         self._builder_tracker = _BuilderTracker(self)
+        self._morph_tracker = _MorphTracker(self)
+        self._warp_in_tracker = _WarpInTracker(self)
         self._upgrade_tracker = _UpgradeTracker(game_data, enemy)
         self._unit_comparer = _UnitComparer(self)
         self._unit_watcher = _UnitWatcher(self)
@@ -61,6 +77,11 @@ class _Tracker:
     def enemy(self) -> Enemy | None:
         """The other player, and what is known of it, or `None` in a game with no other player."""
         return self._enemy
+
+    @property
+    def order_book(self) -> OrderBook:
+        """The book this player's units are ordered into."""
+        return self._order_book
 
     @property
     def last_changes(self) -> _TrackerChanges:
@@ -81,6 +102,16 @@ class _Tracker:
         return self._builder_tracker
 
     @property
+    def morph_tracker(self) -> _MorphTracker:
+        """When each morph under way began, of those the game reports no progress for."""
+        return self._morph_tracker
+
+    @property
+    def warp_in_tracker(self) -> _WarpInTracker:
+        """When each of this player's units warping in began, and how far it has got."""
+        return self._warp_in_tracker
+
+    @property
     def upgrade_tracker(self) -> _UpgradeTracker:
         """The upgrades each side's units have, and what they make of a unit's type."""
         return self._upgrade_tracker
@@ -97,7 +128,8 @@ class _Tracker:
         return self._unit_watcher
 
     def update(self, observation: raw_pb2.ObservationRaw, step: int) -> None:
-        """Take in the observation at `step`: this player's upgrades, then the units it reports and the deaths.
+        """Take in the observation at `step`: this player's upgrades, then the units it reports and the deaths, then
+        the morphs and warp-ins they show.
 
         Raises `UncuratedIdError` if this player holds an upgrade, or a unit is of a type, that the curated ids leave
         out. Those belong among the curated ids.
@@ -106,3 +138,5 @@ class _Tracker:
         if new_upgrades := self._upgrade_tracker.update(observation.player):
             self._last_changes.own_upgrades_finished = new_upgrades
         self._unit_tracker.update(observation, step)
+        self._morph_tracker.update(step)
+        self._warp_in_tracker.update(step)

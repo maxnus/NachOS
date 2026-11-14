@@ -114,7 +114,8 @@ def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
     observation = game.client.observation()
     game_map = GameMap._from_game(game.client.game_info(), observation)
     game_data = GameData(game.client.game_data())
-    tracker = _Tracker(game_data, None)
+    order_book = OrderBook(game_data)
+    tracker = _Tracker(game_data, None, order_book=order_book)
     curated_raw_data, _ = without_uncurated_units(observation.observation.raw_data)
     tracker.update(curated_raw_data, observation.observation.game_loop)
     placement_grids = PlacementGrids._build_at_start(
@@ -123,7 +124,7 @@ def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
         state=_State(observation, tracker, game_map),
         step=observation.observation.game_loop,
         game_data=game_data,
-        order_book=OrderBook(game_data),
+        order_book=order_book,
     )
     mains = []
     for start_location in game_map.all_start_locations:

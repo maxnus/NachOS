@@ -67,6 +67,7 @@ from sweep_placement import (
     _types_to_measure,
 )
 
+from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.geometry import Point, Rectangle, Tile
@@ -75,7 +76,6 @@ from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.protocol import GameEndedError
 from sc2nachos.run import Installation
-from sc2nachos.units._unit_type import UnitType
 
 # How far from a unit, in tiles along each axis, the tiles a trace reports lie.
 _TRACE_REACH = 7

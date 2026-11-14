@@ -10,13 +10,13 @@ import pytest
 from s2clientprotocol import data_pb2
 
 from sc2nachos.gamedata import Attribute, GameData
+from sc2nachos.gamedata import _unit_type as unit_type_module
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
 from sc2nachos.testing import MadeUpUnits, UnitReport
 from sc2nachos.units import OwnUnit, RallyTarget, Unit, Units, UnitType
-from sc2nachos.units import _unit_type as unit_type_module
 from support import load_tool, make_tables
 
 
@@ -103,6 +103,74 @@ class TestUnitType:
         ]
         assert any(linked), (first, second)
 
+    @pytest.mark.parametrize("group", sorted(_unit_types_generator().TWO_FORMS), ids=str)
+    def test_a_group_of_two_forms_is_the_equivalent_types_of_each_of_its_types(
+        self, group: str, first_corpus_tables: GameData
+    ) -> None:
+        two_forms = getattr(UnitType, group)
+        assert all(first_corpus_tables.units[type_id].equivalent_types is two_forms for type_id in two_forms.type_ids)
+
+    def test_a_type_in_no_group_of_two_forms_is_its_own_equivalent_types(self, first_corpus_tables: GameData) -> None:
+        in_groups = set().union(*_unit_types_generator().TWO_FORMS.values())
+        for unit_type, row in first_corpus_tables.units.items():
+            if unit_type not in in_groups:
+                assert row.equivalent_types.type_ids == {unit_type}, unit_type.name
+
+    def test_a_type_and_a_group_of_two_forms_have_equivalent_types(self) -> None:
+        assert UnitType.AnySiegeTank.types_are_equivalent
+        assert UnitType.SiegeTank.types_are_equivalent
+        assert [cls.__name__ for cls in _classes_of_one_type() if not cls.types_are_equivalent] == []
+
+    def test_a_group_of_two_forms_and_no_other_has_equivalent_types(self) -> None:
+        two_forms = {getattr(UnitType, group) for group in _unit_types_generator().TWO_FORMS}
+        groups = [member for member in vars(UnitType).values() if isinstance(member, type) and "id" not in vars(member)]
+        assert {group for group in groups if group.types_are_equivalent} == two_forms
+        assert not UnitType.AnyType.types_are_equivalent
+        assert not UnitType.AnyLocust.types_are_equivalent
+        assert not UnitType.AnyRefinery.types_are_equivalent
+
+    def test_no_class_reads_false_in_a_group_that_reads_true(self) -> None:
+        """A class keeps what every group it is in promises, as a subclass must."""
+        classes = [member for member in vars(UnitType).values() if isinstance(member, type)]
+        in_groups_of_equivalent_types = [
+            cls for cls in classes if any(group.types_are_equivalent for group in cls.__mro__[1:-1])
+        ]
+        assert len(in_groups_of_equivalent_types) == 58
+        assert [cls.__name__ for cls in in_groups_of_equivalent_types if not cls.types_are_equivalent] == []
+
+    def test_the_equivalent_types_differ_from_what_the_tables_call_a_form_of_in_seven_places(
+        self, first_corpus_tables: GameData, form_of: dict[UnitTypeId, UnitTypeId]
+    ) -> None:
+        """The tables call an adept's shade a form of the adept; a disguised changeling a form of a plain one, a
+        queen's or a burrowed creep tumor a form of a plain one, and a flying locust a form of one on the ground, though
+        none is converted back and forth; a gas building on a rich geyser a form of the one on a plain geyser, which is
+        another structure; and a warp gate and a hellbat a form of nothing. They call a rock or a geyser of the map's a
+        form of a plain one, but each has its own class."""
+        race_rows = [row for row in first_corpus_tables.units.values() if row.race is not Race.NONE]
+        types_by_alias: dict[UnitTypeId, set[UnitTypeId]] = {}
+        for row in race_rows:
+            types_by_alias.setdefault(form_of.get(row.id, row.id), set()).add(row.id)
+        by_alias = {frozenset(types) for types in types_by_alias.values()}
+        by_equivalence = {frozenset(row.equivalent_types.type_ids) for row in race_rows}
+        aliased_but_apart = [
+            {UnitTypeId.ADEPT, UnitTypeId.ADEPT_SHADE},
+            UnitType.AnyChangeling.type_ids,
+            UnitType.AnyCreepTumor.type_ids,
+            UnitType.AnyLocust.type_ids,
+            UnitType.AnyRefinery.type_ids,
+            UnitType.AnyExtractor.type_ids,
+            UnitType.AnyAssimilator.type_ids,
+        ]
+        equivalent_but_unaliased = [UnitType.AnyGateway.type_ids, UnitType.AnyHellion.type_ids]
+        assert by_alias - by_equivalence == {frozenset(types) for types in aliased_but_apart} | {
+            frozenset({unit_type}) for types in equivalent_but_unaliased for unit_type in types
+        }
+        assert by_equivalence - by_alias == {frozenset(types) for types in equivalent_but_unaliased} | {
+            frozenset({unit_type}) for types in aliased_but_apart for unit_type in types
+        }
+        map_objects = [row for row in first_corpus_tables.units.values() if row.race is Race.NONE]
+        assert all(row.equivalent_types.type_ids == {row.id} for row in map_objects)
+
     def test_the_module_is_as_generated_from_the_curated_ids_and_the_tables(self) -> None:
         generator = _unit_types_generator()
         generated = generator.render(generator.corpus_answer())
@@ -184,6 +252,11 @@ class TestUnitType:
     def test_any_type_is_every_type(self) -> None:
         assert UnitType.AnyType.type_ids == set(UnitTypeId)
 
+    def test_each_races_gas_building_on_a_plain_or_a_rich_geyser_is_a_group(self) -> None:
+        assert UnitType.AnyRefinery.type_ids == {UnitTypeId.REFINERY, UnitTypeId.REFINERY_RICH}
+        assert UnitType.AnyExtractor.type_ids == {UnitTypeId.EXTRACTOR, UnitTypeId.EXTRACTOR_RICH}
+        assert UnitType.AnyAssimilator.type_ids == {UnitTypeId.ASSIMILATOR, UnitTypeId.ASSIMILATOR_RICH}
+
     def test_the_workers_and_townhalls_are_those_curated(self) -> None:
         assert UnitType.Worker.type_ids == {
             UnitTypeId.SCV,
@@ -234,6 +307,27 @@ class TestUnitType:
             UnitTypeId.REACTOR_STARPORT,
         }
         assert UnitType.AnyAddOn.type_ids == UnitType.AnyTechLab.type_ids | UnitType.AnyReactor.type_ids
+
+    def test_a_production_structures_group_is_every_unit_it_makes_in_any_form(self) -> None:
+        """A Zerg unit hatches from an egg or a cocoon, so no Zerg structure has such a group."""
+        made = {
+            UnitType.BarracksUnit: {"MARINE", "MARAUDER", "REAPER", "GHOST"},
+            UnitType.FactoryUnit: {
+                *("HELLION", "HELLBAT", "WIDOW_MINE", "WIDOW_MINE_BURROWED", "SIEGE_TANK", "SIEGE_TANK_SIEGED"),
+                *("CYCLONE", "THOR", "THOR_HIGH_IMPACT"),
+            },
+            UnitType.StarportUnit: {
+                *("VIKING", "VIKING_LANDED", "MEDIVAC", "LIBERATOR", "LIBERATOR_SIEGED", "RAVEN", "BANSHEE"),
+                "BATTLECRUISER",
+            },
+            UnitType.GatewayUnit: {"ZEALOT", "STALKER", "SENTRY", "ADEPT", "HIGH_TEMPLAR", "DARK_TEMPLAR"},
+            UnitType.RoboticsFacilityUnit: {
+                *("OBSERVER", "OBSERVER_SIEGED", "WARP_PRISM", "WARP_PRISM_PHASING"),
+                *("IMMORTAL", "COLOSSUS", "DISRUPTOR"),
+            },
+            UnitType.StargateUnit: {"PHOENIX", "ORACLE", "VOID_RAY", "TEMPEST", "CARRIER"},
+        }
+        assert {group: {unit_type.name for unit_type in group.type_ids} for group in made} == made
 
 
 _MARINE_TABLES = make_tables(data_pb2.UnitTypeData(unit_id=UnitTypeId.MARINE))

@@ -236,7 +236,8 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   itself once Warp Gate is researched, and nothing else makes one (#29; tested).
 - The starting townhall is never seen unfinished. An auto-turret has the structure attribute but is first seen
   finished. A queen's creep tumor is first seen at 0%, finishes 240 steps later, then becomes
-  `CREEP_TUMOR_BURROWED` (#37).
+  `CREEP_TUMOR_BURROWED` (#37). A plain creep tumor made finished by debug becomes one within 8 steps, under its tag
+  (local game, build 75689, #248).
 - A structure cancelled while going up is reported dead, and so is a MULE when it expires (#37; tested), and a mineral
   field killed by debug command (tested; local game, build 75689).
 - A neural parasite keeps the tag and hands the unit to the caster's player within 24 steps, alliance and upgrades
@@ -248,8 +249,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   `larvae`; local game, Linux build 75689).
 - Only one mothership can stand at a time, arming a nuke needs a factory, and a game starts with 50 minerals (tool
   `sweep_tech_tree`, tool `sweep_alerts`).
-- The game itself disguises a changeling, collapses a tower, lifts a locust into the air and burrows a creep tumor
-  (stated).
+- The game itself disguises a changeling and collapses a tower (stated).
+- A swarm host's locusts come out as `LOCUST` and take off by themselves some 30 steps later, as `LOCUST_FLYING`
+  under the same tags, with no upgrade researched. They stayed in the air some 400 steps with no enemy near; one
+  ordered `LOCUST_SWOOP` landed as `LOCUST` within 18 steps. A locust made by debug stayed on the ground for 120 steps,
+  idle, moving or attacking (local game, build 75689, #248).
 
 ## Vision, fog, cloak and detection
 

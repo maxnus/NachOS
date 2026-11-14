@@ -22,25 +22,24 @@ from sc2nachos.units import (
     Alliance,
     CloakState,
     NotReportedError,
+    Order,
     OwnUnit,
     Passenger,
     RallyTarget,
     Unit,
     UnitIdsExhaustedError,
-    UnitOrder,
     UnknownTagError,
     Visibility,
 )
-from sc2nachos.units._tracking import _Tracker
 from sc2nachos.units._tracking._unit_tracker import _MOVABLE_UNIT_TYPE_IDS
 from support import (
     FakeTransport,
     RealGame,
-    make_enemy,
     make_game_info,
     make_observation,
     make_response,
     make_tables,
+    make_tracker,
     make_unit,
 )
 
@@ -100,7 +99,7 @@ class _Game:
     """A tracker fed one observation at a time, as `Api.play` feeds it."""
 
     def __init__(self) -> None:
-        self.tracker = _Tracker(_TABLES, make_enemy(_TABLES))
+        self.tracker = make_tracker(_TABLES)
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> list[Unit[Any]]:
         """Observe `units` at `step` and return the tracked unit for each, in the order given."""
@@ -1090,7 +1089,7 @@ class TestConstruction:
     def test_a_unit_whose_order_places_a_structure_is_constructing(self, first_corpus_tables: GameData) -> None:
         """Whether an ability places a structure is the game's tables' to say: an SCV's build on its way to the site, a
         barracks building its add-on and a queen planting a tumor, each by its own id, and not a gather."""
-        tracker = _Tracker(first_corpus_tables, make_enemy(first_corpus_tables))
+        tracker = make_tracker(first_corpus_tables)
         gather = raw_pb2.UnitOrder(ability_id=RawAbilityId.Harvest_Gather_SCV)
         reactor = raw_pb2.UnitOrder(ability_id=RawAbilityId.Build_Reactor_Barracks)
         plant = raw_pb2.UnitOrder(
@@ -1227,9 +1226,9 @@ class TestOwnUnits:
         marine, _ = game.observe(0, make_unit(1, orders=orders), make_unit(9, alliance=_ENEMY))
         assert isinstance(marine, OwnUnit)
         assert marine.orders == (
-            UnitOrder(AbilityId.MOVE, Point((5.0, 6.0)), 0.0),
-            UnitOrder(AbilityId.ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
-            UnitOrder(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
+            Order(AbilityId.MOVE, Point((5.0, 6.0)), 0.0),
+            Order(AbilityId.ATTACK, game.tracker.unit_tracker.present.by_id(400001), 0.0),
+            Order(AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5),
         )
         assert not marine.is_idle
 
@@ -1512,7 +1511,7 @@ class TestWhatChanged:
         assert not game.tracker.unit_tracker._unfinished
 
     def test_upgrades_new_to_the_observation_come_in_the_order_of_their_ids(self) -> None:
-        tracker = _Tracker(_TABLES, make_enemy(_TABLES))
+        tracker = make_tracker(_TABLES)
         held = [UpgradeId.TERRAN_INFANTRY_WEAPONS_1, UpgradeId.STIMPACK]
         tracker.update(make_observation(0, upgrades=held).observation.raw_data, 0)
         assert tracker.last_changes.own_upgrades_finished == sorted(held)
