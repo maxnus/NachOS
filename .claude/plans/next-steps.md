@@ -30,16 +30,16 @@ As of 2026-11-14:
 - **0.4.0 is out** (2026-11-05, from 9f56f9a), with #236 and #237: orders given apart go out as one command where one
   order could have named their units. Its notes say a bot changes nothing in its code, only what `api.action_failures`
   lists. AvocaDOS took it in AvocaDOS #95.
-- **Since 0.4.0**, on main: #238 and #240 to #249. The next release, 0.5.0 since #241, #242 and #247 remove and rename
-  what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its own
-  data per unit in a `UnitDict`; the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was an
-  `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242);
-  `InProduction` and `Research` are a `Progress`, whose `product` and `fraction` were their `type_id` or `upgrade` and
-  their `progress` (#247); and a grid's `argmin()` and `argmax()` answer the center of the tile, a `Point`, where they
-  answered the `Tile`, which `argmin_tile()` and `argmax_tile()` answer now (#238). It adds `unit.issue` (#240),
-  `Unit.morph_progress` (#243), `train`, `build` and `research` (#245), `UnitTypeData.equivalent_types` (#248), and the
-  `Field` protocol, which `Grid` satisfies (#238) and `SourceField` too (#249). AvocaDOS #97, a draft, takes it: its
-  production trains a unit, builds an add-on and morphs an orbital command, and it bumps its pin once 0.5.0 is out.
+- **0.5.0 is out** (2026-11-14, from 606626a), with #238 and #240 to #249. Its notes say what a bot has to change:
+  `issue` takes no `data` (#241); the order a bot gave is an `IssuedOrder`, and what a unit reports doing an `Order`
+  (#242); `InProduction` and `Research` are a `Progress`, read through `product` and `fraction` (#247), a structure's
+  morph reading how far it has got where it read `None`; and a grid's `argmin()` and `argmax()` answer a `Point`, the
+  `Tile` being `argmin_tile()` and `argmax_tile()` (#238). Its 48 in-game tests passed on 606626a (sc2 run
+  43625063574), and AvocaDOS's tests failed only on the renamed `InProduction` reads. AvocaDOS #97 takes it: its
+  production trains a unit, builds an add-on and morphs an orbital command, and its `units_in_production` leaves out
+  what makes a structure, which it had left out by a progress of `None`.
+- **Since 0.5.0**, on main: #250 and #251. The next release, 0.5.1, only adds: `UnitType.NonStructure` (#251), which
+  AvocaDOS's `units_in_production` asks `api.in_production` for once it pins it, in place of its check of `Structure`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -119,6 +119,11 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   the actions' `units` hold one.
 - **NachOS names only the categories the game draws**: no `army` and no `mobile` (#157). What counts as army is the
   bot's call, through the type groups, `of_type` and `excluding_type`.
+- **`UnitType.NonStructure` is every type `Structure` leaves out** (the owner, review of AvocaDOS #97, 2026-11-14,
+  #251), so that a bot asks `api.in_production(UnitType.NonStructure)`, over a set of those ids in AvocaDOS and over
+  its filter by `Structure`. The first group of the types another leaves out: read from the tables' structure
+  attribute, so every type is in one of the two, and a group of non-structures alone, `Worker` or `BarracksUnit`, is in
+  it. Singular, as `Structure` is. `Units.non_structures` reads it.
 - **A unit type names what makes it, not what the tables alias it to** (#75): no `UnitTypeData.base_type`, the
   game's `unit_alias`, which aliases an adept's shade to the adept. `morphed_from` gives a form's source, and
   `equivalent_types` the group of the types a unit converts between and back.
@@ -373,10 +378,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      tile touched only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address. Measured
      2026-11-14: a read over a unit's circle costs some 30 to 55 µs where circles reach it, against a grid's 4 to 8, and
      1.5 to 3 where none does.
-  3. AvocaDOS takes them after a release: its effect threat and splash zone as `SourceField`s, a unit reading the max
-     within its own circle; `grid.argmin()` answers a point now, so `cropped(around).argmin().center` drops `.center`
-     and `grid_argmin` takes `argmin_tile()`. Its `melee_effect_threat` adds the effect threat to a grid, which a
-     `SourceField` cannot join: it reads the two apart, or waits for a field drawn onto a grid (below).
+  3. AvocaDOS takes them, now that 0.5.0 is out: its effect threat and splash zone as `SourceField`s, a unit reading
+     the max within its own circle. AvocaDOS #97 already reads `grid.argmin()` as a point and has `grid_argmin` take
+     `argmin_tile()`. Its `melee_effect_threat` adds the effect threat to a grid, which a `SourceField` cannot join: it
+     reads the two apart, or waits for a field drawn onto a grid (below).
 
   Later, when a bot needs one: rectangles in a `SourceField`, by `add_rectangle` (the owner, review of #249). And a
   `SourceField` drawn onto a `Grid`, for paths and grid arithmetic, planned together with public tile rules returning

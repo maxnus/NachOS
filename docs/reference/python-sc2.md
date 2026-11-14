@@ -396,8 +396,8 @@ it.
   `Townhall`, `AnyMineralField`, `AnyVespeneGeyser` and `GasBuilding`, which `Units` also reads as `workers`,
   `townhalls`, `mineral_fields`, `geysers` and `gas_buildings`. A MULE is not a worker, and a lifted command center
   is a townhall. `UnitType.MineralField` and `UnitType.VespeneGeyser` are the plain kinds alone. `UnitType.Structure`
-  divides any collection into its `structures` and `non_structures`: a lifted barracks is a structure, and a larva,
-  an egg and a sieged tank are not.
+  and `UnitType.NonStructure` divide any collection into its `structures` and `non_structures`: a lifted barracks is a
+  structure, and a larva, an egg and a sieged tank are not.
 - **Velocity is built in.** `unit.velocity` is in distance per second, measured between its last two observations.
 - **A unit's weapons, speed and armor include its owner's upgrades.** Yours come from the observation, the enemy's
   from `api.enemy.upgrades`. python-sc2's `real_speed` includes only your own upgrades and needs

@@ -224,9 +224,9 @@ class Units(Sequence[U]):
 
     @property
     def non_structures(self) -> Units[U]:
-        """The units that are not structures, as `UnitType.Structure` has them: larvae, eggs and a sieged tank among
+        """The units that are not structures, those of `UnitType.NonStructure`: larvae, eggs and a sieged tank among
         them, and not a lifted barracks."""
-        return self.excluding_type(UnitType.Structure)
+        return self._in_group(UnitType.NonStructure)
 
     @property
     def workers(self) -> Units[U]:

@@ -20,16 +20,16 @@ class UnitType:
     """Every type of unit, and every group of types, for the type checker. None is ever instantiated.
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
-    `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
-    workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
-    geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
-    destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
-    locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and
-    Protoss production structure makes, or the two forms of a structure or a unit that changes and changes back, such as
-    a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
-    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.equivalent_types` is the group of two forms it
-    is in, or else its own class.
+    `UnitTypeId`. A group is a race, the structures, the types that are not, or the structures of a race, as the game's
+    tables give them; or the workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the
+    mineral fields, the vespene geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible
+    towers and their debris, the destructible rocks, the inhibitor and acceleration zones, the critters, the
+    changelings, the creep tumors, the locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the
+    overlords, the units each Terran and Protoss production structure makes, or the two forms of a structure or a unit
+    that changes and changes back, such as a supply depot raised or lowered, a siege tank sieged or not, or a roach
+    burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot` is a `TerranStructure`,
+    `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, `Townhall` a `Structure`, and `Worker` a `NonStructure`. A
+    type's `UnitTypeData.equivalent_types` is the group of two forms it is in, or else its own class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, `type_ids` holds its ids, and
     `types_are_equivalent` whether a unit converts between its types and back at will.
@@ -86,6 +86,9 @@ class UnitType:
     class Structure(AnyType):
         """A type the game's tables give the structure attribute."""
 
+    class NonStructure(AnyType):
+        """A type the game's tables do not give the structure attribute."""
+
     class Terran(AnyType):
         """A Terran type."""
 
@@ -104,7 +107,7 @@ class UnitType:
     class ProtossStructure(Protoss, Structure):
         """A Protoss structure."""
 
-    class Worker(AnyType):
+    class Worker(NonStructure):
         """A worker: an SCV, a probe or a drone, burrowed or not. A MULE is none."""
 
     class Townhall(Structure):
@@ -149,22 +152,22 @@ class UnitType:
     class InhibitorZone(AnyType):
         """An inhibitor zone generator, of any size, plain or flying."""
 
-    class AccelerationZone(AnyType):
+    class AccelerationZone(NonStructure):
         """An acceleration zone generator, of any size, plain or flying."""
 
-    class Critter(AnyType):
+    class Critter(NonStructure):
         """One of a map's critters: an animal or a robot that wanders and covers no ground."""
 
-    class AnyChangeling(Zerg):
+    class AnyChangeling(NonStructure, Zerg):
         """A changeling, plain or in the shape of a marine, a zealot or a zergling."""
 
     class AnyCreepTumor(ZergStructure):
         """A creep tumor, a queen's or another tumor's, growing or burrowed."""
 
-    class AnyLocust(Zerg):
+    class AnyLocust(NonStructure, Zerg):
         """A locust, on the ground or flying."""
 
-    class Cocoon(Zerg):
+    class Cocoon(NonStructure, Zerg):
         """A cocoon or a lurker egg: a unit on its way to becoming another, as a zergling becomes a baneling."""
 
     class AnyAddOn(TerranStructure):
@@ -179,25 +182,25 @@ class UnitType:
     class AnySpire(ZergStructure):
         """A spire or a greater spire."""
 
-    class AnyOverlord(Zerg):
+    class AnyOverlord(NonStructure, Zerg):
         """An overlord, a transport overlord, or an overseer in either mode, which the tables count as one."""
 
-    class BarracksUnit(Terran):
+    class BarracksUnit(NonStructure, Terran):
         """A unit a barracks trains: a marine, a marauder, a reaper or a ghost."""
 
-    class FactoryUnit(Terran):
+    class FactoryUnit(NonStructure, Terran):
         """A unit a factory makes, in any form: a hellion or hellbat, a widow mine, siege tank, cyclone or thor."""
 
-    class StarportUnit(Terran):
+    class StarportUnit(NonStructure, Terran):
         """A unit a starport makes, in any form: a viking, medivac, liberator, raven, banshee or battlecruiser."""
 
-    class GatewayUnit(Protoss):
+    class GatewayUnit(NonStructure, Protoss):
         """A unit a gateway trains or a warp gate warps in: a zealot, stalker, sentry, adept or either templar."""
 
-    class RoboticsFacilityUnit(Protoss):
+    class RoboticsFacilityUnit(NonStructure, Protoss):
         """A unit a robotics facility makes, in any form: an observer, warp prism, immortal, colossus or disruptor."""
 
-    class StargateUnit(Protoss):
+    class StargateUnit(NonStructure, Protoss):
         """A unit a stargate makes: a phoenix, an oracle, a void ray, a tempest or a carrier."""
 
     class AnySupplyDepot(TerranStructure):
@@ -295,52 +298,52 @@ class UnitType:
 
         types_are_equivalent = True
 
-    class AnyZergling(Zerg):
+    class AnyZergling(NonStructure, Zerg):
         """A zergling, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyBaneling(Zerg):
+    class AnyBaneling(NonStructure, Zerg):
         """A baneling, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyRoach(Zerg):
+    class AnyRoach(NonStructure, Zerg):
         """A roach, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyRavager(Zerg):
+    class AnyRavager(NonStructure, Zerg):
         """A ravager, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyHydralisk(Zerg):
+    class AnyHydralisk(NonStructure, Zerg):
         """A hydralisk, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyLurker(Zerg):
+    class AnyLurker(NonStructure, Zerg):
         """A lurker, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyInfestor(Zerg):
+    class AnyInfestor(NonStructure, Zerg):
         """An infestor, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnySwarmHost(Zerg):
+    class AnySwarmHost(NonStructure, Zerg):
         """A swarm host, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyUltralisk(Zerg):
+    class AnyUltralisk(NonStructure, Zerg):
         """An ultralisk, burrowed or not."""
 
         types_are_equivalent = True
 
-    class AnyQueen(Zerg):
+    class AnyQueen(NonStructure, Zerg):
         """A queen, burrowed or not."""
 
         types_are_equivalent = True
@@ -366,10 +369,10 @@ class UnitType:
     class Adept(GatewayUnit):
         id = UnitTypeId.ADEPT
 
-    class AdeptShade(Protoss):
+    class AdeptShade(NonStructure, Protoss):
         id = UnitTypeId.ADEPT_SHADE
 
-    class Archon(Protoss):
+    class Archon(NonStructure, Protoss):
         id = UnitTypeId.ARCHON
 
     class Armory(TerranStructure):
@@ -408,13 +411,13 @@ class UnitType:
     class Battlecruiser(StarportUnit):
         id = UnitTypeId.BATTLECRUISER
 
-    class BroodLord(Zerg):
+    class BroodLord(NonStructure, Zerg):
         id = UnitTypeId.BROOD_LORD
 
     class BroodLordCocoon(Cocoon):
         id = UnitTypeId.BROOD_LORD_COCOON
 
-    class Broodling(Zerg):
+    class Broodling(NonStructure, Zerg):
         id = UnitTypeId.BROODLING
 
     class Bunker(TerranStructure):
@@ -531,7 +534,7 @@ class UnitType:
     class CommandCenterFlying(AnyCommandCenter):
         id = UnitTypeId.COMMAND_CENTER_FLYING
 
-    class Corruptor(Zerg):
+    class Corruptor(NonStructure, Zerg):
         id = UnitTypeId.CORRUPTOR
 
     class CreepTumor(AnyCreepTumor):
@@ -720,7 +723,7 @@ class UnitType:
     class DroneBurrowed(AnyDrone):
         id = UnitTypeId.DRONE_BURROWED
 
-    class Egg(Zerg):
+    class Egg(NonStructure, Zerg):
         id = UnitTypeId.EGG
 
     class EngineeringBay(TerranStructure):
@@ -744,7 +747,7 @@ class UnitType:
     class FleetBeacon(ProtossStructure):
         id = UnitTypeId.FLEET_BEACON
 
-    class ForceField(Protoss):
+    class ForceField(NonStructure, Protoss):
         id = UnitTypeId.FORCE_FIELD
 
     class Forge(ProtossStructure):
@@ -768,7 +771,7 @@ class UnitType:
     class Hatchery(AnyZergTownhall):
         id = UnitTypeId.HATCHERY
 
-    class HealingShrineXelNaga(AnyType):
+    class HealingShrineXelNaga(NonStructure):
         id = UnitTypeId.HEALING_SHRINE_XEL_NAGA
 
     class Hellbat(AnyHellion):
@@ -804,13 +807,13 @@ class UnitType:
     class InfestorBurrowed(AnyInfestor):
         id = UnitTypeId.INFESTOR_BURROWED
 
-    class InhibitorZoneFlyingLarge(InhibitorZone):
+    class InhibitorZoneFlyingLarge(NonStructure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_LARGE
 
-    class InhibitorZoneFlyingMedium(InhibitorZone):
+    class InhibitorZoneFlyingMedium(NonStructure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_MEDIUM
 
-    class InhibitorZoneFlyingSmall(InhibitorZone):
+    class InhibitorZoneFlyingSmall(NonStructure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_FLYING_SMALL
 
     class InhibitorZoneLarge(Structure, InhibitorZone):
@@ -822,13 +825,13 @@ class UnitType:
     class InhibitorZoneSmall(Structure, InhibitorZone):
         id = UnitTypeId.INHIBITOR_ZONE_SMALL
 
-    class Interceptor(Protoss):
+    class Interceptor(NonStructure, Protoss):
         id = UnitTypeId.INTERCEPTOR
 
     class Lair(AnyZergTownhall):
         id = UnitTypeId.LAIR
 
-    class Larva(Zerg):
+    class Larva(NonStructure, Zerg):
         id = UnitTypeId.LARVA
 
     class Liberator(AnyLiberator):
@@ -912,19 +915,19 @@ class UnitType:
     class MissileTurret(TerranStructure):
         id = UnitTypeId.MISSILE_TURRET
 
-    class Mothership(Protoss):
+    class Mothership(NonStructure, Protoss):
         id = UnitTypeId.MOTHERSHIP
 
-    class Mule(Terran):
+    class Mule(NonStructure, Terran):
         id = UnitTypeId.MULE
 
-    class Mutalisk(Zerg):
+    class Mutalisk(NonStructure, Zerg):
         id = UnitTypeId.MUTALISK
 
     class Nexus(ProtossStructure, Townhall):
         id = UnitTypeId.NEXUS
 
-    class NotAUnit(AnyType):
+    class NotAUnit(NonStructure):
         id = UnitTypeId.NOT_A_UNIT
 
     class NydusNetwork(ZergStructure):
@@ -966,7 +969,7 @@ class UnitType:
     class OverseerSieged(AnyOverseer):
         id = UnitTypeId.OVERSEER_SIEGED
 
-    class ParasiticBombLeftBehind(Zerg):
+    class ParasiticBombLeftBehind(NonStructure, Zerg):
         id = UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND
 
     class Phoenix(StargateUnit):
@@ -981,7 +984,7 @@ class UnitType:
     class Probe(Protoss, Worker):
         id = UnitTypeId.PROBE
 
-    class PurificationNova(Protoss):
+    class PurificationNova(NonStructure, Protoss):
         id = UnitTypeId.PURIFICATION_NOVA
 
     class Pylon(ProtossStructure):
@@ -1170,7 +1173,7 @@ class UnitType:
     class VikingLanded(AnyViking):
         id = UnitTypeId.VIKING_LANDED
 
-    class Viper(Zerg):
+    class Viper(NonStructure, Zerg):
         id = UnitTypeId.VIPER
 
     class VoidRay(StargateUnit):

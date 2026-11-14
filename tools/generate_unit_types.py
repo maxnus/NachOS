@@ -1,11 +1,12 @@
 """Generate `sc2nachos/gamedata/_unit_type.py`: `UnitType`, with a class for every curated unit type and every group,
 and `EQUIVALENT_UNIT_TYPES`, each type's `UnitTypeData.equivalent_types`.
 
-A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute. A mineral
-field, a geyser and a gas building are what the tables say holds minerals or vespene, of no race or of one; a tech lab,
-a reactor, a spire or an overlord is a plain one or what the tables count as one; a map object is named for its kind;
-the other groups are curated here. Each group is in every group that holds all its types. All are read from a corpus
-game's tables, so this runs without StarCraft II. Run it again after changing `UnitTypeId`::
+A type is in its race's group, and in `Structure` where the game's tables give it the structure attribute, or
+`NonStructure` where they do not. A mineral field, a geyser and a gas building are what the tables say holds minerals or
+vespene, of no race or of one; a tech lab, a reactor, a spire or an overlord is a plain one or what the tables count as
+one; a map object is named for its kind; the other groups are curated here. Each group is in every group that holds all
+its types. All are read from a corpus game's tables, so this runs without StarCraft II. Run it again after changing
+`UnitTypeId`::
 
     uv run python tools/generate_unit_types.py
 """
@@ -46,16 +47,16 @@ class UnitType:
     """Every type of unit, and every group of types, for the type checker. None is ever instantiated.
 
     `Unit[UnitType.Marine]` is a marine, and `Unit[UnitType.ProtossStructure]` a Protoss structure. A type's `id` is its
-    `UnitTypeId`. A group is a race, the structures, or the structures of a race, as the game's tables give them; or the
-    workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the mineral fields, the vespene
-    geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible towers and their debris, the
-    destructible rocks, the inhibitor and acceleration zones, the critters, the changelings, the creep tumors, the
-    locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the overlords, the units each Terran and
-    Protoss production structure makes, or the two forms of a structure or a unit that changes and changes back, such as
-    a supply depot raised or lowered, a siege tank sieged or not, or a roach burrowed or not. Each group is in every
-    group that holds all its types: `AnySupplyDepot` is a `TerranStructure`, `AnyDrone` a `Worker`, `AnySiegeTank` a
-    `FactoryUnit`, and `Townhall` a `Structure`. A type's `UnitTypeData.equivalent_types` is the group of two forms it
-    is in, or else its own class.
+    `UnitTypeId`. A group is a race, the structures, the types that are not, or the structures of a race, as the game's
+    tables give them; or the workers, the townhalls, the Terran and the Zerg townhalls, what workers gather at, the
+    mineral fields, the vespene geysers, the gas buildings, each race's on a plain or a rich geyser, the collapsible
+    towers and their debris, the destructible rocks, the inhibitor and acceleration zones, the critters, the
+    changelings, the creep tumors, the locusts, the cocoons, the add-ons, tech labs and reactors, the spires, the
+    overlords, the units each Terran and Protoss production structure makes, or the two forms of a structure or a unit
+    that changes and changes back, such as a supply depot raised or lowered, a siege tank sieged or not, or a roach
+    burrowed or not. Each group is in every group that holds all its types: `AnySupplyDepot` is a `TerranStructure`,
+    `AnyDrone` a `Worker`, `AnySiegeTank` a `FactoryUnit`, `Townhall` a `Structure`, and `Worker` a `NonStructure`. A
+    type's `UnitTypeData.equivalent_types` is the group of two forms it is in, or else its own class.
 
     `includes(unit)` tells whether a unit is of a type or group, narrowing it, `type_ids` holds its ids, and
     `types_are_equivalent` whether a unit converts between its types and back at will.
@@ -387,12 +388,15 @@ def producer_groups(tables: GameData) -> dict[UnitTypeId, list[str]]:
     return groups
 
 
-def table_group(row: UnitTypeData) -> str:
-    """The race or structure group the tables put the type of `row` in, the narrowest: `TerranStructure`, `Terran`,
-    `Structure`, or `AnyType` for a type of no race that is no structure."""
+def table_groups(row: UnitTypeData) -> tuple[str, ...]:
+    """The race and structure groups the tables put the type of `row` in, the narrowest: `TerranStructure`, or
+    `Structure` for a structure of no race; `NonStructure` and `Terran`, or `NonStructure` alone for a type of no race
+    that is no structure. `NonStructure` comes first, as it does in a group's sorted bases, so that every class names
+    the two in one order."""
     race = RACES.get(row.race)
-    structure = Attribute.STRUCTURE in row.attributes
-    return f"{race}Structure" if race and structure else race or ("Structure" if structure else "AnyType")
+    if Attribute.STRUCTURE in row.attributes:
+        return (f"{race}Structure",) if race else ("Structure",)
+    return ("NonStructure", race) if race else ("NonStructure",)
 
 
 def ancestors(group: str, bases: dict[str, tuple[str, ...]]) -> set[str]:
@@ -410,7 +414,7 @@ def render(answer: sc2api_pb2.ResponseData) -> str:
     """The module source for the types in the game's tables, `answer`."""
     tables = GameData(answer)
     counted_as = tech_aliases(answer)
-    table_groups = {unit_type: table_group(tables.units[unit_type]) for unit_type in UnitTypeId}
+    groups_of = {unit_type: table_groups(tables.units[unit_type]) for unit_type in UnitTypeId}
     produced = producer_groups(tables)
     found = {
         unit_type: roles(unit_type, tables.units[unit_type], counted_as.get(unit_type, frozenset()))
@@ -419,11 +423,13 @@ def render(answer: sc2api_pb2.ResponseData) -> str:
     }
     bases: dict[str, tuple[str, ...]] = {
         "Structure": ("AnyType",),
+        "NonStructure": ("AnyType",),
         **{name: ("AnyType",) for name in RACES.values()},
         **{f"{name}Structure": (name, "Structure") for name in RACES.values()},
     }
     docstrings = {
         "Structure": "A type the game's tables give the structure attribute.",
+        "NonStructure": "A type the game's tables do not give the structure attribute.",
         **{name: f"A {name} type." for name in RACES.values()},
         **{f"{name}Structure": f"A {name} structure." for name in RACES.values()},
         **ROLES,
@@ -435,8 +441,12 @@ def render(answer: sc2api_pb2.ResponseData) -> str:
             if members[other] == members[role]:
                 raise ValueError(f"{role} and {other} hold the same types")
         # The race and structure groups every type of the role is in.
-        role_table_groups = {table_groups[unit_type] for unit_type in members[role]}
-        shared = set.intersection(*({group} | ancestors(group, bases) for group in role_table_groups))
+        shared = set.intersection(
+            *(
+                set(groups_of[unit_type]).union(*(ancestors(group, bases) for group in groups_of[unit_type]))
+                for unit_type in members[role]
+            )
+        )
         bases[role] = narrowest([*holding, *sorted(shared)], bases)
     blocks = [HEADER]
     for name, docstring in docstrings.items():
@@ -451,7 +461,7 @@ def render(answer: sc2api_pb2.ResponseData) -> str:
             raise ValueError(f"{unit_type!r} would be named {name}, which is already taken")
         names.add(name)
         # A base named before a subclass of it has no consistent method resolution order.
-        type_bases = ", ".join(narrowest([table_groups[unit_type], *found[unit_type]], bases))
+        type_bases = ", ".join(narrowest([*groups_of[unit_type], *found[unit_type]], bases))
         blocks.append(f"    class {name}({type_bases}):\n        id = UnitTypeId.{unit_type.name}\n")
     blocks.append(equivalent_types_source())
     return "\n".join(blocks)
