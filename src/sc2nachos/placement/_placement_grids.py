@@ -239,7 +239,7 @@ class PlacementGrids:
         candidates = distance.where(fitting & (distance <= max_distance), math.inf)
         if not fitting.any() or candidates.min() == math.inf:
             return None
-        return footprint.center_in_tile(candidates.argmin())
+        return footprint.center_in_tile(candidates.argmin_tile())
 
     def terran_wall(self, main_ramp: Ramp) -> TerranWall | None:
         """Where a Terran wall closes `main_ramp`, the ramp out of a start location's main, its
