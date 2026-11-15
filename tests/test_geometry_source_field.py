@@ -75,7 +75,7 @@ class TestValueAt:
         assert field.value_at((2.0, 0.0)) == 1.0
         assert field.value_at((2.0, 0.01)) == 0.0
 
-    def test_a_circle_holds_its_value_out_to_its_edge_then_falls_linearly_to_zero_at_the_circles_edge(self) -> None:
+    def test_a_linear_edge_holds_the_value_to_where_it_begins_then_falls_evenly_to_zero(self) -> None:
         field = SourceField()
         field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, edge_width=2.0)
         distances_and_values = [(0.0, 6.0), (1.5, 6.0), (2.0, 6.0), (3.0, 3.0), (3.5, 1.5), (4.0, 0.0), (5.0, 0.0)]

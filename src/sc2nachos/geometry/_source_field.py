@@ -100,9 +100,12 @@ class SourceField:
                 total += circle.value
             elif distance_squared <= circle.radius_squared:
                 share_to_cross = (circle.radius - math.sqrt(distance_squared)) / circle.edge_width
-                if circle.edge is Edge.SMOOTH:
-                    share_to_cross = share_to_cross * share_to_cross * (3.0 - 2.0 * share_to_cross)
-                total += circle.value * share_to_cross
+                share_held = (
+                    share_to_cross * share_to_cross * (3.0 - 2.0 * share_to_cross)
+                    if circle.edge is Edge.SMOOTH
+                    else share_to_cross
+                )
+                total += circle.value * share_held
         return total
 
     def min(self, *, within: Area) -> float:
@@ -210,9 +213,12 @@ def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
         distances_squared = dx * dx + dy * dy
         if circle.edge_width:
             shares_to_cross = (circle.radius - numpy.sqrt(distances_squared)) / circle.edge_width
-            if circle.edge is Edge.SMOOTH:
-                shares_to_cross = shares_to_cross * shares_to_cross * (3.0 - 2.0 * shares_to_cross)
-            falling = circle.value * shares_to_cross
+            shares_held = (
+                shares_to_cross * shares_to_cross * (3.0 - 2.0 * shares_to_cross)
+                if circle.edge is Edge.SMOOTH
+                else shares_to_cross
+            )
+            falling = circle.value * shares_held
             values = numpy.where(distances_squared <= circle.radius_squared, falling, 0.0)
             totals += numpy.where(distances_squared <= circle.full_within_squared, circle.value, values)
         else:
