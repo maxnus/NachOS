@@ -118,28 +118,28 @@ class SourceField:
 
     def _extreme_value(self, area: Area, *, largest: bool) -> float:
         """The largest value read in `area`, or the smallest."""
-        _refuse_empty(area)
+        _check_not_empty(area)
         if not self._circles:
             return 0.0
         bounds = area.bounding_rectangle()
         circles = self._circles_near(bounds)
-        reaching = _reaching(area, circles)
+        reaching = _circles_reaching(area, circles)
         if not reaching:
             return 0.0
         if len(reaching) == 1 and largest == (reaching[0][0].value > 0):
             # A circle reaching the area alone holds its value farthest from 0 at the area's point nearest its center,
             # which is one of the points read, and the others near reach none of them.
             return self.value_at(reaching[0][1])
-        xs, ys = self._points_read(area, bounds, [point for _, point in reaching])
+        xs, ys = self._points_to_read(area, bounds, [point for _, point in reaching])
         values = _values_at(xs, ys, circles)
         return (values.max() if largest else values.min()).item()
 
     def _extreme_point(self, area: Area, *, largest: bool) -> Point:
         """The point read in `area` with the largest value, or the smallest, the lowest x, then y, where several tie."""
-        _refuse_empty(area)
+        _check_not_empty(area)
         bounds = area.bounding_rectangle()
         circles = self._circles_near(bounds)
-        xs, ys = self._points_read(area, bounds, [point for _, point in _reaching(area, circles)])
+        xs, ys = self._points_to_read(area, bounds, [point for _, point in _circles_reaching(area, circles)])
         values = _values_at(xs, ys, circles)
         tied = numpy.flatnonzero(values == (values.max() if largest else values.min()))
         picked = tied[numpy.lexsort((ys[tied], xs[tied]))[0]]
@@ -159,10 +159,9 @@ class SourceField:
             and circle.y + circle.radius >= bottom
         ]
 
-    def _points_read(self, area: Area, bounds: Rectangle, nearest_points: list[Point]) -> tuple[ndarray, ndarray]:
-        """The x and the y of the points read in `area`, whose bounding rectangle is `bounds`: those `spacing` apart,
-        by ascending x, then y, then `nearest_points`, the area's points nearest the centers of the circles reaching
-        it."""
+    def _points_to_read(self, area: Area, bounds: Rectangle, nearest_points: list[Point]) -> tuple[ndarray, ndarray]:
+        """The x and the y of the points to read in `area`, whose bounding rectangle is `bounds`: those `spacing` apart,
+        by ascending x, then y, then `nearest_points`, the area's point nearest each reaching circle's center."""
         xs, ys = _points_spaced_over(area, bounds, self._spacing)
         if not nearest_points:
             return xs, ys
@@ -208,7 +207,7 @@ def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
     return totals
 
 
-def _reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSource, Point]]:
+def _circles_reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSource, Point]]:
     """Each of `circles` that reaches `area`, with the area's point nearest its center."""
     reaching = []
     for circle in circles:
@@ -218,7 +217,7 @@ def _reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSou
     return reaching
 
 
-def _refuse_empty(area: Area) -> None:
+def _check_not_empty(area: Area) -> None:
     """Raise `ValueError` if `area` is empty, so that it has no smallest or largest value."""
     if not area.area:
         raise ValueError(f"{area!r} is empty, so it has no smallest or largest value")
