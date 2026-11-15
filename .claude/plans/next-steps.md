@@ -42,8 +42,8 @@ As of 2026-11-14:
   `SourceField`'s `max` and `min` read quicker (#252). AvocaDOS #99 takes it: its `units_in_production` asks
   `api.in_production(UnitType.NonStructure)`, and its effect threat is a `SourceField` (Fields, step 3).
 - **Since 0.5.1**, on main: #253. The next release, 0.6.0 since #253 renames `add_circle`'s `falloff` to `edge_width`,
-  says in its notes that a bot passing `falloff=` passes `edge_width=`; it adds `Edge`, a circle's edge `LINEAR` or
-  `SMOOTH`.
+  says in its notes that a bot's `falloff=w` is `edge=Edge.LINEAR, edge_width=w` now, the default edge `Edge.SHARP`
+  taking no width; it adds `Edge.SMOOTH`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -366,7 +366,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      needs a rectangle yet), each with a value, summed where they overlap (the owner, over the largest), and 0 beyond
      every circle, of floats alone (the owner, review of #249, over booleans or-ed, which a bot writes as circles of
      1.0: whether `max` reads above 0 is as exact, and a read over a unit's circle some 6% slower). A bot builds one by
-     `add_circle(circle, value, *, edge=Edge.LINEAR, edge_width=0.0)`, so it is mutable (the owner, over one built whole
+     `add_circle(circle, value, *, edge=Edge.SHARP, edge_width=0.0)`, so it is mutable (the owner, over one built whole
      from a list of sources), and named for its shape so that `add_rectangle` can follow (the owner, review of #249,
      over `add`). A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
      circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
@@ -374,24 +374,26 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over `full_within`,
      `inner_radius` and a ramp beyond the circle, which reaches past the shape given and has no cone). Since #253 an
      `Edge` says how it falls, set on each circle (the owner, 2026-11-15, over once for the field and over a field's
-     default each circle may override): `LINEAR`, evenly, or `SMOOTH`, by the smoothstep `t²(3 − 2t)`, its slope easing
-     to 0 at both ends (the owner, over smootherstep too, and over a disc blurred by a flat disc, the one whose peak
-     drops for a small disc as a Gaussian blur's does, at some 6 times the cost), named `edge` and `edge_width` (the
-     owner, over `falloff` and `falloff_width`, and over `decay` and `falloff`). Against AvocaDOS's threat grid, a disc
-     blurred by a Gaussian of σ 1, each edge at its best width comes within 0.06 to 0.14 for a radius of 2 and up, and
-     neither keeps a small disc's lower peak; a smooth edge costs 10 to 20% more in a read over an area, and nothing
-     more at a point (2026-11-15). Its gradient is exact. Its max and min within an area are read at points `spacing`
-     apart over the area, set on the field, 0.25 by default (the owner, over a keyword on each read, and review of #249,
-     over `resolution`, which reads both ways), and at the area's point nearest each touching circle's center: where
-     every circle's value is positive, exact in whether `max` reads above 0 and in the largest value of one circle
-     alone, and up to the spacing off for the rest, min included (the owner, building it, kept the rule and had the
-     plan's "exact for booleans and for one shape" corrected). Every point read is one the area holds, as `in` has it
-     (below), so a circle touching only an edge the area leaves out reads nothing, as a grid leaves out a tile touched
-     only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address. Measured 2026-11-14: a read
-     over a unit's circle costs some 30 to 55 µs where circles reach it, against a grid's 4 to 8, and 1.5 to 3 where
-     none does. Since #252, `max` and `min` read 0 at once from a field of no circle, and where one circle reaches the
-     area alone, read the area's point nearest its center alone when that holds the answer, as for the largest value of
-     a positive circle: an empty field's read over a unit's circle 0.40 µs, from 1.28.
+     default each circle may override): `SHARP`, at once, the default, taking no width, or across the width `LINEAR`,
+     evenly, or `SMOOTH`, by the smoothstep `t²(3 − 2t)`, its slope easing to 0 at both ends, each needing a width above
+     0, so that no read divides by 0 (the owner, review of #253, over a width of 0 making any edge sharp and over
+     `edge=None`), and no other sloping kind (the owner, over smootherstep too, and over a disc blurred by a flat disc,
+     the one whose peak drops for a small disc as a Gaussian blur's does, at some 6 times the cost), named `edge` and
+     `edge_width` (the owner, over `falloff` and `falloff_width`, and over `decay` and `falloff`). Against AvocaDOS's
+     threat grid, a disc blurred by a Gaussian of σ 1, each edge at its best width comes within 0.06 to 0.14 for a
+     radius of 2 and up, and neither keeps a small disc's lower peak; a smooth edge costs 10 to 20% more in a read over
+     an area, and nothing more at a point (2026-11-15). Its gradient is exact. Its max and min within an area are read
+     at points `spacing` apart over the area, set on the field, 0.25 by default (the owner, over a keyword on each read,
+     and review of #249, over `resolution`, which reads both ways), and at the area's point nearest each touching
+     circle's center: where every circle's value is positive, exact in whether `max` reads above 0 and in the largest
+     value of one circle alone, and up to the spacing off for the rest, min included (the owner, building it, kept the
+     rule and had the plan's "exact for booleans and for one shape" corrected). Every point read is one the area holds,
+     as `in` has it (below), so a circle touching only an edge the area leaves out reads nothing, as a grid leaves out a
+     tile touched only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address. Measured
+     2026-11-14: a read over a unit's circle costs some 30 to 55 µs where circles reach it, against a grid's 4 to 8, and
+     1.5 to 3 where none does. Since #252, `max` and `min` read 0 at once from a field of no circle, and where one
+     circle reaches the area alone, read the area's point nearest its center alone when that holds the answer, as for
+     the largest value of a positive circle: an empty field's read over a unit's circle 0.40 µs, from 1.28.
   3. AvocaDOS takes its effect threat, biles, storms and reapers' grenades, as a `SourceField`, each unit reading the
      max within its own circle, and reads its melee grid apart, `melee_effect_threat` gone; it flees to the tile of
      least melee threat plus the field's value at its center. Prototyped on its branch `ccr-614226b3-szxe0s`, to take

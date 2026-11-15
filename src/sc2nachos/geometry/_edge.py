@@ -4,9 +4,12 @@ from enum import Enum
 
 
 class Edge(Enum):
-    """How a `SourceField`'s circle falls from its value to 0 across its edge, a band of `edge_width` inside the circle:
-    by the share `t` of the band between a point and the circle's edge, 1 where the band begins and 0 at the edge."""
+    """How a `SourceField`'s circle falls from its value to 0 at its edge: at once, or across a band of `edge_width`
+    inside the circle, by the share `t` of the band between a point and the circle's edge, 1 where the band begins and
+    0 at the edge."""
 
+    SHARP = "sharp"
+    """At once: the circle holds its whole value out to its edge, and none beyond, so it takes no width."""
     LINEAR = "linear"
     """Evenly, by `t`: a constant slope across the band, which turns at once where the band begins and ends."""
     SMOOTH = "smooth"

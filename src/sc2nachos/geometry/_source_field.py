@@ -39,10 +39,10 @@ class _CircleSource:
 @final
 class SourceField:
     """A `Field` of floats made of circles, each adding its value over the ground it covers, its edge included, such as
-    a threat around each enemy, and 0 beyond every circle. A circle given an `edge_width` holds its value out to that
-    distance inside its edge, then falls to 0 at the edge, as its `Edge` says, evenly or smoothly; a circle without one
-    holds its value throughout, so a mask is circles of 1.0. Where circles overlap, their values add up. The field
-    covers every point, so no read raises `IndexError`.
+    a threat around each enemy, and 0 beyond every circle. A circle with a sharp `Edge`, the default, holds its value
+    throughout, so a mask is circles of 1.0; one with a linear or a smooth edge holds its value out to `edge_width`
+    inside its edge, then falls to 0 at the edge, evenly or smoothly. Where circles overlap, their values add up. The
+    field covers every point, so no read raises `IndexError`.
 
     `min`, `max`, `argmin` and `argmax` read the field at points at most `spacing` apart, along x and along y, over
     the area, and at the area's point nearest the center of each circle that reaches it. So where every circle's value
@@ -69,16 +69,21 @@ class SourceField:
         """How far apart, at most, along x and along y, `min`, `max`, `argmin` and `argmax` read the field."""
         return self._spacing
 
-    def add_circle(self, circle: Circle, value: float, *, edge: Edge = Edge.LINEAR, edge_width: float = 0.0) -> None:
-        """Add `circle`, holding `value`: throughout, or with an `edge_width`, out to that distance inside its edge,
-        falling from there to 0 at the edge as `edge` says, so that an edge as wide as the radius makes a cone, or with
-        a smooth edge a bump. Raises `TypeError` for anything but a `Circle`, and `ValueError` for an edge's width below
-        0 or beyond the radius."""
+    def add_circle(self, circle: Circle, value: float, *, edge: Edge = Edge.SHARP, edge_width: float = 0.0) -> None:
+        """Add `circle`, holding `value`: throughout, with a sharp `edge`, or with a linear or a smooth one, out to
+        `edge_width` inside its edge, falling from there to 0 at the edge, so that an edge as wide as the radius makes a
+        cone, or a smooth one a bump. Raises `TypeError` for anything but a `Circle`, and `ValueError` for a width
+        given a sharp edge, and for a linear or smooth edge's width not above 0 or beyond the radius."""
         if not isinstance(circle, Circle):
             raise TypeError(f"a source field adds circles, not a {type(circle).__name__}")
         radius = circle.radius
-        if not 0 <= edge_width <= radius:
-            raise ValueError(f"an edge's width lies between 0 and the radius of {circle!r}, got {edge_width}")
+        if edge is Edge.SHARP:
+            if edge_width:
+                raise ValueError(f"a sharp edge takes no width, got {edge_width}")
+        elif not 0 < edge_width <= radius:
+            raise ValueError(
+                f"a {edge.value} edge's width lies above 0 and within the radius of {circle!r}, got {edge_width}"
+            )
         x, y = circle.center
         full_within = radius - edge_width
         self._circles.append(
