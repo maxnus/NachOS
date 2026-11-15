@@ -6,23 +6,23 @@ from collections.abc import Callable
 
 import pytest
 
-from sc2nachos.geometry import Area, Circle, Field, Point, PointLike, Rectangle, SourceField, Tile, TileSet
+from sc2nachos.geometry import Area, Circle, Edge, Field, Point, PointLike, Rectangle, SourceField, Tile, TileSet
 from test_geometry import OVERLAP_PROBES
 
 
 def _threat() -> SourceField:
     """A cone of 8 at (10, 10), falling to 0 at 4 away, and 3 within 1.5 of (13, 10)."""
     field = SourceField()
-    field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, falloff=4.0)
+    field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, edge=Edge.LINEAR, edge_width=4.0)
     field.add_circle(Circle((13.0, 10.0), 1.5), 3.0)
     return field
 
 
 def _mixed_field() -> SourceField:
-    """Circles that fall off and that do not, one of them negative, over the shapes of `OVERLAP_PROBES`."""
+    """Circles with a linear edge, a smooth one and none, one of them negative, over the shapes of `OVERLAP_PROBES`."""
     field = SourceField()
-    field.add_circle(Circle((3.0, 3.0), 2.5), 4.0, falloff=1.5)
-    field.add_circle(Circle((6.2, 1.1), 1.5), -2.0, falloff=1.5)
+    field.add_circle(Circle((3.0, 3.0), 2.5), 4.0, edge=Edge.LINEAR, edge_width=1.5)
+    field.add_circle(Circle((6.2, 1.1), 1.5), -2.0, edge=Edge.SMOOTH, edge_width=1.5)
     field.add_circle(Circle((1.0, 5.0), 1.2), 1.5)
     field.add_circle(Circle((2.75, 1.5), 1.0), 2.5)
     return field
@@ -58,10 +58,15 @@ class TestBuilding:
         with pytest.raises(TypeError, match=f"adds circles, not a {type(shape).__name__}$"):
             SourceField().add_circle(shape, 2.0)  # pyright: ignore[reportArgumentType]
 
-    @pytest.mark.parametrize("falloff", [-0.5, 2.5])
-    def test_a_falloff_lies_within_the_radius(self, falloff: float) -> None:
-        with pytest.raises(ValueError, match="between 0 and the radius"):
-            SourceField().add_circle(Circle((0, 0), 2), 1.0, falloff=falloff)
+    @pytest.mark.parametrize("edge", [Edge.LINEAR, Edge.SMOOTH])
+    @pytest.mark.parametrize("edge_width", [-0.5, 0.0, 2.5])
+    def test_a_sloping_edges_width_lies_above_0_and_within_the_radius(self, edge: Edge, edge_width: float) -> None:
+        with pytest.raises(ValueError, match="above 0 and within the radius"):
+            SourceField().add_circle(Circle((0, 0), 2), 1.0, edge=edge, edge_width=edge_width)
+
+    def test_a_sharp_edge_takes_no_width(self) -> None:
+        with pytest.raises(ValueError, match="sharp edge takes no width"):
+            SourceField().add_circle(Circle((0, 0), 2), 1.0, edge_width=1.0)
 
     def test_repr(self) -> None:
         assert repr(_threat()) == "SourceField(2 circles)"
@@ -75,9 +80,9 @@ class TestValueAt:
         assert field.value_at((2.0, 0.0)) == 1.0
         assert field.value_at((2.0, 0.01)) == 0.0
 
-    def test_a_circle_holds_its_value_out_to_its_falloff_then_falls_linearly_to_zero_at_its_edge(self) -> None:
+    def test_a_linear_edge_holds_the_value_to_where_it_begins_then_falls_evenly_to_zero(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, falloff=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, edge=Edge.LINEAR, edge_width=2.0)
         distances_and_values = [(0.0, 6.0), (1.5, 6.0), (2.0, 6.0), (3.0, 3.0), (3.5, 1.5), (4.0, 0.0), (5.0, 0.0)]
         assert [field.value_at((distance, 0.0)) for distance, _ in distances_and_values] == [
             value for _, value in distances_and_values
@@ -85,10 +90,35 @@ class TestValueAt:
         assert field.value_at((0.0, -3.0)) == 3.0
         assert field.value_at((1.8, 2.4)) == pytest.approx(3.0)
 
-    def test_a_falloff_of_the_radius_makes_a_cone(self) -> None:
+    def test_an_edge_as_wide_as_the_radius_makes_a_cone(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, falloff=4.0)
+        field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, edge=Edge.LINEAR, edge_width=4.0)
         assert field.value_at((10.0, 10.0)) == 8.0
+        assert field.value_at((12.0, 10.0)) == 4.0
+
+    def test_a_smooth_edge_eases_from_the_value_to_zero(self) -> None:
+        """A point a quarter of the way across the edge has three quarters still to cross: (3/4)²(3 − 3/2) of the
+        value."""
+        field = SourceField()
+        field.add_circle(Circle((0.0, 0.0), 4.0), 8.0, edge=Edge.SMOOTH, edge_width=2.0)
+        distances_and_values = [
+            (1.0, 8.0),
+            (2.0, 8.0),
+            (2.5, 8.0 * 0.84375),
+            (3.0, 4.0),
+            (3.5, 8.0 * 0.15625),
+            (4.0, 0.0),
+            (4.5, 0.0),
+        ]
+        assert [field.value_at((distance, 0.0)) for distance, _ in distances_and_values] == [
+            value for _, value in distances_and_values
+        ]
+
+    def test_a_smooth_edge_as_wide_as_the_radius_makes_a_bump(self) -> None:
+        field = SourceField()
+        field.add_circle(Circle((10.0, 10.0), 4.0), 8.0, edge=Edge.SMOOTH, edge_width=4.0)
+        assert field.value_at((10.0, 10.0)) == 8.0
+        assert field.value_at((11.0, 10.0)) == 8.0 * 0.84375
         assert field.value_at((12.0, 10.0)) == 4.0
 
     def test_overlapping_circles_add_up(self) -> None:
@@ -115,7 +145,7 @@ class TestValueAt:
 class TestGradient:
     def test_a_falling_circle_slopes_up_toward_its_center(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, falloff=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, edge=Edge.LINEAR, edge_width=2.0)
         assert field.gradient_at((3.0, 0.0)) == (-3.0, 0.0)
         assert field.gradient_at((0.0, -3.0)) == (0.0, 3.0)
         slope_x, slope_y = field.gradient_at((2.1, 2.1))
@@ -124,28 +154,45 @@ class TestGradient:
 
     def test_a_negative_circle_slopes_up_away_from_its_center(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((0.0, 0.0), 4.0), -6.0, falloff=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), -6.0, edge=Edge.LINEAR, edge_width=2.0)
         assert field.gradient_at((3.0, 0.0)) == (3.0, 0.0)
 
     @pytest.mark.parametrize(
         ("point", "slope"),
         [
             ((1.0, 0.0), (0.0, 0.0)),  # holding its whole value
-            ((2.0, 0.0), (0.0, 0.0)),  # where the falloff begins
-            ((4.0, 0.0), (-3.0, 0.0)),  # on the edge, which slopes
-            ((4.5, 0.0), (0.0, 0.0)),  # beyond the edge
+            ((2.0, 0.0), (0.0, 0.0)),  # where the edge begins
+            ((4.0, 0.0), (-3.0, 0.0)),  # on the circle's edge, which slopes
+            ((4.5, 0.0), (0.0, 0.0)),  # beyond the circle
         ],
     )
-    def test_a_circle_slopes_over_its_falloff_out_to_its_edge(
+    def test_a_linear_edge_slopes_from_where_it_begins_out_to_the_circles_edge(
         self, point: PointLike, slope: tuple[float, float]
     ) -> None:
         field = SourceField()
-        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, falloff=2.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 6.0, edge=Edge.LINEAR, edge_width=2.0)
         assert field.gradient_at(point) == slope
+
+    @pytest.mark.parametrize(
+        ("point", "slope"),
+        [
+            ((1.0, 0.0), (0.0, 0.0)),  # holding its whole value
+            ((2.0, 0.0), (0.0, 0.0)),  # where the edge begins, its slope eased to 0
+            ((3.0, 0.0), (-6.0, 0.0)),  # halfway across, steepest: 8 × 6 × ½ × ½ / 2
+            ((4.0, 0.0), (0.0, 0.0)),  # on the circle's edge, its slope eased to 0
+            ((4.5, 0.0), (0.0, 0.0)),  # beyond the circle
+        ],
+    )
+    def test_a_smooth_edge_slopes_most_halfway_across_and_not_at_its_ends(
+        self, point: PointLike, slope: tuple[float, float]
+    ) -> None:
+        field = SourceField()
+        field.add_circle(Circle((0.0, 0.0), 4.0), 8.0, edge=Edge.SMOOTH, edge_width=2.0)
+        assert field.gradient_at(point) == pytest.approx(slope)
 
     def test_a_cone_and_a_constant_circle_are_flat_at_their_center(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((0.0, 0.0), 4.0), 8.0, falloff=4.0)
+        field.add_circle(Circle((0.0, 0.0), 4.0), 8.0, edge=Edge.LINEAR, edge_width=4.0)
         field.add_circle(Circle((10.0, 0.0), 4.0), 8.0)
         assert field.gradient_at((0.0, 0.0)) == (0.0, 0.0)
         assert field.gradient_at((10.0, 0.0)) == (0.0, 0.0)
@@ -182,21 +229,31 @@ class TestAreaReads:
             assert field.value_at(point) == extreme(within=area)
 
     @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=repr)
-    @pytest.mark.parametrize(("value", "falloff"), [(3.0, 0.0), (3.0, 1.5), (-3.0, 2.0)], ids=repr)
+    @pytest.mark.parametrize(
+        ("value", "edge", "edge_width"),
+        [
+            (3.0, Edge.SHARP, 0.0),
+            (3.0, Edge.LINEAR, 1.5),
+            (-3.0, Edge.LINEAR, 2.0),
+            (3.0, Edge.SMOOTH, 1.5),
+            (-3.0, Edge.SMOOTH, 2.0),
+        ],
+        ids=repr,
+    )
     def test_a_circle_reaching_an_area_alone_reads_as_every_point_read_does(
-        self, area: Area, value: float, falloff: float
+        self, area: Area, value: float, edge: Edge, edge_width: float
     ) -> None:
         """`max` of a positive circle reaching an area alone, and `min` of a negative one, read only the area's point
         nearest its center, where `argmax` and `argmin` read every point. A second circle is near no probe."""
         field = SourceField()
-        field.add_circle(Circle((3.5, 3.0), 2.0), value, falloff=falloff)
+        field.add_circle(Circle((3.5, 3.0), 2.0), value, edge=edge, edge_width=edge_width)
         field.add_circle(Circle((40.0, 40.0), 1.0), 5.0)
         for extreme, where in ((field.min, field.argmin), (field.max, field.argmax)):
             assert field.value_at(where(within=area)) == extreme(within=area)
 
     def test_one_circles_largest_value_is_exact_where_the_spaced_points_miss_it(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((5.0, 0.0), 4.0), 8.0, falloff=4.0)
+        field.add_circle(Circle((5.0, 0.0), 4.0), 8.0, edge=Edge.LINEAR, edge_width=4.0)
         area = Circle((0.0, 0.0), 2.0)
         assert field.max(within=area) == 2.0
         assert field.argmax(within=area) == Point((2.0, 0.0))
@@ -238,7 +295,7 @@ class TestAreaReads:
         `10 - sqrt(18)`, and no point read is farther than half the spacing along each axis from it."""
         for spacing in (0.25, 0.05):
             field = SourceField(spacing=spacing)
-            field.add_circle(Circle((0.0, 0.0), 10.0), 10.0, falloff=10.0)
+            field.add_circle(Circle((0.0, 0.0), 10.0), 10.0, edge=Edge.LINEAR, edge_width=10.0)
             area = Rectangle(1.0, 1.0, 2.0, 2.0)
             smallest_at_the_corner = 10.0 - math.sqrt(18.0)
             assert smallest_at_the_corner < field.min(within=area) <= smallest_at_the_corner + spacing / math.sqrt(2)
@@ -280,7 +337,7 @@ class TestAreaReads:
 
     def test_a_falling_circle_beyond_an_edge_the_area_leaves_out_reads_just_inside_it(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((3.0, 0.5), 4.0), 8.0, falloff=4.0)
+        field.add_circle(Circle((3.0, 0.5), 4.0), 8.0, edge=Edge.LINEAR, edge_width=4.0)
         area = Rectangle(0.0, 0.0, 1.0, 1.0)
         point = field.argmax(within=area)
         assert point == Point((math.nextafter(1.0, 0.0), 0.5))
@@ -288,7 +345,7 @@ class TestAreaReads:
 
     def test_a_tile_set_reads_its_tiles_alone(self) -> None:
         field = SourceField()
-        field.add_circle(Circle((5.5, 5.5), 2.0), 4.0, falloff=2.0)
+        field.add_circle(Circle((5.5, 5.5), 2.0), 4.0, edge=Edge.LINEAR, edge_width=2.0)
         assert field.max(within=TileSet([Tile(0, 0), Tile(5, 5)])) == 4.0
         assert field.argmax(within=TileSet([Tile(0, 0), Tile(5, 5)])) == Point((5.5, 5.5))
         assert field.max(within=TileSet([Tile(0, 0), Tile(9, 9)])) == 0.0

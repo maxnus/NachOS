@@ -3,6 +3,7 @@
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._circle import Circle
 from sc2nachos.geometry._direction import Direction
+from sc2nachos.geometry._edge import Edge
 from sc2nachos.geometry._field import Field
 from sc2nachos.geometry._footprint import Footprint, Margin
 from sc2nachos.geometry._grid import CheapestPaths, Grid
@@ -17,6 +18,7 @@ __all__ = [
     "CheapestPaths",
     "Circle",
     "Direction",
+    "Edge",
     "Field",
     "Footprint",
     "Grid",

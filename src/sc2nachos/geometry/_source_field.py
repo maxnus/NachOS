@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, final
 import numpy
 
 from sc2nachos.geometry._circle import Circle
+from sc2nachos.geometry._edge import Edge
 from sc2nachos.geometry._point import Point
 
 if TYPE_CHECKING:
@@ -28,19 +29,20 @@ class _CircleSource:
     y: float
     radius: float
     radius_squared: float
-    falloff: float
+    edge: Edge
+    edge_width: float
     full_within_squared: float
-    """The square of how far from the center the circle holds its whole value."""
+    """The square of how far from the center the circle holds its whole value, where its edge begins."""
     value: float
 
 
 @final
 class SourceField:
     """A `Field` of floats made of circles, each adding its value over the ground it covers, its edge included, such as
-    a threat around each enemy, and 0 beyond every circle. A circle given a `falloff` holds its value out to that
-    distance inside its edge, then falls linearly to 0 at the edge; a circle without one holds its value throughout, so
-    a mask is circles of 1.0. Where circles overlap, their values add up. The field covers every point, so no read
-    raises `IndexError`.
+    a threat around each enemy, and 0 beyond every circle. A circle with a sharp `Edge`, the default, holds its value
+    throughout, so a mask is circles of 1.0; one with a linear or a smooth edge holds its value out to `edge_width`
+    inside its edge, then falls to 0 at the edge, evenly or smoothly. Where circles overlap, their values add up. The
+    field covers every point, so no read raises `IndexError`.
 
     `min`, `max`, `argmin` and `argmax` read the field at points at most `spacing` apart, along x and along y, over
     the area, and at the area's point nearest the center of each circle that reaches it. So where every circle's value
@@ -67,19 +69,25 @@ class SourceField:
         """How far apart, at most, along x and along y, `min`, `max`, `argmin` and `argmax` read the field."""
         return self._spacing
 
-    def add_circle(self, circle: Circle, value: float, *, falloff: float = 0.0) -> None:
-        """Add `circle`, holding `value`: throughout, or with a `falloff`, out to that distance inside its edge, falling
-        linearly from there to 0 at the edge, so that a falloff of the radius makes a cone. Raises `TypeError` for
-        anything but a `Circle`, and `ValueError` for a falloff below 0 or beyond the radius."""
+    def add_circle(self, circle: Circle, value: float, *, edge: Edge = Edge.SHARP, edge_width: float = 0.0) -> None:
+        """Add `circle`, holding `value`: throughout, with a sharp `edge`, or with a linear or a smooth one, out to
+        `edge_width` inside its edge, falling from there to 0 at the edge, so that an edge as wide as the radius makes a
+        cone, or a smooth one a bump. Raises `TypeError` for anything but a `Circle`, and `ValueError` for a width
+        given a sharp edge, and for a linear or smooth edge's width not above 0 or beyond the radius."""
         if not isinstance(circle, Circle):
             raise TypeError(f"a source field adds circles, not a {type(circle).__name__}")
         radius = circle.radius
-        if not 0 <= falloff <= radius:
-            raise ValueError(f"a falloff lies between 0 and the radius of {circle!r}, got {falloff}")
+        if edge is Edge.SHARP:
+            if edge_width:
+                raise ValueError(f"a sharp edge takes no width, got {edge_width}")
+        elif not 0 < edge_width <= radius:
+            raise ValueError(
+                f"a {edge.value} edge's width lies above 0 and within the radius of {circle!r}, got {edge_width}"
+            )
         x, y = circle.center
-        full_within = radius - falloff
+        full_within = radius - edge_width
         self._circles.append(
-            _CircleSource(x, y, radius, radius * radius, falloff, full_within * full_within, float(value))
+            _CircleSource(x, y, radius, radius * radius, edge, edge_width, full_within * full_within, float(value))
         )
 
     # --- Reads
@@ -96,7 +104,13 @@ class SourceField:
             if distance_squared <= circle.full_within_squared:
                 total += circle.value
             elif distance_squared <= circle.radius_squared:
-                total += circle.value * ((circle.radius - math.sqrt(distance_squared)) / circle.falloff)
+                share_to_cross = (circle.radius - math.sqrt(distance_squared)) / circle.edge_width
+                share_held = (
+                    share_to_cross * share_to_cross * (3.0 - 2.0 * share_to_cross)
+                    if circle.edge is Edge.SMOOTH
+                    else share_to_cross
+                )
+                total += circle.value * share_held
         return total
 
     def min(self, *, within: Area) -> float:
@@ -170,8 +184,8 @@ class SourceField:
 
     def gradient_at(self, point: PointLike) -> tuple[float, float]:
         """How fast the value rises at `point`, per map unit, along x and along y, together pointing the way it rises
-        fastest. Exact: a circle slopes over its falloff, beyond where that begins and out to its edge, which slopes
-        too, and is flat elsewhere."""
+        fastest. Exact: a circle slopes across its edge, beyond where that begins and out to the circle's edge, where a
+        linear edge slopes too and a smooth one is flat, and is flat elsewhere."""
         x = point[0]
         y = point[1]
         slope_x = 0.0
@@ -181,7 +195,11 @@ class SourceField:
             dy = y - circle.y
             distance_squared = dx * dx + dy * dy
             if circle.full_within_squared < distance_squared <= circle.radius_squared:
-                slope_per_offset = -circle.value / (circle.falloff * math.sqrt(distance_squared))
+                distance = math.sqrt(distance_squared)
+                slope_per_offset = -circle.value / (circle.edge_width * distance)
+                if circle.edge is Edge.SMOOTH:
+                    share_to_cross = (circle.radius - distance) / circle.edge_width
+                    slope_per_offset *= 6.0 * share_to_cross * (1.0 - share_to_cross)
                 slope_x += slope_per_offset * dx
                 slope_y += slope_per_offset * dy
         return slope_x, slope_y
@@ -198,8 +216,14 @@ def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
         dx = xs - circle.x
         dy = ys - circle.y
         distances_squared = dx * dx + dy * dy
-        if circle.falloff:
-            falling = circle.value * ((circle.radius - numpy.sqrt(distances_squared)) / circle.falloff)
+        if circle.edge_width:
+            shares_to_cross = (circle.radius - numpy.sqrt(distances_squared)) / circle.edge_width
+            shares_held = (
+                shares_to_cross * shares_to_cross * (3.0 - 2.0 * shares_to_cross)
+                if circle.edge is Edge.SMOOTH
+                else shares_to_cross
+            )
+            falling = circle.value * shares_held
             values = numpy.where(distances_squared <= circle.radius_squared, falling, 0.0)
             totals += numpy.where(distances_squared <= circle.full_within_squared, circle.value, values)
         else:
