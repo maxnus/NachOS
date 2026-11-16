@@ -14,6 +14,8 @@ from sc2nachos.geometry._point import Point
 from sc2nachos.geometry._shapes import Tile
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from numpy import ndarray
 
     from sc2nachos.geometry._area import Area
@@ -23,8 +25,22 @@ if TYPE_CHECKING:
 
 @final
 @dataclass(frozen=True, slots=True)
-class _CircleSource:
-    """A circle added to a field, with the squares its reads compare against."""
+class CircleSource:
+    """A circle a `SourceField` holds, as `add_circle` took it: `value` held out to `edge_width` inside its edge, and
+    falling to 0 at the edge as `edge` says."""
+
+    center: Point
+    radius: float
+    value: float
+    edge: Edge
+    edge_width: float
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class _StoredCircle:
+    """A circle added to a field, as its reads take it: its center as two floats, and the squares they compare
+    against."""
 
     x: float
     y: float
@@ -50,11 +66,14 @@ class SourceField:
     is positive, whether `max` reads above 0 is exact, and so is the largest value where one circle reaches the area
     alone. Anything else may be off by as much as the field changes over the spacing, and a value held only on a patch
     narrower than that may be missed.
+
+    `len` counts its circles, and iterating over it gives each as a `CircleSource`, in the order it was added. Like a
+    grid, it has no truth value.
     """
 
     __slots__ = ("_circles", "_spacing")
 
-    _circles: list[_CircleSource]
+    _circles: list[_StoredCircle]
     _spacing: float
 
     def __init__(self, *, spacing: float = 0.25) -> None:
@@ -89,7 +108,7 @@ class SourceField:
         radius = float(radius)
         full_within = radius - edge_width
         self._circles.append(
-            _CircleSource(
+            _StoredCircle(
                 float(center[0]),
                 float(center[1]),
                 radius,
@@ -100,6 +119,24 @@ class SourceField:
                 float(value),
             )
         )
+
+    def clear(self) -> None:
+        """Remove every circle, keeping the spacing."""
+        self._circles.clear()
+
+    def __len__(self) -> int:
+        """The number of circles added."""
+        return len(self._circles)
+
+    def __iter__(self) -> Iterator[CircleSource]:
+        """Each circle added, as a `CircleSource`, in the order it was added."""
+        for circle in self._circles:
+            yield CircleSource(Point((circle.x, circle.y)), circle.radius, circle.value, circle.edge, circle.edge_width)
+
+    def __bool__(self) -> bool:
+        """Raises `TypeError`, as a grid's does: whether a field holds a circle and whether it reads anything differ,
+        for circles of 0 or ones that cancel out. `len` says the one, and `max` within an area the other."""
+        raise TypeError("a source field has no truth value; len() says whether it holds a circle")
 
     # --- Reads
 
@@ -170,7 +207,7 @@ class SourceField:
         picked = tied[numpy.lexsort((ys[tied], xs[tied]))[0]]
         return Point((xs[picked].item(), ys[picked].item()))
 
-    def _circles_near(self, bounds: Rectangle) -> list[_CircleSource]:
+    def _circles_near(self, bounds: Rectangle) -> list[_StoredCircle]:
         """The circles that may reach into `bounds`, an area's bounding rectangle: every one that does, and some that
         only come near."""
         left, bottom = bounds.x, bounds.y
@@ -240,7 +277,7 @@ class SourceField:
         return f"SourceField({len(self._circles)} circles)"
 
 
-def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarray:
+def _values_at(xs: ndarray, ys: ndarray, circles: list[_StoredCircle]) -> ndarray:
     """The sum of the values of `circles` covering each point of `xs` and `ys`, worked out as `value_at` works out
     one."""
     totals = numpy.zeros(len(xs))
@@ -251,7 +288,7 @@ def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
     return totals
 
 
-def _circle_values(circle: _CircleSource, distances_squared: ndarray) -> ndarray:
+def _circle_values(circle: _StoredCircle, distances_squared: ndarray) -> ndarray:
     """The value `circle` holds at each of `distances_squared` from its center, worked out as `value_at` works out
     one, to the last bit."""
     if not circle.edge_width:
@@ -266,7 +303,7 @@ def _circle_values(circle: _CircleSource, distances_squared: ndarray) -> ndarray
     return numpy.where(distances_squared <= circle.full_within_squared, circle.value, falling)
 
 
-def _circles_reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSource, Point]]:
+def _circles_reaching(area: Area, circles: list[_StoredCircle]) -> list[tuple[_StoredCircle, Point]]:
     """Each of `circles` that reaches `area`, with the area's point nearest its center."""
     reaching = []
     for circle in circles:

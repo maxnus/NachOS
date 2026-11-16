@@ -9,7 +9,7 @@ from sc2nachos.geometry._footprint import Footprint, Margin
 from sc2nachos.geometry._grid import CheapestPaths, Grid
 from sc2nachos.geometry._point import POINT_PRECISION, Point, Point3D, PointLike
 from sc2nachos.geometry._shapes import Rectangle, Tile, TileSet
-from sc2nachos.geometry._source_field import SourceField
+from sc2nachos.geometry._source_field import CircleSource, SourceField
 from sc2nachos.geometry._tile_path import TilePath
 
 __all__ = [
@@ -17,6 +17,7 @@ __all__ = [
     "Area",
     "CheapestPaths",
     "Circle",
+    "CircleSource",
     "Direction",
     "Edge",
     "Field",

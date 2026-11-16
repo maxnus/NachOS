@@ -6,7 +6,20 @@ from collections.abc import Callable
 
 import pytest
 
-from sc2nachos.geometry import Area, Circle, Edge, Field, Grid, Point, PointLike, Rectangle, SourceField, Tile, TileSet
+from sc2nachos.geometry import (
+    Area,
+    Circle,
+    CircleSource,
+    Edge,
+    Field,
+    Grid,
+    Point,
+    PointLike,
+    Rectangle,
+    SourceField,
+    Tile,
+    TileSet,
+)
 from test_geometry import OVERLAP_PROBES
 
 
@@ -76,6 +89,52 @@ class TestBuilding:
     def test_a_sharp_edge_takes_no_width(self) -> None:
         with pytest.raises(ValueError, match="sharp edge takes no width"):
             SourceField().add_circle((0, 0), 2, 1.0, edge_width=1.0)
+
+    def test_len_counts_the_circles_and_clear_removes_them_keeping_the_spacing(self) -> None:
+        field = SourceField(spacing=0.5)
+        field.add_circle((0.0, 0.0), 2.0, 1.0)
+        field.add_circle((5.0, 0.0), 1.0, -2.0, edge=Edge.SMOOTH, edge_width=1.0)
+        assert len(field) == 2
+        field.clear()
+        assert len(field) == 0
+        assert field.spacing == 0.5
+        assert field.value_at((0.0, 0.0)) == 0.0
+        assert field.max(within=Circle((0.0, 0.0), 1.0)) == 0.0
+        field.add_circle((0.0, 0.0), 2.0, 3.0)
+        assert len(field) == 1
+        assert field.value_at((0.0, 0.0)) == 3.0
+
+    @pytest.mark.parametrize("make_field", [_threat, SourceField], ids=["circles", "no circle"])
+    def test_a_field_has_no_truth_value(self, make_field: Callable[[], SourceField]) -> None:
+        with pytest.raises(TypeError, match="no truth value"):
+            bool(make_field())
+
+    def test_iterating_gives_each_circle_as_it_was_added_in_order(self) -> None:
+        field = SourceField()
+        field.add_circle((10, 10), 4, 8, edge=Edge.LINEAR, edge_width=4.0)
+        field.add_circle(Point((13.0, 10.0)), 1.5, 3.0)
+        assert list(field) == [
+            CircleSource(Point((10.0, 10.0)), 4.0, 8.0, Edge.LINEAR, 4.0),
+            CircleSource(Point((13.0, 10.0)), 1.5, 3.0, Edge.SHARP, 0.0),
+        ]
+        assert all(type(source.center) is Point for source in field)
+        assert list(SourceField()) == []
+
+    def test_the_circles_iterated_build_a_field_that_reads_the_same(self) -> None:
+        field = _mixed_field()
+        copied = SourceField()
+        for source in field:
+            copied.add_circle(
+                source.center, source.radius, source.value, edge=source.edge, edge_width=source.edge_width
+            )
+        rectangle = Rectangle(-2.0, -1.0, 12.0, 10.0)
+        assert copied.to_grid(rectangle).values.tolist() == field.to_grid(rectangle).values.tolist()
+        assert copied.gradient_at((3.1, 4.2)) == field.gradient_at((3.1, 4.2))
+
+    def test_a_circle_source_is_frozen(self) -> None:
+        source = next(iter(_threat()))
+        with pytest.raises(AttributeError):
+            source.radius = 1.0  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_repr(self) -> None:
         assert repr(_threat()) == "SourceField(2 circles)"

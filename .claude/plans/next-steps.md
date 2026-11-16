@@ -46,7 +46,8 @@ As of 2026-11-14:
   Its 48 in-game tests passed on cfa5be5 (sc2 run 43749840344), and AvocaDOS's on it unchanged. AvocaDOS #99 takes it.
 - **Since 0.6.0**, on main: #254. The next release, 0.7.0 since #254 has `add_circle` take a center and a radius where
   it took a `Circle`, says in its notes that a bot's `add_circle(Circle(center, radius), value, ...)` is
-  `add_circle(center, radius, value, ...)` now; it adds `SourceField.to_grid`.
+  `add_circle(center, radius, value, ...)` now, and that a field has no truth value, as a grid has none; it adds
+  `SourceField.to_grid`, `len` and iteration over a field's circles, each a `CircleSource`, and `clear`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -373,7 +374,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      whole from a list of sources), and named for its shape so that `add_rectangle` can follow (the owner, review of
      #249, over `add`). It took a `Circle` until #254 (the owner, review of AvocaDOS #99: the call spelled the circle
      twice, and the field never kept it; over `value` keyword-only, though a radius and a value side by side can be
-     swapped). A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
+     swapped). Since #254, `len(field)` counts its circles and `bool(field)` raises `TypeError`, as a grid's does,
+     since whether a field holds a circle and whether it reads anything differ for circles of 0 or ones that cancel
+     (the owner, 2026-11-16, over truthy when it holds one, as `Units` is, and over a `circle_count`); iterating gives
+     each circle as a public frozen `CircleSource`, its center a `Point`, radius, value, edge and width, in the order
+     added, built on demand from the flat floats the reads loop over, 0.66 µs a circle (the owner, over tuples and over
+     waiting for a caller); and `clear()` removes every circle, keeping the spacing, as `UnitDict.clear` does (the
+     owner, though building a new field takes 0.10 µs). A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
      circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
      lies inside the circle, so the circle is all the ground the field reaches and an edge as wide as the radius makes a
      cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over `full_within`,
