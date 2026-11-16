@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import numbers
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, final
 
 import numpy
@@ -51,6 +51,19 @@ class _StoredCircle:
     full_within_squared: float
     """The square of how far from the center the circle holds its whole value, where its edge begins."""
     value: float
+
+    def with_value(self, value: float) -> _StoredCircle:
+        """The same circle holding `value`."""
+        return _StoredCircle(
+            self.x,
+            self.y,
+            self.radius,
+            self.radius_squared,
+            self.edge,
+            self.edge_width,
+            self.full_within_squared,
+            value,
+        )
 
     def to_circle_source(self) -> CircleSource:
         """The circle as `add_circle` took it."""
@@ -200,7 +213,7 @@ class SourceField:
     def _with_values(self, new_value_of: Callable[[float], float]) -> SourceField:
         """A new field of the same circles at the same spacing, each with the value `new_value_of` makes of its own."""
         return SourceField._holding(
-            [replace(circle, value=float(new_value_of(circle.value))) for circle in self._circles],
+            [circle.with_value(float(new_value_of(circle.value))) for circle in self._circles],
             spacing=self._spacing,
         )
 
