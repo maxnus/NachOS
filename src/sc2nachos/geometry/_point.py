@@ -16,8 +16,9 @@ from sc2nachos._shared.rounding import rounded_half_up
 from sc2nachos.geometry._area import Area
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
+    from numpy import ndarray
     from s2clientprotocol import common_pb2
 
 
@@ -44,6 +45,21 @@ def not_a_point_error(value: object) -> TypeError:
     if isinstance(value, Area):
         return TypeError(f"a {type(value).__name__} is an area, not a point — pass its .center")
     return TypeError(f"expected a point or a coordinate tuple, got {type(value).__name__}")
+
+
+def coordinate_arrays_of(points: Sequence[PointLike] | ndarray) -> tuple[ndarray, ndarray]:
+    """The x and the y of each of `points`, a sequence of points or an array of them, a point a row, as two arrays of
+    floats in the same order; a height is dropped. Raises `ValueError` for anything but rows of two coordinates, or all
+    of three."""
+    try:
+        array = numpy.asarray(points, dtype=float)
+    except ValueError as error:
+        raise ValueError("points are rows of an x and a y, all of the same length") from error
+    if not array.size:
+        return numpy.empty(0), numpy.empty(0)
+    if array.ndim != 2 or array.shape[1] not in (2, 3):
+        raise ValueError(f"points are rows of an x and a y, got an array of shape {array.shape}")
+    return array[:, 0], array[:, 1]
 
 
 def checked_ground_offset(offset: PointLike) -> PointLike:

@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+import numbers
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, final
 
 import numpy
 
 from sc2nachos.geometry._edge import Edge
 from sc2nachos.geometry._grid import Grid
-from sc2nachos.geometry._point import Point
-from sc2nachos.geometry._shapes import Tile
+from sc2nachos.geometry._point import Point, coordinate_arrays_of
+from sc2nachos.geometry._shapes import Rectangle, Tile
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
     from numpy import ndarray
 
     from sc2nachos.geometry._area import Area
     from sc2nachos.geometry._point import PointLike
-    from sc2nachos.geometry._shapes import Rectangle
 
 
 @final
@@ -52,6 +52,10 @@ class _StoredCircle:
     """The square of how far from the center the circle holds its whole value, where its edge begins."""
     value: float
 
+    def to_circle_source(self) -> CircleSource:
+        """The circle as `add_circle` took it."""
+        return CircleSource(Point((self.x, self.y)), self.radius, self.value, self.edge, self.edge_width)
+
 
 @final
 class SourceField:
@@ -67,8 +71,9 @@ class SourceField:
     alone. Anything else may be off by as much as the field changes over the spacing, and a value held only on a patch
     narrower than that may be missed.
 
-    `len` counts its circles, and iterating over it gives each as a `CircleSource`, in the order it was added. Like a
-    grid, it has no truth value.
+    A field is built from `CircleSource`s, or circle by circle with `add_circle`. `len` counts its circles, and
+    iterating over it gives each as a `CircleSource`, in the order it was added. Fields add up and subtract, a sum
+    holding the circles of both, and a number scales one, each a new field. Like a grid, a field has no truth value.
     """
 
     __slots__ = ("_circles", "_spacing")
@@ -76,13 +81,25 @@ class SourceField:
     _circles: list[_StoredCircle]
     _spacing: float
 
-    def __init__(self, *, spacing: float = 0.25) -> None:
-        """An empty field, whose reads over an area take points at most `spacing` apart. Raises `ValueError` for a
-        spacing that is not positive."""
+    def __init__(self, sources: Iterable[CircleSource] = (), *, spacing: float = 0.25) -> None:
+        """A field holding `sources`, each checked as `add_circle` checks it, whose reads over an area take points at
+        most `spacing` apart: `SourceField(other)` holds another field's circles. Raises `ValueError` for a spacing that
+        is not positive or a source `add_circle` refuses, and `TypeError` for a source that is not a `CircleSource`."""
         if spacing <= 0:
             raise ValueError(f"a source field reads points a positive spacing apart, got {spacing}")
         self._circles = []
         self._spacing = spacing
+        for source in sources:
+            if not isinstance(source, CircleSource):
+                raise TypeError(f"a source field is built from CircleSources, not a {type(source).__name__}")
+            self.add_circle(source.center, source.radius, source.value, edge=source.edge, edge_width=source.edge_width)
+
+    @staticmethod
+    def _holding(circles: list[_StoredCircle], *, spacing: float) -> SourceField:
+        """A field holding `circles`, checked as they were added to another, and reading at `spacing`."""
+        field = SourceField(spacing=spacing)
+        field._circles = circles
+        return field
 
     @property
     def spacing(self) -> float:
@@ -124,6 +141,11 @@ class SourceField:
         """Remove every circle, keeping the spacing."""
         self._circles.clear()
 
+    def copy(self) -> SourceField:
+        """A new field holding the same circles and reading at the same spacing, which a circle added to either leaves
+        out of the other."""
+        return SourceField._holding(list(self._circles), spacing=self._spacing)
+
     def __len__(self) -> int:
         """The number of circles added."""
         return len(self._circles)
@@ -131,14 +153,78 @@ class SourceField:
     def __iter__(self) -> Iterator[CircleSource]:
         """Each circle added, as a `CircleSource`, in the order it was added."""
         for circle in self._circles:
-            yield CircleSource(Point((circle.x, circle.y)), circle.radius, circle.value, circle.edge, circle.edge_width)
+            yield circle.to_circle_source()
 
     def __bool__(self) -> bool:
         """Raises `TypeError`, as a grid's does: whether a field holds a circle and whether it reads anything differ,
         for circles of 0 or ones that cancel out. `len` says the one, and `max` within an area the other."""
         raise TypeError("a source field has no truth value; len() says whether it holds a circle")
 
+    # --- Arithmetic
+
+    def __add__(self, other: SourceField) -> SourceField:
+        """A new field holding this field's circles and then `other`'s, so that its value is the sum of theirs
+        everywhere, reading at the finer of their spacings."""
+        if not isinstance(other, SourceField):
+            return NotImplemented
+        return SourceField._holding([*self._circles, *other._circles], spacing=min(self._spacing, other._spacing))
+
+    def __sub__(self, other: SourceField) -> SourceField:
+        """A new field holding this field's circles and then `other`'s with their values negated, so that its value is
+        the difference of theirs everywhere, reading at the finer of their spacings."""
+        if not isinstance(other, SourceField):
+            return NotImplemented
+        return self + -other
+
+    def __neg__(self) -> SourceField:
+        """A new field of the same circles, each with its value negated."""
+        return self._with_values(lambda value: -value)
+
+    def __mul__(self, factor: float) -> SourceField:
+        """A new field of the same circles, each with its value multiplied by `factor`, a number."""
+        if not isinstance(factor, numbers.Real):
+            return NotImplemented
+        return self._with_values(lambda value: value * factor)
+
+    def __rmul__(self, factor: float) -> SourceField:
+        """A new field of the same circles, each with its value multiplied by `factor`, a number."""
+        return self.__mul__(factor)
+
+    def __truediv__(self, divisor: float) -> SourceField:
+        """A new field of the same circles, each with its value divided by `divisor`, a number. Raises
+        `ZeroDivisionError` for 0."""
+        if not isinstance(divisor, numbers.Real):
+            return NotImplemented
+        return self._with_values(lambda value: value / divisor)
+
+    def _with_values(self, new_value_of: Callable[[float], float]) -> SourceField:
+        """A new field of the same circles at the same spacing, each with the value `new_value_of` makes of its own."""
+        return SourceField._holding(
+            [replace(circle, value=float(new_value_of(circle.value))) for circle in self._circles],
+            spacing=self._spacing,
+        )
+
     # --- Reads
+
+    def sources_reaching(self, area: Area) -> list[CircleSource]:
+        """Each circle reaching `area`, as a `CircleSource`, in the order it was added: those whose values the reads
+        over the area take, so not one touching only an edge the area leaves out. An empty area has none."""
+        if not area.area:
+            return []
+        circles = self._circles_near(area.bounding_rectangle())
+        return [circle.to_circle_source() for circle, _ in _circles_reaching(area, circles)]
+
+    def values_at(self, points: Sequence[PointLike] | ndarray) -> ndarray:
+        """The value at each of `points`, a sequence of points or an array of them, a point a row, as `value_at` reads
+        it to the last bit, in a numpy pass a circle: an array of floats, a value a point, in order. It pays off from
+        about a hundred points; for a few, `value_at` in a loop is quicker."""
+        xs, ys = coordinate_arrays_of(points)
+        if not len(xs):
+            return numpy.zeros(0)
+        left = xs.min().item()
+        bottom = ys.min().item()
+        bounds = Rectangle(left, bottom, xs.max().item() - left, ys.max().item() - bottom)
+        return _values_at(xs, ys, self._circles_near(bounds))
 
     def value_at(self, point: PointLike) -> float:
         """The value at `point`: the sum of the values of the circles covering it."""

@@ -47,7 +47,9 @@ As of 2026-11-14:
 - **Since 0.6.0**, on main: #254. The next release, 0.7.0 since #254 has `add_circle` take a center and a radius where
   it took a `Circle`, says in its notes that a bot's `add_circle(Circle(center, radius), value, ...)` is
   `add_circle(center, radius, value, ...)` now, and that a field has no truth value, as a grid has none; it adds
-  `SourceField.to_grid`, `len` and iteration over a field's circles, each a `CircleSource`, and `clear`.
+  `SourceField.to_grid`, `len` and iteration over a field's circles, each a `CircleSource`, a field built from them,
+  `clear`, `copy`, `sources_reaching`, adding, subtracting and scaling fields, and `values_at` on every `Field`, a
+  grid's included.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -380,7 +382,16 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      each circle as a public frozen `CircleSource`, its center a `Point`, radius, value, edge and width, in the order
      added, built on demand from the flat floats the reads loop over, 0.66 µs a circle (the owner, over tuples and over
      waiting for a caller); and `clear()` removes every circle, keeping the spacing, as `UnitDict.clear` does (the
-     owner, though building a new field takes 0.10 µs). A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
+     owner, though building a new field takes 0.10 µs). Also since #254, the owner's further asks (2026-11-16):
+     `SourceField(sources, *, spacing=0.25)` holds `CircleSource`s, each checked as `add_circle` checks it, so
+     `SourceField(other)` holds another field's circles, reversing #249's field built by `add_circle` alone (over
+     `sources=` keyword-only); `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`, `k * a`, `a * k` and `a / k` each
+     make a new field, a sum holding both fields' circles and reading at the finer spacing, a number scaling each
+     circle's value, with no in-place `+=`, so a field one reader holds never changes under it (over spacings that must
+     match, and over `combined_with` and `scaled`, as `Units` has); and `sources_reaching(area)` lists the circles the
+     reads over an area take, as `CircleSource`s in the order added (over a field of them). No helper adds a disc
+     blurred by a Gaussian (the owner: a caller gets as much from a smooth circle's parameters, and nothing makes the
+     blur a better choice a priori). A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
      circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
      lies inside the circle, so the circle is all the ground the field reaches and an edge as wide as the radius makes a
      cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over `full_within`,
@@ -423,8 +434,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      width the lesser of 4.2 and that radius, and the value times the blurred disc's peak, 1 − exp(−R²/2), for R from
      0.5 to 15, and within 0.017 to 0.025 fitting each R alone (2026-11-16). The field reaches R + 2, where the smoothed
      grid reads above 0 out to R + 4, its filter's truncation: 373 tiles for 10 zerglings, against 31 in their circles.
-     The melee threat first, in #99, drawn onto the map's grid by `to_grid` every 4 steps, as the grid was smoothed, and
-     cropped for each flee as now; threat and support in a pull request of their own, since paths and grid arithmetic
+     That fit is a starting point, not a target: the owner, since the smoothed grids' values were never evaluated as
+     best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
+     #99, drawn onto the map's grid by `to_grid` every 4 steps, as the grid was smoothed, and cropped for each flee as
+     now; threat and support in a pull request of their own, since paths and grid arithmetic
      read them, and points in some 20 places.
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
@@ -439,9 +452,17 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   Later, when a bot needs one: rectangles in a `SourceField`, by `add_rectangle` (the owner, review of #249). And public
   tile rules returning `TileSet`s: every tile whose center an area holds, as `tiles()` gives, every tile it overlaps,
   and every tile it holds whole once a use shows; `TileMask` stays private (the owner, second review of #238, over the
-  rules now, a public `TileMask` and conversions, and leaving all private). And `values_at`, many points in one numpy pass.
-  For 100 points and 10 circles that was 52 µs against 423 µs for a Python loop, but on a grid it is no faster than
-  looping `grid[point]` unless the points already are an array: 44 µs looped, 10 µs from an array (2026-11-06).
+  rules now, a public `TileMask` and conversions, and leaving all private).
+
+  Done in #254: `values_at(points)` on the `Field` protocol, a sequence of points or an (n, 2) array in, a numpy array
+  out, on `SourceField` and `Grid` alike (the owner, 2026-11-16, over `SourceField` alone and over a list of floats). A
+  field's is a numpy pass a circle, `_values_at`, as its reads over an area take, and agrees with `value_at` to the last
+  bit. Measured 2026-11-16, best of 9: 16 points and 40 circles 348 µs against 55 looping `value_at`; 100 and 10, 89 to
+  161 against 101 to 109; 1,000 and 10, 166 against 1,420; 10,000 and 40, 2.7 ms against 34. A pass working every
+  point against every circle at once, its columns summed circle by circle so that it agreed to the last bit, took 94,
+  49, 280 and 23,417 µs: quicker for a few points and many circles, as a read over a unit's circle has, slower from
+  some hundreds of points, so not built. A grid's from an array 16 µs for 100 points, from a list of points 44, against
+  54 looping `value_at`.
 
   Also later, only if a bot reads scattered tile sets often (the owner, review of #238): a grid reading a `TileSet` by
   its addresses rather than its cached mask. It pays only where the set fills little of its bounding box and that box

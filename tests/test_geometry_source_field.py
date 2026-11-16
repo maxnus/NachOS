@@ -4,6 +4,7 @@ import math
 import random
 from collections.abc import Callable
 
+import numpy
 import pytest
 
 from sc2nachos.geometry import (
@@ -14,6 +15,7 @@ from sc2nachos.geometry import (
     Field,
     Grid,
     Point,
+    Point3D,
     PointLike,
     Rectangle,
     SourceField,
@@ -135,6 +137,41 @@ class TestBuilding:
         source = next(iter(_threat()))
         with pytest.raises(AttributeError):
             source.radius = 1.0  # pyright: ignore[reportAttributeAccessIssue]
+
+    def test_a_field_is_built_from_circle_sources_each_checked_as_add_circle_checks_it(self) -> None:
+        sources = [
+            CircleSource(Point((10.0, 10.0)), 4.0, 8.0, Edge.LINEAR, 4.0),
+            CircleSource(Point((13.0, 10.0)), 1.5, 3.0, Edge.SHARP, 0.0),
+        ]
+        field = SourceField(source for source in sources)
+        assert list(field) == sources
+        assert field.spacing == 0.25
+        assert SourceField(sources, spacing=0.5).spacing == 0.5
+        with pytest.raises(ValueError, match="radius lies above 0"):
+            SourceField([CircleSource(Point((0.0, 0.0)), 0.0, 1.0, Edge.SHARP, 0.0)])
+        with pytest.raises(ValueError, match="sharp edge takes no width"):
+            SourceField([CircleSource(Point((0.0, 0.0)), 2.0, 1.0, Edge.SHARP, 1.0)])
+
+    def test_a_field_is_built_from_another_fields_circles(self) -> None:
+        field = _mixed_field()
+        rebuilt = SourceField(field)
+        assert list(rebuilt) == list(field)
+        assert rebuilt.value_at((3.1, 4.2)) == field.value_at((3.1, 4.2))
+
+    @pytest.mark.parametrize("source", [Circle((0.0, 0.0), 1.0), ((0.0, 0.0), 1.0, 1.0)], ids=repr)
+    def test_a_field_is_built_from_circle_sources_alone(self, source: object) -> None:
+        with pytest.raises(TypeError, match="built from CircleSources, not a"):
+            SourceField([source])  # pyright: ignore[reportArgumentType]
+
+    def test_a_copy_holds_the_same_circles_and_spacing_apart_from_the_original(self) -> None:
+        field = _threat()
+        copied = field.copy()
+        assert list(copied) == list(field)
+        assert SourceField(spacing=0.5).copy().spacing == 0.5
+        copied.add_circle((0.0, 0.0), 1.0, 1.0)
+        field.clear()
+        assert len(copied) == 3
+        assert len(field) == 0
 
     def test_repr(self) -> None:
         assert repr(_threat()) == "SourceField(2 circles)"
@@ -512,3 +549,116 @@ class TestToGrid:
 
     def test_the_grid_holds_floats(self) -> None:
         assert _threat().to_grid(Rectangle(8.0, 8.0, 4.0, 4.0)).values.dtype == float
+
+
+class TestValuesAt:
+    def test_each_value_is_the_value_at_its_point_to_the_last_bit(self) -> None:
+        field = _mixed_field()
+        rng = random.Random(3)
+        points = [Point((rng.uniform(-1, 9), rng.uniform(-1, 8))) for _ in range(200)]
+        values = field.values_at(points)
+        assert values.dtype == float
+        assert values.tolist() == [field.value_at(point) for point in points]
+
+    def test_points_come_as_tuples_points_with_a_height_or_an_array(self) -> None:
+        field = _threat()
+        expected = [8.0, 7.0, 0.0]
+        assert field.values_at([(10.0, 10.0), (12.0, 10.0), (50.0, 50.0)]).tolist() == expected
+        assert field.values_at(numpy.array([[10.0, 10.0], [12.0, 10.0], [50.0, 50.0]])).tolist() == expected
+        assert field.values_at([Point3D((10.0, 10.0, 3.0)), Point3D((12.0, 10.0, 3.0))]).tolist() == [8.0, 7.0]
+
+    def test_no_points_read_no_values(self) -> None:
+        assert _threat().values_at([]).tolist() == []
+        assert SourceField().values_at([(1.0, 2.0)]).tolist() == [0.0]
+
+    def test_anything_but_rows_of_two_or_three_coordinates_raises(self) -> None:
+        with pytest.raises(ValueError, match="rows of an x and a y"):
+            _threat().values_at(numpy.zeros((3, 4)))
+
+
+class TestArithmetic:
+    def test_a_sum_holds_both_fields_circles_and_reads_their_sum(self) -> None:
+        threat = _threat()
+        mixed = _mixed_field()
+        total = threat + mixed
+        assert list(total) == list(threat) + list(mixed)
+        for point in ((3.0, 3.0), (6.0, 1.5), (11.0, 10.0), (20.0, 20.0)):
+            assert total.value_at(point) == pytest.approx(threat.value_at(point) + mixed.value_at(point))
+            assert total.gradient_at(point) == pytest.approx(
+                tuple(a + b for a, b in zip(threat.gradient_at(point), mixed.gradient_at(point), strict=True))
+            )
+
+    def test_a_difference_reads_the_difference(self) -> None:
+        threat = _threat()
+        mixed = _mixed_field()
+        for point in ((3.0, 3.0), (6.0, 1.5), (11.0, 10.0)):
+            assert (threat - mixed).value_at(point) == pytest.approx(threat.value_at(point) - mixed.value_at(point))
+        assert list(threat - mixed) == list(threat + -mixed)
+
+    def test_a_number_scales_every_circles_value(self) -> None:
+        field = _mixed_field()
+        point = (3.1, 4.2)
+        assert [source.value for source in -field] == [-source.value for source in field]
+        assert [source.value for source in 2 * field] == [2 * source.value for source in field]
+        assert [source.value for source in field * 0.5] == [0.5 * source.value for source in field]
+        assert [source.value for source in field / 4] == [source.value / 4 for source in field]
+        assert (-field).value_at(point) == -field.value_at(point)
+        assert (field * 3.0).max(within=Circle(point, 1.0)) == pytest.approx(3.0 * field.max(within=Circle(point, 1.0)))
+        with pytest.raises(ZeroDivisionError):
+            _ = field / 0
+
+    def test_each_result_is_a_new_field_leaving_the_operands_as_they_were(self) -> None:
+        threat = _threat()
+        mixed = _mixed_field()
+        before = (list(threat), list(mixed))
+        for result in (threat + mixed, threat - mixed, -threat, 2 * threat, threat / 2):
+            result.add_circle((0.0, 0.0), 1.0, 1.0)
+        assert (list(threat), list(mixed)) == before
+
+    def test_a_sum_reads_at_the_finer_spacing_and_scaling_keeps_it(self) -> None:
+        coarse = SourceField(spacing=0.5)
+        fine = SourceField(spacing=0.1)
+        assert (coarse + fine).spacing == 0.1
+        assert (fine - coarse).spacing == 0.1
+        assert (-coarse).spacing == (coarse * 2).spacing == (coarse / 2).spacing == 0.5
+
+    @pytest.mark.parametrize("other", [1.0, Grid.zeros(2, 2), "field"], ids=repr)
+    def test_a_field_adds_only_a_field(self, other: object) -> None:
+        with pytest.raises(TypeError):
+            _ = _threat() + other  # pyright: ignore[reportOperatorIssue]
+        with pytest.raises(TypeError):
+            _ = _threat() - other  # pyright: ignore[reportOperatorIssue]
+
+    def test_a_field_is_scaled_only_by_a_number(self) -> None:
+        with pytest.raises(TypeError):
+            _ = _threat() * _threat()  # pyright: ignore[reportOperatorIssue]
+        with pytest.raises(TypeError):
+            _ = _threat() / "2"  # pyright: ignore[reportOperatorIssue]
+
+
+class TestSourcesReaching:
+    def test_the_circles_reaching_an_area_in_the_order_added(self) -> None:
+        field = SourceField()
+        field.add_circle((0.0, 0.0), 2.0, 1.0)
+        field.add_circle((10.0, 0.0), 1.0, 2.0)
+        field.add_circle((3.0, 0.0), 1.5, 3.0, edge=Edge.SMOOTH, edge_width=1.5)
+        assert field.sources_reaching(Circle((2.0, 0.0), 0.5)) == [
+            CircleSource(Point((0.0, 0.0)), 2.0, 1.0, Edge.SHARP, 0.0),
+            CircleSource(Point((3.0, 0.0)), 1.5, 3.0, Edge.SMOOTH, 1.5),
+        ]
+        assert field.sources_reaching(Circle((6.0, 5.0), 1.0)) == []
+
+    @pytest.mark.parametrize("area", [Tile(0, 0), Rectangle(0.0, 0.0, 1.0, 1.0)], ids=repr)
+    def test_a_circle_touching_only_an_edge_the_area_leaves_out_does_not_reach_it(self, area: Area) -> None:
+        field = SourceField()
+        field.add_circle((1.75, 0.5), 0.75, 5.0)
+        assert field.sources_reaching(area) == []
+        assert len(field.sources_reaching(Tile(1, 0))) == 1
+
+    @pytest.mark.parametrize("area", OVERLAP_PROBES, ids=repr)
+    def test_a_mask_reads_above_0_exactly_where_a_circle_reaches(self, area: Area) -> None:
+        assert (len(_mask().sources_reaching(area)) > 0) == (_mask().max(within=area) > 0)
+
+    @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1.0, 1.0, 0.0, 2.0)], ids=repr)
+    def test_an_empty_area_is_reached_by_none(self, area: Area) -> None:
+        assert _threat().sources_reaching(area) == []
