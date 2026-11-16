@@ -108,7 +108,7 @@ class SourceField:
             self.add_circle(source.center, source.radius, source.value, edge=source.edge, edge_width=source.edge_width)
 
     @staticmethod
-    def _holding(circles: list[_StoredCircle], *, spacing: float) -> SourceField:
+    def _holding_circles(circles: list[_StoredCircle], *, spacing: float) -> SourceField:
         """A field holding `circles`, checked as they were added to another, and reading at `spacing`."""
         field = SourceField(spacing=spacing)
         field._circles = circles
@@ -157,7 +157,7 @@ class SourceField:
     def copy(self) -> SourceField:
         """A new field holding the same circles and reading at the same spacing, which a circle added to either leaves
         out of the other."""
-        return SourceField._holding(list(self._circles), spacing=self._spacing)
+        return SourceField._holding_circles(list(self._circles), spacing=self._spacing)
 
     def __len__(self) -> int:
         """The number of circles added."""
@@ -180,7 +180,9 @@ class SourceField:
         everywhere, reading at the finer of their spacings."""
         if not isinstance(other, SourceField):
             return NotImplemented
-        return SourceField._holding([*self._circles, *other._circles], spacing=min(self._spacing, other._spacing))
+        return SourceField._holding_circles(
+            [*self._circles, *other._circles], spacing=min(self._spacing, other._spacing)
+        )
 
     def __sub__(self, other: SourceField) -> SourceField:
         """A new field holding this field's circles and then `other`'s with their values negated, so that its value is
@@ -212,7 +214,7 @@ class SourceField:
 
     def _with_values(self, new_value_of: Callable[[float], float]) -> SourceField:
         """A new field of the same circles at the same spacing, each with the value `new_value_of` makes of its own."""
-        return SourceField._holding(
+        return SourceField._holding_circles(
             [circle.with_value(float(new_value_of(circle.value))) for circle in self._circles],
             spacing=self._spacing,
         )

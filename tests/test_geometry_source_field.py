@@ -122,17 +122,6 @@ class TestBuilding:
         assert all(type(source.center) is Point for source in field)
         assert list(SourceField()) == []
 
-    def test_the_circles_iterated_build_a_field_that_reads_the_same(self) -> None:
-        field = _mixed_field()
-        copied = SourceField()
-        for source in field:
-            copied.add_circle(
-                source.center, source.radius, source.value, edge=source.edge, edge_width=source.edge_width
-            )
-        rectangle = Rectangle(-2.0, -1.0, 12.0, 10.0)
-        assert copied.to_grid(rectangle).values.tolist() == field.to_grid(rectangle).values.tolist()
-        assert copied.gradient_at((3.1, 4.2)) == field.gradient_at((3.1, 4.2))
-
     def test_a_circle_source_is_frozen(self) -> None:
         source = next(iter(_threat()))
         with pytest.raises(AttributeError):
@@ -152,11 +141,14 @@ class TestBuilding:
         with pytest.raises(ValueError, match="sharp edge takes no width"):
             SourceField([CircleSource(Point((0.0, 0.0)), 2.0, 1.0, Edge.SHARP, 1.0)])
 
-    def test_a_field_is_built_from_another_fields_circles(self) -> None:
+    def test_a_field_built_from_another_fields_circles_reads_the_same(self) -> None:
+        """So iterating gives each circle whole, its edge and width included."""
         field = _mixed_field()
         rebuilt = SourceField(field)
         assert list(rebuilt) == list(field)
-        assert rebuilt.value_at((3.1, 4.2)) == field.value_at((3.1, 4.2))
+        rectangle = Rectangle(-2.0, -1.0, 12.0, 10.0)
+        assert rebuilt.to_grid(rectangle).values.tolist() == field.to_grid(rectangle).values.tolist()
+        assert rebuilt.gradient_at((3.1, 4.2)) == field.gradient_at((3.1, 4.2))
 
     @pytest.mark.parametrize("source", [Circle((0.0, 0.0), 1.0), ((0.0, 0.0), 1.0, 1.0)], ids=repr)
     def test_a_field_is_built_from_circle_sources_alone(self, source: object) -> None:

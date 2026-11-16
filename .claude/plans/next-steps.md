@@ -43,7 +43,8 @@ As of 2026-11-14:
   `api.in_production(UnitType.NonStructure)`, and its effect threat is a `SourceField` (Fields, step 3).
 - **0.6.0 is out** (2026-11-15, from cfa5be5), with #253. Its notes say that a bot's `falloff=w` is
   `edge=Edge.LINEAR, edge_width=w` now, the default edge `Edge.SHARP` taking no width, and that it adds `Edge.SMOOTH`.
-  Its 48 in-game tests passed on cfa5be5 (sc2 run 43749840344), and AvocaDOS's on it unchanged. AvocaDOS #99 takes it.
+  Its 48 in-game tests passed on cfa5be5 (sc2 run 43749840344), and AvocaDOS's tests on it, unchanged. AvocaDOS #99
+  takes it.
 - **Since 0.6.0**, on main: #254. The next release, 0.7.0 since #254 has `add_circle` take a center and a radius where
   it took a `Circle`, says in its notes that a bot's `add_circle(Circle(center, radius), value, ...)` is
   `add_circle(center, radius, value, ...)` now, and that a field has no truth value, as a grid has none; it adds
@@ -372,26 +373,27 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      needs a rectangle yet), each with a value, summed where they overlap (the owner, over the largest), and 0 beyond
      every circle, of floats alone (the owner, review of #249, over booleans or-ed, which a bot writes as circles of
      1.0: whether `max` reads above 0 is as exact, and a read over a unit's circle some 6% slower). A bot builds one by
-     `add_circle(center, radius, value, *, edge=Edge.SHARP, edge_width=0.0)`, so it is mutable (the owner, over one built
-     whole from a list of sources), and named for its shape so that `add_rectangle` can follow (the owner, review of
-     #249, over `add`). It took a `Circle` until #254 (the owner, review of AvocaDOS #99: the call spelled the circle
-     twice, and the field never kept it; over `value` keyword-only, though a radius and a value side by side can be
-     swapped). Since #254, `len(field)` counts its circles and `bool(field)` raises `TypeError`, as a grid's does,
-     since whether a field holds a circle and whether it reads anything differ for circles of 0 or ones that cancel
-     (the owner, 2026-11-16, over truthy when it holds one, as `Units` is, and over a `circle_count`); iterating gives
-     each circle as a public frozen `CircleSource`, its center a `Point`, radius, value, edge and width, in the order
-     added, built on demand from the flat floats the reads loop over, 0.66 µs a circle (the owner, over tuples and over
-     waiting for a caller); and `clear()` removes every circle, keeping the spacing, as `UnitDict.clear` does (the
-     owner, though building a new field takes 0.10 µs). Also since #254, the owner's further asks (2026-11-16):
-     `SourceField(sources, *, spacing=0.25)` holds `CircleSource`s, each checked as `add_circle` checks it, so
-     `SourceField(other)` holds another field's circles, reversing #249's field built by `add_circle` alone (over
-     `sources=` keyword-only); `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`, `k * a`, `a * k` and `a / k` each
-     make a new field, a sum holding both fields' circles and reading at the finer spacing, a number scaling each
-     circle's value, with no in-place `+=`, so a field one reader holds never changes under it (over spacings that must
-     match, and over `combined_with` and `scaled`, as `Units` has); and `sources_reaching(area)` lists the circles the
-     reads over an area take, as `CircleSource`s in the order added (over a field of them). No helper adds a disc
-     blurred by a Gaussian (the owner: a caller gets as much from a smooth circle's parameters, and nothing makes the
-     blur a better choice a priori). A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
+     `add_circle(center, radius, value, *, edge=Edge.SHARP, edge_width=0.0)`, so it is mutable (the owner, over one
+     built whole and frozen from a list of sources; since #254 it can also start from a list, below), and named for its
+     shape so that `add_rectangle` can follow (the owner, review of #249, over `add`). It took a `Circle` until #254
+     (the owner, review of AvocaDOS #99: the call spelled the circle twice, and the field never kept it; over `value`
+     keyword-only, though a radius and a value side by side can be swapped). Since #254, `len(field)` counts its circles
+     and `bool(field)` raises `TypeError`, as a grid's does, since whether a field holds a circle and whether it reads
+     anything differ for circles of 0 or ones that cancel (the owner, 2026-11-16, over truthy when it holds one, as
+     `Units` is, and over a `circle_count`); iterating gives each circle as a public frozen `CircleSource`, its center a
+     `Point`, radius, value, edge and width, in the order added, built on demand from the flat floats the reads loop
+     over, 0.66 µs a circle (the owner, over tuples and over waiting for a caller); and `clear()` removes every circle,
+     keeping the spacing, as `UnitDict.clear` does (the owner, though building a new field takes 0.10 µs). Also since
+     #254, the owner's further asks (2026-11-16): `SourceField(sources, *, spacing=0.25)` holds `CircleSource`s, each
+     checked as `add_circle` checks it, so `SourceField(other)` holds another field's circles, reversing #249's field
+     built by `add_circle` alone (over `sources=` keyword-only); `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`,
+     `k * a`, `a * k` and `a / k` each make a new field, a sum holding both fields' circles and reading at the finer
+     spacing, a number scaling each circle's value, with no in-place `+=`, so a field one reader holds never changes
+     under it (over spacings that must match, and over `combined_with` and `scaled`, as `Units` has); and
+     `sources_reaching(area)` lists the circles the reads over an area take, as `CircleSource`s in the order added (over
+     a field of them). No helper adds a disc blurred by a Gaussian (the owner: a caller gets as much from a smooth
+     circle's parameters, and nothing makes the blur a better choice a priori).
+     A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
      circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
      lies inside the circle, so the circle is all the ground the field reaches and an edge as wide as the radius makes a
      cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over `full_within`,
@@ -437,17 +439,18 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      That fit is a starting point, not a target: the owner, since the smoothed grids' values were never evaluated as
      best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
      #99, drawn onto the map's grid by `to_grid` every 4 steps, as the grid was smoothed, and cropped for each flee as
-     now; threat and support in a pull request of their own, since paths and grid arithmetic
-     read them, and points in some 20 places.
+     now; threat and support in a pull request of their own, since paths and grid arithmetic read them, and points in
+     some 20 places.
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
   holding the field's value at its center, for paths and grid arithmetic (the owner, review of AvocaDOS #99, over the
   largest value within each tile, which spaced reads would cost some 30 to 50 µs a tile, and over `to_grid(like=grid)`).
   It came ahead of the public tile rules it was to be planned with (second review of #238), since it returns no
   `TileSet`. Each circle adds its values over the tiles its bounding box overlaps, 17 to 33 µs a circle over a map of
-  200 by 176 tiles, 80 circles in 1.4 to 1.5 ms, where smoothing that grid alone takes 0.56 ms; over a 4 by 4 area, 18 µs with one circle near and 0.7 ms
-  with 40, where a prototype working every tile against every circle at once took 52 to 74 µs but 26 ms over the map
-  with 40 (2026-11-16): not built, since AvocaDOS reads many circles over a small area off a grid drawn once.
+  200 by 176 tiles, 80 circles in 1.4 to 1.5 ms, where smoothing that grid alone takes 0.56 ms; over a 4 by 4 area,
+  18 µs with one circle near and 0.7 ms with 40, where a prototype working every tile against every circle at once took
+  52 to 74 µs but 26 ms over the map with 40 (2026-11-16): not built, since AvocaDOS reads many circles over a small
+  area off a grid drawn once.
 
   Later, when a bot needs one: rectangles in a `SourceField`, by `add_rectangle` (the owner, review of #249). And public
   tile rules returning `TileSet`s: every tile whose center an area holds, as `tiles()` gives, every tile it overlaps,
