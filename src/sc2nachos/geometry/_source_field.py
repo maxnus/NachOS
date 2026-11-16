@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, final
 
 import numpy
 
-from sc2nachos.geometry._circle import Circle
 from sc2nachos.geometry._edge import Edge
+from sc2nachos.geometry._grid import Grid
 from sc2nachos.geometry._point import Point
+from sc2nachos.geometry._shapes import Tile
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -69,25 +70,35 @@ class SourceField:
         """How far apart, at most, along x and along y, `min`, `max`, `argmin` and `argmax` read the field."""
         return self._spacing
 
-    def add_circle(self, circle: Circle, value: float, *, edge: Edge = Edge.SHARP, edge_width: float = 0.0) -> None:
-        """Add `circle`, holding `value`: throughout, with a sharp `edge`, or with a linear or a smooth one, out to
-        `edge_width` inside its edge, falling from there to 0 at the edge, so that an edge as wide as the radius makes a
-        cone, or a smooth one a bump. Raises `TypeError` for anything but a `Circle`, and `ValueError` for a width
-        given a sharp edge, and for a linear or smooth edge's width not above 0 or beyond the radius."""
-        if not isinstance(circle, Circle):
-            raise TypeError(f"a source field adds circles, not a {type(circle).__name__}")
-        radius = circle.radius
+    def add_circle(
+        self, center: PointLike, radius: float, value: float, *, edge: Edge = Edge.SHARP, edge_width: float = 0.0
+    ) -> None:
+        """Add a circle of `radius` around `center`, holding `value`: throughout, with a sharp `edge`, or with a linear
+        or a smooth one, out to `edge_width` inside its edge, falling from there to 0 at the edge, so that an edge as
+        wide as the radius makes a cone, or a smooth one a bump. Raises `ValueError` for a radius not above 0, for a
+        width given a sharp edge, and for a linear or smooth edge's width not above 0 or beyond the radius."""
+        if not radius > 0:
+            raise ValueError(f"a circle's radius lies above 0, got {radius}")
         if edge is Edge.SHARP:
             if edge_width:
                 raise ValueError(f"a sharp edge takes no width, got {edge_width}")
         elif not 0 < edge_width <= radius:
             raise ValueError(
-                f"a {edge.value} edge's width lies above 0 and within the radius of {circle!r}, got {edge_width}"
+                f"a {edge.value} edge's width lies above 0 and within the radius of {radius}, got {edge_width}"
             )
-        x, y = circle.center
+        radius = float(radius)
         full_within = radius - edge_width
         self._circles.append(
-            _CircleSource(x, y, radius, radius * radius, edge, edge_width, full_within * full_within, float(value))
+            _CircleSource(
+                float(center[0]),
+                float(center[1]),
+                radius,
+                radius * radius,
+                edge,
+                edge_width,
+                full_within * full_within,
+                float(value),
+            )
         )
 
     # --- Reads
@@ -204,6 +215,27 @@ class SourceField:
                 slope_y += slope_per_offset * dy
         return slope_x, slope_y
 
+    def to_grid(self, rectangle: Rectangle, *, outside: float | None = None) -> Grid[float]:
+        """A grid over the tiles `rectangle` covers, as `Grid.cropped` takes them, each holding the field's value at
+        its center, as `value_at` reads it, so that paths and a grid's arithmetic can take the field. A circle that
+        covers no tile's center, as a small one may, leaves no mark on the grid. `outside` is what the grid reads
+        beyond its edge, as `Grid` takes it."""
+        x_range, y_range = rectangle.tile_range()
+        values = numpy.zeros((len(x_range), len(y_range)))
+        for circle in self._circles:
+            # The tiles the circle's bounding box overlaps, of those the grid holds.
+            left = max(x_range.start, math.floor(circle.x - circle.radius))
+            right = min(x_range.stop, math.floor(circle.x + circle.radius) + 1)
+            bottom = max(y_range.start, math.floor(circle.y - circle.radius))
+            top = min(y_range.stop, math.floor(circle.y + circle.radius) + 1)
+            if left >= right or bottom >= top:
+                continue
+            dx = (numpy.arange(left, right) + 0.5) - circle.x
+            dy = (numpy.arange(bottom, top) + 0.5) - circle.y
+            block = values[left - x_range.start : right - x_range.start, bottom - y_range.start : top - y_range.start]
+            block += _circle_values(circle, (dx * dx)[:, None] + (dy * dy)[None, :])
+        return Grid(values, origin=Tile(x_range.start, y_range.start), outside=outside)
+
     def __repr__(self) -> str:
         return f"SourceField({len(self._circles)} circles)"
 
@@ -215,20 +247,23 @@ def _values_at(xs: ndarray, ys: ndarray, circles: list[_CircleSource]) -> ndarra
     for circle in circles:
         dx = xs - circle.x
         dy = ys - circle.y
-        distances_squared = dx * dx + dy * dy
-        if circle.edge_width:
-            shares_to_cross = (circle.radius - numpy.sqrt(distances_squared)) / circle.edge_width
-            shares_held = (
-                shares_to_cross * shares_to_cross * (3.0 - 2.0 * shares_to_cross)
-                if circle.edge is Edge.SMOOTH
-                else shares_to_cross
-            )
-            falling = circle.value * shares_held
-            values = numpy.where(distances_squared <= circle.radius_squared, falling, 0.0)
-            totals += numpy.where(distances_squared <= circle.full_within_squared, circle.value, values)
-        else:
-            totals += numpy.where(distances_squared <= circle.radius_squared, circle.value, 0.0)
+        totals += _circle_values(circle, dx * dx + dy * dy)
     return totals
+
+
+def _circle_values(circle: _CircleSource, distances_squared: ndarray) -> ndarray:
+    """The value `circle` holds at each of `distances_squared` from its center, worked out as `value_at` works out
+    one, to the last bit."""
+    if not circle.edge_width:
+        return numpy.where(distances_squared <= circle.radius_squared, circle.value, 0.0)
+    shares_to_cross = (circle.radius - numpy.sqrt(distances_squared)) / circle.edge_width
+    shares_held = (
+        shares_to_cross * shares_to_cross * (3.0 - 2.0 * shares_to_cross)
+        if circle.edge is Edge.SMOOTH
+        else shares_to_cross
+    )
+    falling = numpy.where(distances_squared <= circle.radius_squared, circle.value * shares_held, 0.0)
+    return numpy.where(distances_squared <= circle.full_within_squared, circle.value, falling)
 
 
 def _circles_reaching(area: Area, circles: list[_CircleSource]) -> list[tuple[_CircleSource, Point]]:
