@@ -49,8 +49,8 @@ As of 2026-11-14:
   it took a `Circle`, says in its notes that a bot's `add_circle(Circle(center, radius), value, ...)` is
   `add_circle(center, radius, value, ...)` now, and that a field has no truth value, as a grid has none; it adds
   `SourceField.to_grid`, `len` and iteration over a field's circles, each a `CircleSource`, a field built from them,
-  `clear`, `copy`, `sources_reaching`, adding, subtracting and scaling fields, and `values_at` on every `Field`, a
-  grid's included.
+  `clear`, `copy`, `sources_reaching`, `transformed`, adding, subtracting and scaling fields, and `values_at` on every
+  `Field`, a grid's included.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -377,22 +377,27 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      built whole and frozen from a list of sources; since #254 it can also start from a list, below), and named for its
      shape so that `add_rectangle` can follow (the owner, review of #249, over `add`). It took a `Circle` until #254
      (the owner, review of AvocaDOS #99: the call spelled the circle twice, and the field never kept it; over `value`
-     keyword-only, though a radius and a value side by side can be swapped). Since #254, `len(field)` counts its circles
-     and `bool(field)` raises `TypeError`, as a grid's does, since whether a field holds a circle and whether it reads
-     anything differ for circles of 0 or ones that cancel (the owner, 2026-11-16, over truthy when it holds one, as
-     `Units` is, and over a `circle_count`); iterating gives each circle as a public frozen `CircleSource`, its center a
-     `Point`, radius, value, edge and width, in the order added, built on demand from the flat floats the reads loop
-     over, 0.66 µs a circle (the owner, over tuples and over waiting for a caller); and `clear()` removes every circle,
-     keeping the spacing, as `UnitDict.clear` does (the owner, though building a new field takes 0.10 µs). Also since
-     #254, the owner's further asks (2026-11-16): `SourceField(sources, *, spacing=0.25)` holds `CircleSource`s, each
-     checked as `add_circle` checks it, so `SourceField(other)` holds another field's circles, reversing #249's field
-     built by `add_circle` alone (over `sources=` keyword-only); `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`,
-     `k * a`, `a * k` and `a / k` each make a new field, a sum holding both fields' circles and reading at the finer
-     spacing, a number scaling each circle's value, with no in-place `+=`, so a field one reader holds never changes
-     under it (over spacings that must match, and over `combined_with` and `scaled`, as `Units` has); and
-     `sources_reaching(area)` lists the circles the reads over an area take, as `CircleSource`s in the order added (over
-     a field of them). No helper adds a disc blurred by a Gaussian (the owner: a caller gets as much from a smooth
-     circle's parameters, and nothing makes the blur a better choice a priori).
+     keyword-only, though a radius and a value side by side can be swapped). Since #254, the field holds and hands out
+     `CircleSource`s, a public frozen dataclass of a `Circle`, a value, an edge and its width, checked as it is made,
+     `dataclasses.replace` included, and holding private copies of what the reads compare, the center's x and y, the
+     radius and the squares, worked out as it is made (the owner, review of #254, over two records, a public one built
+     on demand and a private one the reads looped over, and over a center and a radius in place of the `Circle`): a
+     circle added 1.68 µs against 1.16, iterating over 10 0.19 µs against 6.91, the reads unchanged. `len(field)` counts
+     its circles and `bool(field)` raises `TypeError`, as a grid's does, since whether a field holds a circle and
+     whether it reads anything differ for circles of 0 or ones that cancel (the owner, 2026-11-16, over truthy when it
+     holds one, as `Units` is, and over a `circle_count`); iterating hands out its `CircleSource`s in the order added
+     (the owner, over tuples and over waiting for a caller); and `clear()` removes every circle, keeping the spacing, as
+     `UnitDict.clear` does (the owner, though building a new field takes 0.10 µs). Also since #254, the owner's further
+     asks (2026-11-16): `SourceField(sources, *, spacing=0.25)` holds `CircleSource`s, so `SourceField(other)` holds
+     another field's circles, reversing #249's field built by `add_circle` alone (over `sources=` keyword-only);
+     `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`, `k * a`, `a * k` and `a / k` each make a new field, a sum
+     holding both fields' circles and reading at the finer spacing, a number scaling each circle's value, with no
+     in-place `+=`, so a field one reader holds never changes under it (over spacings that must match, and over
+     `combined_with` and `scaled`, as `Units` has); `transformed(new_source_of)` remakes each circle, a `CircleSource`
+     from a `CircleSource`, its value, circle or edge (the owner, review of #254, over `with_values`, `with_radii` and
+     `with_edges`, and over values alone); and `sources_reaching(area)` lists the circles the reads over an area take,
+     in the order added (over a field of them). No helper adds a disc blurred by a Gaussian (the owner: a caller gets as
+     much from a smooth circle's parameters, and nothing makes the blur a better choice a priori).
      A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
      circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
      lies inside the circle, so the circle is all the ground the field reaches and an edge as wide as the radius makes a

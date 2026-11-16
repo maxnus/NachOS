@@ -3,6 +3,7 @@
 import math
 import random
 from collections.abc import Callable
+from dataclasses import replace
 
 import numpy
 import pytest
@@ -70,7 +71,7 @@ class TestBuilding:
 
     @pytest.mark.parametrize("radius", [0.0, -1.0, math.nan])
     def test_a_circles_radius_lies_above_0(self, radius: float) -> None:
-        with pytest.raises(ValueError, match="radius lies above 0"):
+        with pytest.raises(ValueError, match="positive radius|radius lies above 0"):
             SourceField().add_circle((0.0, 0.0), radius, 1.0)
 
     def test_a_circle_is_held_by_its_center_and_radius(self) -> None:
@@ -116,30 +117,45 @@ class TestBuilding:
         field.add_circle((10, 10), 4, 8, edge=Edge.LINEAR, edge_width=4.0)
         field.add_circle(Point((13.0, 10.0)), 1.5, 3.0)
         assert list(field) == [
-            CircleSource(Point((10.0, 10.0)), 4.0, 8.0, Edge.LINEAR, 4.0),
-            CircleSource(Point((13.0, 10.0)), 1.5, 3.0, Edge.SHARP, 0.0),
+            CircleSource(Circle((10.0, 10.0), 4.0), 8.0, Edge.LINEAR, 4.0),
+            CircleSource(Circle((13.0, 10.0), 1.5), 3.0),
         ]
-        assert all(type(source.center) is Point for source in field)
+        assert all(type(source.value) is float for source in field)
         assert list(SourceField()) == []
+
+    def test_iterating_hands_out_the_circles_the_field_holds(self) -> None:
+        """No copies: each is frozen."""
+        field = _threat()
+        assert all(first is second for first, second in zip(field, field, strict=True))
 
     def test_a_circle_source_is_frozen(self) -> None:
         source = next(iter(_threat()))
         with pytest.raises(AttributeError):
-            source.radius = 1.0  # pyright: ignore[reportAttributeAccessIssue]
+            source.value = 1.0  # pyright: ignore[reportAttributeAccessIssue]
 
-    def test_a_field_is_built_from_circle_sources_each_checked_as_add_circle_checks_it(self) -> None:
+    def test_a_circle_source_is_checked_as_it_is_made(self) -> None:
+        """As `add_circle` checked a circle, since it makes one; `dataclasses.replace` makes one too."""
+        with pytest.raises(ValueError, match="sharp edge takes no width"):
+            CircleSource(Circle((0.0, 0.0), 2.0), 1.0, Edge.SHARP, 1.0)
+        with pytest.raises(ValueError, match="above 0 and within the radius"):
+            CircleSource(Circle((0.0, 0.0), 2.0), 1.0, Edge.LINEAR, 2.5)
+        with pytest.raises(ValueError, match="radius lies above 0"):
+            CircleSource(Circle((0.0, 0.0), math.nan), 1.0)
+        with pytest.raises(ValueError, match="above 0 and within the radius"):
+            replace(CircleSource(Circle((0.0, 0.0), 2.0), 1.0, Edge.SMOOTH, 2.0), circle=Circle((0.0, 0.0), 1.0))
+        with pytest.raises(TypeError, match="holds a Circle, not a Rectangle"):
+            CircleSource(Rectangle(0.0, 0.0, 1.0, 1.0), 1.0)  # pyright: ignore[reportArgumentType]
+
+    def test_a_field_is_built_from_circle_sources(self) -> None:
         sources = [
-            CircleSource(Point((10.0, 10.0)), 4.0, 8.0, Edge.LINEAR, 4.0),
-            CircleSource(Point((13.0, 10.0)), 1.5, 3.0, Edge.SHARP, 0.0),
+            CircleSource(Circle((10.0, 10.0), 4.0), 8.0, Edge.LINEAR, 4.0),
+            CircleSource(Circle((13.0, 10.0), 1.5), 3.0),
         ]
         field = SourceField(source for source in sources)
         assert list(field) == sources
+        assert field.value_at((10.0, 10.0)) == _threat().value_at((10.0, 10.0))
         assert field.spacing == 0.25
         assert SourceField(sources, spacing=0.5).spacing == 0.5
-        with pytest.raises(ValueError, match="radius lies above 0"):
-            SourceField([CircleSource(Point((0.0, 0.0)), 0.0, 1.0, Edge.SHARP, 0.0)])
-        with pytest.raises(ValueError, match="sharp edge takes no width"):
-            SourceField([CircleSource(Point((0.0, 0.0)), 2.0, 1.0, Edge.SHARP, 1.0)])
 
     def test_a_field_built_from_another_fields_circles_reads_the_same(self) -> None:
         """So iterating gives each circle whole, its edge and width included."""
@@ -152,7 +168,7 @@ class TestBuilding:
 
     @pytest.mark.parametrize("source", [Circle((0.0, 0.0), 1.0), ((0.0, 0.0), 1.0, 1.0)], ids=repr)
     def test_a_field_is_built_from_circle_sources_alone(self, source: object) -> None:
-        with pytest.raises(TypeError, match="built from CircleSources, not a"):
+        with pytest.raises(TypeError, match="holds CircleSources, not a"):
             SourceField([source])  # pyright: ignore[reportArgumentType]
 
     def test_a_copy_holds_the_same_circles_and_spacing_apart_from_the_original(self) -> None:
@@ -635,8 +651,8 @@ class TestSourcesReaching:
         field.add_circle((10.0, 0.0), 1.0, 2.0)
         field.add_circle((3.0, 0.0), 1.5, 3.0, edge=Edge.SMOOTH, edge_width=1.5)
         assert field.sources_reaching(Circle((2.0, 0.0), 0.5)) == [
-            CircleSource(Point((0.0, 0.0)), 2.0, 1.0, Edge.SHARP, 0.0),
-            CircleSource(Point((3.0, 0.0)), 1.5, 3.0, Edge.SMOOTH, 1.5),
+            CircleSource(Circle((0.0, 0.0), 2.0), 1.0),
+            CircleSource(Circle((3.0, 0.0), 1.5), 3.0, Edge.SMOOTH, 1.5),
         ]
         assert field.sources_reaching(Circle((6.0, 5.0), 1.0)) == []
 
@@ -654,3 +670,34 @@ class TestSourcesReaching:
     @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1.0, 1.0, 0.0, 2.0)], ids=repr)
     def test_an_empty_area_is_reached_by_none(self, area: Area) -> None:
         assert _threat().sources_reaching(area) == []
+
+
+class TestTransformed:
+    def test_each_circles_value_circle_or_edge_is_remade_in_a_new_field(self) -> None:
+        """`_threat`: a cone of 8 and radius 4 at (10, 10), and 3 within 1.5 of (13, 10)."""
+        field = _threat()
+        capped = field.transformed(lambda source: replace(source, value=min(source.value, 5.0)))
+        assert [source.value for source in capped] == [5.0, 3.0]
+        assert [source.value for source in field] == [8.0, 3.0]
+        wider = field.transformed(
+            lambda source: replace(source, circle=Circle(source.circle.center, source.circle.radius + 1.0))
+        )
+        assert [source.circle.radius for source in wider] == [5.0, 2.5]
+        assert field.value_at((15.0, 10.0)) == 0.0
+        assert wider.value_at((15.0, 10.0)) == 3.0
+        softened = field.transformed(lambda source: replace(source, edge=Edge.SMOOTH, edge_width=source.circle.radius))
+        assert softened.value_at((12.0, 10.0)) == pytest.approx(4.0 + 3.0 * (1 / 3) ** 2 * (3.0 - 2.0 / 3))
+
+    def test_the_order_and_spacing_stay(self) -> None:
+        field = SourceField(_mixed_field(), spacing=0.5)
+        same = field.transformed(lambda source: source)
+        assert list(same) == list(field)
+        assert same.spacing == 0.5
+
+    def test_anything_but_a_circle_source_made_raises(self) -> None:
+        with pytest.raises(TypeError, match="holds CircleSources, not a float"):
+            _threat().transformed(lambda source: source.value)  # pyright: ignore[reportArgumentType, reportReturnType]
+
+    def test_a_circle_made_wrong_raises_as_it_is_made(self) -> None:
+        with pytest.raises(ValueError, match="above 0 and within the radius"):
+            _threat().transformed(lambda source: replace(source, edge=Edge.LINEAR, edge_width=10.0))
