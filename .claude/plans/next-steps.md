@@ -47,7 +47,9 @@ As of 2026-11-14:
   takes it.
 - **Since 0.6.0**, on main: #254. The next release, 0.7.0 since #254 has `add_circle` take a center and a radius where
   it took a `Circle`, says in its notes that a bot's `add_circle(Circle(center, radius), value, ...)` is
-  `add_circle(center, radius, value, ...)` now, and that a field has no truth value, as a grid has none; it adds
+  `add_circle(center, radius, value, ...)` now; that a linear or smooth edge is centered on the circle's edge, so
+  0.6.0's `add_circle(Circle(center, r), value, edge=e, edge_width=w)` reads as `add_circle(center, r - w / 2, value,
+  edge=e, edge_width=w)` does now; and that a field has no truth value, as a grid has none. It adds
   `SourceField.to_grid`, `len` and iteration over a field's circles, each a `CircleSource`, a field built from them,
   `clear`, `copy`, `sources_reaching`, `transformed`, adding, subtracting and scaling fields, and `values_at` on every
   `Field`, a grid's included.
@@ -398,11 +400,16 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      `with_edges`, and over values alone); and `sources_reaching(area)` lists the circles the reads over an area take,
      in the order added (over a field of them). No helper adds a disc blurred by a Gaussian (the owner: a caller gets as
      much from a smooth circle's parameters, and nothing makes the blur a better choice a priori).
-     A circle holds its value out to `edge_width` inside its edge and falls to 0 at the edge, so a constant
+     A circle holds its value out to half its `edge_width` inside its edge, falling to 0 as far beyond, so a constant
      circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
-     lies inside the circle, so the circle is all the ground the field reaches and an edge as wide as the radius makes a
-     cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over `full_within`,
-     `inner_radius` and a ramp beyond the circle, which reaches past the shape given and has no cone). Since #253 an
+     lay inside the circle until #254, so the circle was all the ground the field reaches and an edge as wide as the
+     radius made a cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over
+     `full_within`, `inner_radius` and a ramp beyond the circle, which reaches past the shape given and has no cone).
+     Since #254 it is centered on the circle's edge, half the value on it, so the field reaches half the width beyond
+     the circle (the owner, 2026-11-16, reversing #249, and over an edge beyond the circle, full throughout it): the
+     radius stays the circle's size whatever the width, as antialiasing and signed-distance shapes soften one; no width
+     is too wide, one wider than the circle leaving no point with the whole value and lowering its peak, as blurring a
+     small disc does; and an edge as wide as the circle makes a cone reaching twice its radius. Since #253 an
      `Edge` says how it falls, set on each circle (the owner, 2026-11-15, over once for the field and over a field's
      default each circle may override): `SHARP`, at once, the default, taking no width, or across the width `LINEAR`,
      evenly, or `SMOOTH`, by the smoothstep `t²(3 − 2t)`, its slope easing to 0 at both ends, each needing a width above
@@ -437,10 +444,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      center. Its splash zone waits: `squad_splash_spacing` is 0, so only the debug overlay reads it. #99, open, takes
      0.6.0, and is to take 0.7.0 and the owner's review of it: its smoothed strength grids, melee threat, threat and
      support, become fields of smooth circles, what #253's edges were for (the owner, 2026-11-16, over keeping them
-     grids). A disc of radius R blurred by a Gaussian of σ 1 comes within 0.06 of a smooth circle of radius R + 2, edge
-     width the lesser of 4.2 and that radius, and the value times the blurred disc's peak, 1 − exp(−R²/2), for R from
-     0.5 to 15, and within 0.017 to 0.025 fitting each R alone (2026-11-16). The field reaches R + 2, where the smoothed
-     grid reads above 0 out to R + 4, its filter's truncation: 373 tiles for 10 zerglings, against 31 in their circles.
+     grids). A disc of radius R blurred by a Gaussian of σ 1 comes within 0.06 of a smooth circle reaching R + 2, its
+     edge the lesser of 4.2 and R + 2 wide, centered on a radius of R + 2 less half that width, about R from R 2.2 up,
+     and the value times the blurred disc's peak, 1 − exp(−R²/2), for R from 0.5 to 15, and within 0.017 to 0.025
+     fitting each R alone (2026-11-16, worked out in #253's terms, an edge inside a circle of radius R + 2). The field
+     reaches R + 2, where the smoothed grid reads above 0 out to R + 4, its filter's truncation: 373 tiles for 10
+     zerglings, against 31 in their circles.
      That fit is a starting point, not a target: the owner, since the smoothed grids' values were never evaluated as
      best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
      #99, drawn onto the map's grid by `to_grid` every 4 steps, as the grid was smoothed, and cropped for each flee as
