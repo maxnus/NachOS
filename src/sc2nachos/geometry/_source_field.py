@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from sc2nachos.geometry._area import Area
     from sc2nachos.geometry._point import PointLike
 
+# How far apart, at most, a read over an area takes its points, unless it is given another spacing.
+_DEFAULT_SPACING = 0.1
+
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -237,23 +240,23 @@ class SourceField:
                 total += source.value * weight
         return total
 
-    def min(self, *, within: Area, spacing: float = 0.1) -> float:
+    def min(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> float:
         """The smallest value read in `within`, at points at most `spacing` apart, as the class says. Raises
         `ValueError` for an empty area and for a spacing not above 0."""
         return self._extreme_value(within, spacing, largest=False)
 
-    def max(self, *, within: Area, spacing: float = 0.1) -> float:
+    def max(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> float:
         """The largest value read in `within`, at points at most `spacing` apart, as the class says. Raises
         `ValueError` for an empty area and for a spacing not above 0."""
         return self._extreme_value(within, spacing, largest=True)
 
-    def argmin(self, *, within: Area, spacing: float = 0.1) -> Point:
+    def argmin(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> Point:
         """The point, of those read in `within` at points at most `spacing` apart as the class says, with the smallest
         value, the lowest x, then y, where several tie: always one `within` holds. Raises `ValueError` for an empty
         area and for a spacing not above 0."""
         return self._extreme_point(within, spacing, largest=False)
 
-    def argmax(self, *, within: Area, spacing: float = 0.1) -> Point:
+    def argmax(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> Point:
         """The point, of those read in `within` at points at most `spacing` apart as the class says, with the largest
         value, as `argmin` picks one."""
         return self._extreme_point(within, spacing, largest=True)

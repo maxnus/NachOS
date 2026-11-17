@@ -425,7 +425,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      at points at most `spacing` apart over the area, a keyword of each read over an area, 0.1 by default (the owner,
      2026-11-17, #255, reversing #238's spacing set on the field, 0.25 by default: how finely to read is the read's to
      choose, two readers of one field may want different, and a sum of fields had to pick one; review of #249, over
-     `resolution`, which reads both ways), and at the area's point nearest each touching
+     `resolution`, which reads both ways, and of #255, over `sampling`, which names the method and not the distance;
+     its default one private constant, `_DEFAULT_SPACING`, the owner), and at the area's point nearest each touching
      circle's center: where every circle's value is positive, exact in whether `max` reads above 0 and in the largest
      value of one circle alone, and up to the spacing off for the rest, min included (the owner, building it, kept the
      rule and had the plan's "exact for booleans and for one shape" corrected). Every point read is one the area holds,
