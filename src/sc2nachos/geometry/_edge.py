@@ -5,8 +5,10 @@ from enum import Enum
 
 class Edge(Enum):
     """How a `SourceField`'s circle falls from its value to 0 at its edge: at once, or across a band of `edge_width`
-    inside the circle, by the share `t` of the band between a point and the circle's edge, 1 where the band begins and
-    0 at the edge."""
+    centered on the edge, by a point's depth `t` in the band, how far it lies from the band's outer end in band widths:
+    1 where the band begins, half the edge's width inside the circle, ½ on the circle's edge, and 0 half the width
+    beyond it. A band wider than the circle leaves no point holding the whole value, and the center holds what its depth
+    gives."""
 
     SHARP = "sharp"
     """At once: the circle holds its whole value out to its edge, and none beyond, so it takes no width."""

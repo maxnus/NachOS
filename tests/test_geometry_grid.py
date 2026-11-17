@@ -686,6 +686,32 @@ class TestFieldReads:
         assert mask.max(within=Tile(1, 1)) is False
         assert mask.value_at((1.5, 1.5)) is False
 
+    def test_values_at_reads_each_point_as_value_at_does(self) -> None:
+        """Points inside tiles, on their lower and left edges, which the tile holds, and just below them."""
+        grid = playable_grid()
+        points = [(8.7, 9.2), (4.0, 6.0), (13.999, 13.999), (8.0, 9.0), (math.nextafter(8.0, 0.0), 9.0)]
+        values = grid.values_at(points)
+        assert values.tolist() == [grid.value_at(point) for point in points]
+        assert values.dtype == float
+        assert grid.values_at(numpy.array(points)).tolist() == values.tolist()
+        assert grid.values_at([Point((8.7, 9.2))]).tolist() == grid.values_at([Point3D((8.7, 9.2, 1.0))]).tolist()
+        with pytest.raises(ValueError, match="all of the same length"):
+            grid.values_at([Point((8.7, 9.2)), Point3D((8.7, 9.2, 1.0))])
+        assert grid.values_at([]).tolist() == []
+
+    def test_values_at_reads_outside_beyond_the_grid_or_raises_without_it(self) -> None:
+        grid = Grid(numpy.arange(4).reshape(2, 2), outside=-1.5)
+        assert grid.values_at([(0.5, 1.5), (5.0, 5.0), (-0.5, 0.5)]).tolist() == [1, -1.5, -1.5]
+        assert Grid.zeros(2, 2, dtype=bool, outside=False).values_at([(0.5, 0.5), (9.0, 9.0)]).tolist() == [False] * 2
+        with pytest.raises(IndexError, match=re.escape("Tile(5, 5) lies outside")):
+            Grid.zeros(2, 2).values_at([(0.5, 0.5), (5.0, 5.0)])
+
+    def test_any_field_reads_many_points(self) -> None:
+        def threat_at_sites(field: Field[float], sites: list[PointLike]) -> list[float]:
+            return field.values_at(sites).tolist()
+
+        assert threat_at_sites(playable_grid(), [(8.5, 9.5)]) == [4 * 8 + 3]
+
     def test_value_at_reads_as_indexing_a_point_does(self) -> None:
         grid = playable_grid()
         assert grid.value_at((8.7, 9.2)) == grid[(8.7, 9.2)] == grid.value_at(Tile(8, 9)) == 4 * 8 + 3

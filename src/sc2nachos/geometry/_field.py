@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from numpy import ndarray
+
     from sc2nachos.geometry._area import Area
     from sc2nachos.geometry._point import Point, PointLike
 
@@ -19,6 +23,11 @@ class Field[T: float](Protocol):
 
     def value_at(self, point: PointLike) -> T:
         """The value at `point`."""
+        ...
+
+    def values_at(self, points: Sequence[PointLike] | ndarray) -> ndarray:
+        """The value at each of `points`, a sequence of points or an array of them, a point a row, as `value_at` reads
+        it, through numpy: an array, a value a point, in order."""
         ...
 
     def min(self, *, within: Area) -> T:

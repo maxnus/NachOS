@@ -13,11 +13,12 @@ import semita
 
 from sc2nachos.geometry._area import Area
 from sc2nachos.geometry._footprint import _margin_sides
+from sc2nachos.geometry._point import coordinate_arrays_of
 from sc2nachos.geometry._shapes import Rectangle, Tile
 from sc2nachos.geometry._tile_path import TilePath
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Sequence
 
     from numpy import ndarray
 
@@ -160,6 +161,26 @@ class Grid[T: float]:
         if self._outside is None:
             raise IndexError(f"{Tile.at(point)!r} lies outside {self.bounds!r}")
         return self._outside
+
+    def values_at(self, points: Sequence[PointLike] | ndarray) -> ndarray:
+        """The value at each of `points`, a sequence of points or an array of them, a point a row, as `value_at` reads
+        it, in one numpy pass: an array of the grid's values, a value a point, in order, `outside` beyond the grid.
+        Raises `IndexError` for a point beyond the grid where it reads no `outside`. A sequence of points first becomes
+        an array, which takes most of the time: the pass pays off most on points already in an array."""
+        xs, ys = coordinate_arrays_of(points)
+        columns = numpy.floor(xs).astype(numpy.intp) - self._origin.x
+        rows = numpy.floor(ys).astype(numpy.intp) - self._origin.y
+        width, height = self._data.shape
+        covered = (columns >= 0) & (columns < width) & (rows >= 0) & (rows < height)
+        if covered.all():
+            return self._data[columns, rows]
+        if self._outside is None:
+            first_beyond = int(numpy.argmin(covered))
+            point = (xs[first_beyond].item(), ys[first_beyond].item())
+            raise IndexError(f"{Tile.at(point)!r} lies outside {self.bounds!r}")
+        values = numpy.full(len(xs), self._outside, dtype=numpy.result_type(self._data.dtype, self._outside))
+        values[covered] = self._data[columns[covered], rows[covered]]
+        return values
 
     def _aligned(self, other: Grid) -> ndarray:
         """The values of `other`, which must cover the same tiles as this grid."""
