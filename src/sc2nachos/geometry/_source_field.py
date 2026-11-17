@@ -100,10 +100,9 @@ class SourceField:
 
     `min`, `max`, `argmin` and `argmax` read the field at points at most `spacing` apart, along x and along y, over
     the area, 0.1 unless the read is given another, and at the area's point nearest the center of each circle that
-    reaches it. So where every circle's value
-    is positive, whether `max` reads above 0 is exact, and so is the largest value where one circle reaches the area
-    alone. Anything else may be off by as much as the field changes over the spacing, and a value held only on a patch
-    narrower than that may be missed.
+    reaches it. So where every circle's value is positive, whether `max` reads above 0 is exact, and so is the largest
+    value where one circle reaches the area alone. Anything else may be off by as much as the field changes over the
+    spacing, and a value held only on a patch narrower than that may be missed.
 
     A field holds `CircleSource`s, built from them or circle by circle with `add_circle`. `len` counts them, and
     iterating over the field hands them out, in the order added. Fields add up and subtract, a sum holding the circles
@@ -387,7 +386,7 @@ def _points_to_read(
 
 
 def _check_spacing(spacing: float) -> None:
-    """Raises `ValueError` for a spacing not above 0, NaN included."""
+    """Raise `ValueError` for a spacing not above 0, NaN included."""
     if not spacing > 0:
         raise ValueError(f"a source field reads points a positive spacing apart, got {spacing}")
 
