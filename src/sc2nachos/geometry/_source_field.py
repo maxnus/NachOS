@@ -73,18 +73,19 @@ class CircleSource:
         set_field(self, "_reach_squared", reach * reach)
         set_field(self, "_full_within_squared", full_within * full_within if full_within >= 0 else -1.0)
 
+    def _with_value(self, value: float) -> CircleSource:
+        """The circle holding `value` in place of its own, made as `dataclasses.replace` would make it, at about half
+        the cost."""
+        return CircleSource(self.circle, value, self.edge, self.edge_width)
+
     def _values_at_distances_squared(self, distances_squared: ndarray) -> ndarray:
         """The value the circle holds at each of `distances_squared` from its center, worked out as
         `SourceField.value_at` works out one, to the last bit."""
         if not self.edge_width:
             return numpy.where(distances_squared <= self._reach_squared, self.value, 0.0)
-        shares_to_cross = (self._reach - numpy.sqrt(distances_squared)) / self.edge_width
-        shares_held = (
-            shares_to_cross * shares_to_cross * (3.0 - 2.0 * shares_to_cross)
-            if self.edge is Edge.SMOOTH
-            else shares_to_cross
-        )
-        falling = numpy.where(distances_squared <= self._reach_squared, self.value * shares_held, 0.0)
+        depths = (self._reach - numpy.sqrt(distances_squared)) / self.edge_width
+        weights = depths * depths * (3.0 - 2.0 * depths) if self.edge is Edge.SMOOTH else depths
+        falling = numpy.where(distances_squared <= self._reach_squared, self.value * weights, 0.0)
         return numpy.where(distances_squared <= self._full_within_squared, self.value, falling)
 
 
@@ -109,9 +110,9 @@ class SourceField:
     truth value.
     """
 
-    __slots__ = ("_circles", "_spacing")
+    __slots__ = ("_sources", "_spacing")
 
-    _circles: list[CircleSource]
+    _sources: list[CircleSource]
     _spacing: float
 
     def __init__(self, sources: Iterable[CircleSource] = (), *, spacing: float = 0.25) -> None:
@@ -120,19 +121,12 @@ class SourceField:
         `TypeError` for a source that is not a `CircleSource`."""
         if spacing <= 0:
             raise ValueError(f"a source field reads points a positive spacing apart, got {spacing}")
-        self._circles = []
+        self._sources = []
         self._spacing = spacing
         for source in sources:
             if not isinstance(source, CircleSource):
                 raise TypeError(f"a source field holds CircleSources, not a {type(source).__name__}")
-            self._circles.append(source)
-
-    @staticmethod
-    def _holding_circles(circles: list[CircleSource], *, spacing: float) -> SourceField:
-        """A field holding `circles`, as they are, and reading at `spacing`."""
-        new_field = SourceField(spacing=spacing)
-        new_field._circles = circles
-        return new_field
+            self._sources.append(source)
 
     @property
     def spacing(self) -> float:
@@ -147,24 +141,24 @@ class SourceField:
         the width beyond it, so that an edge as wide as the circle makes a cone, or a smooth one a bump, reaching twice
         the radius. Raises `ValueError` as a `Circle` and a `CircleSource` do: for a radius not above 0, for a width
         given a sharp edge, and for a linear or smooth edge's width not above 0."""
-        self._circles.append(CircleSource(Circle(center, radius), value, edge, edge_width))
+        self._sources.append(CircleSource(Circle(center, radius), value, edge, edge_width))
 
     def clear(self) -> None:
         """Remove every circle, keeping the spacing."""
-        self._circles.clear()
+        self._sources.clear()
 
     def copy(self) -> SourceField:
         """A new field holding the same circles and reading at the same spacing, which a circle added to either leaves
         out of the other."""
-        return SourceField._holding_circles(list(self._circles), spacing=self._spacing)
+        return SourceField(self._sources, spacing=self._spacing)
 
     def __len__(self) -> int:
         """The number of circles added."""
-        return len(self._circles)
+        return len(self._sources)
 
     def __iter__(self) -> Iterator[CircleSource]:
         """Each circle the field holds, in the order added."""
-        return iter(self._circles)
+        return iter(self._sources)
 
     def __bool__(self) -> bool:
         """Raises `TypeError`, as a grid's does: whether a field holds a circle and whether it reads anything differ,
@@ -178,9 +172,7 @@ class SourceField:
         everywhere, reading at the finer of their spacings."""
         if not isinstance(other, SourceField):
             return NotImplemented
-        return SourceField._holding_circles(
-            [*self._circles, *other._circles], spacing=min(self._spacing, other._spacing)
-        )
+        return SourceField([*self._sources, *other._sources], spacing=min(self._spacing, other._spacing))
 
     def __sub__(self, other: SourceField) -> SourceField:
         """A new field holding this field's circles and then `other`'s with their values negated, so that its value is
@@ -191,13 +183,13 @@ class SourceField:
 
     def __neg__(self) -> SourceField:
         """A new field of the same circles, each with its value negated."""
-        return self.transformed(lambda source: _with_value(source, -source.value))
+        return self.transformed(lambda source: source._with_value(-source.value))
 
     def __mul__(self, factor: float) -> SourceField:
         """A new field of the same circles, each with its value multiplied by `factor`, a number."""
         if not isinstance(factor, numbers.Real):
             return NotImplemented
-        return self.transformed(lambda source: _with_value(source, source.value * factor))
+        return self.transformed(lambda source: source._with_value(source.value * factor))
 
     def __rmul__(self, factor: float) -> SourceField:
         """A new field of the same circles, each with its value multiplied by `factor`, a number."""
@@ -208,19 +200,13 @@ class SourceField:
         `ZeroDivisionError` for 0."""
         if not isinstance(divisor, numbers.Real):
             return NotImplemented
-        return self.transformed(lambda source: _with_value(source, source.value / divisor))
+        return self.transformed(lambda source: source._with_value(source.value / divisor))
 
-    def transformed(self, new_source_of: Callable[[CircleSource], CircleSource]) -> SourceField:
-        """A new field of each circle as `new_source_of` remakes it, a `CircleSource` from a `CircleSource`, in the same
-        order and reading at the same spacing: its value, its circle or its edge, through `dataclasses.replace`. Raises
-        `TypeError` for anything but a `CircleSource` made, which was checked as it was made."""
-        remade = []
-        for source in self._circles:
-            new_source = new_source_of(source)
-            if not isinstance(new_source, CircleSource):
-                raise TypeError(f"a source field holds CircleSources, not a {type(new_source).__name__}")
-            remade.append(new_source)
-        return SourceField._holding_circles(remade, spacing=self._spacing)
+    def transformed(self, transformation: Callable[[CircleSource], CircleSource]) -> SourceField:
+        """A new field of each circle as `transformation` remakes it, a `CircleSource` from a `CircleSource`, in the
+        same order and reading at the same spacing: its value, its circle or its edge, through `dataclasses.replace`.
+        Raises `TypeError` for anything but a `CircleSource` made, which was checked as it was made."""
+        return SourceField((transformation(source) for source in self._sources), spacing=self._spacing)
 
     # --- Reads
 
@@ -230,8 +216,8 @@ class SourceField:
         edge the area leaves out. An empty area has none."""
         if not area.area:
             return []
-        circles = self._circles_near(area.bounding_rectangle())
-        return [circle for circle, _ in _circles_reaching(area, circles)]
+        sources = self._sources_near(area.bounding_rectangle())
+        return [source for source, _ in _sources_reaching(area, sources)]
 
     def values_at(self, points: Sequence[PointLike] | ndarray) -> ndarray:
         """The value at each of `points`, a sequence of points or an array of them, a point a row, as `value_at` reads
@@ -243,27 +229,23 @@ class SourceField:
         left = xs.min().item()
         bottom = ys.min().item()
         bounds = Rectangle(left, bottom, xs.max().item() - left, ys.max().item() - bottom)
-        return _values_at(xs, ys, self._circles_near(bounds))
+        return _values_at(xs, ys, self._sources_near(bounds))
 
     def value_at(self, point: PointLike) -> float:
         """The value at `point`: the sum of the values of the circles covering it."""
         x = point[0]
         y = point[1]
         total = 0.0
-        for circle in self._circles:
-            dx = x - circle._x
-            dy = y - circle._y
+        for source in self._sources:
+            dx = x - source._x
+            dy = y - source._y
             distance_squared = dx * dx + dy * dy
-            if distance_squared <= circle._full_within_squared:
-                total += circle.value
-            elif distance_squared <= circle._reach_squared:
-                share_to_cross = (circle._reach - math.sqrt(distance_squared)) / circle.edge_width
-                share_held = (
-                    share_to_cross * share_to_cross * (3.0 - 2.0 * share_to_cross)
-                    if circle.edge is Edge.SMOOTH
-                    else share_to_cross
-                )
-                total += circle.value * share_held
+            if distance_squared <= source._full_within_squared:
+                total += source.value
+            elif distance_squared <= source._reach_squared:
+                depth = (source._reach - math.sqrt(distance_squared)) / source.edge_width
+                weight = depth * depth * (3.0 - 2.0 * depth) if source.edge is Edge.SMOOTH else depth
+                total += source.value * weight
         return total
 
     def min(self, *, within: Area) -> float:
@@ -286,11 +268,11 @@ class SourceField:
     def _extreme_value(self, area: Area, *, largest: bool) -> float:
         """The largest value read in `area`, or the smallest."""
         _check_not_empty(area)
-        if not self._circles:
+        if not self._sources:
             return 0.0
         bounds = area.bounding_rectangle()
-        circles = self._circles_near(bounds)
-        reaching = _circles_reaching(area, circles)
+        sources = self._sources_near(bounds)
+        reaching = _sources_reaching(area, sources)
         if not reaching:
             return 0.0
         if len(reaching) == 1 and largest == (reaching[0][0].value > 0):
@@ -298,32 +280,32 @@ class SourceField:
             # which is one of the points read, and the others near reach none of them.
             return self.value_at(reaching[0][1])
         xs, ys = self._points_to_read(area, bounds, [point for _, point in reaching])
-        values = _values_at(xs, ys, circles)
+        values = _values_at(xs, ys, sources)
         return (values.max() if largest else values.min()).item()
 
     def _extreme_point(self, area: Area, *, largest: bool) -> Point:
         """The point read in `area` with the largest value, or the smallest, the lowest x, then y, where several tie."""
         _check_not_empty(area)
         bounds = area.bounding_rectangle()
-        circles = self._circles_near(bounds)
-        xs, ys = self._points_to_read(area, bounds, [point for _, point in _circles_reaching(area, circles)])
-        values = _values_at(xs, ys, circles)
+        sources = self._sources_near(bounds)
+        xs, ys = self._points_to_read(area, bounds, [point for _, point in _sources_reaching(area, sources)])
+        values = _values_at(xs, ys, sources)
         tied = numpy.flatnonzero(values == (values.max() if largest else values.min()))
         picked = tied[numpy.lexsort((ys[tied], xs[tied]))[0]]
         return Point((xs[picked].item(), ys[picked].item()))
 
-    def _circles_near(self, bounds: Rectangle) -> list[CircleSource]:
+    def _sources_near(self, bounds: Rectangle) -> list[CircleSource]:
         """The circles that may reach into `bounds`, an area's bounding rectangle: every one that does, and some that
         only come near."""
         left, bottom = bounds.x, bounds.y
         right, top = bounds.right, bounds.top
         return [
-            circle
-            for circle in self._circles
-            if circle._x - circle._reach <= right
-            and circle._x + circle._reach >= left
-            and circle._y - circle._reach <= top
-            and circle._y + circle._reach >= bottom
+            source
+            for source in self._sources
+            if source._x - source._reach <= right
+            and source._x + source._reach >= left
+            and source._y - source._reach <= top
+            and source._y + source._reach >= bottom
         ]
 
     def _points_to_read(self, area: Area, bounds: Rectangle, nearest_points: list[Point]) -> tuple[ndarray, ndarray]:
@@ -344,16 +326,16 @@ class SourceField:
         y = point[1]
         slope_x = 0.0
         slope_y = 0.0
-        for circle in self._circles:
-            dx = x - circle._x
-            dy = y - circle._y
+        for source in self._sources:
+            dx = x - source._x
+            dy = y - source._y
             distance_squared = dx * dx + dy * dy
-            if circle._full_within_squared < distance_squared <= circle._reach_squared and distance_squared > 0.0:
+            if source._full_within_squared < distance_squared <= source._reach_squared and distance_squared > 0.0:
                 distance = math.sqrt(distance_squared)
-                slope_per_offset = -circle.value / (circle.edge_width * distance)
-                if circle.edge is Edge.SMOOTH:
-                    share_to_cross = (circle._reach - distance) / circle.edge_width
-                    slope_per_offset *= 6.0 * share_to_cross * (1.0 - share_to_cross)
+                slope_per_offset = -source.value / (source.edge_width * distance)
+                if source.edge is Edge.SMOOTH:
+                    depth = (source._reach - distance) / source.edge_width
+                    slope_per_offset *= 6.0 * depth * (1.0 - depth)
                 slope_x += slope_per_offset * dx
                 slope_y += slope_per_offset * dy
         return slope_x, slope_y
@@ -365,48 +347,42 @@ class SourceField:
         beyond its edge, as `Grid` takes it."""
         x_range, y_range = rectangle.tile_range()
         values = numpy.zeros((len(x_range), len(y_range)))
-        for circle in self._circles:
+        for source in self._sources:
             # The tiles the circle's bounding box overlaps, of those the grid holds.
-            left = max(x_range.start, math.floor(circle._x - circle._reach))
-            right = min(x_range.stop, math.floor(circle._x + circle._reach) + 1)
-            bottom = max(y_range.start, math.floor(circle._y - circle._reach))
-            top = min(y_range.stop, math.floor(circle._y + circle._reach) + 1)
+            left = max(x_range.start, math.floor(source._x - source._reach))
+            right = min(x_range.stop, math.floor(source._x + source._reach) + 1)
+            bottom = max(y_range.start, math.floor(source._y - source._reach))
+            top = min(y_range.stop, math.floor(source._y + source._reach) + 1)
             if left >= right or bottom >= top:
                 continue
-            dx = (numpy.arange(left, right) + 0.5) - circle._x
-            dy = (numpy.arange(bottom, top) + 0.5) - circle._y
+            dx = (numpy.arange(left, right) + 0.5) - source._x
+            dy = (numpy.arange(bottom, top) + 0.5) - source._y
             block = values[left - x_range.start : right - x_range.start, bottom - y_range.start : top - y_range.start]
-            block += circle._values_at_distances_squared((dx * dx)[:, None] + (dy * dy)[None, :])
+            block += source._values_at_distances_squared((dx * dx)[:, None] + (dy * dy)[None, :])
         return Grid(values, origin=Tile(x_range.start, y_range.start), outside=outside)
 
     def __repr__(self) -> str:
-        return f"SourceField({len(self._circles)} circles)"
+        return f"SourceField({len(self._sources)} circles)"
 
 
-def _values_at(xs: ndarray, ys: ndarray, circles: list[CircleSource]) -> ndarray:
-    """The sum of the values of `circles` covering each point of `xs` and `ys`, worked out as `value_at` works out
+def _values_at(xs: ndarray, ys: ndarray, sources: list[CircleSource]) -> ndarray:
+    """The sum of the values of `sources` covering each point of `xs` and `ys`, worked out as `value_at` works out
     one."""
     totals = numpy.zeros(len(xs))
-    for circle in circles:
-        dx = xs - circle._x
-        dy = ys - circle._y
-        totals += circle._values_at_distances_squared(dx * dx + dy * dy)
+    for source in sources:
+        dx = xs - source._x
+        dy = ys - source._y
+        totals += source._values_at_distances_squared(dx * dx + dy * dy)
     return totals
 
 
-def _with_value(source: CircleSource, value: float) -> CircleSource:
-    """`source` holding `value` in place of its own, made as `dataclasses.replace` would make it, at about half the
-    cost."""
-    return CircleSource(source.circle, value, source.edge, source.edge_width)
-
-
-def _circles_reaching(area: Area, circles: list[CircleSource]) -> list[tuple[CircleSource, Point]]:
-    """Each of `circles` that reaches `area`, with the area's point nearest its center."""
+def _sources_reaching(area: Area, sources: list[CircleSource]) -> list[tuple[CircleSource, Point]]:
+    """Each of `sources` that reaches `area`, with the area's point nearest its center."""
     reaching = []
-    for circle in circles:
-        point, distance = area.closest_point_to((circle._x, circle._y))
-        if distance <= circle._reach:
-            reaching.append((circle, point))
+    for source in sources:
+        point, distance = area.closest_point_to((source._x, source._y))
+        if distance <= source._reach:
+            reaching.append((source, point))
     return reaching
 
 

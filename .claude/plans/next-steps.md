@@ -395,7 +395,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`, `k * a`, `a * k` and `a / k` each make a new field, a sum
      holding both fields' circles and reading at the finer spacing, a number scaling each circle's value, with no
      in-place `+=`, so a field one reader holds never changes under it (over spacings that must match, and over
-     `combined_with` and `scaled`, as `Units` has); `transformed(new_source_of)` remakes each circle, a `CircleSource`
+     `combined_with` and `scaled`, as `Units` has); `transformed(transformation)` remakes each circle, a `CircleSource`
      from a `CircleSource`, its value, circle or edge (the owner, review of #254, over `with_values`, `with_radii` and
      `with_edges`, and over values alone); and `sources_reaching(area)` lists the circles the reads over an area take,
      in the order added (over a field of them). No helper adds a disc blurred by a Gaussian (the owner: a caller gets as
