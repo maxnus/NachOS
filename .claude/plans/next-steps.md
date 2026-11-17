@@ -45,14 +45,16 @@ As of 2026-11-14:
   `edge=Edge.LINEAR, edge_width=w` now, the default edge `Edge.SHARP` taking no width, and that it adds `Edge.SMOOTH`.
   Its 48 in-game tests passed on cfa5be5 (sc2 run 43749840344), and AvocaDOS's tests on it, unchanged. AvocaDOS #99
   takes it.
-- **Since 0.6.0**, on main: #254. The next release, 0.7.0 since #254 has `add_circle` take a center and a radius where
-  it took a `Circle`, says in its notes that a bot's `add_circle(Circle(center, radius), value, ...)` is
-  `add_circle(center, radius, value, ...)` now; that a linear or smooth edge is centered on the circle's edge, so
-  0.6.0's `add_circle(Circle(center, r), value, edge=e, edge_width=w)` reads as `add_circle(center, r - w / 2, value,
-  edge=e, edge_width=w)` does now; and that a field has no truth value, as a grid has none. It adds
-  `SourceField.to_grid`, `len` and iteration over a field's circles, each a `CircleSource`, a field built from them,
-  `clear`, `copy`, `sources_reaching`, `transformed`, adding, subtracting and scaling fields, and `values_at` on every
-  `Field`, a grid's included.
+- **0.7.0 is out** (2026-11-17, from 5a8fb0e), with #254. Its notes say that a bot's
+  `add_circle(Circle(center, radius), value, ...)` is `add_circle(center, radius, value, ...)` now; that a linear or
+  smooth edge is centered on the circle's edge, so 0.6.0's `add_circle(Circle(center, r), value, edge=e, edge_width=w)`
+  reads as `add_circle(center, r - w / 2, value, edge=e, edge_width=w)` does now; and that a field has no truth value,
+  as a grid has none. Its 48 in-game tests passed on 5a8fb0e (sc2 run 44089362974), and AvocaDOS's tests failed only on
+  its two `add_circle` calls. AvocaDOS #99 takes it.
+- **Since 0.7.0**, on main: #255. The next release, 0.8.0 since #255 moves a field's `spacing` from the field to its
+  reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
+  and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
+  they read 0.25 apart.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -388,13 +390,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      its circles and `bool(field)` raises `TypeError`, as a grid's does, since whether a field holds a circle and
      whether it reads anything differ for circles of 0 or ones that cancel (the owner, 2026-11-16, over truthy when it
      holds one, as `Units` is, and over a `circle_count`); iterating hands out its `CircleSource`s in the order added
-     (the owner, over tuples and over waiting for a caller); and `clear()` removes every circle, keeping the spacing, as
-     `UnitDict.clear` does (the owner, though building a new field takes 0.10 µs). Also since #254, the owner's further
-     asks (2026-11-16): `SourceField(sources, *, spacing=0.25)` holds `CircleSource`s, so `SourceField(other)` holds
-     another field's circles, reversing #249's field built by `add_circle` alone (over `sources=` keyword-only);
-     `copy()` keeps the spacing too; `a + b`, `a - b`, `-a`, `k * a`, `a * k` and `a / k` each make a new field, a sum
-     holding both fields' circles and reading at the finer spacing, a number scaling each circle's value, with no
-     in-place `+=`, so a field one reader holds never changes under it (over spacings that must match, and over
+     (the owner, over tuples and over waiting for a caller); and `clear()` removes every circle, as `UnitDict.clear`
+     does (the owner, though building a new field takes 0.10 µs). Also since #254, the owner's further asks
+     (2026-11-16): `SourceField(sources)` holds `CircleSource`s, with no spacing since #255, so `SourceField(other)`
+     holds another field's circles, reversing #249's field built by `add_circle` alone (over `sources=` keyword-only);
+     `copy()`, a new field of the same circles, which a circle added to either leaves out of the other; `a + b`,
+     `a - b`, `-a`, `k * a`, `a * k` and `a / k` each make a new field, a sum holding both fields' circles, a number
+     scaling each circle's value, with no in-place `+=`, so a field one reader holds never changes under it (over
      `combined_with` and `scaled`, as `Units` has); `transformed(transformation)` remakes each circle, a `CircleSource`
      from a `CircleSource`, its value, circle or edge (the owner, review of #254, over `with_values`, `with_radii` and
      `with_edges`, and over values alone); and `sources_reaching(area)` lists the circles the reads over an area take,
@@ -420,8 +422,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      threat grid, a disc blurred by a Gaussian of σ 1, each edge at its best width comes within 0.06 to 0.14 for a
      radius of 2 and up, and neither keeps a small disc's lower peak; a smooth edge costs 10 to 20% more in a read over
      an area, and nothing more at a point (2026-11-15). Its gradient is exact. Its max and min within an area are read
-     at points `spacing` apart over the area, set on the field, 0.25 by default (the owner, over a keyword on each read,
-     and review of #249, over `resolution`, which reads both ways), and at the area's point nearest each touching
+     at points at most `spacing` apart over the area, a keyword of each read over an area, 0.1 by default (the owner,
+     2026-11-17, #255, reversing #238's spacing set on the field, 0.25 by default: how finely to read is the read's to
+     choose, two readers of one field may want different, and a sum of fields had to pick one; review of #249, over
+     `resolution`, which reads both ways), and at the area's point nearest each touching
      circle's center: where every circle's value is positive, exact in whether `max` reads above 0 and in the largest
      value of one circle alone, and up to the spacing off for the rest, min included (the owner, building it, kept the
      rule and had the plan's "exact for booleans and for one shape" corrected). Every point read is one the area holds,
@@ -442,7 +446,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      misses a unit whose body alone is in an effect, and over a read in NachOS of whether any circle reaches an area.
      The field finds 16 marines in that storm, the grid 13, and a bile on a tile's corner, which covers no tile's
      center. Its splash zone waits: `squad_splash_spacing` is 0, so only the debug overlay reads it. #99, open, takes
-     0.6.0, and is to take 0.7.0 and the owner's review of it: its smoothed strength grids, melee threat, threat and
+     0.7.0, and with it the owner's review of its first version: its smoothed strength grids, melee threat, threat and
      support, become fields of smooth circles, what #253's edges were for (the owner, 2026-11-16, over keeping them
      grids). A disc of radius R blurred by a Gaussian of σ 1 comes within 0.06 of a smooth circle reaching R + 2, its
      edge the lesser of 4.2 and R + 2 wide, centered on a radius of R + 2 less half that width, about R from R 2.2 up,
@@ -452,9 +456,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      zerglings, against 31 in their circles.
      That fit is a starting point, not a target: the owner, since the smoothed grids' values were never evaluated as
      best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
-     #99, drawn onto the map's grid by `to_grid` every 4 steps, as the grid was smoothed, and cropped for each flee as
-     now; threat and support in a pull request of their own, since paths and grid arithmetic read them, and points in
-     some 20 places.
+     #99, a field read as a field, a unit's check at its position and a flee at its tiles' centers, with no grid drawn
+     from it (the owner, 2026-11-17, over drawing it onto the map's grid every 4 steps: its field holds 0 to 3 circles
+     on average in the recorded games, so a point read off it costs less than a grid lookup); its reach R + 2 (the
+     owner, over R + 4, as far as the blur read above 0, and over a threshold), and a flee's ties between tiles of equal
+     threat broken down the field's slope at the unit (the owner, over the lowest address, farthest, nearest, toward the
+     squad, its support or the main base, as measured in #99). Threat and support in a pull request of their own, since
+     paths and grid arithmetic read them, and points in some 20 places.
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
   holding the field's value at its center, for paths and grid arithmetic (the owner, review of AvocaDOS #99, over the
