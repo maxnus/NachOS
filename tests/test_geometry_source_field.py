@@ -60,14 +60,15 @@ class TestBuilding:
         assert field.min(within=Circle((3.0, 4.0), 2.0)) == 0.0
         assert field.gradient_at((3.0, 4.0)) == (0.0, 0.0)
 
-    @pytest.mark.parametrize("spacing", [0.0, -0.25])
-    def test_the_spacing_is_positive(self, spacing: float) -> None:
-        with pytest.raises(ValueError, match="positive spacing"):
-            SourceField(spacing=spacing)
-
-    def test_the_spacing_reads_back(self) -> None:
-        assert SourceField().spacing == 0.25
-        assert SourceField(spacing=0.5).spacing == 0.5
+    @pytest.mark.parametrize("spacing", [0.0, -0.25, math.nan])
+    @pytest.mark.parametrize("read", ["min", "max", "argmin", "argmax"])
+    def test_a_read_over_an_area_takes_a_positive_spacing(self, read: str, spacing: float) -> None:
+        """Refused even where the read needs no spacing: of a field of no circle, or of one circle alone."""
+        alone = SourceField()
+        alone.add_circle((0.0, 0.0), 2.0, 1.0)
+        for field in (SourceField(), alone):
+            with pytest.raises(ValueError, match="positive spacing"):
+                getattr(field, read)(within=Circle((0.0, 0.0), 1.0), spacing=spacing)
 
     @pytest.mark.parametrize("radius", [0.0, -1.0, math.nan])
     def test_a_circles_radius_lies_above_0(self, radius: float) -> None:
@@ -98,14 +99,13 @@ class TestBuilding:
         with pytest.raises(ValueError, match="sharp edge takes no width"):
             SourceField().add_circle((0, 0), 2, 1.0, edge_width=1.0)
 
-    def test_len_counts_the_circles_and_clear_removes_them_keeping_the_spacing(self) -> None:
-        field = SourceField(spacing=0.5)
+    def test_len_counts_the_circles_and_clear_removes_them(self) -> None:
+        field = SourceField()
         field.add_circle((0.0, 0.0), 2.0, 1.0)
         field.add_circle((5.0, 0.0), 0.5, -2.0, edge=Edge.SMOOTH, edge_width=1.0)
         assert len(field) == 2
         field.clear()
         assert len(field) == 0
-        assert field.spacing == 0.5
         assert field.value_at((0.0, 0.0)) == 0.0
         assert field.max(within=Circle((0.0, 0.0), 1.0)) == 0.0
         field.add_circle((0.0, 0.0), 2.0, 3.0)
@@ -159,8 +159,6 @@ class TestBuilding:
         field = SourceField(source for source in sources)
         assert list(field) == sources
         assert field.value_at((10.0, 10.0)) == _threat().value_at((10.0, 10.0))
-        assert field.spacing == 0.25
-        assert SourceField(sources, spacing=0.5).spacing == 0.5
 
     def test_a_field_built_from_another_fields_circles_reads_the_same(self) -> None:
         """So iterating gives each circle whole, its edge and width included."""
@@ -176,11 +174,10 @@ class TestBuilding:
         with pytest.raises(TypeError, match="holds CircleSources, not a"):
             SourceField([source])  # pyright: ignore[reportArgumentType]
 
-    def test_a_copy_holds_the_same_circles_and_spacing_apart_from_the_original(self) -> None:
+    def test_a_copy_holds_the_same_circles_apart_from_the_original(self) -> None:
         field = _threat()
         copied = field.copy()
         assert list(copied) == list(field)
-        assert SourceField(spacing=0.5).copy().spacing == 0.5
         copied.add_circle((0.0, 0.0), 1.0, 1.0)
         field.clear()
         assert len(copied) == 3
@@ -437,14 +434,20 @@ class TestAreaReads:
 
     def test_the_smallest_value_and_where_come_within_the_spacing(self) -> None:
         """The smallest lies at the far corner, (3, 3), which the rectangle leaves out: the field there is
-        `10 - sqrt(18)`, and no point read is farther than half the spacing along each axis from it."""
-        for spacing in (0.25, 0.05):
-            field = SourceField(spacing=spacing)
-            field.add_circle((0.0, 0.0), 5.0, 10.0, edge=Edge.LINEAR, edge_width=10.0)
-            area = Rectangle(1.0, 1.0, 2.0, 2.0)
-            smallest_at_the_corner = 10.0 - math.sqrt(18.0)
-            assert smallest_at_the_corner < field.min(within=area) <= smallest_at_the_corner + spacing / math.sqrt(2)
-            assert field.argmin(within=area) == pytest.approx(Point((3.0 - spacing / 2, 3.0 - spacing / 2)))
+        `10 - sqrt(18)`, and no point read is farther than half the spacing along each axis from it, 0.1 unless the
+        read is given another."""
+        field = SourceField()
+        field.add_circle((0.0, 0.0), 5.0, 10.0, edge=Edge.LINEAR, edge_width=10.0)
+        area = Rectangle(1.0, 1.0, 2.0, 2.0)
+        smallest_at_the_corner = 10.0 - math.sqrt(18.0)
+        for spacing in (0.25, 0.1, 0.05):
+            smallest = field.min(within=area, spacing=spacing)
+            assert smallest_at_the_corner < smallest <= smallest_at_the_corner + spacing / math.sqrt(2)
+            where = field.argmin(within=area, spacing=spacing)
+            assert where == pytest.approx(Point((3.0 - spacing / 2, 3.0 - spacing / 2)))
+        assert field.min(within=area) == field.min(within=area, spacing=0.1)
+        assert field.argmin(within=area) == field.argmin(within=area, spacing=0.1)
+        assert field.argmin(within=area) != field.argmin(within=area, spacing=0.25)
 
     def test_overlapping_circles_add_up_where_both_reach(self) -> None:
         field = SourceField()
@@ -457,12 +460,14 @@ class TestAreaReads:
         assert point.distance_to((1.5, 0.0)) <= 1.0
 
     def test_points_that_tie_go_to_the_lowest_x_then_y(self) -> None:
-        """Every point reads 1, and the point nearest the circle's center lies left of every spaced one."""
+        """Every point reads 1, and the point nearest the circle's center lies left of every spaced one. With no circle,
+        every point reads 0, and the first of the cells 0.1 wide, or 0.25, is picked."""
         mask = SourceField()
         mask.add_circle((0.01, 0.5), 5.0, 1.0)
         assert mask.argmax(within=Rectangle(0.0, 0.0, 1.0, 1.0)) == Point((0.01, 0.5))
         assert mask.argmin(within=Rectangle(0.0, 0.0, 1.0, 1.0)) == Point((0.01, 0.5))
-        assert SourceField().argmin(within=Rectangle(2.0, 3.0, 1.0, 1.0)) == Point((2.125, 3.125))
+        assert SourceField().argmin(within=Rectangle(2.0, 3.0, 1.0, 1.0)) == pytest.approx(Point((2.05, 3.05)))
+        assert SourceField().argmin(within=Rectangle(2.0, 3.0, 1.0, 1.0), spacing=0.25) == Point((2.125, 3.125))
 
     @pytest.mark.parametrize("area", [Tile(0, 0), Rectangle(0.0, 0.0, 1.0, 1.0)], ids=repr)
     def test_a_circle_touching_only_an_edge_the_area_leaves_out_reads_nothing(self, area: Area) -> None:
@@ -498,7 +503,7 @@ class TestAreaReads:
     def test_a_spacing_wider_than_a_tile_still_reads_a_point_of_a_tile_set(self) -> None:
         """Split three tiles to a cell, the tile set's bounds hold no cell center on either tile."""
         tiles = TileSet([Tile(0, 0), Tile(5, 5)])
-        assert SourceField(spacing=3.0).argmin(within=tiles) in tiles
+        assert SourceField().argmin(within=tiles, spacing=3.0) in tiles
 
     @pytest.mark.parametrize("area", [TileSet([]), Rectangle(1.0, 1.0, 0.0, 2.0)], ids=repr)
     @pytest.mark.parametrize("make_field", [_threat, SourceField], ids=["circles", "no circle"])
@@ -656,13 +661,6 @@ class TestArithmetic:
             result.add_circle((0.0, 0.0), 1.0, 1.0)
         assert (list(threat), list(mixed)) == before
 
-    def test_a_sum_reads_at_the_finer_spacing_and_scaling_keeps_it(self) -> None:
-        coarse = SourceField(spacing=0.5)
-        fine = SourceField(spacing=0.1)
-        assert (coarse + fine).spacing == 0.1
-        assert (fine - coarse).spacing == 0.1
-        assert (-coarse).spacing == (coarse * 2).spacing == (coarse / 2).spacing == 0.5
-
     @pytest.mark.parametrize("other", [1.0, Grid.zeros(2, 2), "field"], ids=repr)
     def test_a_field_adds_only_a_field(self, other: object) -> None:
         with pytest.raises(TypeError):
@@ -730,11 +728,10 @@ class TestTransformed:
         share_held = 1.25 / 1.5
         assert softened.value_at((12.0, 10.0)) == pytest.approx(4.0 + 3.0 * share_held**2 * (3.0 - 2.0 * share_held))
 
-    def test_the_order_and_spacing_stay(self) -> None:
-        field = SourceField(_mixed_field(), spacing=0.5)
+    def test_the_order_stays(self) -> None:
+        field = _mixed_field()
         same = field.transformed(lambda source: source)
         assert list(same) == list(field)
-        assert same.spacing == 0.5
 
     def test_anything_but_a_circle_source_made_raises(self) -> None:
         with pytest.raises(TypeError, match="holds CircleSources, not a float"):

@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from sc2nachos.geometry._area import Area
     from sc2nachos.geometry._point import PointLike
 
+# How far apart, at most, a read over an area takes its points, unless it is given another spacing.
+_DEFAULT_SPACING = 0.1
+
 
 @final
 @dataclass(frozen=True, slots=True)
@@ -99,10 +102,10 @@ class SourceField:
     read raises `IndexError`.
 
     `min`, `max`, `argmin` and `argmax` read the field at points at most `spacing` apart, along x and along y, over
-    the area, and at the area's point nearest the center of each circle that reaches it. So where every circle's value
-    is positive, whether `max` reads above 0 is exact, and so is the largest value where one circle reaches the area
-    alone. Anything else may be off by as much as the field changes over the spacing, and a value held only on a patch
-    narrower than that may be missed.
+    the area, 0.1 unless the read is given another, and at the area's point nearest the center of each circle that
+    reaches it. So where every circle's value is positive, whether `max` reads above 0 is exact, and so is the largest
+    value where one circle reaches the area alone. Anything else may be off by as much as the field changes over the
+    spacing, and a value held only on a patch narrower than that may be missed.
 
     A field holds `CircleSource`s, built from them or circle by circle with `add_circle`. `len` counts them, and
     iterating over the field hands them out, in the order added. Fields add up and subtract, a sum holding the circles
@@ -110,28 +113,18 @@ class SourceField:
     truth value.
     """
 
-    __slots__ = ("_sources", "_spacing")
+    __slots__ = ("_sources",)
 
     _sources: list[CircleSource]
-    _spacing: float
 
-    def __init__(self, sources: Iterable[CircleSource] = (), *, spacing: float = 0.25) -> None:
-        """A field holding `sources`, whose reads over an area take points at most `spacing` apart:
-        `SourceField(other)` holds another field's circles. Raises `ValueError` for a spacing that is not positive, and
-        `TypeError` for a source that is not a `CircleSource`."""
-        if spacing <= 0:
-            raise ValueError(f"a source field reads points a positive spacing apart, got {spacing}")
+    def __init__(self, sources: Iterable[CircleSource] = ()) -> None:
+        """A field holding `sources`: `SourceField(other)` holds another field's circles. Raises `TypeError` for a
+        source that is not a `CircleSource`."""
         self._sources = []
-        self._spacing = spacing
         for source in sources:
             if not isinstance(source, CircleSource):
                 raise TypeError(f"a source field holds CircleSources, not a {type(source).__name__}")
             self._sources.append(source)
-
-    @property
-    def spacing(self) -> float:
-        """How far apart, at most, along x and along y, `min`, `max`, `argmin` and `argmax` read the field."""
-        return self._spacing
 
     def add_circle(
         self, center: PointLike, radius: float, value: float, *, edge: Edge = Edge.SHARP, edge_width: float = 0.0
@@ -144,13 +137,12 @@ class SourceField:
         self._sources.append(CircleSource(Circle(center, radius), value, edge, edge_width))
 
     def clear(self) -> None:
-        """Remove every circle, keeping the spacing."""
+        """Remove every circle."""
         self._sources.clear()
 
     def copy(self) -> SourceField:
-        """A new field holding the same circles and reading at the same spacing, which a circle added to either leaves
-        out of the other."""
-        return SourceField(self._sources, spacing=self._spacing)
+        """A new field holding the same circles, which a circle added to either leaves out of the other."""
+        return SourceField(self._sources)
 
     def __len__(self) -> int:
         """The number of circles added."""
@@ -169,14 +161,14 @@ class SourceField:
 
     def __add__(self, other: SourceField) -> SourceField:
         """A new field holding this field's circles and then `other`'s, so that its value is the sum of theirs
-        everywhere, reading at the finer of their spacings."""
+        everywhere."""
         if not isinstance(other, SourceField):
             return NotImplemented
-        return SourceField([*self._sources, *other._sources], spacing=min(self._spacing, other._spacing))
+        return SourceField([*self._sources, *other._sources])
 
     def __sub__(self, other: SourceField) -> SourceField:
         """A new field holding this field's circles and then `other`'s with their values negated, so that its value is
-        the difference of theirs everywhere, reading at the finer of their spacings."""
+        the difference of theirs everywhere."""
         if not isinstance(other, SourceField):
             return NotImplemented
         return self + -other
@@ -204,9 +196,9 @@ class SourceField:
 
     def transformed(self, transformation: Callable[[CircleSource], CircleSource]) -> SourceField:
         """A new field of each circle as `transformation` remakes it, a `CircleSource` from a `CircleSource`, in the
-        same order and reading at the same spacing: its value, its circle or its edge, through `dataclasses.replace`.
-        Raises `TypeError` for anything but a `CircleSource` made, which was checked as it was made."""
-        return SourceField((transformation(source) for source in self._sources), spacing=self._spacing)
+        same order: its value, its circle or its edge, through `dataclasses.replace`. Raises `TypeError` for anything
+        but a `CircleSource` made, which was checked as it was made."""
+        return SourceField(transformation(source) for source in self._sources)
 
     # --- Reads
 
@@ -248,26 +240,31 @@ class SourceField:
                 total += source.value * weight
         return total
 
-    def min(self, *, within: Area) -> float:
-        """The smallest value read in `within`, as the class says. Raises `ValueError` for an empty area."""
-        return self._extreme_value(within, largest=False)
+    def min(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> float:
+        """The smallest value read in `within`, at points at most `spacing` apart, as the class says. Raises
+        `ValueError` for an empty area and for a spacing not above 0."""
+        return self._extreme_value(within, spacing, largest=False)
 
-    def max(self, *, within: Area) -> float:
-        """The largest value read in `within`, as the class says. Raises `ValueError` for an empty area."""
-        return self._extreme_value(within, largest=True)
+    def max(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> float:
+        """The largest value read in `within`, at points at most `spacing` apart, as the class says. Raises
+        `ValueError` for an empty area and for a spacing not above 0."""
+        return self._extreme_value(within, spacing, largest=True)
 
-    def argmin(self, *, within: Area) -> Point:
-        """The point, of those read in `within` as the class says, with the smallest value, the lowest x, then y, where
-        several tie: always one `within` holds. Raises `ValueError` for an empty area."""
-        return self._extreme_point(within, largest=False)
+    def argmin(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> Point:
+        """The point, of those read in `within` at points at most `spacing` apart as the class says, with the smallest
+        value, the lowest x, then y, where several tie: always one `within` holds. Raises `ValueError` for an empty
+        area and for a spacing not above 0."""
+        return self._extreme_point(within, spacing, largest=False)
 
-    def argmax(self, *, within: Area) -> Point:
-        """The point, of those read in `within` as the class says, with the largest value, as `argmin` picks one."""
-        return self._extreme_point(within, largest=True)
+    def argmax(self, *, within: Area, spacing: float = _DEFAULT_SPACING) -> Point:
+        """The point, of those read in `within` at points at most `spacing` apart as the class says, with the largest
+        value, as `argmin` picks one."""
+        return self._extreme_point(within, spacing, largest=True)
 
-    def _extreme_value(self, area: Area, *, largest: bool) -> float:
-        """The largest value read in `area`, or the smallest."""
+    def _extreme_value(self, area: Area, spacing: float, *, largest: bool) -> float:
+        """The largest value read in `area` at points at most `spacing` apart, or the smallest."""
         _check_not_empty(area)
+        _check_spacing(spacing)
         if not self._sources:
             return 0.0
         bounds = area.bounding_rectangle()
@@ -279,16 +276,18 @@ class SourceField:
             # A circle reaching the area alone holds its value farthest from 0 at the area's point nearest its center,
             # which is one of the points read, and the others near reach none of them.
             return self.value_at(reaching[0][1])
-        xs, ys = self._points_to_read(area, bounds, [point for _, point in reaching])
+        xs, ys = _points_to_read(area, bounds, spacing, [point for _, point in reaching])
         values = _values_at(xs, ys, sources)
         return (values.max() if largest else values.min()).item()
 
-    def _extreme_point(self, area: Area, *, largest: bool) -> Point:
-        """The point read in `area` with the largest value, or the smallest, the lowest x, then y, where several tie."""
+    def _extreme_point(self, area: Area, spacing: float, *, largest: bool) -> Point:
+        """The point read in `area` at points at most `spacing` apart with the largest value, or the smallest, the
+        lowest x, then y, where several tie."""
         _check_not_empty(area)
+        _check_spacing(spacing)
         bounds = area.bounding_rectangle()
         sources = self._sources_near(bounds)
-        xs, ys = self._points_to_read(area, bounds, [point for _, point in _sources_reaching(area, sources)])
+        xs, ys = _points_to_read(area, bounds, spacing, [point for _, point in _sources_reaching(area, sources)])
         values = _values_at(xs, ys, sources)
         tied = numpy.flatnonzero(values == (values.max() if largest else values.min()))
         picked = tied[numpy.lexsort((ys[tied], xs[tied]))[0]]
@@ -307,15 +306,6 @@ class SourceField:
             and source._y - source._reach <= top
             and source._y + source._reach >= bottom
         ]
-
-    def _points_to_read(self, area: Area, bounds: Rectangle, nearest_points: list[Point]) -> tuple[ndarray, ndarray]:
-        """The x and the y of the points to read in `area`, whose bounding rectangle is `bounds`: those `spacing` apart,
-        by ascending x, then y, then `nearest_points`, the area's point nearest each reaching circle's center."""
-        xs, ys = _points_spaced_over(area, bounds, self._spacing)
-        if not nearest_points:
-            return xs, ys
-        nearest = numpy.array(nearest_points)
-        return numpy.concatenate((xs, nearest[:, 0])), numpy.concatenate((ys, nearest[:, 1]))
 
     def gradient_at(self, point: PointLike) -> tuple[float, float]:
         """How fast the value rises at `point`, per map unit, along x and along y, together pointing the way it rises
@@ -384,6 +374,24 @@ def _sources_reaching(area: Area, sources: list[CircleSource]) -> list[tuple[Cir
         if distance <= source._reach:
             reaching.append((source, point))
     return reaching
+
+
+def _points_to_read(
+    area: Area, bounds: Rectangle, spacing: float, nearest_points: list[Point]
+) -> tuple[ndarray, ndarray]:
+    """The x and the y of the points to read in `area`, whose bounding rectangle is `bounds`: those at most `spacing`
+    apart, by ascending x, then y, then `nearest_points`, the area's point nearest each reaching circle's center."""
+    xs, ys = _points_spaced_over(area, bounds, spacing)
+    if not nearest_points:
+        return xs, ys
+    nearest = numpy.array(nearest_points)
+    return numpy.concatenate((xs, nearest[:, 0])), numpy.concatenate((ys, nearest[:, 1]))
+
+
+def _check_spacing(spacing: float) -> None:
+    """Raise `ValueError` for a spacing not above 0, NaN included."""
+    if not spacing > 0:
+        raise ValueError(f"a source field reads points a positive spacing apart, got {spacing}")
 
 
 def _check_not_empty(area: Area) -> None:
