@@ -517,10 +517,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   concussive shells, time warp, a fungal and the inhibitor zone (the owner, over creep first and over only what is
   measured): the rows hold none of them, and only five types' speeds on creep (above) and time warp's 0.6 are measured.
   A step at a time:
-  1. A sweep measures each in game, on the sc2 workflow: every Zerg ground type on creep and off, with each speed
-     upgrade; a marine and a marauder stimmed; a unit of the enemy's slowed by concussive shells, rooted by a fungal and
-     slowed by a time warp, as `playing_rivals` plays both sides; and a unit in each size of inhibitor zone. What it
-     finds goes to `docs/reference/game-behavior/units.md`.
+  1. Done: `tools/sweep_movement.py` measured each in game (sc2 runs 44272083769, 44273048633 and
+     44278966397), and `docs/reference/game-behavior/units.md` holds it, under Moving. Creep makes most Zerg ground
+     units 1.3 times as fast, a locust 1.4 and a queen 2.66, a drone, a broodling and a changeling no faster, and
+     Muscular Augments and Anabolic Synthesis add less on it, so a type's speed on creep is a measured table, not a
+     factor. Stim makes a marine and a marauder 1.5 times as fast; concussive shells, but on a massive unit, make one
+     0.5; an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25, which roots nothing, each flying or not. Not
+     measured: an acceleration zone and a flying inhibitor zone, which the game does not make; two of these at once;
+     and the other buffs that may change a speed, such as a medivac's afterburners.
   2. With the owner: how a unit out of sight reads, with its last buffs or none; whether a type's speed on creep becomes
      public for planning a path, as upgrade inference's private table holds it; and acceleration zones.
   3. `base_speed` and `speed`, proposed for 0.8.0 with #255, so that a bot changes once. AvocaDOS then reads

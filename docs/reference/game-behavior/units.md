@@ -199,15 +199,24 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   step of which ended on creep at least 3.3 from ground without it, and off creep with none within 8 of any step; a
   course laid as soon as creep covered it, 1.5 inside its edge, gave the same speeds (tool `sweep_movement`, build
   75689).
-- **Stim makes a marine and a marauder 1.5 times as fast**: 4.725 a second for 3.15, wearing `Stimpack` and
-  `StimpackMarauder` (tool `sweep_movement`, build 75689).
-- **Concussive shells halve the speed of a unit they hit, but a massive one**: wearing `Slow`, a zergling 2.07 a second
+- **Stim makes a marine and a marauder 1.5 times as fast**: 4.725 a second for 3.15, wearing `MARINE_STIMMED` and
+  `MARAUDER_STIMMED` (tool `sweep_movement`, build 75689).
+- **Concussive shells halve the speed of a unit they hit, but a massive one**: wearing
+  `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, a zergling 2.07 a second
   for 4.13, and a marine, a zealot and a roach 1.57 for 3.15, chased by a marauder ordered to attack it, the median of
   the steps it began and ended slowed; an ultralisk was hit and never wore it (tool `sweep_movement`, build 75689).
 - **An inhibitor zone slows a unit in it to 0.65 of its speed, flying or not, whatever the zone's size**: wearing
-  `InhibitorZoneTemporalField`, a marine 2.045 a second for 3.15, a zergling 2.685 for 4.134 and a medivac 2.270 for
-  3.5, the same in a small, a medium and a large zone, made neutral by debug command; the game makes no flying zone
-  (tool `sweep_movement`, build 75689).
+  `INHIBITOR_ZONE`, a marine 2.045 a second for 3.15, a zergling 2.685 for 4.134 and a medivac 2.270 for 3.5, the same
+  in a small, a medium and a large zone, made neutral by debug command; the game makes no flying zone, nor an
+  acceleration zone, so neither was measured (tool `sweep_movement`, build 75689).
+- **A fungal slows a unit to a quarter of its speed for its 64 steps, flying or not, and roots nothing**: wearing
+  `INFESTOR_FUNGAL_GROWTH`, a zergling 1.03 a second for 4.13, a marine and a roach 0.79 for 3.15, and a mutalisk 1.4
+  for 5.6, each the enemy's under this player's fungal (tool `sweep_movement`, build 75689).
+- **A time warp slows a unit in it to 0.6 of its speed, flying or not**: wearing `MOTHERSHIP_TIME_WARP`, a zergling
+  2.48 a second for 4.13, a marine and a roach 1.89 for 3.15, and a mutalisk 3.36 for 5.6, each the enemy's under this
+  player's time warp (tool `sweep_movement`, build 75689); zerglings with Metabolic Boost 3.94 against their 6.58, at
+  every step of 11 at a time (tool `replay_movement`, AI Arena's 2026 Season 1 replay 4704095 played back as player 2,
+  build 75689).
 - **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
   and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
   `sweep_movement`, build 75689).
