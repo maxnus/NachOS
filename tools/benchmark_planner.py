@@ -1,9 +1,9 @@
 """Benchmark the build planner on the cases of its toy, `tools/planner_toy/`, from the game's data rather than the toy's
 14 hand-written items: each solve's time, objective, gap and counts, and the first part of its plan.
 
-Every case plans from the start of a game, twelve SCVs on a main's eight fields beside its command center, 50
-minerals and 12 of 15 supply, with at most three new command centers, over 10 minutes, valuing marines, marauders and
-medivacs as the toy did, with no walks unless the case says so:
+Every case but `replans` plans from the start of a game, twelve SCVs on a main's eight fields beside its command
+center, 50 minerals and 12 of 15 supply, and every case with at most three new command centers, over 10 minutes. But
+for `replans` and `items`, each values marines, marauders and medivacs as the toy did, with no walks unless it says so:
 
 - `reference`: the reference configuration, the doubling grid, the planner's default windows of whole starts, and a
   discounted concave reward, at each half-life given by `--half-lives`, with walks: 25 seconds to the expansion and 6
@@ -16,6 +16,12 @@ medivacs as the toy did, with no walks unless the case says so:
 - `walks`: its run11, no walks against Terran's.
 - `losses`: its run12, losing army units at 0.002 a second, or workers at 0.001.
 - `discount`: its run2's discount, the linear reward at each half-life given by `--half-lives`.
+- `replans`: a plan made in the middle of a game, as a bot asks for most of its plans: from two made-up states, two
+  bases at 3:00 and at 6:00 with units in production, with the reference's grid, windows and walks, at each half-life,
+  for a reward on marines, marauders and medivacs that never saturates, each count still worth something.
+- `items`: the item set a wide reward brings, 38 items where the toy's has 14: the reward of `replans` and ten more
+  army types, and eight upgrades, from the game's start with the reference's grid, windows and walks, at each
+  half-life.
 
     uv run python tools/benchmark_planner.py reference --time-limit 3
     uv run python tools/benchmark_planner.py grids --time-limit 10
@@ -30,11 +36,22 @@ from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 
 from sc2nachos import GameTime
-from sc2nachos.extensions.planner import Coverage, CurveSegment, Economy, GameState, Plan, Reward, TimeGrid
+from sc2nachos.extensions.planner import (
+    Coverage,
+    CurveSegment,
+    Economy,
+    GameState,
+    Occupation,
+    Plan,
+    Reward,
+    TimeGrid,
+    UnitCompletion,
+    WorkerBuild,
+)
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._planner import whole_until_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
-from sc2nachos.ids import UnitTypeId
+from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.testing import load_game_data
 
 _HORIZON = GameTime(seconds=600)
@@ -50,6 +67,40 @@ _TOY_CURVES = {
         CurveSegment(slope=0.0),
     ),
     UnitTypeId.MEDIVAC: (CurveSegment(slope=2.5, up_to=4), CurveSegment(slope=0.8, up_to=8), CurveSegment(slope=0.0)),
+}
+# Like the toy's curves, but no count is worth nothing, so that the reward never saturates.
+_GROWING_CURVES = {
+    UnitTypeId.MARINE: (CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.5, up_to=80), CurveSegment(slope=0.25)),
+    UnitTypeId.MARAUDER: (
+        CurveSegment(slope=2.2, up_to=12),
+        CurveSegment(slope=1.1, up_to=40),
+        CurveSegment(slope=0.5),
+    ),
+    UnitTypeId.MEDIVAC: (CurveSegment(slope=2.5, up_to=4), CurveSegment(slope=1.2, up_to=10), CurveSegment(slope=0.4)),
+}
+# The wide reward: what each of the first six units of ten more army types is worth a second, each one after them a
+# third of it, and what each of eight upgrades is worth a second once done.
+_FIRST_SIX_SLOPES_OF_THE_WIDE_REWARD = {
+    UnitTypeId.SIEGE_TANK: 4.0,
+    UnitTypeId.VIKING: 3.0,
+    UnitTypeId.HELLION: 1.2,
+    UnitTypeId.CYCLONE: 3.0,
+    UnitTypeId.LIBERATOR: 3.5,
+    UnitTypeId.WIDOW_MINE: 1.5,
+    UnitTypeId.THOR: 7.0,
+    UnitTypeId.GHOST: 4.0,
+    UnitTypeId.RAVEN: 3.5,
+    UnitTypeId.BANSHEE: 3.5,
+}
+_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD = {
+    UpgradeId.STIMPACK: 20.0,
+    UpgradeId.COMBAT_SHIELD: 10.0,
+    UpgradeId.CONCUSSIVE_SHELLS: 6.0,
+    UpgradeId.TERRAN_INFANTRY_WEAPONS_1: 12.0,
+    UpgradeId.TERRAN_INFANTRY_ARMOR_1: 10.0,
+    UpgradeId.TERRAN_INFANTRY_WEAPONS_2: 14.0,
+    UpgradeId.TERRAN_INFANTRY_ARMOR_2: 12.0,
+    UpgradeId.TERRAN_VEHICLE_WEAPONS_1: 8.0,
 }
 # The toy's run10: a small standing value a unit, and the rest from covering the enemy.
 _STANDING_WEIGHTS = {UnitTypeId.MARINE: 0.1, UnitTypeId.MARAUDER: 0.2, UnitTypeId.MEDIVAC: 0.1}
@@ -134,6 +185,99 @@ def _game_start() -> GameState:
     )
 
 
+def _in_production(
+    unit_type: UnitTypeId, producer: UnitTypeId, seconds_left: float, *, needs_tech_lab: bool = False
+) -> tuple[UnitCompletion, Occupation]:
+    """A unit of `unit_type` that `producer` makes, done in `seconds_left`, and what keeps the producer busy until
+    then, its tech lab too if the unit `needs_tech_lab`."""
+    time_left = GameTime(seconds=seconds_left)
+    occupation = Occupation(
+        producer=producer,
+        time_until_start=GameTime.ZERO,
+        time_left=time_left,
+        needs_tech_lab=needs_tech_lab,
+    )
+    return UnitCompletion(unit_type=unit_type, time_left=time_left), occupation
+
+
+def _mid_game_states() -> dict[str, GameState]:
+    """Two made-up states in the middle of a game, after what the planner's best plan for the growing reward at a
+    half-life of 480 s expects there, its fractions made whole: two bases at 3:00, four barracks making marines and a
+    marauder, a reactor and a supply depot going up; and at 6:00, five barracks and a starport."""
+    at_3_minutes = [
+        _in_production(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 10.0),
+        _in_production(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 10.0),
+        _in_production(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 2.0),
+        _in_production(UnitTypeId.MARAUDER, UnitTypeId.BARRACKS, 5.0, needs_tech_lab=True),
+        _in_production(UnitTypeId.REACTOR_BARRACKS, UnitTypeId.BARRACKS, 20.0),
+        _in_production(UnitTypeId.SCV, UnitTypeId.ORBITAL_COMMAND, 4.0),
+        _in_production(UnitTypeId.SCV, UnitTypeId.ORBITAL_COMMAND, 4.0),
+    ]
+    at_6_minutes = [
+        _in_production(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 2.0),
+        _in_production(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 2.0),
+        _in_production(UnitTypeId.MARINE, UnitTypeId.BARRACKS, 2.0),
+        _in_production(UnitTypeId.MARAUDER, UnitTypeId.BARRACKS, 5.0, needs_tech_lab=True),
+        _in_production(UnitTypeId.MARAUDER, UnitTypeId.BARRACKS, 5.0, needs_tech_lab=True),
+        _in_production(UnitTypeId.MEDIVAC, UnitTypeId.STARPORT, 14.0),
+    ]
+    return {
+        "3:00": GameState(
+            time=GameTime(seconds=180),
+            minerals=110.0,
+            vespene=10.0,
+            supply_used=38.0,
+            supply_cap=46.0,
+            counts={
+                UnitTypeId.SCV: 24,
+                UnitTypeId.ORBITAL_COMMAND: 2,
+                UnitTypeId.SUPPLY_DEPOT: 2,
+                UnitTypeId.REFINERY: 1,
+                UnitTypeId.BARRACKS: 4,
+                UnitTypeId.REACTOR_BARRACKS: 1,
+                UnitTypeId.TECH_LAB_BARRACKS: 1,
+                UnitTypeId.MARINE: 5,
+                UnitTypeId.MARAUDER: 1,
+            },
+            unit_completions=tuple(completion for completion, _ in at_3_minutes),
+            occupations=tuple(occupation for _, occupation in at_3_minutes),
+            worker_builds=(
+                WorkerBuild(
+                    unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=13), builder_walks_there=False
+                ),
+            ),
+            mineral_fields=16,
+            refineries_with_vespene=1,
+            free_geysers=3,
+        ),
+        "6:00": GameState(
+            time=GameTime(seconds=360),
+            minerals=440.0,
+            vespene=60.0,
+            supply_used=114.0,
+            supply_cap=126.0,
+            counts={
+                UnitTypeId.SCV: 34,
+                UnitTypeId.ORBITAL_COMMAND: 2,
+                UnitTypeId.SUPPLY_DEPOT: 12,
+                UnitTypeId.REFINERY: 2,
+                UnitTypeId.BARRACKS: 5,
+                UnitTypeId.REACTOR_BARRACKS: 2,
+                UnitTypeId.TECH_LAB_BARRACKS: 3,
+                UnitTypeId.STARPORT: 1,
+                UnitTypeId.MARINE: 39,
+                UnitTypeId.MARAUDER: 15,
+                UnitTypeId.MEDIVAC: 1,
+            },
+            unit_completions=tuple(completion for completion, _ in at_6_minutes),
+            occupations=tuple(occupation for _, occupation in at_6_minutes),
+            mineral_fields=16,
+            refineries_with_vespene=2,
+            free_geysers=2,
+        ),
+    }
+
+
 def _walking(walks: Mapping[UnitTypeId, float]) -> Economy:
     """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others."""
     return Economy(walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)))
@@ -149,17 +293,18 @@ def _solve_and_print(
     whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
     economy: Economy | None = None,
     loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
+    state: GameState | None = None,
 ) -> Plan | None:
-    """Plan for `reward` from the game's start on `grid` within `time_limit` seconds, with the windows of whole starts
-    `whole_until` gives, as `Planner` takes it, by `economy`, with no walks if `None`, and `loss_rates`, and print what
-    came of it."""
+    """Plan for `reward` from `state`, the game's start if `None`, on `grid` within `time_limit` seconds, with the
+    windows of whole starts `whole_until` gives, as `Planner` takes it, by `economy`, with no walks if `None`, and
+    `loss_rates`, and print what came of it."""
     items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     started = time.perf_counter()
     program = PlanProgram(
         items=items,
         model=model,
         edges=grid.edges(_HORIZON),
-        state=_game_start(),
+        state=_game_start() if state is None else state,
         reward=reward,
         economy=_walking(_NO_WALKS) if economy is None else economy,
         loss_rates=loss_rates,
@@ -169,7 +314,10 @@ def _solve_and_print(
     built = time.perf_counter() - started
     plan = program.solve(time_limit=time_limit, node_limit=None)
     buckets = len(grid.edges(_HORIZON)) - 1
-    size = f"{buckets} buckets, {program.linear_program.integral_count} integers, built in {built * 1000:.0f} ms"
+    size = (
+        f"{len(items)} items, {buckets} buckets, {program.linear_program.integral_count} integers, "
+        f"built in {built * 1000:.0f} ms"
+    )
     if plan is None:
         print(f"{label}: {size}, no plan within {time_limit} s")
         return None
@@ -180,17 +328,66 @@ def _solve_and_print(
     )
     print(f"    counts: {dict(counts)}")
     first = [planned for planned in plan.items if (planned.start - plan.made_at).seconds < _FIRST_SECONDS_SHOWN]
-    print("    first 90 s: " + ", ".join(f"{planned.start.seconds:.0f}s {planned.item.name}" for planned in first))
+    starts = (f"{(planned.start - plan.made_at).seconds:.0f}s {planned.item.name}" for planned in first)
+    print("    first 90 s: " + ", ".join(starts))
     return plan
 
 
 def _run_reference(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None]) -> None:
     """The reference configuration at each half-life."""
-    walks = {unit_type: _REFERENCE_WALK_SECONDS for unit_type in model.unit_items} | {UnitTypeId.COMMAND_CENTER: 25.0}
     for half_life in half_lives:
         reward = Reward(curves=_TOY_CURVES, half_life=half_life)
-        label = f"reference, half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
-        _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit, economy=_walking(walks))
+        _solve_and_print(
+            f"reference, {_half_life_label(half_life)}",
+            model,
+            reward,
+            grid=TimeGrid.doubling(),
+            time_limit=time_limit,
+            economy=_reference_economy(model),
+        )
+
+
+def _run_replans(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None]) -> None:
+    """The growing reward from each mid-game state, at each half-life."""
+    for name, state in _mid_game_states().items():
+        for half_life in half_lives:
+            _solve_and_print(
+                f"replan at {name}, {_half_life_label(half_life)}",
+                model,
+                Reward(curves=_GROWING_CURVES, half_life=half_life),
+                grid=TimeGrid.doubling(),
+                time_limit=time_limit,
+                economy=_reference_economy(model),
+                state=state,
+            )
+
+
+def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None]) -> None:
+    """The wide reward from the game's start, at each half-life."""
+    curves: dict[UnitTypeId, tuple[CurveSegment, ...]] = dict(_GROWING_CURVES)
+    for unit_type, slope in _FIRST_SIX_SLOPES_OF_THE_WIDE_REWARD.items():
+        curves[unit_type] = (CurveSegment(slope=slope, up_to=6), CurveSegment(slope=slope / 3))
+    for half_life in half_lives:
+        _solve_and_print(
+            f"wide reward, {_half_life_label(half_life)}",
+            model,
+            Reward(curves=curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
+            grid=TimeGrid.doubling(),
+            time_limit=time_limit,
+            economy=_reference_economy(model),
+        )
+
+
+def _reference_economy(model: TerranModel) -> Economy:
+    """The reference configuration's economy: the default, but with a walk of 25 seconds to a command center, and of 6
+    to any other structure."""
+    walks = {unit_type: _REFERENCE_WALK_SECONDS for unit_type in model.unit_items} | {UnitTypeId.COMMAND_CENTER: 25.0}
+    return _walking(walks)
+
+
+def _half_life_label(half_life: GameTime | None) -> str:
+    """How a solve's label names `half_life`."""
+    return f"half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
 
 
 def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
@@ -267,8 +464,7 @@ def _run_discount(model: TerranModel, time_limit: float, half_lives: Sequence[Ga
     """The linear reward at each half-life."""
     for half_life in half_lives:
         reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life)
-        label = f"half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
-        _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+        _solve_and_print(_half_life_label(half_life), model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
 
 
 def _whole_for_90_seconds(_: UnitTypeId) -> GameTime:
@@ -301,6 +497,8 @@ _CASES: Mapping[str, Callable[[TerranModel, float, Sequence[GameTime | None]], N
     "walks": _run_walks,
     "losses": _run_losses,
     "discount": _run_discount,
+    "replans": _run_replans,
+    "items": _run_items,
 }
 
 

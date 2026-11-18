@@ -208,8 +208,17 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 2. **highspy.** Its warm start is what makes continuous replanning strictly better and the budget sub-second, at
    the price of a second solver wheel beside scipy's, in NachOS as an optional dependency and in AvocaDOS's zip.
    Phase 3 decides it with a measurement.
-3. **The item set.** The real model has more types than the toy's 14, and integers scale with them. Prune to what
-   the reward reaches, and measure on the full Terran tree in phase 1.
+3. **The item set: a wide reward is not solved in 3 seconds** (measured in phase 1's pull request, 2026-11-18,
+   `tools/benchmark_planner.py items`). The real model has more types than the toy's 14, and integers scale with
+   them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
+   them, where the reference has 14 and 419. From the game's start it finds no plan within 1 s at any half-life; after
+   3 s none at a half-life of 120 s, and plans 5% short of the best undiscounted, 28% at 240 s and 24% at 480; after
+   10 s plans 0.8 to 1.6% short; and it is proven optimal in 36 to 38 s at three half-lives, 2.1% from its bound after
+   40 at 240 s. A replan in the middle of a game with the toy's 14 items is no such trouble (`replans`, from two
+   made-up states at 3:00 and 6:00 with units in production, a reward that never saturates): a plan within 1.1% of
+   the best after 1 s and within 0.3% after 3, proven optimal in 4 to 18 s. Open: prune to what the reward reaches,
+   a shorter window for the upgrades' whole starts, or phase 3's start from the previous plan; and what a bot is
+   handed when no plan is found in time, where `plan_now` raises `NoPlanFoundError`.
 4. **Build space.** A bound on structures per base from the map, as the one physical limit the model lacks;
    `api.placement` may answer it.
 5. **Replanning defaults.** The interval, the budget and the hysteresis bonus are parameters; their defaults come
