@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-14:
+As of 2026-11-18:
 
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day

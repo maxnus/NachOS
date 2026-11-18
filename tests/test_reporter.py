@@ -594,7 +594,7 @@ class TestBuffs:
             ("EnemyUnitLostBuffEvent", BuffId.STASIS_WARD_TRAPPED),
         ]
 
-    def test_an_enemy_structure_a_viper_drains_gains_its_consume_and_loses_it_when_drained(self) -> None:
+    def test_an_enemy_structure_a_viper_drains_gains_its_consume_and_loses_it_when_the_drain_ends(self) -> None:
         hive = _worn(alliance=_ENEMY, unit_type=UnitTypeId.HIVE)
         drained = _worn(alliance=_ENEMY, unit_type=UnitTypeId.HIVE, buff_ids=[RawBuffId.ViperConsumeStructure])
         assert self._changes(hive, drained, hive) == [

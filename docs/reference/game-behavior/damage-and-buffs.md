@@ -220,9 +220,9 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
 - A viper's Consume puts `ViperConsumeStructure` on the structure it drains, and no buff on the viper. A viper with 50
   energy, ordered to consume its own player's hatchery, held the order for 328 to 360 steps. The hatchery wore the buff
   from within 8 steps of the order until 328 to 336 steps after it, reading 0 steps of 0 left, and lost 145 health,
-  while the viper gained 62 energy, its own regeneration included. A viper at full energy, 200, was accepted the order
-  and dropped it within 8 steps, draining nothing and putting no buff on anything, so tool `sweep_buffs`, which fills
-  every energy bar, never saw it. Ordered to consume again about 420 and 840 steps after a Consume, drained or dropped,
+  while the viper gained 62 energy, its own regeneration included. A viper at full energy, 200, was answered `Success`
+  and dropped the order within 8 steps, draining nothing and putting no buff on anything, so tool `sweep_buffs`, which
+  fills every energy bar, never saw it. Ordered to consume again about 420 and 840 steps after a Consume, drained or dropped,
   a viper was refused with the generic `Error`, and about 2,260 steps after, accepted (in game, scratch checks on
   PylonAIE, 2026-11-18, build 75689). A hive a viper drained wore it in AI Arena replays played back with the fog off
   (2026-11-04), and an enemy unit wore it to AvocaDOS in AI Arena match 5118204 (its log, 2026-11-12).
