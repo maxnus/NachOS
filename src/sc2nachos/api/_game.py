@@ -145,24 +145,24 @@ class _Game:
         enemy = Enemy._from_game(info, player_id, game_data=game_data, ladder_id=enemy_ladder_id)
         order_book = OrderBook(game_data)
 
-        def is_on_creep(point: Point) -> bool:
+        def on_creep(point: Point) -> bool:
             # A unit's speed reads the creep under it off the game's current state, which decodes it once an
             # observation, if asked. The game is made below, before any unit's speed is asked.
             return game.state.creep[point]
 
         fog_off_playback = None
         if client.fog_disabled:
-            fog_off_playback = _FogOffPlayback(game_data, enemy, order_book, is_on_creep=is_on_creep)
+            fog_off_playback = _FogOffPlayback(game_data, enemy, order_book, on_creep=on_creep)
             tracker = _Tracker(
                 game_data,
                 enemy,
                 id_provider=fog_off_playback.id_of_unit,
                 order_book=order_book,
-                is_on_creep=is_on_creep,
+                on_creep=on_creep,
             )
             observation = fog_off_playback.read(observation, step)
         else:
-            tracker = _Tracker(game_data, enemy, order_book=order_book, is_on_creep=is_on_creep)
+            tracker = _Tracker(game_data, enemy, order_book=order_book, on_creep=on_creep)
         game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present

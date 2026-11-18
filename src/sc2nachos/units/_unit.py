@@ -763,9 +763,9 @@ class Unit[K: UnitType.AnyType]:
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
-    def speed(self) -> float:
-        """How fast the unit can move where it stands, in distance per second, like `velocity`: `speed_with()`, which
-        counts its owner's upgrades, the creep under it and the buffs it wears."""
+    def current_speed(self) -> float:
+        """How fast the unit can move where it stands, as it stands now, in distance per second: `speed_with()`, which
+        counts its owner's upgrades, the creep under it and the buffs it wears. How fast it moves now is `velocity`."""
         return self.speed_with()
 
     def speed_with(self, *, upgrades: bool = True, buffs: bool = True, on_creep: bool | None = None) -> float:
@@ -788,7 +788,7 @@ class Unit[K: UnitType.AnyType]:
         # Reading the creep only for a type it speeds up spares decoding it for any other.
         if type_data.creep_speed != speed and not self.is_flying:
             if on_creep is None:
-                on_creep = self._tracker.is_on_creep(self.position)
+                on_creep = self._tracker.on_creep(self.position)
             if on_creep:
                 speed = type_data.creep_speed
         if buffs and self.is_visible:
