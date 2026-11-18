@@ -54,7 +54,7 @@ As of 2026-11-14:
 - **Since 0.7.0**, on main: #255. The next release, 0.8.0 since #255 moves a field's `spacing` from the field to its
   reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
   and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
-  they read 0.25 apart.
+  they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -459,10 +459,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
      #99, a field read as a field, a unit's check at its position and a flee at its tiles' centers, with no grid drawn
      from it (the owner, 2026-11-17, over drawing it onto the map's grid every 4 steps: its field holds 0 to 3 circles
-     on average in the recorded games, so a point read off it costs less than a grid lookup); its reach R + 2 (the
-     owner, over R + 4, as far as the blur read above 0, and over a threshold), and a flee's ties between tiles of equal
-     threat broken down the field's slope at the unit (the owner, over the lowest address, farthest, nearest, toward the
-     squad, its support or the main base, as measured in #99). Threat and support in a pull request of their own, since
+     on average in the recorded games, so a point read off it costs less than a grid lookup); its reach R + 2 at first
+     (the owner, over R + 4, as far as the blur read above 0, and over a threshold), then, in the owner's review of
+     a3463ca, a unit's strength out to its attack range and radius, falling smoothly to 0 as far beyond as it moves in
+     0.5 s at its speed where it stands (the owner, over 0.25 and 1 s, and over a width as a share of the reach), which
+     AvocaDOS works out until NachOS has it (Next); a flee's ties between tiles of equal threat broken down the field's
+     slope at the unit (the owner, over the lowest address, farthest, nearest, toward the squad, its support or the main
+     base, as measured in #99), and its two threats read as one field (the owner, over that field's `argmin`, which
+     breaks ties by address and knows no pathing). Threat and support in a pull request of their own, after #99, since
      paths and grid arithmetic read them, and points in some 20 places.
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
@@ -506,6 +510,21 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   the owner. The yield goes into `mine` only if it is measured to mine more.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
+- **A unit's speed where it stands** (the owner, 2026-11-18, after AvocaDOS #99 worked out its melee units' speed
+  itself): `Unit.speed` counts the creep under the unit and the buffs it wears, and `Unit.base_speed` is what `speed`
+  is now, its type's with its owner's upgrades, for planning a path, which creep changes tile by tile (the owner, over
+  `speed` kept and a new `current_speed`, and over one `speed`). It covers creep for every Zerg ground type, and stim,
+  concussive shells, time warp, a fungal and the inhibitor zone (the owner, over creep first and over only what is
+  measured): the rows hold none of them, and only five types' speeds on creep (above) and time warp's 0.6 are measured.
+  A step at a time:
+  1. A sweep measures each in game, on the sc2 workflow: every Zerg ground type on creep and off, with each speed
+     upgrade; a marine and a marauder stimmed; a unit of the enemy's slowed by concussive shells, rooted by a fungal and
+     slowed by a time warp, as `playing_rivals` plays both sides; and a unit in each size of inhibitor zone. What it
+     finds goes to `docs/reference/game-behavior/units.md`.
+  2. With the owner: how a unit out of sight reads, with its last buffs or none; whether a type's speed on creep becomes
+     public for planning a path, as upgrade inference's private table holds it; and acceleration zones.
+  3. `base_speed` and `speed`, proposed for 0.8.0 with #255, so that a bot changes once. AvocaDOS then reads
+     `unit.speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
   1. Done in #212: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
      the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`
