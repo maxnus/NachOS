@@ -10,9 +10,10 @@ along each of `_HEADINGS_DEGREES`, recording where it stood at every step. A Zer
 between four hatcheries made beside a course of its own, once their creep has stopped spreading, every point of it
 `_CREEP_MARGIN` or more from ground without creep. As Protoss, a sentry's hallucinations of the types it can
 hallucinate run too. Then the sweep researches each of the race's speed upgrades, at researchers it makes with whatever
-they need, and runs every trial again. Then each race's units that put a buff on themselves run wearing it: a medivac
-with its afterburners lit, a hydralisk lunging once Nanomuscular Swell is in, a void ray in prismatic alignment, and a
-zealot, once Charge is in, charging a zergling of the computer's 3.5 ahead.
+they need, and runs every trial again. Before the speed upgrades and after, each race's units that put a buff on
+themselves run wearing it: a medivac with its afterburners lit, a hydralisk lunging once Nanomuscular Swell is in, a
+void ray in prismatic alignment, and, after alone, as Charge is its speed upgrade, a zealot charging a zergling of the
+computer's 3.5 ahead.
 
 As Zerg, every other Zerg type on the ground with a speed runs too, off creep and on it, once, as no upgrade changes it.
 As Terran, once the speed upgrades are in, Stimpack and Concussive Shells are researched too, and a marine and a
@@ -598,12 +599,20 @@ class MovementSweep:
         if (verdict := self._game.order(RawAbilityId.Effect_Charge, mover.tag, target.tag)) != SUCCESS:
             raise RuntimeError(f"the game refused the charge: {verdict}")
 
-    def run_self_buff_trials(self) -> tuple[list[dict[str, object]], dict[str, str]]:
-        """The trials of the race's `_SELF_BUFFS`, once the speed upgrades are in, researching what each needs, as
-        findings or errors, and why each research that failed did."""
+    def run_self_buff_trials(self, *, upgraded: bool) -> tuple[list[dict[str, object]], dict[str, str]]:
+        """The trials of the race's `_SELF_BUFFS`, with the speed upgrades in or not, researching what each needs, as
+        findings or errors, and why each research that failed did; unupgraded, leaving out a type whose ability needs
+        the research that changes its speed, a zealot's Charge."""
         trials: list[dict[str, object]] = []
         not_researched: dict[str, str] = {}
         for unit_type, ability, needed in _SELF_BUFFS.get(self._race, ()):
+            changes_its_speed = (
+                needed is not None
+                and needed in self.data.units[unit_type].upgrades
+                and bool(self.data.units[unit_type].upgrades[needed].speed)
+            )
+            if not upgraded and changes_its_speed:
+                continue
             if needed is not None and needed not in self._researched():
                 try:
                     self._research(needed)
@@ -622,7 +631,7 @@ class MovementSweep:
                         unit_type,
                         speed_upgrade,
                         _HEADINGS_DEGREES[0],
-                        upgraded=speed_upgrade is not None,
+                        upgraded=upgraded and speed_upgrade is not None,
                         condition=f"using {ability.name}",
                         course=Course(course.start, target_at),
                         before_move=functools.partial(self._charged, target_at, made_tags),
@@ -637,7 +646,7 @@ class MovementSweep:
                         unit_type,
                         speed_upgrade,
                         heading,
-                        upgraded=speed_upgrade is not None,
+                        upgraded=upgraded and speed_upgrade is not None,
                         condition=f"using {ability.name}",
                         before_move=functools.partial(self._buffed_by, ability),
                     )
@@ -1355,9 +1364,11 @@ def sweep_race(race: Race, installation: Installation) -> dict[str, object]:
         movement_sweep = MovementSweep(game, race)
         logger.info("{}: {}", race.name, {t.name: u.name for t, u in movement_sweep.speed_upgrades.items()})
         unupgraded = movement_sweep.run_trials(upgraded=False)
-        not_researched = movement_sweep.research_speed_upgrades()
+        self_buffed, not_researched = movement_sweep.run_self_buff_trials(upgraded=False)
+        not_researched |= movement_sweep.research_speed_upgrades()
         upgraded = movement_sweep.run_trials(upgraded=True)
-        self_buffed, self_buffs_not_researched = movement_sweep.run_self_buff_trials()
+        upgraded_self_buffed, self_buffs_not_researched = movement_sweep.run_self_buff_trials(upgraded=True)
+        self_buffed += upgraded_self_buffed
         not_researched |= self_buffs_not_researched
         buffed: list[dict[str, object]] = []
         if race is Race.TERRAN:
