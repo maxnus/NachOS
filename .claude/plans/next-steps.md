@@ -525,8 +525,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      0.5; an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25, which roots nothing, each flying or not. Not
      measured: an acceleration zone and a flying inhibitor zone, which the game does not make; two of these at once;
      and the other buffs that may change a speed, such as a medivac's afterburners.
-  2. With the owner: how a unit out of sight reads, with its last buffs or none; whether a type's speed on creep becomes
-     public for planning a path, as upgrade inference's private table holds it; and acceleration zones.
+  2. Decided with the owner (2026-11-18): a unit out of sight reads its `base_speed` with the creep where it was last
+     seen, and no buffs, which last seconds (over its last buffs and over raising); a type's speed on creep is public,
+     `UnitTypeData.creep_speed`, which `with_upgrades` updates as it does `speed`, and `Unit.base_creep_speed`, with the
+     owner's upgrades, which upgrade inference reads where it holds a private table (over `UnitTypeData` alone and over
+     private); and two modifiers at once are measured before `speed` counts them (over multiplying them unmeasured and
+     over the strongest slow alone): stim with concussive shells or an inhibitor zone, concussive shells with a zone,
+     creep with each slow, and a fungal with a time warp.
   3. `base_speed` and `speed`, proposed for 0.8.0 with #255, so that a bot changes once. AvocaDOS then reads
      `unit.speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
