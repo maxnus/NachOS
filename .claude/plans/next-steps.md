@@ -473,12 +473,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      circles, each drawn onto the map's tiles every 4 steps for its readers, which read the grids (the owner, over every
      read off the fields, which cost 12 to 16 µs a read of support with its 63 circles on average against a grid's 1.5
      to 1.8, and over batching the heavy readers' points into `values_at`); building a field and drawing it costs less
-     than the smoothing did, the strength properties 582.7 µs a step against 846.8 over the recorded games. A flee kept
-     away from unpathable tiles, so as not to be cornered, next: a penalty falling with each tile's distance to the
-     nearest unpathable one, from the pathing grid's `distance_transform`, added to the threat the flee reads (the
-     owner, review of AvocaDOS #99 at aa238ab, over doing it in #99 and over a tile source in a `SourceField`, which
-     would need `add_rectangle` and a source per blocked tile, could not rule out the far side of a cliff, and whose
-     `argmin` breaks ties by address).
+     than the smoothing did, the strength properties 582.7 µs a step against 846.8 over the recorded games. A flee keeps
+     off tiles beside unpathable ground, so as not to be cornered, in AvocaDOS #102, merged: a penalty of 0.1 beside it,
+     falling to 0 a tile farther, from the pathing grid's `distance_transform`, added to the threat the flee reads, for
+     a ground unit (the owner, review of AvocaDOS #99 at aa238ab, over a tile source in a `SourceField`, which would
+     need `add_rectangle` and a source per blocked tile, could not rule out the far side of a cliff, and whose `argmin`
+     breaks ties by address; and over a weight of 0.25 or 1.0 and a reach of 2 or 3). Over the recorded games it takes
+     flees beside unpathable ground from 35.9% to 16.1%, 6.7% of flees taking 0.023 more threat on average, and the
+     effect-avoidance step 148.9 µs a step against 143.6.
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
   holding the field's value at its center, for paths and grid arithmetic (the owner, review of AvocaDOS #99, over the
