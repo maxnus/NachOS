@@ -188,13 +188,26 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   and 19 with; an overlord took 10 steps, 28 with Pneumatized Carapace, and a transport overlord 14 and 32. Along 45
   degrees every type read up to 0.6% slower, an overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299
   for 4.1344 (tool `sweep_movement`, build 75689).
-- **Creep makes a Zerg ground unit 1.3 times as fast, to within 0.1%, but for what Muscular Augments and Anabolic
-  Synthesis add**: a zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a
-  roach, a hydralisk and an ultralisk alike without their speed upgrades, and a baneling and a roach with them. Muscular
-  Augments and Anabolic Synthesis add less on creep ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries'
-  creep had stopped spreading, on a course every step of which ended on creep at least 3.3 from ground without it, and
-  off creep with none within 8 of any step; a course laid as soon as creep covered it, 1.5 inside its edge, gave the
-  same speeds (tool `sweep_movement`, build 75689).
+- **Creep makes most Zerg ground units 1.3 times as fast, to within 0.1%, a locust 1.4 times and a queen 2.66 times,
+  and a drone, a broodling and a changeling no faster, but for what Muscular Augments and Anabolic Synthesis add**: a
+  zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a roach, a ravager, a
+  hydralisk, an infestor, burrowed or not, a lurker, a swarm host and an ultralisk alike without their speed upgrades,
+  and a baneling and a roach with them; a locust 2.63 and 3.67, a queen 1.31 and 3.49; a drone 3.94 on both, a
+  broodling 4.13, and a changeling 3.15, plain or disguised as a marine or a zealot, while one disguised as a zergling
+  runs as a zergling does. Muscular Augments and Anabolic Synthesis add less on creep
+  ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries' creep had stopped spreading, on a course every
+  step of which ended on creep at least 3.3 from ground without it, and off creep with none within 8 of any step; a
+  course laid as soon as creep covered it, 1.5 inside its edge, gave the same speeds (tool `sweep_movement`, build
+  75689).
+- **Stim makes a marine and a marauder 1.5 times as fast**: 4.725 a second for 3.15, wearing `Stimpack` and
+  `StimpackMarauder` (tool `sweep_movement`, build 75689).
+- **Concussive shells halve the speed of a unit they hit, but a massive one**: wearing `Slow`, a zergling 2.07 a second
+  for 4.13, and a marine, a zealot and a roach 1.57 for 3.15, chased by a marauder ordered to attack it, the median of
+  the steps it began and ended slowed; an ultralisk was hit and never wore it (tool `sweep_movement`, build 75689).
+- **An inhibitor zone slows a unit in it to 0.65 of its speed, flying or not, whatever the zone's size**: wearing
+  `InhibitorZoneTemporalField`, a marine 2.045 a second for 3.15, a zergling 2.685 for 4.134 and a medivac 2.270 for
+  3.5, the same in a small, a medium and a large zone, made neutral by debug command; the game makes no flying zone
+  (tool `sweep_movement`, build 75689).
 - **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
   and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
   `sweep_movement`, build 75689).
