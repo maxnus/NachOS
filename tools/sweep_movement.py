@@ -25,8 +25,8 @@ middle::
 With `rivals`, or with no names, it also plays a game of two players, both played from here, in which a zergling, a
 marine, a roach and a mutalisk of the enemy's run along a ground course under a fungal of an infestor of this player's,
 cast on the runner a third of the way along, and under a time warp of a mothership's, cast at the course's middle as
-the runner sets off. They are watched for as long as the course takes at a quarter of the row's speed, a root
-notwithstanding::
+the runner sets off, the runner's life set back to full at every step, since the mothership fires at it. They are
+watched for as long as the course takes at a quarter of the row's speed, a stop notwithstanding::
 
     uv run python tools/sweep_movement.py rivals --out movement-rivals.json
 
@@ -167,7 +167,7 @@ _BUFFED_WATCH_SPEED_SHARE = 0.25
 # share of the way along, this far ahead of it; a time warp at the course's middle as the runner sets off, since it
 # slows nothing for its first 1.79 s (in game).
 _ENEMY_SPELLS = {
-    "rooted by a fungal": (UnitTypeId.INFESTOR, RawAbilityId.FungalGrowth_FungalGrowth),
+    "slowed by a fungal": (UnitTypeId.INFESTOR, RawAbilityId.FungalGrowth_FungalGrowth),
     "slowed by a time warp": (UnitTypeId.MOTHERSHIP, RawAbilityId.Effect_TimeWarp),
 }
 _CASTER_SIDE_DISTANCE = 5.0
@@ -1013,6 +1013,7 @@ def _enemy_buff_trial(
     for _ in range(watch_steps):
         rivals.step(1)
         runner = _listed_by(enemy, runner_tag)
+        me.set_value(_LIFE_VALUE, runner.health_max, [runner_tag])
         positions.append(_position_of(runner))
         buffs.append(_buff_names(runner))
         if not fungal_cast and positions[-1].distance_to(course.start) >= course.length * _FUNGAL_ALONG:
