@@ -180,21 +180,60 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 ## Moving
 
 - **A unit ordered along a straight line moves at its row's speed once it is up to speed, a unit on the ground from the
-  first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for the 12
-  types a speed upgrade changes, with the upgrade and without: every step of a ground unit's run, and every window of
-  11, 22 or 44 steps, came within 0.0001 a second of the row's speed, an upgraded ultralisk's from its third step; a
-  flying unit's windows within 0.15% of it, though a single step of an overlord, an overseer or an observer fell up to
-  1.6% short. A banshee gained 0.0127 a step every step until it reached its speed, 14 steps without Hyperflight Rotors
-  and 19 with; an overlord took 10 steps, 28 with Pneumatized Carapace, and a transport overlord 14 and 32. Along 45
-  degrees every type read up to 0.6% slower, an overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299
-  for 4.1344 (tool `sweep_movement`, build 75689).
-- **Creep makes a Zerg ground unit 1.3 times as fast, to within 0.1%, but for what Muscular Augments and Anabolic
-  Synthesis add**: a zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a
-  roach, a hydralisk and an ultralisk alike without their speed upgrades, and a baneling and a roach with them. Muscular
-  Augments and Anabolic Synthesis add less on creep ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries'
-  creep had stopped spreading, on a course every step of which ended on creep at least 3.3 from ground without it, and
-  off creep with none within 8 of any step; a course laid as soon as creep covered it, 1.5 inside its edge, gave the
-  same speeds (tool `sweep_movement`, build 75689).
+  first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for the 13
+  types a speed upgrade changes, with the upgrade and without, a zealot's 3.15 and 4.725 with Charge among them (sc2 run
+  44296029839): every step of a ground unit's run, and every window of 11, 22 or 44 steps, came within 0.0001 a second
+  of the row's speed, an upgraded ultralisk's from its third step; a flying unit's windows within 0.15% of it, though a
+  single step of an overlord, an overseer or an observer fell up to 1.6% short. A banshee gained 0.0127 a step every
+  step until it reached its speed, 14 steps without Hyperflight Rotors and 19 with; an overlord took 10 steps, 28 with
+  Pneumatized Carapace, and a transport overlord 14 and 32. Along 45 degrees every type read up to 0.6% slower, an
+  overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299 for 4.1344 (tool `sweep_movement`, build
+  75689).
+- **Creep makes most Zerg ground units 1.3 times as fast, to within 0.1%, a locust 1.4 times and a queen 2.66 times,
+  and a drone, a broodling and a changeling no faster, but for what Muscular Augments and Anabolic Synthesis add**: a
+  zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a roach, a ravager, a
+  hydralisk, an infestor, burrowed or not, a lurker, a swarm host and an ultralisk alike without their speed upgrades,
+  and a baneling and a roach with them; a locust 2.63 and 3.67, a queen 1.31 and 3.49; a drone 3.94 on both, a
+  broodling 4.13, and a changeling 3.15, plain or disguised as a marine or a zealot, while one disguised as a zergling
+  runs as a zergling does. Muscular Augments and Anabolic Synthesis add less on creep
+  ([upgrades](upgrades-and-tables.md)). Measured once the hatcheries' creep had stopped spreading, on a course every
+  step of which ended on creep at least 3.3 from ground without it, and off creep with none within 8 of any step; a
+  course laid as soon as creep covered it, 1.5 inside its edge, gave the same speeds (tool `sweep_movement`, build
+  75689).
+- **Stim makes a marine and a marauder 1.5 times as fast**: 4.725 a second for 3.15, wearing `MARINE_STIMMED` and
+  `MARAUDER_STIMMED` (tool `sweep_movement`, build 75689).
+- **Concussive shells halve the speed of a unit they hit, but a massive one**: wearing
+  `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, a zergling 2.07 a second for 4.13, and a marine, a zealot and a roach 1.57 for
+  3.15, chased by a marauder ordered to attack it, the median of the steps it began and ended slowed; an ultralisk was
+  hit and never wore it (tool `sweep_movement`, build 75689).
+- **An inhibitor zone slows a unit in it to 0.65 of its speed, flying or not, whatever the zone's size**: wearing
+  `INHIBITOR_ZONE`, a marine 2.045 a second for 3.15, a zergling 2.685 for 4.134 and a medivac 2.270 for 3.5, the same
+  in a small, a medium and a large zone, made neutral by debug command; the game makes no flying zone, nor an
+  acceleration zone, so neither was measured (tool `sweep_movement`, build 75689).
+- **A fungal slows a unit to a quarter of its speed for its 64 steps, flying or not, and roots nothing**: wearing
+  `INFESTOR_FUNGAL_GROWTH`, a zergling 1.03 a second for 4.13, a marine and a roach 0.79 for 3.15, and a mutalisk 1.4
+  for 5.6, each the enemy's under this player's fungal (tool `sweep_movement`, build 75689).
+- **A time warp slows a unit in it to 0.6 of its speed, flying or not**: wearing `MOTHERSHIP_TIME_WARP`, a zergling
+  2.48 a second for 4.13, a marine and a roach 1.89 for 3.15, and a mutalisk 3.36 for 5.6, each the enemy's under this
+  player's time warp (tool `sweep_movement`, build 75689); zerglings with Metabolic Boost 3.94 against their 6.58, at
+  every step of 11 at a time (tool `replay_movement`, AI Arena's 2026 Season 1 replay 4704095 played back as player 2,
+  build 75689).
+- **What a unit puts on itself: afterburners make a medivac 1.7 times as fast and a lunge a hydralisk twice as fast;
+  prismatic alignment sets a void ray to 0.75 of its speed before Flux Vanes, with Flux Vanes or without, and a charge
+  sets a zealot dashing at some 3.3 times its speed before Charge**: wearing `MEDIVAC_BOOST`, a medivac 5.94 a second
+  for 3.5, for 119 steps; wearing `HYDRALISK_LUNGE`, a hydralisk 6.3 for 3.15 and 8.26 for 4.13 with Muscular
+  Augments, for 7 steps; wearing `VOID_RAY_PRISMATIC_ALIGNMENT`, a void ray 2.888 for 3.85 and 2.882 for 4.648 with
+  Flux Vanes, for 311 steps; and wearing `ZEALOT_CHARGING`, a zealot with Charge some 10.39 over the 5 steps of its
+  dash at a zergling 3.5 away. Each was measured alone (tool `sweep_movement`, build 75689). Liquipedia gives 5.95 for
+  a medivac's afterburners and a 25% slow for prismatic alignment (the owner, review of #256).
+- **Two of these at once multiply, creep among them**, to within the rounding of a step's distance: a marine or a
+  marauder stimmed and slowed by concussive shells 2.36 a second for 3.15, 1.5 times 0.5; a marine stimmed in an
+  inhibitor zone 3.06, 1.5 times 0.65; a zergling slowed in a zone 1.34 for 4.13, 0.5 times 0.65; a zergling, a marine,
+  a roach and a mutalisk of the enemy's under a fungal and a time warp at once 0.62, 0.47, 0.47 and 0.84 for 4.13,
+  3.15, 3.15 and 5.6, 0.25 times 0.6; and on creep, a zergling with Metabolic Boost 4.27 slowed by concussive shells and
+  5.55 in a zone, for its 8.55, a roach with Glial Reconstitution 2.73 and 3.54 for its 5.46, and the enemy's zergling
+  and roach, unupgraded, 1.34 and 1.02 under a fungal and 3.22 and 2.45 under a time warp, for their 5.37 and 4.09 (tool
+  `sweep_movement`, build 75689).
 - **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
   and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
   `sweep_movement`, build 75689).

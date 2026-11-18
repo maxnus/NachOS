@@ -19,8 +19,14 @@ if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.gamedata import GameData
+    from sc2nachos.geometry import Point
     from sc2nachos.match import Enemy
     from sc2nachos.orders import OrderBook
+
+
+def _on_no_creep(point: Point) -> bool:
+    """No creep known anywhere: the test of a tracker made with none."""
+    return False
 
 
 @final
@@ -36,6 +42,7 @@ class _Tracker:
         "_game_data",
         "_last_changes",
         "_morph_tracker",
+        "_on_creep",
         "_order_book",
         "_unit_comparer",
         "_unit_tracker",
@@ -51,10 +58,12 @@ class _Tracker:
         *,
         id_provider: Callable[[raw_pb2.Unit], int] | None = None,
         order_book: OrderBook,
+        on_creep: Callable[[Point], bool] = _on_no_creep,
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
         alliance's next id, or under the one `id_provider` gives the report it is first seen in. This player's units
-        are ordered into `order_book`."""
+        are ordered into `order_book`. `on_creep` tells whether creep covers the ground at a point now, as a unit's
+        speed asks; by default no creep is known."""
         self._game_data = game_data
         self._enemy = enemy
         self._order_book = order_book
@@ -67,6 +76,7 @@ class _Tracker:
         self._upgrade_tracker = _UpgradeTracker(game_data, enemy)
         self._unit_comparer = _UnitComparer(self)
         self._unit_watcher = _UnitWatcher(self)
+        self._on_creep = on_creep
 
     @property
     def game_data(self) -> GameData:
@@ -120,6 +130,10 @@ class _Tracker:
     def unit_comparer(self) -> _UnitComparer:
         """Compares each unit with the previous update, recording into the last changes, on request."""
         return self._unit_comparer
+
+    def on_creep(self, point: Point) -> bool:
+        """Whether creep covers the ground at `point` now, as the test the tracker was made with tells."""
+        return self._on_creep(point)
 
     @property
     def unit_watcher(self) -> _UnitWatcher:

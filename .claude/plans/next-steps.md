@@ -54,7 +54,10 @@ As of 2026-11-14:
 - **Since 0.7.0**, on main: #255. The next release, 0.8.0 since #255 moves a field's `spacing` from the field to its
   reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
   and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
-  they read 0.25 apart.
+  they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too, so that its notes also
+  say that a bot's `unit.speed`, its type's with its owner's upgrades, is gone, `unit.speed_with(buffs=False,
+  on_creep=False)` now, and that the new `unit.current_speed` counts creep and buffs where the unit stands; and that
+  it adds `unit.speed_with(...)`, `UnitTypeData.creep_speed` and `MadeUpUnits.observe(creep=...)`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -459,10 +462,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
      #99, a field read as a field, a unit's check at its position and a flee at its tiles' centers, with no grid drawn
      from it (the owner, 2026-11-17, over drawing it onto the map's grid every 4 steps: its field holds 0 to 3 circles
-     on average in the recorded games, so a point read off it costs less than a grid lookup); its reach R + 2 (the
-     owner, over R + 4, as far as the blur read above 0, and over a threshold), and a flee's ties between tiles of equal
-     threat broken down the field's slope at the unit (the owner, over the lowest address, farthest, nearest, toward the
-     squad, its support or the main base, as measured in #99). Threat and support in a pull request of their own, since
+     on average in the recorded games, so a point read off it costs less than a grid lookup); its reach R + 2 at first
+     (the owner, over R + 4, as far as the blur read above 0, and over a threshold), then, in the owner's review of
+     a3463ca, a unit's strength out to its attack range and radius, falling smoothly to 0 as far beyond as it moves in
+     0.5 s at its speed where it stands (the owner, over 0.25 and 1 s, and over a width as a share of the reach), which
+     AvocaDOS works out until NachOS has it (Next); a flee's ties between tiles of equal threat broken down the field's
+     slope at the unit (the owner, over the lowest address, farthest, nearest, toward the squad, its support or the main
+     base, as measured in #99), and its two threats read as one field (the owner, over that field's `argmin`, which
+     breaks ties by address and knows no pathing). Threat and support in a pull request of their own, after #99, since
      paths and grid arithmetic read them, and points in some 20 places.
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
@@ -506,6 +513,45 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   the owner. The yield goes into `mine` only if it is measured to mine more.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
+- **A unit's speed where it stands** (the owner, 2026-11-18, after AvocaDOS #99 worked out its melee units' speed
+  itself): `Unit.speed` counts the creep under the unit and the buffs it wears, and `Unit.base_speed` is what `speed` is
+  now, its type's with its owner's upgrades, for planning a path, which creep changes tile by tile (the owner, over
+  `speed` kept and a new `current_speed`, and over one `speed`). The owner's reviews of #256 reversed the names (step
+  3): `Unit.current_speed` counts them, and `speed_with(buffs=False, on_creep=False)` is the old `speed`, which is gone,
+  so that a bot reading it fails rather than reading creep and buffs unawares. It covers creep for every Zerg ground
+  type, and stim, concussive shells, time warp, a fungal and the inhibitor zone (the owner, over creep first and over
+  only what is measured): the rows hold none of them, and only five types' speeds on creep (above) and time warp's 0.6
+  are measured. A step at a time:
+  1. Done: `tools/sweep_movement.py` measured each in game (sc2 runs 44272083769, 44273048633 and
+     44278966397), and `docs/reference/game-behavior/units.md` holds it, under Moving. Creep makes most Zerg ground
+     units 1.3 times as fast, a locust 1.4 and a queen 2.66, a drone, a broodling and a changeling no faster, and
+     Muscular Augments and Anabolic Synthesis add less on it, so a type's speed on creep is a measured table, not a
+     factor. Stim makes a marine and a marauder 1.5 times as fast; concussive shells, but on a massive unit, make one
+     0.5; an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25, which roots nothing, each flying or not. In #256,
+     after the owner asked why a medivac's afterburners went unmeasured, the buffs a unit puts on itself: afterburners
+     1.7 and a hydralisk's lunge 2, factors, and a void ray's prismatic alignment and a zealot's charge, which set the
+     speed to a share of the type's before upgrades, 0.75 and 3.3 (the owner pointed to Liquipedia's 5.95 and 25%,
+     which agree). Not measured: an acceleration zone and a flying inhibitor zone, which the game does not make, and
+     these four with anything else.
+  2. Decided with the owner (2026-11-18): a unit out of sight reads its speed with the creep where it was last seen,
+     and no buffs, which last seconds (over its last buffs and over raising); a type's speed on creep is public,
+     `UnitTypeData.creep_speed`, which `with_upgrades` updates as it does `speed`, and on `Unit`, with the owner's
+     upgrades, which upgrade inference reads where it holds a private table (over `UnitTypeData` alone and over
+     private); and two modifiers at once are measured before `speed` counts them (over multiplying them unmeasured and
+     over the strongest slow alone): stim with concussive shells or an inhibitor zone, concussive shells with a zone,
+     creep with each slow, and a fungal with a time warp. Measured (sc2 runs 44280840577 and 44280846865): every pair
+     multiplies, to within the rounding of a step's distance, so `speed` is the speed on creep or off times each buff's
+     factor.
+  3. Built: `UnitTypeData.creep_speed`, from the table measured in step 1, which `with_upgrades` updates;
+     `Unit.current_speed`, which multiplies the speed on creep or off by each buff's factor, in sight, and reads the
+     creep of the turn off the game's state, which decodes it once an observation and only for a type creep speeds up,
+     through a point test the tracker is made with (the owner's review of #256, over a setter and a grid that may be
+     `None`), and `Unit.speed_with(*, upgrades=True, buffs=True, on_creep=None)`, which leaves any of them out or
+     assumes creep or none (the owner's review of #256, over `base_speed` and `base_creep_speed` beside `speed`, over an
+     upgraded type on `Unit`, and over one method with no property; the owner's second review named the property
+     `current_speed`, over keeping `speed`, and the creep test `on_creep`); `MadeUpUnits.observe(creep=...)` for a bot's
+     tests; and upgrade inference reading `creep_speed`, its private table gone. Proposed for 0.8.0 with #255, so that a
+     bot changes once. AvocaDOS then reads `unit.current_speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
   1. Done in #212: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
      the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`

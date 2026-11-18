@@ -387,7 +387,7 @@ class TestWhatAUnitReads:
     def test_this_players_units_read_with_its_upgrades(self, first_corpus_tables: GameData) -> None:
         tracker = _tracker_against_the_computer(first_corpus_tables)
         (zergling,) = _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING), upgrades=(UpgradeId.ZERGLING_SPEED,))
-        assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
+        assert zergling.speed_with(buffs=False, on_creep=False) == pytest.approx(_BOOSTED_ZERGLING_SPEED)
 
     def test_this_players_units_attack_as_fast_as_its_upgrades_have_them(self, first_corpus_tables: GameData) -> None:
         tracker = _tracker_against_the_computer(first_corpus_tables)
@@ -419,11 +419,11 @@ class TestWhatAUnitReads:
         tracker = _tracker_against_the_computer(first_corpus_tables)
         (zergling,) = _units_observed(tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY))
         base = first_corpus_tables.units[UnitTypeId.ZERGLING].speed
-        assert zergling.speed == base
+        assert zergling.speed_with(buffs=False, on_creep=False) == base
         require_enemy(tracker.enemy).assume_upgrades(UpgradeId.ZERGLING_SPEED)
-        assert zergling.speed == pytest.approx(_BOOSTED_ZERGLING_SPEED)
+        assert zergling.speed_with(buffs=False, on_creep=False) == pytest.approx(_BOOSTED_ZERGLING_SPEED)
         require_enemy(tracker.enemy).forget_upgrades(UpgradeId.ZERGLING_SPEED)
-        assert zergling.speed == base
+        assert zergling.speed_with(buffs=False, on_creep=False) == base
 
     def test_assuming_a_level_assumes_the_levels_below_it(self, first_corpus_tables: GameData) -> None:
         tracker = _tracker_against_the_computer(first_corpus_tables)
@@ -470,7 +470,7 @@ class TestWhatAUnitReads:
         (zergling,) = _units_observed(
             tracker, make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.NEUTRAL), upgrades=(UpgradeId.ZERGLING_SPEED,)
         )
-        assert zergling.speed == first_corpus_tables.units[UnitTypeId.ZERGLING].speed
+        assert zergling.speed_with(buffs=False, on_creep=False) == first_corpus_tables.units[UnitTypeId.ZERGLING].speed
 
     def test_a_visible_enemy_unit_shows_the_levels_of_its_own_lines(self, first_corpus_tables: GameData) -> None:
         tracker = _tracker_against_the_computer(first_corpus_tables)

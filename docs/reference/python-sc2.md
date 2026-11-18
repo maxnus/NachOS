@@ -314,7 +314,7 @@ it.
 | `unit.is_facing(t, angle_error)`, `relative_facing(t)` | `unit.time_to_face(t, facing_tolerance=angle_error) == GameTime(steps=0)`, which is false for a type `time_to_face` gives `None`, and `unit.position.angle_to(t)` less `unit.facing`, wrapped into -π to π as python-sc2 does; `time_to_face` is the time the unit's turn toward `t` takes once its order lands, at the turn rate measured for its type, `unit_data.turn_rate`, which python-sc2 has none of, as it has nothing of `unit_data.moves_while_turning` |
 | nothing, for whether a unit fires facing its target | `weapon.turns_to_fire`, false for one that fires at any angle, a battlecruiser's or a planetary fortress's among them |
 | `unit.name` | `unit.type_id.name` |
-| `unit.real_speed`, `calculate_speed(upgrades)` | `unit.speed`, with upgrades but not yet creep or buffs; see below |
+| `unit.real_speed`, `calculate_speed(upgrades)` | `unit.current_speed`, with upgrades, creep and buffs; `unit.speed_with(...)`, with any left out; see below |
 | `unit.ground_range`, `air_range`, `ground_dps`, which count no upgrade | the same, which count them, a dps per second of Faster speed; with `unit.ground_weapon`, `air_weapon`, `ground_damage`, `air_damage`, and `unit.weapon_against(target)` |
 | `unit.can_attack_ground`, `can_attack_air` | `unit.ground_weapon is not None`, `air_weapon`; `unit.weapon_against(target) is not None` against one target |
 | `unit.is_melee` | `unit.is_melee`, a ground range above 0 and at most 1 |
@@ -431,10 +431,15 @@ it.
 - **`unit.shield_armor` is the shields level its owner has**, which python-sc2 writes as
   `enemy_shield_armor = target.shield_upgrade_level` inside `calculate_damage_vs_target`. The game's tables carry no
   shield armor at all ([game behavior](game-behavior/damage-and-buffs.md#damage-energy-and-spells)).
-- **`unit.speed` counts no creep and no buff yet**; python-sc2's `real_speed` counts both.
+- **`unit.current_speed` is how fast a unit can move where it stands**: its type's speed with its owner's upgrades, on creep
+  as measured for each type, since creep speeds up a drone, a queen and a locust otherwise than a zergling, times what
+  each buff it wears makes of it, as measured, for a unit in sight ([game behavior](game-behavior/units.md#moving)).
+  `unit.speed_with(buffs=False, on_creep=False)` is the speed off creep with no buff, and `on_creep=True` the same on
+  creep, for planning a path; `upgrades=False` leaves the upgrades out. python-sc2's `real_speed` counts creep and buffs
+  too.
 - **Speeds are per second of the game's Faster speed, as `velocity` is.** The game's tables give them per second of
   its Normal speed, 16 steps, which python-sc2 hands on, so its code multiplies by 1.4 to get the distance a unit
-  covers in a real second. NachOS has done that already: a zergling's `speed` is 4.13, not 2.95.
+  covers in a real second. NachOS has done that already: a zergling's `type_data.speed` is 4.13, not 2.95.
 - **`armor_upgrade_level` is armor, not a count of levels**, where `attack_upgrade_level` is a count
   ([game behavior](game-behavior/units.md#what-is-reported-of-a-unit)).
 - **Reaper grenades, force fields and the parasitic bombs vipers leave behind stay units**, and are not in
