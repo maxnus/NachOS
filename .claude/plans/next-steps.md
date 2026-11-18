@@ -39,25 +39,25 @@ As of 2026-11-14:
   production trains a unit, builds an add-on and morphs an orbital command, and its `units_in_production` leaves out
   what makes a structure, which it had left out by a progress of `None`.
 - **0.5.1 is out** (2026-11-15, from 01113bf), with #250 to #252: `UnitType.NonStructure` (#251), and a
-  `SourceField`'s `max` and `min` read quicker (#252). AvocaDOS #99 takes it: its `units_in_production` asks
+  `SourceField`'s `max` and `min` read quicker (#252). AvocaDOS #99 took it: its `units_in_production` asks
   `api.in_production(UnitType.NonStructure)`, and its effect threat is a `SourceField` (Fields, step 3).
 - **0.6.0 is out** (2026-11-15, from cfa5be5), with #253. Its notes say that a bot's `falloff=w` is
   `edge=Edge.LINEAR, edge_width=w` now, the default edge `Edge.SHARP` taking no width, and that it adds `Edge.SMOOTH`.
   Its 48 in-game tests passed on cfa5be5 (sc2 run 43749840344), and AvocaDOS's tests on it, unchanged. AvocaDOS #99
-  takes it.
+  took it.
 - **0.7.0 is out** (2026-11-17, from 5a8fb0e), with #254. Its notes say that a bot's
   `add_circle(Circle(center, radius), value, ...)` is `add_circle(center, radius, value, ...)` now; that a linear or
   smooth edge is centered on the circle's edge, so 0.6.0's `add_circle(Circle(center, r), value, edge=e, edge_width=w)`
   reads as `add_circle(center, r - w / 2, value, edge=e, edge_width=w)` does now; and that a field has no truth value,
   as a grid has none. Its 48 in-game tests passed on 5a8fb0e (sc2 run 44089362974), and AvocaDOS's tests failed only on
-  its two `add_circle` calls. AvocaDOS #99 takes it.
-- **Since 0.7.0**, on main: #255. The next release, 0.8.0 since #255 moves a field's `spacing` from the field to its
-  reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
-  and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
-  they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too, so that its notes also
-  say that a bot's `unit.speed`, its type's with its owner's upgrades, is gone, `unit.speed_with(buffs=False,
-  on_creep=False)` now, and that the new `unit.current_speed` counts creep and buffs where the unit stands; and that
-  it adds `unit.speed_with(...)`, `UnitTypeData.creep_speed` and `MadeUpUnits.observe(creep=...)`.
+  its two `add_circle` calls. AvocaDOS #99 took it.
+- **0.8.0 is out** (2026-11-18, from 1b571a3), with #255 and #256. Its notes say that a bot's `unit.speed` is gone,
+  `unit.speed_with(buffs=False, on_creep=False)` now, the new `unit.current_speed` counting the creep under the unit and
+  the buffs it wears; and that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `min`, `max`,
+  `argmin` and `argmax` taking `spacing=s` instead, and reading at points 0.1 apart by default, where they read 0.25
+  apart. Its 48 in-game tests passed on 1b571a3 (sc2 run 44307110239), and AvocaDOS's tests failed only on its reads of
+  `unit.speed`. AvocaDOS #99 took it: every read of a unit's speed is `current_speed` (the owner, over the old speed
+  kept everywhere but the melee threat, and over `current_speed` in micro alone).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -449,8 +449,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      reach reads the spaced points: the owner accepted it (2026-11-14), over reading each unit's center alone, which
      misses a unit whose body alone is in an effect, and over a read in NachOS of whether any circle reaches an area.
      The field finds 16 marines in that storm, the grid 13, and a bile on a tile's corner, which covers no tile's
-     center. Its splash zone waits: `squad_splash_spacing` is 0, so only the debug overlay reads it. #99, open, takes
-     0.7.0, and with it the owner's review of its first version: its smoothed strength grids, melee threat, threat and
+     center. Its splash zone waits: `squad_splash_spacing` is 0, so only the debug overlay reads it. #99, merged, took
+     0.8.0, and with it the owner's review of its first version: its smoothed strength grids, melee threat, threat and
      support, become fields of smooth circles, what #253's edges were for (the owner, 2026-11-16, over keeping them
      grids). A disc of radius R blurred by a Gaussian of σ 1 comes within 0.06 of a smooth circle reaching R + 2, its
      edge the lesser of 4.2 and R + 2 wide, centered on a radius of R + 2 less half that width, about R from R 2.2 up,
@@ -470,7 +470,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      slope at the unit (the owner, over the lowest address, farthest, nearest, toward the squad, its support or the main
      base, as measured in #99), and its two threats read as one field (the owner, over that field's `argmin`, which
      breaks ties by address and knows no pathing). Threat and support in a pull request of their own, after #99, since
-     paths and grid arithmetic read them, and points in some 20 places.
+     paths and grid arithmetic read them, and points in some 20 places (the owner, again in the review of aa238ab, over
+     doing it in #99). A flee kept away from unpathable tiles, so as not to be cornered, in a pull request after #99: a
+     penalty falling with each tile's distance to the nearest unpathable one, from the pathing grid's
+     `distance_transform`, added to the threat the flee reads (the owner, review of aa238ab, over doing it in #99 and
+     over a tile source in a `SourceField`, which would need `add_rectangle` and a source per blocked tile, could not
+     rule out the far side of a cliff, and whose `argmin` breaks ties by address).
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
   holding the field's value at its center, for paths and grid arithmetic (the owner, review of AvocaDOS #99, over the
@@ -550,8 +555,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      assumes creep or none (the owner's review of #256, over `base_speed` and `base_creep_speed` beside `speed`, over an
      upgraded type on `Unit`, and over one method with no property; the owner's second review named the property
      `current_speed`, over keeping `speed`, and the creep test `on_creep`); `MadeUpUnits.observe(creep=...)` for a bot's
-     tests; and upgrade inference reading `creep_speed`, its private table gone. Proposed for 0.8.0 with #255, so that a
-     bot changes once. AvocaDOS then reads `unit.current_speed` where its melee threat works it out (AvocaDOS #99).
+     tests; and upgrade inference reading `creep_speed`, its private table gone. Released in 0.8.0 with #255, so that a
+     bot changes once. AvocaDOS #99 reads `unit.current_speed` wherever it read `speed` (the owner).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
   1. Done in #212: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
      the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`
