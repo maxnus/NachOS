@@ -72,6 +72,12 @@ class TestATypesSpeedOnCreep:
         """Muscular Augments and Anabolic Synthesis add less on creep than off it."""
         assert _DATA.units[unit_type].with_upgrades({upgrade}).creep_speed == creep_speed
 
+    def test_stays_as_measured_with_an_upgrade_that_changes_no_speed(self) -> None:
+        """Melee weapons change a zergling's weapon, and leave its speed on creep without Metabolic Boost."""
+        upgraded = _DATA.units[UnitTypeId.ZERGLING].with_upgrades({UpgradeId.ZERG_MELEE_WEAPONS_1})
+        assert upgraded.weapons != _DATA.units[UnitTypeId.ZERGLING].weapons
+        assert upgraded.creep_speed == _ZERGLING_CREEP_SPEED
+
     @pytest.mark.parametrize(
         ("unit_type", "upgrade"),
         [
@@ -84,7 +90,7 @@ class TestATypesSpeedOnCreep:
     def test_stays_the_speed_off_creep_with_an_upgrade_of_a_type_creep_does_not_speed_up(
         self, unit_type: UnitTypeId, upgrade: UpgradeId
     ) -> None:
-        """Equal, where adding the upgrade's change to each would leave them a rounding apart."""
+        """Equal to the last bit, the upgrade's change added to each alike."""
         upgraded = _DATA.units[unit_type].with_upgrades({upgrade})
         assert upgraded.creep_speed == upgraded.speed > _DATA.units[unit_type].speed
 
@@ -96,25 +102,23 @@ class TestATypesSpeedOnCreep:
 
 
 class TestAUnitsSpeed:
-    def test_off_creep_is_its_base_speed(self) -> None:
+    def test_off_creep_is_its_types_speed_off_creep(self) -> None:
         (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING), creep=_NO_CREEP)
-        assert zergling.speed == zergling.base_speed == _ZERGLING_SPEED
-        assert zergling.base_creep_speed == _ZERGLING_CREEP_SPEED
+        assert zergling.speed == _ZERGLING_SPEED
 
-    def test_on_creep_is_its_base_creep_speed(self) -> None:
+    def test_on_creep_is_its_types_speed_on_creep(self) -> None:
         (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING), creep=_CREEP)
         assert zergling.speed == _ZERGLING_CREEP_SPEED
-        assert zergling.base_speed == _ZERGLING_SPEED
 
     def test_with_no_creep_known_is_as_off_creep(self) -> None:
         (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING))
         assert zergling.speed == _ZERGLING_SPEED
 
-    def test_on_creep_is_a_drones_base_speed(self) -> None:
+    def test_on_creep_is_a_drones_speed_off_it(self) -> None:
         (drone,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.DRONE), creep=_CREEP)
-        assert drone.speed == drone.base_speed == _DATA.units[UnitTypeId.DRONE].speed
+        assert drone.speed == _DATA.units[UnitTypeId.DRONE].speed
 
-    def test_over_creep_is_a_flying_units_base_speed(self) -> None:
+    def test_over_creep_is_a_flying_units_speed_off_it(self) -> None:
         """A made-up overlord that creep sped up would show it: none does, so a zergling the game reports flying,
         as it would one a phoenix lifts, stands for it."""
         (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING, is_flying=True), creep=_CREEP)
@@ -130,7 +134,7 @@ class TestAUnitsSpeed:
             (BuffId.INFESTOR_FUNGAL_GROWTH, 0.25),
         ],
     )
-    def test_is_its_base_speed_times_what_a_buff_makes_of_it(self, buff: BuffId, factor: float) -> None:
+    def test_is_its_speed_times_what_a_buff_makes_of_it(self, buff: BuffId, factor: float) -> None:
         (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE, buffs=(buff,)), creep=_NO_CREEP)
         assert marine.speed == pytest.approx(_MARINE_SPEED * factor)
 
@@ -138,7 +142,7 @@ class TestAUnitsSpeed:
         ("unit_type", "buff", "factor"),
         [(UnitTypeId.MEDIVAC, BuffId.MEDIVAC_BOOST, 1.7), (UnitTypeId.HYDRALISK, BuffId.HYDRALISK_LUNGE, 2.0)],
     )
-    def test_is_its_base_speed_times_what_a_buff_it_puts_on_itself_makes_of_it(
+    def test_is_its_speed_times_what_a_buff_it_puts_on_itself_makes_of_it(
         self, unit_type: UnitTypeId, buff: BuffId, factor: float
     ) -> None:
         (unit,) = MadeUpUnits().observe(UnitReport(1, unit_type, buffs=(buff,)))
@@ -166,7 +170,7 @@ class TestAUnitsSpeed:
         )
         tracker.update(make_observation(0, units=[aligned]).observation.raw_data, 0)
         (void_ray,) = tracker.unit_tracker.present
-        assert void_ray.base_speed > _DATA.units[UnitTypeId.VOID_RAY].speed
+        assert void_ray.speed_with(buffs=False) > _DATA.units[UnitTypeId.VOID_RAY].speed
         assert void_ray.speed == pytest.approx(_DATA.units[UnitTypeId.VOID_RAY].speed * 0.75)
 
     def test_set_by_a_buff_is_still_multiplied_by_the_others(self) -> None:
@@ -175,7 +179,7 @@ class TestAUnitsSpeed:
         (void_ray,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.VOID_RAY, alliance=Alliance.ENEMY, buffs=buffs))
         assert void_ray.speed == pytest.approx(_DATA.units[UnitTypeId.VOID_RAY].speed * 0.75 * 0.6)
 
-    def test_stimmed_is_a_marauders_base_speed_half_as_fast_again(self) -> None:
+    def test_stimmed_is_a_marauders_speed_half_as_fast_again(self) -> None:
         (marauder,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARAUDER, buffs=(BuffId.MARAUDER_STIMMED,)))
         assert marauder.speed == pytest.approx(_MARINE_SPEED * 1.5)
 
@@ -204,6 +208,51 @@ class TestAUnitsSpeed:
         made_up_units.observe(creep=_CREEP)
         assert not zergling.is_visible
         assert zergling.speed == _ZERGLING_CREEP_SPEED
+
+
+class TestAUnitsSpeedWith:
+    def test_with_everything_is_its_speed(self) -> None:
+        report = UnitReport(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, buffs=(BuffId.INFESTOR_FUNGAL_GROWTH,))
+        (zergling,) = MadeUpUnits().observe(report, creep=_CREEP)
+        assert zergling.speed_with() == zergling.speed == pytest.approx(_ZERGLING_CREEP_SPEED * 0.25)
+
+    def test_without_upgrades_is_its_types_speed_before_any(self) -> None:
+        """An enemy zergling known to have Metabolic Boost, on creep and off."""
+        tracker = make_tracker(_DATA)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.ZERGLING_SPEED)
+        report = make_unit(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY)
+        tracker.update(make_observation(0, units=[report]).observation.raw_data, 0)
+        (zergling,) = tracker.unit_tracker.present
+        boosted = _DATA.units[UnitTypeId.ZERGLING].with_upgrades([UpgradeId.ZERGLING_SPEED])
+        assert zergling.speed_with(on_creep=False) == boosted.speed > _ZERGLING_SPEED
+        assert zergling.speed_with(on_creep=True) == 8.5477
+        assert zergling.speed_with(upgrades=False, on_creep=False) == _ZERGLING_SPEED
+        assert zergling.speed_with(upgrades=False, on_creep=True) == _ZERGLING_CREEP_SPEED
+
+    def test_on_creep_assumed_is_its_speed_on_creep_off_it(self) -> None:
+        (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING), creep=_NO_CREEP)
+        assert zergling.speed_with(on_creep=True) == _ZERGLING_CREEP_SPEED
+
+    def test_off_creep_assumed_is_its_speed_off_creep_on_it(self) -> None:
+        (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING), creep=_CREEP)
+        assert zergling.speed_with(on_creep=False) == _ZERGLING_SPEED
+
+    def test_on_creep_assumed_is_a_drones_speed_off_it(self) -> None:
+        (drone,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.DRONE))
+        assert drone.speed_with(on_creep=True) == _DATA.units[UnitTypeId.DRONE].speed
+
+    def test_on_creep_assumed_is_a_flying_units_speed_off_it(self) -> None:
+        (zergling,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZERGLING, is_flying=True))
+        assert zergling.speed_with(on_creep=True) == _ZERGLING_SPEED
+
+    def test_without_buffs_leaves_out_a_factor(self) -> None:
+        report = UnitReport(1, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY, buffs=(BuffId.INFESTOR_FUNGAL_GROWTH,))
+        (zergling,) = MadeUpUnits().observe(report, creep=_CREEP)
+        assert zergling.speed_with(buffs=False) == _ZERGLING_CREEP_SPEED
+
+    def test_without_buffs_leaves_out_a_share(self) -> None:
+        (zealot,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.ZEALOT, buffs=(BuffId.ZEALOT_CHARGING,)))
+        assert zealot.speed_with(buffs=False) == _DATA.units[UnitTypeId.ZEALOT].speed
 
 
 def test_in_a_game_a_unit_reads_the_creep_of_each_observation() -> None:

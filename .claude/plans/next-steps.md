@@ -55,9 +55,9 @@ As of 2026-11-14:
   reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
   and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
   they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too, so that its notes also
-  say that a bot's `unit.speed`, its type's with its owner's upgrades, is `unit.base_speed` now, and that `unit.speed`
-  counts creep and buffs where the unit stands; and that it adds `unit.base_creep_speed`, `UnitTypeData.creep_speed`
-  and `MadeUpUnits.observe(creep=...)`.
+  say that a bot's `unit.speed`, its type's with its owner's upgrades, is `unit.speed_with(buffs=False,
+  on_creep=False)` now, and that `unit.speed` counts creep and buffs where the unit stands; and that it adds
+  `unit.speed_with(...)`, `UnitTypeData.creep_speed` and `MadeUpUnits.observe(creep=...)`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -514,9 +514,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
 - **A unit's speed where it stands** (the owner, 2026-11-18, after AvocaDOS #99 worked out its melee units' speed
-  itself): `Unit.speed` counts the creep under the unit and the buffs it wears, and `Unit.base_speed` is what `speed`
-  is now, its type's with its owner's upgrades, for planning a path, which creep changes tile by tile (the owner, over
-  `speed` kept and a new `current_speed`, and over one `speed`). It covers creep for every Zerg ground type, and stim,
+  itself): `Unit.speed` counts the creep under the unit and the buffs it wears, and `Unit.base_speed`, since the
+  owner's review of #256 `speed_with(buffs=False, on_creep=False)` (step 3), is what `speed` is now, its type's with
+  its owner's upgrades, for planning a path, which creep changes tile by tile (the owner, over `speed` kept and a new
+  `current_speed`, and over one `speed`). It covers creep for every Zerg ground type, and stim,
   concussive shells, time warp, a fungal and the inhibitor zone (the owner, over creep first and over only what is
   measured): the rows hold none of them, and only five types' speeds on creep (above) and time warp's 0.6 are measured.
   A step at a time:
@@ -531,19 +532,23 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      speed to a share of the type's before upgrades, 0.75 and 3.3 (the owner pointed to Liquipedia's 5.95 and 25%,
      which agree). Not measured: an acceleration zone and a flying inhibitor zone, which the game does not make, and
      these four with anything else.
-  2. Decided with the owner (2026-11-18): a unit out of sight reads its `base_speed` with the creep where it was last
-     seen, and no buffs, which last seconds (over its last buffs and over raising); a type's speed on creep is public,
-     `UnitTypeData.creep_speed`, which `with_upgrades` updates as it does `speed`, and `Unit.base_creep_speed`, with the
-     owner's upgrades, which upgrade inference reads where it holds a private table (over `UnitTypeData` alone and over
+  2. Decided with the owner (2026-11-18): a unit out of sight reads its speed with the creep where it was last seen,
+     and no buffs, which last seconds (over its last buffs and over raising); a type's speed on creep is public,
+     `UnitTypeData.creep_speed`, which `with_upgrades` updates as it does `speed`, and on `Unit`, with the owner's
+     upgrades, which upgrade inference reads where it holds a private table (over `UnitTypeData` alone and over
      private); and two modifiers at once are measured before `speed` counts them (over multiplying them unmeasured and
      over the strongest slow alone): stim with concussive shells or an inhibitor zone, concussive shells with a zone,
      creep with each slow, and a fungal with a time warp. Measured (sc2 runs 44280840577 and 44280846865): every pair
      multiplies, to within the rounding of a step's distance, so `speed` is the speed on creep or off times each buff's
      factor.
   3. Built: `UnitTypeData.creep_speed`, from the table measured in step 1, which `with_upgrades` updates;
-     `Unit.base_speed`, `Unit.base_creep_speed` and `Unit.speed`, which multiplies the speed on creep or off by each
-     buff's factor, in sight, and reads the creep of the turn off the game's state, which decodes it once an
-     observation and only for a type creep speeds up; `MadeUpUnits.observe(creep=...)` for a bot's tests; and upgrade
+     `Unit.speed`, which multiplies the speed on creep or off by each buff's factor, in sight, and reads the creep of
+     the turn off the game's state, which decodes it once an observation and only for a type creep speeds up, through
+     a point test the tracker is made with (the owner's review of #256, over a setter and a grid that may be `None`),
+     and
+     `Unit.speed_with(*, upgrades=True, buffs=True, on_creep=None)`, which leaves any of them out or assumes creep or
+     none (the owner's review of #256, over `base_speed` and `base_creep_speed` beside `speed`, over an upgraded type
+     on `Unit`, and over one method with no property); `MadeUpUnits.observe(creep=...)` for a bot's tests; and upgrade
      inference reading `creep_speed`, its private table gone. Proposed for 0.8.0 with #255, so that a bot changes once.
      AvocaDOS then reads `unit.speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:

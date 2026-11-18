@@ -385,7 +385,7 @@ class Api[E]:
 
         `api.enemy.upgrades` holds the upgrade levels enemy units have shown and those the bot or an extension added
         with `assume_upgrades`, as `Enemy.upgrades` says. Everything an upgrade changes on an enemy unit,
-        `Unit.weapons` and `Unit.base_speed` among them, counts them. `api.enemy.start_location` is where it started, as
+        `Unit.weapons` and `Unit.speed` among them, counts them. `api.enemy.start_location` is where it started, as
         `Enemy.start_location` says.
         """
         if (enemy := self._current_game().enemy) is None:

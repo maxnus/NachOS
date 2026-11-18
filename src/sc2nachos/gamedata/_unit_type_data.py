@@ -321,23 +321,17 @@ class UnitTypeData:
             )
             for index, weapon in enumerate(self.weapons)
         )
-        speed = self.speed + sum(change.speed for change in changes)
-        measured_on_creep = [
-            UPGRADED_CREEP_SPEEDS[self.id, upgrade]
-            for upgrade in researched
-            if (self.id, upgrade) in UPGRADED_CREEP_SPEEDS
-        ]
-        if measured_on_creep:
-            creep_speed = measured_on_creep[0]
-        elif self.creep_speed == self.speed:
-            # Kept equal, as for a type creep does not speed up.
-            creep_speed = speed
+        speed_change = sum(change.speed for change in changes)
+        measured = UPGRADED_CREEP_SPEEDS.get(self.id)
+        if measured is not None and measured[0] in researched:
+            creep_speed = measured[1]
         else:
-            creep_speed = self.creep_speed + speed - self.speed
+            # The same sum as off creep, so that the two stay equal for a type creep does not speed up.
+            creep_speed = self.creep_speed + speed_change
         return replace(
             self,
             armor=self.armor + sum(change.armor for change in changes),
-            speed=speed,
+            speed=self.speed + speed_change,
             creep_speed=creep_speed,
             weapons=weapons,
         )
@@ -347,6 +341,8 @@ class UnitTypeData:
         """Read one unit type from the game's table, with what `tech_tree` says about it."""
         unit_type = UnitTypeId(unit.unit_id)
         in_tree = tech_tree.unit_type(unit_type)
+        # The game gives it in distance per second at Normal speed, 16 steps a second.
+        speed = unit.movement_speed * FASTER_PER_NORMAL_SPEED
         return cls(
             id=unit_type,
             race=Race(unit.race),
@@ -358,9 +354,8 @@ class UnitTypeData:
             supply_used=unit.food_required,
             cargo_size=unit.cargo_size,
             sight_range=unit.sight_range,
-            # The game gives it in distance per second at Normal speed, 16 steps a second.
-            speed=unit.movement_speed * FASTER_PER_NORMAL_SPEED,
-            creep_speed=CREEP_SPEEDS.get(unit_type, unit.movement_speed * FASTER_PER_NORMAL_SPEED),
+            speed=speed,
+            creep_speed=CREEP_SPEEDS.get(unit_type, speed),
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),

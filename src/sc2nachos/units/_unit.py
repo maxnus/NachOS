@@ -763,35 +763,35 @@ class Unit[K: UnitType.AnyType]:
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
-    def base_speed(self) -> float:
-        """The unit type's speed with its owner's upgrades applied, as for `weapons`, off creep and before any buff. In
-        distance per second, like `velocity`."""
-        return self._tracker.upgrade_tracker.upgraded_type(self).speed
-
-    @property
-    def base_creep_speed(self) -> float:
-        """`base_speed` on creep: the type's `UnitTypeData.creep_speed` with its owner's upgrades applied."""
-        return self._tracker.upgrade_tracker.upgraded_type(self).creep_speed
-
-    @property
     def speed(self) -> float:
-        """How fast the unit can move where it stands, in distance per second, like `velocity`, as measured in game
-        (`docs/reference/game-behavior/units.md`): `base_creep_speed` for a unit on the ground on creep and `base_speed`
-        anywhere else, or, for a void ray in prismatic alignment or a zealot charging, the share of its type's speed
-        before any upgrade that the buff sets, 0.75 and 3.3; times what each other buff it wears makes of it: stim 1.5,
-        afterburners 1.7, a lunge 2, concussive shells 0.5, an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25.
-        Two at once were measured to multiply, but for the four a unit puts on itself, which were measured alone. A unit
-        not visible now moves at its speed on the ground where it was last seen, with no buff, since a buff lasts
-        seconds. Nothing else counts: no acceleration zone, unmeasured, and no creep where the game gives none, as for a
-        made-up unit."""
-        upgraded = self._tracker.upgrade_tracker.upgraded_type(self)
-        speed = upgraded.speed
+        """How fast the unit can move where it stands, in distance per second, like `velocity`: `speed_with()`, which
+        counts its owner's upgrades, the creep under it and the buffs it wears."""
+        return self.speed_with()
+
+    def speed_with(self, *, upgrades: bool = True, buffs: bool = True, on_creep: bool | None = None) -> float:
+        """How fast the unit would move, in distance per second, like `velocity`, as measured in game
+        (`docs/reference/game-behavior/units.md`): its type's speed with its owner's upgrades applied, as for `weapons`,
+        or before any without `upgrades`; for a unit on the ground on creep, its type's `UnitTypeData.creep_speed`
+        instead, on creep where `on_creep` says so, or, with it `None`, where creep covers the ground the unit stands
+        on; and, with `buffs`, as the buffs it wears make it. A void ray in prismatic alignment and a zealot charging
+        move at the share of their type's speed before any upgrade that the buff sets, 0.75 and 3.3, and any unit at
+        its speed times what each other buff makes of it: stim 1.5, afterburners 1.7, a lunge 2, concussive shells 0.5,
+        an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25.
+
+        Two buffs at once were measured to multiply, but for the four a unit puts on itself, which were measured alone.
+        A unit not visible now stands where it was last seen and wears no buff, since a buff lasts seconds. Nothing else
+        counts: no acceleration zone, unmeasured, and no creep where the game gives none, as for a made-up unit observed
+        without it.
+        """
+        type_data = self._tracker.upgrade_tracker.upgraded_type(self) if upgrades else self.type_data
+        speed = type_data.speed
         # Reading the creep only for a type it speeds up spares decoding it for any other.
-        if upgraded.creep_speed != speed and not self.is_flying:
-            creep = self._tracker.creep
-            if creep is not None and creep[self.position]:
-                speed = upgraded.creep_speed
-        if self.is_visible:
+        if type_data.creep_speed != speed and not self.is_flying:
+            if on_creep is None:
+                on_creep = self._tracker.is_on_creep(self.position)
+            if on_creep:
+                speed = type_data.creep_speed
+        if buffs and self.is_visible:
             buff_ids = self._latest_report.buff_ids
             for buff in buff_ids:
                 if (share := _MOVEMENT_SPEED_SHARE_BY_RAW_BUFF.get(buff)) is not None:

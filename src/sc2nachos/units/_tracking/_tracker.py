@@ -19,9 +19,14 @@ if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.gamedata import GameData
-    from sc2nachos.geometry import Grid
+    from sc2nachos.geometry import Point
     from sc2nachos.match import Enemy
     from sc2nachos.orders import OrderBook
+
+
+def _on_no_creep(point: Point) -> bool:
+    """No creep known anywhere: the test of a tracker made with none."""
+    return False
 
 
 @final
@@ -33,9 +38,9 @@ class _Tracker:
 
     __slots__ = (
         "_builder_tracker",
-        "_creep",
         "_enemy",
         "_game_data",
+        "_is_on_creep",
         "_last_changes",
         "_morph_tracker",
         "_order_book",
@@ -53,10 +58,12 @@ class _Tracker:
         *,
         id_provider: Callable[[raw_pb2.Unit], int] | None = None,
         order_book: OrderBook,
+        is_on_creep: Callable[[Point], bool] = _on_no_creep,
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
         alliance's next id, or under the one `id_provider` gives the report it is first seen in. This player's units
-        are ordered into `order_book`."""
+        are ordered into `order_book`. `is_on_creep` tells whether creep covers the ground at a point now, as a unit's
+        speed asks; by default no creep is known."""
         self._game_data = game_data
         self._enemy = enemy
         self._order_book = order_book
@@ -69,7 +76,7 @@ class _Tracker:
         self._upgrade_tracker = _UpgradeTracker(game_data, enemy)
         self._unit_comparer = _UnitComparer(self)
         self._unit_watcher = _UnitWatcher(self)
-        self._creep: Callable[[], Grid[bool] | None] = _no_creep_known
+        self._is_on_creep = is_on_creep
 
     @property
     def game_data(self) -> GameData:
@@ -124,15 +131,9 @@ class _Tracker:
         """Compares each unit with the previous update, recording into the last changes, on request."""
         return self._unit_comparer
 
-    @property
-    def creep(self) -> Grid[bool] | None:
-        """Where creep covers the ground now, from the source `read_creep_from` gave, or `None` if it gave none."""
-        return self._creep()
-
-    def read_creep_from(self, source: Callable[[], Grid[bool] | None]) -> None:
-        """Read where creep covers the ground from `source`, called when asked, as a game's current state is: it
-        decodes the creep of an observation once, and only if something asks."""
-        self._creep = source
+    def is_on_creep(self, point: Point) -> bool:
+        """Whether creep covers the ground at `point` now, as the test the tracker was made with tells."""
+        return self._is_on_creep(point)
 
     @property
     def unit_watcher(self) -> _UnitWatcher:
@@ -153,7 +154,3 @@ class _Tracker:
         self._unit_tracker.update(observation, step)
         self._morph_tracker.update(step)
         self._warp_in_tracker.update(step)
-
-
-def _no_creep_known() -> None:
-    """No creep known, until a source is given."""

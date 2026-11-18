@@ -33,22 +33,23 @@ CREEP_SPEEDS: Final[Mapping[UnitTypeId, float]] = MappingProxyType(
     }
 )
 
-# The speed on creep of a type with the upgrade that changes its speed, by type and upgrade: Muscular Augments and
-# Anabolic Synthesis add less on creep than off it, the others 1.3 times as much (in game, tool `sweep_movement`, build
-# 75689).
-UPGRADED_CREEP_SPEEDS: Final[Mapping[tuple[UnitTypeId, UpgradeId], float]] = MappingProxyType(
+# The upgrade that changes the speed of a type creep speeds up, by type, with the type's speed on creep once it has it:
+# Muscular Augments and Anabolic Synthesis add less on creep than off it, the others 1.3 times as much (in game, tool
+# `sweep_movement`, build 75689). Each was measured as its type's only speed upgrade, as none of these types has a
+# second; one that had would need its speed with both measured.
+UPGRADED_CREEP_SPEEDS: Final[Mapping[UnitTypeId, tuple[UpgradeId, float]]] = MappingProxyType(
     {
-        (UnitTypeId.BANELING, UpgradeId.BANELING_SPEED): 5.3703,
-        (UnitTypeId.HYDRALISK, UpgradeId.HYDRALISK_SPEED): 4.8289,
-        (UnitTypeId.ROACH, UpgradeId.ROACH_SPEED): 5.4578,
-        (UnitTypeId.ULTRALISK, UpgradeId.ULTRALISK_SPEED): 5.5344,
-        (UnitTypeId.ZERGLING, UpgradeId.ZERGLING_SPEED): 8.5477,
+        UnitTypeId.BANELING: (UpgradeId.BANELING_SPEED, 5.3703),
+        UnitTypeId.HYDRALISK: (UpgradeId.HYDRALISK_SPEED, 4.8289),
+        UnitTypeId.ROACH: (UpgradeId.ROACH_SPEED, 5.4578),
+        UnitTypeId.ULTRALISK: (UpgradeId.ULTRALISK_SPEED, 5.5344),
+        UnitTypeId.ZERGLING: (UpgradeId.ZERGLING_SPEED, 8.5477),
     }
 )
 
 # How many times as fast each buff makes its wearer move, flying or not; two at once, and creep, multiply. A medivac's
-# afterburners and a hydralisk's lunge were measured on their own alone; an inhibitor zone's flying buff and an
-# acceleration zone's are left out, unmeasured (in game, tool `sweep_movement`, build 75689).
+# afterburners and a hydralisk's lunge were measured alone; an inhibitor zone's flying buff and an acceleration zone's
+# are left out, unmeasured (in game, tool `sweep_movement`, build 75689).
 MOVEMENT_SPEED_BUFFS: Final[Mapping[BuffId, float]] = MappingProxyType(
     {
         BuffId.HYDRALISK_LUNGE: 2.0,
@@ -64,8 +65,7 @@ MOVEMENT_SPEED_BUFFS: Final[Mapping[BuffId, float]] = MappingProxyType(
 
 # The buffs that set their wearer's speed to a share of its type's speed before any upgrade, whatever its upgrades: a
 # void ray in prismatic alignment moves at 0.75 of its 3.85 with Flux Vanes or without, and a zealot charging, which it
-# can only with Charge, some 3.3 times its 3.15. Measured on their own alone (in game, tool `sweep_movement`, build
-# 75689).
+# can only with Charge, some 3.3 times its 3.15. Measured alone (in game, tool `sweep_movement`, build 75689).
 MOVEMENT_SPEED_SHARE_BUFFS: Final[Mapping[BuffId, float]] = MappingProxyType(
     {
         BuffId.VOID_RAY_PRISMATIC_ALIGNMENT: 0.75,
