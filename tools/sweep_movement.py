@@ -169,9 +169,9 @@ _ZONE_RUNNERS = (UnitTypeId.MARINE, UnitTypeId.ZERGLING, UnitTypeId.MEDIVAC)
 # A buffed trial watches its unit for as long as the course takes it at this share of its row speed, as a slow can
 # halve it.
 _BUFFED_WATCH_SPEED_SHARE = 0.25
-# The buffs a unit of each race puts on itself that may change its speed, once the speed upgrades are in: the type, the
-# ability it uses, and the research the ability needs, if any. A zealot charges a zergling of the computer's made this
-# far along the course ahead of it, which moves it, and is watched until it stands still.
+# The buffs a unit of each race puts on itself that may change its speed, run before the speed upgrades and after: the
+# type, the ability it uses, and the research the ability needs, if any. A zealot charges a zergling of the computer's
+# made this far along the course ahead of it, which moves it, and is watched until it stands still.
 _SELF_BUFFS: dict[Race, tuple[tuple[UnitTypeId, RawAbilityId, UpgradeId | None], ...]] = {
     Race.TERRAN: ((UnitTypeId.MEDIVAC, RawAbilityId.Effect_MedivacIgniteAfterburners, None),),
     Race.ZERG: ((UnitTypeId.HYDRALISK, RawAbilityId.HydraliskFrenzy, UpgradeId.HYDRALISK_LUNGE),),
