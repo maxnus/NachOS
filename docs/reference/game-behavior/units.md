@@ -217,6 +217,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   player's time warp (tool `sweep_movement`, build 75689); zerglings with Metabolic Boost 3.94 against their 6.58, at
   every step of 11 at a time (tool `replay_movement`, AI Arena's 2026 Season 1 replay 4704095 played back as player 2,
   build 75689).
+- **What a unit puts on itself: afterburners make a medivac 1.7 times as fast and a lunge a hydralisk twice as fast;
+  prismatic alignment sets a void ray to 0.75 of its speed before Flux Vanes, with Flux Vanes or without, and a charge
+  sets a zealot dashing at some 3.3 times its speed before Charge**: wearing `MEDIVAC_BOOST`, a medivac 5.94 a second
+  for 3.5, for 119 steps; wearing `HYDRALISK_LUNGE`, a hydralisk 6.3 for 3.15 and 8.26 for 4.13 with Muscular
+  Augments, for 7 steps; wearing `VOID_RAY_PRISMATIC_ALIGNMENT`, a void ray 2.888 for 3.85 and 2.882 for 4.648 with
+  Flux Vanes, for 311 steps; and wearing `ZEALOT_CHARGING`, a zealot with Charge some 10.39 over the 5 steps of its
+  dash at a zergling 3.5 away. Each was measured alone (tool `sweep_movement`, build 75689). Liquipedia gives 5.95 for
+  a medivac's afterburners and a 25% slow for prismatic alignment (the owner, review of #256).
 - **Two of these at once multiply, creep among them**, to within the rounding of a step's distance: a marine or a
   marauder stimmed and slowed by concussive shells 2.36 a second for 3.15, 1.5 times 0.5; a marine stimmed in an
   inhibitor zone 3.06, 1.5 times 0.65; a zergling slowed in a zone 1.34 for 4.13, 0.5 times 0.65; a zergling, a marine,

@@ -10,7 +10,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos._shared.errors import NotReportedError
 from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
-from sc2nachos.gamedata._movement_speeds import MOVEMENT_SPEED_BUFFS
+from sc2nachos.gamedata._movement_speeds import MOVEMENT_SPEED_BUFFS, MOVEMENT_SPEED_SHARE_BUFFS
 from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
@@ -57,6 +57,8 @@ _GROUND_TYPES_HIT_FROM_THE_AIR = frozenset({UnitTypeId.COLOSSUS})
 _ATTACK_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in ATTACK_SPEED_BUFFS.items()}
 # How many times as fast each buff has its wearer move, by raw id, as a report lists its buffs.
 _MOVEMENT_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in MOVEMENT_SPEED_BUFFS.items()}
+# The share of its type's speed before upgrades each buff sets its wearer's speed to, by raw id.
+_MOVEMENT_SPEED_SHARE_BY_RAW_BUFF = {int(buff): share for buff, share in MOVEMENT_SPEED_SHARE_BUFFS.items()}
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -773,12 +775,15 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def speed(self) -> float:
-        """How fast the unit can move where it stands, in distance per second, like `velocity`: `base_creep_speed` for a
-        unit on the ground on creep, and `base_speed` anywhere else, times what each buff it wears makes of it, as
-        measured in game, where two at once multiply: stim 1.5, concussive shells 0.5, an inhibitor zone 0.65, a time
-        warp 0.6 and a fungal 0.25 (`docs/reference/game-behavior/units.md`). A unit not visible now moves at its speed
-        on the ground where it was last seen, with no buff, since a buff lasts seconds. Nothing else counts: no
-        acceleration zone or afterburners, unmeasured, and no creep where the game gives none, as for a made-up unit."""
+        """How fast the unit can move where it stands, in distance per second, like `velocity`, as measured in game
+        (`docs/reference/game-behavior/units.md`): `base_creep_speed` for a unit on the ground on creep and `base_speed`
+        anywhere else, or, for a void ray in prismatic alignment or a zealot charging, the share of its type's speed
+        before any upgrade that the buff sets, 0.75 and 3.3; times what each other buff it wears makes of it: stim 1.5,
+        afterburners 1.7, a lunge 2, concussive shells 0.5, an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25.
+        Two at once were measured to multiply, but for the four a unit puts on itself, which were measured alone. A unit
+        not visible now moves at its speed on the ground where it was last seen, with no buff, since a buff lasts
+        seconds. Nothing else counts: no acceleration zone, unmeasured, and no creep where the game gives none, as for a
+        made-up unit."""
         upgraded = self._tracker.upgrade_tracker.upgraded_type(self)
         speed = upgraded.speed
         # Reading the creep only for a type it speeds up spares decoding it for any other.
@@ -787,7 +792,11 @@ class Unit[K: UnitType.AnyType]:
             if creep is not None and creep[self.position]:
                 speed = upgraded.creep_speed
         if self.is_visible:
-            speed *= math.prod(_MOVEMENT_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in self._latest_report.buff_ids)
+            buff_ids = self._latest_report.buff_ids
+            for buff in buff_ids:
+                if (share := _MOVEMENT_SPEED_SHARE_BY_RAW_BUFF.get(buff)) is not None:
+                    speed = self.type_data.speed * share
+            speed *= math.prod(_MOVEMENT_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in buff_ids)
         return speed
 
     @property

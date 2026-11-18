@@ -46,16 +46,29 @@ UPGRADED_CREEP_SPEEDS: Final[Mapping[tuple[UnitTypeId, UpgradeId], float]] = Map
     }
 )
 
-# How many times as fast each buff makes its wearer move, flying or not; two at once, and creep, multiply. An
-# inhibitor zone's flying buff, an acceleration zone's and a medivac's afterburners are left out, unmeasured (in game,
-# tool `sweep_movement`, build 75689).
+# How many times as fast each buff makes its wearer move, flying or not; two at once, and creep, multiply. A medivac's
+# afterburners and a hydralisk's lunge were measured on their own alone; an inhibitor zone's flying buff and an
+# acceleration zone's are left out, unmeasured (in game, tool `sweep_movement`, build 75689).
 MOVEMENT_SPEED_BUFFS: Final[Mapping[BuffId, float]] = MappingProxyType(
     {
+        BuffId.HYDRALISK_LUNGE: 2.0,
         BuffId.INFESTOR_FUNGAL_GROWTH: 0.25,
         BuffId.INHIBITOR_ZONE: 0.65,
         BuffId.MARAUDER_CONCUSSIVE_SHELLS_SLOW: 0.5,
         BuffId.MARAUDER_STIMMED: 1.5,
         BuffId.MARINE_STIMMED: 1.5,
+        BuffId.MEDIVAC_BOOST: 1.7,
         BuffId.MOTHERSHIP_TIME_WARP: 0.6,
+    }
+)
+
+# The buffs that set their wearer's speed to a share of its type's speed before any upgrade, whatever its upgrades: a
+# void ray in prismatic alignment moves at 0.75 of its 3.85 with Flux Vanes or without, and a zealot charging, which it
+# can only with Charge, some 3.3 times its 3.15. Measured on their own alone (in game, tool `sweep_movement`, build
+# 75689).
+MOVEMENT_SPEED_SHARE_BUFFS: Final[Mapping[BuffId, float]] = MappingProxyType(
+    {
+        BuffId.VOID_RAY_PRISMATIC_ALIGNMENT: 0.75,
+        BuffId.ZEALOT_CHARGING: 3.2973,
     }
 )

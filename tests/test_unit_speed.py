@@ -13,7 +13,16 @@ from sc2nachos.geometry import Grid
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.testing import MadeUpUnits, UnitReport, load_game_data
 from sc2nachos.units import Alliance
-from support import ScriptedGame, make_bits, make_game_info, make_observation, make_unit, shipped_game_data
+from support import (
+    ScriptedGame,
+    make_bits,
+    make_game_info,
+    make_observation,
+    make_tracker,
+    make_unit,
+    require_enemy,
+    shipped_game_data,
+)
 
 _DATA = load_game_data()
 _CREEP = Grid(numpy.ones((32, 32), dtype=bool), outside=False)
@@ -124,6 +133,47 @@ class TestAUnitsSpeed:
     def test_is_its_base_speed_times_what_a_buff_makes_of_it(self, buff: BuffId, factor: float) -> None:
         (marine,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE, buffs=(buff,)), creep=_NO_CREEP)
         assert marine.speed == pytest.approx(_MARINE_SPEED * factor)
+
+    @pytest.mark.parametrize(
+        ("unit_type", "buff", "factor"),
+        [(UnitTypeId.MEDIVAC, BuffId.MEDIVAC_BOOST, 1.7), (UnitTypeId.HYDRALISK, BuffId.HYDRALISK_LUNGE, 2.0)],
+    )
+    def test_is_its_base_speed_times_what_a_buff_it_puts_on_itself_makes_of_it(
+        self, unit_type: UnitTypeId, buff: BuffId, factor: float
+    ) -> None:
+        (unit,) = MadeUpUnits().observe(UnitReport(1, unit_type, buffs=(buff,)))
+        assert unit.speed == pytest.approx(_DATA.units[unit_type].speed * factor)
+
+    @pytest.mark.parametrize(
+        ("unit_type", "buff", "share"),
+        [
+            (UnitTypeId.VOID_RAY, BuffId.VOID_RAY_PRISMATIC_ALIGNMENT, 0.75),
+            (UnitTypeId.ZEALOT, BuffId.ZEALOT_CHARGING, 3.2973),
+        ],
+    )
+    def test_is_a_share_of_its_types_speed_before_upgrades_under_a_buff_that_sets_it(
+        self, unit_type: UnitTypeId, buff: BuffId, share: float
+    ) -> None:
+        (unit,) = MadeUpUnits().observe(UnitReport(1, unit_type, buffs=(buff,)))
+        assert unit.speed == pytest.approx(_DATA.units[unit_type].speed * share)
+
+    def test_in_prismatic_alignment_leaves_flux_vanes_out(self) -> None:
+        """A void ray of the enemy's known to have Flux Vanes moves at 0.75 of its 3.85, not of its 4.65."""
+        tracker = make_tracker(_DATA)
+        require_enemy(tracker.enemy).assume_upgrades(UpgradeId.VOID_RAY_SPEED)
+        aligned = make_unit(
+            1, UnitTypeId.VOID_RAY, alliance=Alliance.ENEMY, buff_ids=[BuffId.VOID_RAY_PRISMATIC_ALIGNMENT]
+        )
+        tracker.update(make_observation(0, units=[aligned]).observation.raw_data, 0)
+        (void_ray,) = tracker.unit_tracker.present
+        assert void_ray.base_speed > _DATA.units[UnitTypeId.VOID_RAY].speed
+        assert void_ray.speed == pytest.approx(_DATA.units[UnitTypeId.VOID_RAY].speed * 0.75)
+
+    def test_set_by_a_buff_is_still_multiplied_by_the_others(self) -> None:
+        """Unmeasured together: the factors multiply the speed a buff sets, as they multiply any other."""
+        buffs = (BuffId.VOID_RAY_PRISMATIC_ALIGNMENT, BuffId.MOTHERSHIP_TIME_WARP)
+        (void_ray,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.VOID_RAY, alliance=Alliance.ENEMY, buffs=buffs))
+        assert void_ray.speed == pytest.approx(_DATA.units[UnitTypeId.VOID_RAY].speed * 0.75 * 0.6)
 
     def test_stimmed_is_a_marauders_base_speed_half_as_fast_again(self) -> None:
         (marauder,) = MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARAUDER, buffs=(BuffId.MARAUDER_STIMMED,)))

@@ -525,9 +525,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      units 1.3 times as fast, a locust 1.4 and a queen 2.66, a drone, a broodling and a changeling no faster, and
      Muscular Augments and Anabolic Synthesis add less on it, so a type's speed on creep is a measured table, not a
      factor. Stim makes a marine and a marauder 1.5 times as fast; concussive shells, but on a massive unit, make one
-     0.5; an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25, which roots nothing, each flying or not. Not
-     measured: an acceleration zone and a flying inhibitor zone, which the game does not make; two of these at once;
-     and the other buffs that may change a speed, such as a medivac's afterburners.
+     0.5; an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25, which roots nothing, each flying or not. In #256,
+     after the owner asked why a medivac's afterburners went unmeasured, the buffs a unit puts on itself: afterburners
+     1.7 and a hydralisk's lunge 2, factors, and a void ray's prismatic alignment and a zealot's charge, which set the
+     speed to a share of the type's before upgrades, 0.75 and 3.3 (the owner pointed to Liquipedia's 5.95 and 25%,
+     which agree). Not measured: an acceleration zone and a flying inhibitor zone, which the game does not make, and
+     these four with anything else.
   2. Decided with the owner (2026-11-18): a unit out of sight reads its `base_speed` with the creep where it was last
      seen, and no buffs, which last seconds (over its last buffs and over raising); a type's speed on creep is public,
      `UnitTypeData.creep_speed`, which `with_upgrades` updates as it does `speed`, and `Unit.base_creep_speed`, with the
