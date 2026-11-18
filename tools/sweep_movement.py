@@ -15,11 +15,20 @@ they need, and runs every trial again.
 As Zerg, every other Zerg type on the ground with a speed runs too, off creep and on it, once, as no upgrade changes it.
 As Terran, once the speed upgrades are in, Stimpack and Concussive Shells are researched too, and a marine and a
 marauder run stimmed; a zergling, a marine, a zealot, a roach and an ultralisk run along a course while a marauder of
-this player's, ordered to attack it, slows it with concussive shells, its life set back to full at every step; and a
-marine, a zergling and a medivac run through an inhibitor zone of each size, made neutral at the course's middle::
+this player's, ordered to attack it, slows it with concussive shells, its life and shields set back to full at every
+step; and a marine, a zergling and a medivac run through an inhibitor zone of each size, made neutral at the course's
+middle::
 
     uv run python tools/sweep_movement.py
     uv run python tools/sweep_movement.py zerg --out movement-zerg.json
+
+With `rivals`, or with no names, it also plays a game of two players, both played from here, in which a zergling, a
+marine, a roach and a mutalisk of the enemy's run along a ground course under a fungal of an infestor of this player's,
+cast on the runner a third of the way along, and under a time warp of a mothership's, cast at the course's middle as
+the runner sets off. They are watched for as long as the course takes at a quarter of the row's speed, a root
+notwithstanding::
+
+    uv run python tools/sweep_movement.py rivals --out movement-rivals.json
 
 Each trial records the row's speed, the steps until the unit moved and until it cruised, at 98% of its fastest step or
 more, its fastest, median and slowest step while cruising, and the most and least a window of each of
@@ -42,7 +51,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Self
 
-from _sandbox import NEUTRAL, SUCCESS, Cheat, OpenGround, Sandbox, playing
+from _sandbox import NEUTRAL, SUCCESS, Cheat, OpenGround, Rivals, Sandbox, playing, playing_rivals
 from loguru import logger
 from s2clientprotocol import debug_pb2, raw_pb2
 
@@ -60,6 +69,8 @@ from sc2nachos.units import UnitType
 
 DEFAULT_FINDINGS_PATH = Path("movement.json")
 RACES_BY_NAME = {"terran": Race.TERRAN, "zerg": Race.ZERG, "protoss": Race.PROTOSS}
+# The name of the game of two players, beside the races.
+RIVALS = "rivals"
 
 # The headings each course is run along, in degrees from the positive x-axis.
 _HEADINGS_DEGREES = (0.0, 45.0, 90.0)
@@ -132,6 +143,7 @@ _HALLUCINATIONS = {
 _ENERGY_VALUE = debug_pb2.DebugSetUnitValue.Energy
 _FULL_ENERGY = 200.0
 _LIFE_VALUE = debug_pb2.DebugSetUnitValue.Life
+_SHIELDS_VALUE = debug_pb2.DebugSetUnitValue.Shields
 # The Zerg types on the ground that run on creep though no upgrade changes their speed leave out a larva, which wanders,
 # and the eggs and cocoons, which stay where they are.
 _NOT_RUN_ON_CREEP = frozenset({UnitTypeId.LARVA, *UnitType.Cocoon.type_ids, *UnitType.Egg.type_ids})
@@ -150,6 +162,19 @@ _ZONE_RUNNERS = (UnitTypeId.MARINE, UnitTypeId.ZERGLING, UnitTypeId.MEDIVAC)
 # A buffed trial watches its unit for as long as the course takes it at this share of its row speed, as a slow can
 # halve it.
 _BUFFED_WATCH_SPEED_SHARE = 0.25
+# The spells of this player's that land on the enemy's units alone, by the trial's condition: the caster, made this far
+# to the side of the course's middle, and its ability, cast at a point. A fungal lands on the runner once it is this
+# share of the way along, this far ahead of it; a time warp at the course's middle as the runner sets off, since it
+# slows nothing for its first 1.79 s (in game).
+_ENEMY_SPELLS = {
+    "rooted by a fungal": (UnitTypeId.INFESTOR, RawAbilityId.FungalGrowth_FungalGrowth),
+    "slowed by a time warp": (UnitTypeId.MOTHERSHIP, RawAbilityId.Effect_TimeWarp),
+}
+_CASTER_SIDE_DISTANCE = 5.0
+_FUNGAL_ALONG = 1 / 3
+_FUNGAL_LEAD = 1.0
+# The enemy's types run under them, on foot and flying.
+_ENEMY_RUNNERS = (UnitTypeId.ZERGLING, UnitTypeId.MARINE, UnitTypeId.ROACH, UnitTypeId.MUTALISK)
 
 
 @dataclass(slots=True)
@@ -306,7 +331,7 @@ class MovementSweep:
                 )
         away_from = [*self._map.all_start_locations, *([self._creep_center] if self._creep_center else [])]
         self._ground_courses = {
-            heading: self._longest_ground_course(heading, away_from) for heading in _HEADINGS_DEGREES
+            heading: longest_ground_course(self._map, heading, away_from) for heading in _HEADINGS_DEGREES
         }
         for heading, course in self._ground_courses.items():
             logger.info("The ground course at {} degrees runs {:.1f} from {}", heading, course.length, course.start)
@@ -415,8 +440,8 @@ class MovementSweep:
 
     def _slowed(self, attacker_at: Point, attacker_tags: list[int], mover: raw_pb2.Unit) -> None:
         """Make a marauder at `attacker_at`, adding its tag to `attacker_tags`, order it to attack `mover`, and step
-        until it has hit `mover`, whose life is then set back to full. An ultralisk, being massive, is hit but never
-        slowed."""
+        until it has hit `mover`, whose life and shields are then set back to full. An ultralisk, being massive, is hit
+        but never slowed."""
         attacker = self._make(UnitTypeId.MARAUDER, attacker_at)
         attacker_tags.append(attacker.tag)
         if (verdict := self._game.order(RawAbilityId.Attack, attacker.tag, mover.tag)) != SUCCESS:
@@ -424,14 +449,17 @@ class MovementSweep:
         for _ in range(_FIRST_HIT_STEPS):
             self._client.step(1)
             target = self._listed(mover.tag)
-            if target.health < target.health_max:
+            if target.health < target.health_max or target.shield < target.shield_max:
                 self._kept_alive(mover.tag)
                 return
         raise RuntimeError(f"the marauder did not hit within {_FIRST_HIT_STEPS} steps")
 
     def _kept_alive(self, tag: int) -> None:
-        """Set the unit `tag`'s life back to full."""
-        self._game.set_value(_LIFE_VALUE, self._listed(tag).health_max, [tag])
+        """Set the unit `tag`'s life and shields back to full."""
+        unit = self._listed(tag)
+        self._game.set_value(_LIFE_VALUE, unit.health_max, [tag])
+        if unit.shield_max:
+            self._game.set_value(_SHIELDS_VALUE, unit.shield_max, [tag])
 
     def research_speed_upgrades(self) -> dict[str, str]:
         """Research each of the race's speed upgrades, and return why each that was not researched was not."""
@@ -622,26 +650,6 @@ class MovementSweep:
             self._game.remove([probe.tag])
             flies = self._flying_by_type[unit_type] = probe.is_flying
         return flies
-
-    def _longest_ground_course(self, heading_degrees: float, away_from: Sequence[Point]) -> Course:
-        """The longest ground course along `heading_degrees` through a tile center at least
-        `_GROUND_COURSE_DISTANCE_FROM_OTHERS` from each of `away_from`. Raises `RuntimeError` if there is none."""
-        pathing = self._map.pathing
-        area = self._map.playable_area
-        best_center, best_half_length = None, 0.0
-        for x in range(int(area.x) + 1, int(area.x + area.width) - 1, _GROUND_COURSE_SEARCH_SPACING):
-            for y in range(int(area.y) + 1, int(area.y + area.height) - 1, _GROUND_COURSE_SEARCH_SPACING):
-                center = Point((x + 0.5, y + 0.5))
-                if any(center.distance_to(other) < _GROUND_COURSE_DISTANCE_FROM_OTHERS for other in away_from):
-                    continue
-                half_length = _clear_half_length(
-                    center, heading_degrees, lambda point: pathing[point], clearance=_GROUND_CLEARANCE
-                )
-                if half_length > best_half_length:
-                    best_center, best_half_length = center, half_length
-        if best_center is None or best_half_length <= _COURSE_END_INSET:
-            raise RuntimeError(f"no clear ground at {heading_degrees} degrees for a course")
-        return Course.through(best_center, heading_degrees, best_half_length - _COURSE_END_INSET)
 
     def _creep_course(self, heading_degrees: float) -> Course:
         """The creep course along `heading_degrees`, once the hatcheries' creep covers it. Raises `RuntimeError` if it
@@ -836,6 +844,27 @@ class MovementSweep:
         return unit
 
 
+def longest_ground_course(game_map: GameMap, heading_degrees: float, away_from: Sequence[Point]) -> Course:
+    """The longest ground course along `heading_degrees` through a tile center at least
+    `_GROUND_COURSE_DISTANCE_FROM_OTHERS` from each of `away_from`. Raises `RuntimeError` if there is none."""
+    pathing = game_map.pathing
+    area = game_map.playable_area
+    best_center, best_half_length = None, 0.0
+    for x in range(int(area.x) + 1, int(area.x + area.width) - 1, _GROUND_COURSE_SEARCH_SPACING):
+        for y in range(int(area.y) + 1, int(area.y + area.height) - 1, _GROUND_COURSE_SEARCH_SPACING):
+            center = Point((x + 0.5, y + 0.5))
+            if any(center.distance_to(other) < _GROUND_COURSE_DISTANCE_FROM_OTHERS for other in away_from):
+                continue
+            half_length = _clear_half_length(
+                center, heading_degrees, lambda point: pathing[point], clearance=_GROUND_CLEARANCE
+            )
+            if half_length > best_half_length:
+                best_center, best_half_length = center, half_length
+    if best_center is None or best_half_length <= _COURSE_END_INSET:
+        raise RuntimeError(f"no clear ground at {heading_degrees} degrees for a course")
+    return Course.through(best_center, heading_degrees, best_half_length - _COURSE_END_INSET)
+
+
 def _clear_half_length(
     center: Point, heading_degrees: float, is_clear: Callable[[Point], bool], *, clearance: float
 ) -> float:
@@ -908,6 +937,115 @@ def _measure_into(finding: MoveFinding, positions: Sequence[Point]) -> None:
             )
 
 
+def sweep_enemy_buffs(installation: Installation) -> dict[str, object]:
+    """The game of two players: each of `_ENEMY_RUNNERS` of the enemy's under each of `_ENEMY_SPELLS`."""
+    with playing_rivals(Race.ZERG, installation) as rivals:
+        me = rivals.me
+        me.cheat(Cheat.SHOW_MAP)
+        rivals.step(_SETTLING_STEPS)
+        data = GameData(me.client.game_data())
+        game_map = GameMap._from_game(me.client.game_info(), me.client.observation())
+        course = longest_ground_course(game_map, _HEADINGS_DEGREES[0], game_map.all_start_locations)
+        logger.info("The course for the enemy's runners runs {:.1f} from {}", course.length, course.start)
+        trials = [
+            _recorded_enemy_buff(rivals, data, course, condition, runner_type)
+            for condition in _ENEMY_SPELLS
+            for runner_type in _ENEMY_RUNNERS
+        ]
+        return {"base_build": me.client.ping().base_build, "trials": trials}
+
+
+def _recorded_enemy_buff(
+    rivals: Rivals, data: GameData, course: Course, condition: str, runner_type: UnitTypeId
+) -> dict[str, object]:
+    """One trial of the game of two players as its finding, or as its error if the game would not set it up."""
+    conditions = {"unit_type": runner_type.name, "condition": condition}
+    made_tags: list[int] = []
+    try:
+        finding = _enemy_buff_trial(rivals, data, course, condition, runner_type, made_tags)
+    except RuntimeError as error:
+        logger.warning("{}: {}", conditions, error)
+        return {**conditions, "error": str(error)}
+    finally:
+        rivals.me.remove(made_tags)
+        rivals.step(_SETTLING_STEPS)
+    logger.info(
+        "The enemy's {} {}: {} steps, by buffs {}",
+        runner_type.name,
+        condition,
+        len(finding.step_distances),
+        speeds_by_buffs(finding),
+    )
+    return asdict(finding)
+
+
+def _enemy_buff_trial(
+    rivals: Rivals, data: GameData, course: Course, condition: str, runner_type: UnitTypeId, made_tags: list[int]
+) -> MoveFinding:
+    """Make a `runner_type` of the enemy's at the start of `course` and the caster of `condition` to the side of its
+    middle, run the one to the end under the other's spell, and record how far it moved in each step and what it wore,
+    adding what was made to `made_tags`."""
+    me, enemy = rivals.me, rivals.enemy
+    caster_type, spell = _ENEMY_SPELLS[condition]
+    heading = math.atan2(course.end.y - course.start.y, course.end.x - course.start.x)
+    middle = _point_toward(course.start, heading, course.length / 2)
+    tags_before = {unit.tag for unit in me.units()}
+    me.debug(
+        me.create(runner_type, enemy.player, course.start),
+        me.create(caster_type, me.player, _point_toward(middle, heading + math.pi / 2, _CASTER_SIDE_DISTANCE)),
+    )
+    rivals.step(_MAKING_STEPS)
+    made = {unit.unit_type: unit for unit in me.units() if unit.tag not in tags_before}
+    made_tags.extend(unit.tag for unit in made.values())
+    if runner_type not in made or caster_type not in made:
+        raise RuntimeError(f"the game did not make the {runner_type.name} and the {caster_type.name}")
+    runner_tag, caster_tag = made[runner_type].tag, made[caster_type].tag
+    me.set_value(_ENERGY_VALUE, _FULL_ENERGY, [caster_tag])
+    rivals.step(_SETTLING_STEPS)
+    runner = _listed_by(enemy, runner_tag)
+    positions, buffs = [_position_of(runner)], [_buff_names(runner)]
+    if enemy.order(RawAbilityId.Move_Move, runner_tag, course.end) != SUCCESS:
+        raise RuntimeError("the game refused the runner's move")
+    if spell is RawAbilityId.Effect_TimeWarp and (verdict := me.order(spell, caster_tag, middle)) != SUCCESS:
+        raise RuntimeError(f"the game refused the time warp: {verdict}")
+    row_speed = data.units[runner_type].speed
+    watch_steps = math.ceil(course.length / (row_speed * _BUFFED_WATCH_SPEED_SHARE / STEPS_PER_SECOND))
+    fungal_cast = spell is not RawAbilityId.FungalGrowth_FungalGrowth
+    for _ in range(watch_steps):
+        rivals.step(1)
+        runner = _listed_by(enemy, runner_tag)
+        positions.append(_position_of(runner))
+        buffs.append(_buff_names(runner))
+        if not fungal_cast and positions[-1].distance_to(course.start) >= course.length * _FUNGAL_ALONG:
+            target = _point_toward(positions[-1], heading, _FUNGAL_LEAD)
+            if (verdict := me.order(spell, caster_tag, target)) != SUCCESS:
+                raise RuntimeError(f"the game refused the fungal: {verdict}")
+            fungal_cast = True
+        if positions[-1].distance_to(course.end) < _ARRIVED_DISTANCE:
+            break
+    finding = MoveFinding(
+        runner_type.name,
+        None,
+        False,
+        False,
+        False,
+        _HEADINGS_DEGREES[0],
+        runner.is_flying,
+        round(row_speed, 4),
+        f"the enemy's, {condition}",
+    )
+    _measure_into(finding, positions)
+    finding.buffs = buffs
+    return finding
+
+
+def _listed_by(game: Sandbox, tag: int) -> raw_pb2.Unit:
+    """The unit `tag` as a fresh observation of `game`'s lists it."""
+    if (unit := next((unit for unit in game.units() if unit.tag == tag), None)) is None:
+        raise RuntimeError(f"unit {tag} is no longer listed")
+    return unit
+
+
 def speeds_by_buffs(finding: MoveFinding) -> dict[str, tuple[float, float, int]]:
     """How fast the unit moved in the steps it began and ended wearing the same buffs, after it first moved, by those
     buffs joined with `+`, `none` for none: the median and the fastest of those steps, in distance per second, and how
@@ -949,7 +1087,11 @@ def sweep_race(race: Race, installation: Installation) -> dict[str, object]:
 def main(argv: Sequence[str]) -> None:
     """Sweep the races named, or every race, and write the findings."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("races", nargs="*", help=f"which to play, of {', '.join(RACES_BY_NAME)}; every one when none")
+    parser.add_argument(
+        "races",
+        nargs="*",
+        help=f"which to play, of {', '.join(RACES_BY_NAME)} and {RIVALS}, the game of two players; all when none",
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -957,10 +1099,13 @@ def main(argv: Sequence[str]) -> None:
         help=f"where to write the findings; {DEFAULT_FINDINGS_PATH} if not named",
     )
     arguments = parser.parse_args(argv)
-    if unknown_races := [name for name in arguments.races if name not in RACES_BY_NAME]:
+    if unknown_races := [name for name in arguments.races if name not in RACES_BY_NAME and name != RIVALS]:
         raise SystemExit(f"No race is called {', '.join(unknown_races)}")
     installation = Installation.find()
-    findings = {name: sweep_race(RACES_BY_NAME[name], installation) for name in arguments.races or RACES_BY_NAME}
+    findings = {
+        name: sweep_enemy_buffs(installation) if name == RIVALS else sweep_race(RACES_BY_NAME[name], installation)
+        for name in arguments.races or [*RACES_BY_NAME, RIVALS]
+    }
     arguments.out.write_text(json.dumps(findings, indent=2) + "\n", encoding="utf-8")
     logger.info("Wrote the findings to {}", arguments.out)
 
