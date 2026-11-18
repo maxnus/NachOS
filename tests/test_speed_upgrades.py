@@ -11,7 +11,6 @@ from s2clientprotocol import common_pb2, raw_pb2
 from sc2nachos import Api
 from sc2nachos.events import AnyUpgradeEvent, GameStartEvent, TurnStartEvent
 from sc2nachos.extensions.upgrade_inference import EnemyUpgradeAssumedEvent, UpgradeInference
-from sc2nachos.extensions.upgrade_inference._movement_windows import _CREEP_SPEEDS
 from sc2nachos.gamedata import GameData
 from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
 from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
@@ -36,7 +35,9 @@ def _distance_a_step(unit_type: UnitTypeId, *, upgraded: bool) -> float:
 
 
 def _creep_distance_a_step(unit_type: UnitTypeId, *, upgraded: bool) -> float:
-    return _CREEP_SPEEDS[unit_type][upgraded] / STEPS_PER_SECOND
+    row = _GAME_DATA.units[unit_type]
+    speed_upgrades = {upgrade for upgrade, change in row.upgrades.items() if change.speed} if upgraded else set()
+    return row.with_upgrades(speed_upgrades).creep_speed / STEPS_PER_SECOND
 
 
 _ZERGLING_STEP = _distance_a_step(UnitTypeId.ZERGLING, upgraded=False)

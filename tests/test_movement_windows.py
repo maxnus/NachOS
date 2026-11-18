@@ -9,7 +9,6 @@ from s2clientprotocol import common_pb2, raw_pb2
 
 from sc2nachos import Api
 from sc2nachos.extensions.upgrade_inference._movement_windows import (
-    _CREEP_SPEEDS,
     MovementWindow,
     MovementWindows,
     speed_upgrade_by_type,
@@ -94,8 +93,19 @@ class TestTheTypes:
             UnitTypeId.ZERGLING: UpgradeId.ZERGLING_SPEED,
         }
 
-    def test_the_creep_speeds_are_for_some_of_them(self) -> None:
-        assert _CREEP_SPEEDS.keys() <= speed_upgrade_by_type(_GAME_DATA).keys()
+    def test_creep_speeds_up_five_of_them(self) -> None:
+        sped_up = {
+            unit_type
+            for unit_type in speed_upgrade_by_type(_GAME_DATA)
+            if _GAME_DATA.units[unit_type].creep_speed != _GAME_DATA.units[unit_type].speed
+        }
+        assert sped_up == {
+            UnitTypeId.BANELING,
+            UnitTypeId.HYDRALISK,
+            UnitTypeId.ROACH,
+            UnitTypeId.ULTRALISK,
+            UnitTypeId.ZERGLING,
+        }
 
 
 class TestWhereTheDistanceFalls:
@@ -112,7 +122,9 @@ class TestWhereTheDistanceFalls:
 
     @pytest.mark.parametrize(("speed_index", "share"), [(0, 0.0), (1, 1.0)])
     def test_on_creep_it_moves_at_its_creep_speeds(self, speed_index: int, share: float) -> None:
-        distance_a_step = _CREEP_SPEEDS[UnitTypeId.ZERGLING][speed_index] / STEPS_PER_SECOND
+        zergling = _GAME_DATA.units[UnitTypeId.ZERGLING]
+        creep_speeds = (zergling.creep_speed, zergling.with_upgrades({UpgradeId.ZERGLING_SPEED}).creep_speed)
+        distance_a_step = creep_speeds[speed_index] / STEPS_PER_SECOND
         windows = _windows_of(_zergling_running(distance_a_step, 24), creep=_CREEP_EVERYWHERE)
         assert [window.upgraded_share for window in windows] == [pytest.approx(share, abs=1e-4)] * 2
         assert [window.steps_on_creep for window in windows] == [11, 11]
@@ -129,7 +141,8 @@ class TestWhereTheDistanceFalls:
         assert window.steps_on_creep == 0
 
     def test_across_a_creep_edge_each_move_takes_the_speed_for_where_it_began(self) -> None:
-        on_creep, off_creep = _CREEP_SPEEDS[UnitTypeId.ZERGLING][0] / STEPS_PER_SECOND, _ZERGLING_STEP
+        on_creep = _GAME_DATA.units[UnitTypeId.ZERGLING].creep_speed / STEPS_PER_SECOND
+        off_creep = _ZERGLING_STEP
         positions = [8.5]
         for _ in range(11):
             positions.append(positions[-1] + (on_creep if positions[-1] < 10 else off_creep))

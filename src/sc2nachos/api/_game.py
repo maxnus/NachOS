@@ -189,6 +189,10 @@ class _Game:
             time=GameTime(steps=step),
             _fog_off_playback=fog_off_playback,
         )
+        # A unit's speed reads the creep under it off the current state, which decodes it once an observation, if asked.
+        for creep_reader in (tracker, game.whole_game_tracker):
+            if creep_reader is not None:
+                creep_reader.read_creep_from(lambda: game.state.creep)
         game._read(observation, step)
         return game
 

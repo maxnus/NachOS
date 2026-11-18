@@ -10,6 +10,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos._shared.errors import NotReportedError
 from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
+from sc2nachos.gamedata._movement_speeds import MOVEMENT_SPEED_BUFFS
 from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
@@ -54,6 +55,8 @@ _IDS_PER_ALLIANCE = 100_000
 _GROUND_TYPES_HIT_FROM_THE_AIR = frozenset({UnitTypeId.COLOSSUS})
 # How many times as often each buff has its wearer attack, by raw id, as a report lists its buffs.
 _ATTACK_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in ATTACK_SPEED_BUFFS.items()}
+# How many times as fast each buff has its wearer move, by raw id, as a report lists its buffs.
+_MOVEMENT_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in MOVEMENT_SPEED_BUFFS.items()}
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -758,10 +761,34 @@ class Unit[K: UnitType.AnyType]:
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
-    def speed(self) -> float:
-        """The unit type's speed with its owner's upgrades applied, as for `weapons`, before creep or any buff. In
+    def base_speed(self) -> float:
+        """The unit type's speed with its owner's upgrades applied, as for `weapons`, off creep and before any buff. In
         distance per second, like `velocity`."""
         return self._tracker.upgrade_tracker.upgraded_type(self).speed
+
+    @property
+    def base_creep_speed(self) -> float:
+        """`base_speed` on creep: the type's `UnitTypeData.creep_speed` with its owner's upgrades applied."""
+        return self._tracker.upgrade_tracker.upgraded_type(self).creep_speed
+
+    @property
+    def speed(self) -> float:
+        """How fast the unit can move where it stands, in distance per second, like `velocity`: `base_creep_speed` for a
+        unit on the ground on creep, and `base_speed` anywhere else, times what each buff it wears makes of it, as
+        measured in game, where two at once multiply: stim 1.5, concussive shells 0.5, an inhibitor zone 0.65, a time
+        warp 0.6 and a fungal 0.25 (`docs/reference/game-behavior/units.md`). A unit not visible now moves at its speed
+        on the ground where it was last seen, with no buff, since a buff lasts seconds. Nothing else counts: no
+        acceleration zone or afterburners, unmeasured, and no creep where the game gives none, as for a made-up unit."""
+        upgraded = self._tracker.upgrade_tracker.upgraded_type(self)
+        speed = upgraded.speed
+        # Reading the creep only for a type it speeds up spares decoding it for any other.
+        if upgraded.creep_speed != speed and not self.is_flying:
+            creep = self._tracker.creep
+            if creep is not None and creep[self.position]:
+                speed = upgraded.creep_speed
+        if self.is_visible:
+            speed *= math.prod(_MOVEMENT_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in self._latest_report.buff_ids)
+        return speed
 
     @property
     def armor(self) -> float:

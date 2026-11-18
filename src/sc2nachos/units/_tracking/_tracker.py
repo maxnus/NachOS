@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from s2clientprotocol import raw_pb2
 
     from sc2nachos.gamedata import GameData
+    from sc2nachos.geometry import Grid
     from sc2nachos.match import Enemy
     from sc2nachos.orders import OrderBook
 
@@ -32,6 +33,7 @@ class _Tracker:
 
     __slots__ = (
         "_builder_tracker",
+        "_creep",
         "_enemy",
         "_game_data",
         "_last_changes",
@@ -67,6 +69,7 @@ class _Tracker:
         self._upgrade_tracker = _UpgradeTracker(game_data, enemy)
         self._unit_comparer = _UnitComparer(self)
         self._unit_watcher = _UnitWatcher(self)
+        self._creep: Callable[[], Grid[bool] | None] = _no_creep_known
 
     @property
     def game_data(self) -> GameData:
@@ -122,6 +125,16 @@ class _Tracker:
         return self._unit_comparer
 
     @property
+    def creep(self) -> Grid[bool] | None:
+        """Where creep covers the ground now, from the source `read_creep_from` gave, or `None` if it gave none."""
+        return self._creep()
+
+    def read_creep_from(self, source: Callable[[], Grid[bool] | None]) -> None:
+        """Read where creep covers the ground from `source`, called when asked, as a game's current state is: it
+        decodes the creep of an observation once, and only if something asks."""
+        self._creep = source
+
+    @property
     def unit_watcher(self) -> _UnitWatcher:
         """Watches each unit for crossing a value of its energy or life, or the edge of an area, recording into the
         last changes, on request."""
@@ -140,3 +153,7 @@ class _Tracker:
         self._unit_tracker.update(observation, step)
         self._morph_tracker.update(step)
         self._warp_in_tracker.update(step)
+
+
+def _no_creep_known() -> None:
+    """No creep known, until a source is given."""

@@ -54,7 +54,10 @@ As of 2026-11-14:
 - **Since 0.7.0**, on main: #255. The next release, 0.8.0 since #255 moves a field's `spacing` from the field to its
   reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
   and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
-  they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too.
+  they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too, so that its notes also
+  say that a bot's `unit.speed`, its type's with its owner's upgrades, is `unit.base_speed` now, and that `unit.speed`
+  counts creep and buffs where the unit stands; and that it adds `unit.base_creep_speed`, `UnitTypeData.creep_speed`
+  and `MadeUpUnits.observe(creep=...)`.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -534,8 +537,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      creep with each slow, and a fungal with a time warp. Measured (sc2 runs 44280840577 and 44280846865): every pair
      multiplies, to within the rounding of a step's distance, so `speed` is the speed on creep or off times each buff's
      factor.
-  3. `base_speed` and `speed`, proposed for 0.8.0 with #255, so that a bot changes once. AvocaDOS then reads
-     `unit.speed` where its melee threat works it out (AvocaDOS #99).
+  3. Built: `UnitTypeData.creep_speed`, from the table measured in step 1, which `with_upgrades` updates;
+     `Unit.base_speed`, `Unit.base_creep_speed` and `Unit.speed`, which multiplies the speed on creep or off by each
+     buff's factor, in sight, and reads the creep of the turn off the game's state, which decodes it once an
+     observation and only for a type creep speeds up; `MadeUpUnits.observe(creep=...)` for a bot's tests; and upgrade
+     inference reading `creep_speed`, its private table gone. Proposed for 0.8.0 with #255, so that a bot changes once.
+     AvocaDOS then reads `unit.speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
   1. Done in #212: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
      the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`

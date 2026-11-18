@@ -12,6 +12,7 @@ from s2clientprotocol import data_pb2
 from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._footprints import CREEP_REQUIREMENTS, FOOTPRINTS
+from sc2nachos.gamedata._movement_speeds import CREEP_SPEEDS, UPGRADED_CREEP_SPEEDS
 from sc2nachos.gamedata._tech import Tech
 from sc2nachos.gamedata._tech_requirements import TechRequirements
 from sc2nachos.gamedata._techtree._overrides import PRODUCERS_FALLBACK
@@ -216,6 +217,10 @@ class UnitTypeData:
     """Its sight range."""
     speed: float
     """Its movement speed, in distance per second at the game's Faster speed (22.4 steps); zero for a structure."""
+    creep_speed: float
+    """Its movement speed on creep, as measured in game, since the tables hold none: 1.3 times `speed` for most Zerg
+    ground types, 1.4 times for a locust and 2.66 times for a queen, and `speed` for any other, a drone, a broodling and
+    whatever flies among them (`docs/reference/game-behavior/units.md`)."""
     armor: float
     """The damage it takes off each hit."""
     attributes: frozenset[Attribute]
@@ -298,12 +303,15 @@ class UnitTypeData:
         return frozenset(self.ability_requirements)
 
     def with_upgrades(self, upgrades: Iterable[UpgradeId]) -> UnitTypeData:
-        """This type with `upgrades` researched: the weapons, their attack speed, the armor and the speed they change.
+        """This type with `upgrades` researched: the weapons, their attack speed, the armor and the speed they change,
+        on creep and off.
 
-        Nothing else an upgrade does is applied. Anabolic Synthesis counts whether or not the unit is on creep, as in
-        the game's rows.
+        Nothing else an upgrade does is applied. On creep, an upgrade gives the speed measured in game with it, as
+        Muscular Augments and Anabolic Synthesis add less there; one not measured on creep, which no type creep speeds
+        up has, adds what it adds off creep.
         """
-        changes = [self.upgrades[upgrade] for upgrade in sorted(set(upgrades) & self.upgrades.keys())]
+        researched = sorted(set(upgrades) & self.upgrades.keys())
+        changes = [self.upgrades[upgrade] for upgrade in researched]
         changes = [change for change in changes if change != _NO_CHANGE]
         if not changes:
             return self
@@ -313,10 +321,24 @@ class UnitTypeData:
             )
             for index, weapon in enumerate(self.weapons)
         )
+        speed = self.speed + sum(change.speed for change in changes)
+        measured_on_creep = [
+            UPGRADED_CREEP_SPEEDS[self.id, upgrade]
+            for upgrade in researched
+            if (self.id, upgrade) in UPGRADED_CREEP_SPEEDS
+        ]
+        if measured_on_creep:
+            creep_speed = measured_on_creep[0]
+        elif self.creep_speed == self.speed:
+            # Kept equal, as for a type creep does not speed up.
+            creep_speed = speed
+        else:
+            creep_speed = self.creep_speed + speed - self.speed
         return replace(
             self,
             armor=self.armor + sum(change.armor for change in changes),
-            speed=self.speed + sum(change.speed for change in changes),
+            speed=speed,
+            creep_speed=creep_speed,
             weapons=weapons,
         )
 
@@ -338,6 +360,7 @@ class UnitTypeData:
             sight_range=unit.sight_range,
             # The game gives it in distance per second at Normal speed, 16 steps a second.
             speed=unit.movement_speed * FASTER_PER_NORMAL_SPEED,
+            creep_speed=CREEP_SPEEDS.get(unit_type, unit.movement_speed * FASTER_PER_NORMAL_SPEED),
             armor=unit.armor,
             attributes=frozenset(Attribute(attribute) for attribute in unit.attributes),
             weapons=tuple(Weapon._from_proto(weapon) for weapon in unit.weapons),
