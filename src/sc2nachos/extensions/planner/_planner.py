@@ -140,23 +140,32 @@ class Planner:
         economy: Economy = Economy(),
         loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
         new_command_center_limit: int | None = None,
+        previous_plan: Plan | None = None,
+        hysteresis_bonus: float = 0.0,
     ) -> Plan:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `game_state()` now if `None`, and its time is the plan's start. The plan's workers mine, collect and walk as
         `economy` says. A unit of a type in `loss_rates` is expected lost at that share a second, those alive now and
         those the plan makes, so that only the share expected alive counts. The plan starts at most
         `new_command_center_limit` command centers, any number if `None`: the bot's own count, such as the expansions it
-        means to take less those an SCV is already on its way to build on, which `state` holds as worker builds. It
-        solves within the planner's limits, before it returns.
+        means to take less those an SCV is already on its way to build on, which `state` holds as worker builds. With a
+        `previous_plan`, such as `plan`, each of its items the new plan starts no later than that one expected,
+        counting those of its kind before it, is worth `hysteresis_bonus` once, beside the reward, so that the new plan
+        differs from it only for more than that. It solves within the planner's limits, before it returns.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate or `new_command_center_limit`, or a negative time from `whole_until` or from
-        `economy`'s `walk_time`; and `NoPlanFoundError` if the solver finds no plan within its limits.
+        than 0, a negative loss rate, `new_command_center_limit` or `hysteresis_bonus`, a `hysteresis_bonus` with no
+        `previous_plan`, or a negative time from `whole_until` or from `economy`'s `walk_time`; and `NoPlanFoundError`
+        if the solver finds no plan within its limits.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
         if new_command_center_limit is not None and new_command_center_limit < 0:
             raise ValueError(f"new_command_center_limit must not be negative, not {new_command_center_limit}")
+        if hysteresis_bonus < 0:
+            raise ValueError(f"hysteresis_bonus must not be negative, not {hysteresis_bonus}")
+        if hysteresis_bonus and previous_plan is None:
+            raise ValueError("a hysteresis bonus needs the previous plan it favors")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
         program = PlanProgram(
@@ -169,6 +178,8 @@ class Planner:
             loss_rates=loss_rates,
             new_command_center_limit=new_command_center_limit,
             whole_until_seconds=whole_until_seconds_of(items, whole_until=self._whole_until),
+            previous_plan=previous_plan,
+            hysteresis_bonus=hysteresis_bonus,
         )
         plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)
         if plan is None:

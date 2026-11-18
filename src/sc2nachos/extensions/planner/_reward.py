@@ -5,13 +5,10 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, final
+from typing import final
 
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
-
-if TYPE_CHECKING:
-    from sc2nachos.extensions.planner._plan import Plan
 
 
 @final
@@ -72,13 +69,10 @@ class Reward:
     what it falls short of the floors, each second discounted by `half_life`. Only what is expected to survive counts,
     by the loss rates handed to `Planner.plan_now`.
 
-    `terminal_time` counts the state at the horizon for that much longer, as if it lasted, discounted alike. With a
-    `previous_plan`, each of its items the new plan starts no later than the previous one expected, counting those of
-    its type before it, is worth `hysteresis_bonus` once, so that a new plan changes the old only for more than that.
+    `terminal_time` counts the state at the horizon for that much longer, as if it lasted, discounted alike.
 
     Raises `ValueError` for a unit type both weighted and given a curve, a curve that is not concave, its slopes
-    falling and its counts rising, a `half_life` not longer than 0, a negative `terminal_time` or `hysteresis_bonus`,
-    or a `hysteresis_bonus` with no `previous_plan`.
+    falling and its counts rising, a `half_life` not longer than 0, or a negative `terminal_time`.
     """
 
     weights: Mapping[UnitTypeId, float] = field(default_factory=dict)
@@ -95,10 +89,6 @@ class Reward:
     """The time over which a second's worth halves, from the plan's start; `None` for no discount."""
     terminal_time: GameTime = GameTime.ZERO
     """How much longer the state at the horizon counts."""
-    previous_plan: Plan | None = None
-    """The plan a new one is to keep to."""
-    hysteresis_bonus: float = 0.0
-    """What each item of `previous_plan` the new plan keeps to is worth."""
 
     def __post_init__(self) -> None:
         if both := self.weights.keys() & self.curves.keys():
@@ -109,10 +99,6 @@ class Reward:
             raise ValueError(f"a half-life must be longer than 0, not {self.half_life}")
         if self.terminal_time < GameTime.ZERO:
             raise ValueError(f"terminal_time must not be negative, not {self.terminal_time}")
-        if self.hysteresis_bonus < 0:
-            raise ValueError(f"hysteresis_bonus must not be negative, not {self.hysteresis_bonus}")
-        if self.hysteresis_bonus and self.previous_plan is None:
-            raise ValueError("a hysteresis bonus needs the previous plan it favors")
 
     @property
     def unit_types(self) -> frozenset[UnitTypeId]:

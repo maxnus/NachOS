@@ -310,6 +310,8 @@ def _solve_and_print(
         loss_rates=loss_rates,
         new_command_center_limit=_NEW_COMMAND_CENTER_LIMIT,
         whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
+        previous_plan=None,
+        hysteresis_bonus=0.0,
     )
     built = time.perf_counter() - started
     plan = program.solve(time_limit=time_limit, node_limit=None)

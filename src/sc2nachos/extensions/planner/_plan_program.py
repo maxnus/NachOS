@@ -53,7 +53,9 @@ class PlanProgram:
     walk back, takes its supply at once, and counts as done from the first edge at or after its end. Workers mine,
     collect or build, pooled over every field and refinery, in the tiers of `economy`'s rates, and each orbital command
     adds its MULEs' income. A unit counts as it survives its loss rate in `loss_rates`, for income, supply, the reward
-    and coverage. At most `new_command_center_limit` command centers start, any number if `None`.
+    and coverage. At most `new_command_center_limit` command centers start, any number if `None`. Each item of
+    `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
+    worth `hysteresis_bonus` once, beside the reward.
 
     Raises `ValueError` unless `whole_until_seconds` hold one time for each item, and for a negative walk from
     `economy`'s `walk_time`.
@@ -67,6 +69,7 @@ class PlanProgram:
         "_discounts",
         "_economy",
         "_edges",
+        "_hysteresis_bonus",
         "_new_command_center_limit",
         "_index_of_unit_type",
         "_index_of_upgrade",
@@ -76,6 +79,7 @@ class PlanProgram:
         "_mining",
         "_model",
         "_objective",
+        "_previous_plan",
         "_program",
         "_reward",
         "_starts_so_far",
@@ -98,6 +102,8 @@ class PlanProgram:
         loss_rates: Mapping[UnitTypeId, float],
         new_command_center_limit: int | None,
         whole_until_seconds: Sequence[float],
+        previous_plan: Plan | None,
+        hysteresis_bonus: float,
     ) -> None:
         if len(whole_until_seconds) != len(items):
             raise ValueError(f"{len(whole_until_seconds)} windows for {len(items)} items")
@@ -108,6 +114,8 @@ class PlanProgram:
         self._economy = economy
         self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
         self._new_command_center_limit = new_command_center_limit
+        self._previous_plan = previous_plan
+        self._hysteresis_bonus = hysteresis_bonus
         built_by_worker = (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         self._walk_seconds = walk_seconds_of(economy, built_by_worker)
         self._completions, self._builders_free_after = self._completions_and_builders()
@@ -599,8 +607,8 @@ class PlanProgram:
         for floor in reward.floors:
             worth.add(self._units_short_of(floor), identity * -floor.penalty)
         objective = worth.summed(self._discounts)
-        if reward.previous_plan is not None and reward.hysteresis_bonus:
-            objective.add(self._previous_items_kept(reward.previous_plan), reward.hysteresis_bonus)
+        if self._previous_plan is not None and self._hysteresis_bonus:
+            objective.add(self._previous_items_kept(self._previous_plan), self._hysteresis_bonus)
         return objective
 
     def _curve_values(self, unit_type: UnitTypeId, segments: Sequence[CurveSegment]) -> VariableBlock:

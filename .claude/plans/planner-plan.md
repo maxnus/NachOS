@@ -85,7 +85,10 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
     handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
     worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and
     `new_command_center_limit`, the bot's own count, beside it. The constructor keeps only how to solve: the grid, the
-    limits and the windows. Workers stay pooled over every field and refinery (Open 10).
+    limits and the windows. Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to
+    and the bonus for it are `plan_now`'s `previous_plan` and `hysteresis_bonus` too (the owner, 2026-11-18, over the
+    reward holding them, and over the planner keeping to its own last plan, an input the bot would not see): they
+    say how plans follow one another, not what the bot wants, so a reward is built once and handed to every plan.
 
 ## Measurements
 
@@ -136,8 +139,9 @@ class Extensions:
   bases. A bot may change it and hand it back.
 - `_economy.py`: `Economy`, what the bot assumes of its economy (decision 11), with defaults measured in game.
 - `_reward.py`: the reward as data the matrix builder reads, and the extension's public interface: per-type weights
-  or concave segments, coverage (effectiveness, enemy counts per bucket, values), floors, the discount half-life, the
-  terminal value, the hysteresis bonus and the plan it favours. The bot builds it; the planner never guesses it.
+  or concave segments, coverage (effectiveness, enemy counts per bucket, values), floors, the discount half-life and
+  the terminal value. The bot builds it; the planner never guesses it. The hysteresis bonus and the plan it favours
+  are `plan_now`'s (decision 11).
 - `_milp.py`: the matrix from model, grid, snapshot and reward; the solve with a time or node limit; the plan from
   the solution.
 - `_plan.py`: the `Plan`: items in order with predicted start times and the predicted resource and count curves, read

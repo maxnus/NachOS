@@ -71,9 +71,12 @@ def _best_plan(
     economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: dict[UnitTypeId, float] | None = None,
     new_command_center_limit: int | None = None,
+    previous_plan: Plan | None = None,
+    hysteresis_bonus: float = 0.0,
 ) -> Plan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `whole_until`, by
-    `economy`, with `loss_rates` and `new_command_center_limit`, proven best."""
+    `economy`, with `loss_rates` and `new_command_center_limit`, keeping to `previous_plan` for `hysteresis_bonus`,
+    proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
         items=items,
@@ -85,11 +88,28 @@ def _best_plan(
         loss_rates=loss_rates or {},
         new_command_center_limit=new_command_center_limit,
         whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
+        previous_plan=previous_plan,
+        hysteresis_bonus=hysteresis_bonus,
     )
     plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT)
     assert plan is not None
     assert plan.is_optimal
     return plan
+
+
+# A plan that starts one barracks, 30 seconds after it was made at the game's start.
+_A_PLAN_OF_ONE_BARRACKS = Plan(
+    made_at=GameTime.ZERO,
+    items=(PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30)),),
+    times=(),
+    minerals=(),
+    vespene=(),
+    counts={},
+    objective=0.0,
+    gap=0.0,
+    is_optimal=True,
+    solve_seconds=0.0,
+)
 
 
 def _whole_over_any_horizon(_: UnitTypeId) -> GameTime:
@@ -397,25 +417,12 @@ class TestKnownPlans:
     def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
         """A barracks nothing else is worth gets built by when the previous plan had it, for a bonus above its cost in
         what an SCV's mining would have been worth."""
-        previous = Plan(
-            made_at=GameTime.ZERO,
-            items=(PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30)),),
-            times=(),
-            minerals=(),
-            vespene=(),
-            counts={},
-            objective=0.0,
-            gap=0.0,
-            is_optimal=True,
-            solve_seconds=0.0,
-        )
+        previous = _A_PLAN_OF_ONE_BARRACKS
         state = _game_start(minerals=500.0, supply_cap=23.0, counts={UnitTypeId.SCV: 12, UnitTypeId.SUPPLY_DEPOT: 1})
         reward = Reward(weights={UnitTypeId.SCV: 1.0})
 
         without = _best_plan(state, reward, horizon_seconds=40)
-        kept = _best_plan(
-            state, dataclasses.replace(reward, previous_plan=previous, hysteresis_bonus=100.0), horizon_seconds=40
-        )
+        kept = _best_plan(state, reward, horizon_seconds=40, previous_plan=previous, hysteresis_bonus=100.0)
 
         assert _start_seconds(without, UnitTypeId.BARRACKS) == []
         assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
@@ -464,6 +471,8 @@ class TestWholeUntil:
                 loss_rates={},
                 new_command_center_limit=None,
                 whole_until_seconds=[whole_until.seconds] * len(items),
+                previous_plan=None,
+                hysteresis_bonus=0.0,
             )
             return program.linear_program.integral_count
 
@@ -637,10 +646,10 @@ class TestReward:
 
     @pytest.mark.parametrize(
         "arguments",
-        [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}, {"hysteresis_bonus": 1.0}],
-        ids=["a half-life of 0", "a negative terminal time", "a bonus with no previous plan"],
+        [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}],
+        ids=["a half-life of 0", "a negative terminal time"],
     )
-    def test_a_bad_discount_tail_or_bonus_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_bad_discount_or_tail_raises(self, arguments: dict[str, Any]) -> None:
         with pytest.raises(ValueError):
             Reward(**arguments)
 
@@ -1003,12 +1012,57 @@ class TestPlanner:
         ((plan),) = plans
         assert plan.minerals[0] == 0.0
 
+    def test_it_keeps_to_a_previous_plan_it_is_handed_for_a_bonus(self) -> None:
+        """With 150 minerals and none mined, a barracks costs the plan its SCVs, which the reward is for: it starts
+        one for a bonus worth more."""
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        plans: list[Plan] = []
+
+        @api.on(TurnEvent)
+        def plan_scvs_twice(_: TurnEvent) -> None:
+            state = dataclasses.replace(api.extensions.game_state(), minerals=150.0, mineral_fields=0)
+            reward = Reward(weights={UnitTypeId.SCV: 1.0})
+            horizon = GameTime(seconds=40)
+            plans.append(api.extensions.plan_now(reward, horizon=horizon, state=state))
+            plans.append(
+                api.extensions.plan_now(
+                    reward,
+                    horizon=horizon,
+                    state=state,
+                    previous_plan=_A_PLAN_OF_ONE_BARRACKS,
+                    hysteresis_bonus=100.0,
+                )
+            )
+
+        api.play(game.joined())
+
+        without, kept = plans
+        assert _start_seconds(without, UnitTypeId.BARRACKS) == []
+        assert _start_seconds(without, UnitTypeId.SCV) != []
+        assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
+        assert _start_seconds(kept, UnitTypeId.SCV) == []
+
     @pytest.mark.parametrize(
         "arguments",
-        [{"new_command_center_limit": -1}, {"economy": Economy(walk_time=lambda _: GameTime(seconds=-1))}],
-        ids=["a negative command center limit", "a negative walk"],
+        [
+            {"new_command_center_limit": -1},
+            {"economy": Economy(walk_time=lambda _: GameTime(seconds=-1))},
+            {"hysteresis_bonus": 1.0},
+            {"previous_plan": _A_PLAN_OF_ONE_BARRACKS, "hysteresis_bonus": -1.0},
+        ],
+        ids=[
+            "a negative command center limit",
+            "a negative walk",
+            "a bonus with no previous plan",
+            "a negative bonus",
+        ],
     )
-    def test_a_negative_command_center_limit_or_walk_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_negative_limit_walk_or_bonus_or_a_bonus_with_no_previous_plan_raises(
+        self, arguments: dict[str, Any]
+    ) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
         api = Api(extensions=Planner)
 

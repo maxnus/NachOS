@@ -224,9 +224,11 @@ class ThreatMap:
   what each unit alive is worth, a weight for each type or a concave curve of pieces over its count, so that a plan
   buys a mix rather than only the best type for its cost; what each upgrade done is worth; enemy units covered, each
   kind a `Coverage` of how many the bot expects from when, how much of one each own type covers and what one covered is
-  worth; counts wanted at least, each a `Floor` with what a unit short costs; how long the state at the horizon counts
-  for after it; and a bonus for each item of the previous plan the new one keeps to. `plan_now` takes the horizon and
-  the share of each unit type the bot expects lost a second, so that only what is expected to survive counts.
+  worth; counts wanted at least, each a `Floor` with what a unit short costs; and how long the state at the horizon
+  counts for after it. `plan_now` takes the horizon and the share of each unit type the bot expects lost a second, so
+  that only what is expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and a
+  `hysteresis_bonus` for each of its items the new plan keeps to, so that a new plan differs from the last only for
+  more than that.
   A unit counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a
   hellbat as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
