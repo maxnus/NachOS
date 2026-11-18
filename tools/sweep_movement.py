@@ -967,8 +967,7 @@ def _recorded_enemy_buff(
         logger.warning("{}: {}", conditions, error)
         return {**conditions, "error": str(error)}
     finally:
-        rivals.me.remove(made_tags)
-        rivals.step(_SETTLING_STEPS)
+        _removed_by_both(rivals, made_tags)
     logger.info(
         "The enemy's {} {}: {} steps, by buffs {}",
         runner_type.name,
@@ -1037,6 +1036,18 @@ def _enemy_buff_trial(
     _measure_into(finding, positions)
     finding.buffs = buffs
     return finding
+
+
+def _removed_by_both(rivals: Rivals, tags: Sequence[int]) -> None:
+    """Kill the units under `tags` and step both players until the game lists none of them: a game of two steps only
+    once both ask, so `Sandbox.remove`, which steps one, would wait for ever."""
+    me = rivals.me
+    me.kill(tags)
+    for _ in range(_MAKING_STEPS):
+        rivals.step(1)
+        if not set(tags) & {unit.tag for unit in me.units()}:
+            return
+    logger.warning("{} units were not removed", len(tags))
 
 
 def _listed_by(game: Sandbox, tag: int) -> raw_pb2.Unit:
