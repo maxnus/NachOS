@@ -10,7 +10,9 @@ along each of `_HEADINGS_DEGREES`, recording where it stood at every step. A Zer
 between four hatcheries made beside a course of its own, once their creep has stopped spreading, every point of it
 `_CREEP_MARGIN` or more from ground without creep. As Protoss, a sentry's hallucinations of the types it can
 hallucinate run too. Then the sweep researches each of the race's speed upgrades, at researchers it makes with whatever
-they need, and runs every trial again.
+they need, and runs every trial again. Then each race's units that put a buff on themselves run wearing it: a medivac
+with its afterburners lit, a hydralisk lunging once Nanomuscular Swell is in, a void ray in prismatic alignment, and a
+zealot, once Charge is in, charging a zergling of the computer's 3.5 ahead.
 
 As Zerg, every other Zerg type on the ground with a speed runs too, off creep and on it, once, as no upgrade changes it.
 As Terran, once the speed upgrades are in, Stimpack and Concussive Shells are researched too, and a marine and a
@@ -166,6 +168,18 @@ _ZONE_RUNNERS = (UnitTypeId.MARINE, UnitTypeId.ZERGLING, UnitTypeId.MEDIVAC)
 # A buffed trial watches its unit for as long as the course takes it at this share of its row speed, as a slow can
 # halve it.
 _BUFFED_WATCH_SPEED_SHARE = 0.25
+# The buffs a unit of each race puts on itself that may change its speed, once the speed upgrades are in: the type, the
+# ability it uses, and the research the ability needs, if any. A zealot charges a zergling of the computer's made this
+# far along the course ahead of it, which moves it, and is watched until it stands still.
+_SELF_BUFFS: dict[Race, tuple[tuple[UnitTypeId, RawAbilityId, UpgradeId | None], ...]] = {
+    Race.TERRAN: ((UnitTypeId.MEDIVAC, RawAbilityId.Effect_MedivacIgniteAfterburners, None),),
+    Race.ZERG: ((UnitTypeId.HYDRALISK, RawAbilityId.HydraliskFrenzy, UpgradeId.HYDRALISK_LUNGE),),
+    Race.PROTOSS: (
+        (UnitTypeId.VOID_RAY, RawAbilityId.Effect_VoidRayPrismaticAlignment, None),
+        (UnitTypeId.ZEALOT, RawAbilityId.Effect_Charge, UpgradeId.CHARGE),
+    ),
+}
+_CHARGE_TARGET_DISTANCE = 3.5
 # Two modifiers at once, in the Terran game: a stimmed marine and marauder slowed by concussive shells, a stimmed marine
 # in an inhibitor zone of this size, and a zergling slowed by concussive shells in it; in the Zerg game, once its speed
 # upgrades are in, these types run on creep slowed by concussive shells and through the zone.
@@ -401,7 +415,7 @@ class MovementSweep:
                         heading,
                         upgraded=False,
                         condition="stimmed",
-                        before_move=functools.partial(self._stimmed, stim),
+                        before_move=functools.partial(self._buffed_by, stim),
                     )
                 )
         for unit_type in _SLOWED_TYPES:
@@ -486,7 +500,7 @@ class MovementSweep:
                     upgraded=False,
                     condition=f"stimmed, {_PAIRED_ZONE.name}",
                     course=course,
-                    before_move=functools.partial(self._stimmed, _STIMS[UnitTypeId.MARINE]),
+                    before_move=functools.partial(self._buffed_by, _STIMS[UnitTypeId.MARINE]),
                 )
             )
             attacker_tags = []
@@ -561,19 +575,74 @@ class MovementSweep:
     def _stimmed_and_slowed(
         self, stim: RawAbilityId, attacker_at: Point, attacker_tags: list[int], mover: raw_pb2.Unit
     ) -> None:
-        """Stim `mover`, then have a marauder slow it, as `_stimmed` and `_slowed` do."""
-        self._stimmed(stim, mover)
+        """Stim `mover`, then have a marauder slow it, as `_buffed_by` and `_slowed` do."""
+        self._buffed_by(stim, mover)
         self._slowed(attacker_at, attacker_tags, mover)
 
-    def _stimmed(self, stim: RawAbilityId, mover: raw_pb2.Unit) -> None:
-        """Order `mover` to stim, and step until it wears a buff."""
-        if (verdict := self._game.order(stim, mover.tag)) != SUCCESS:
-            raise RuntimeError(f"the game refused the stim: {verdict}")
+    def _buffed_by(self, ability: RawAbilityId, mover: raw_pb2.Unit) -> None:
+        """Order `mover` to use `ability` on itself, as a stim, and step until it wears a buff."""
+        if (verdict := self._game.order(ability, mover.tag)) != SUCCESS:
+            raise RuntimeError(f"the game refused {ability.name}: {verdict}")
         for _ in range(_MAKING_STEPS):
             self._client.step(1)
             if self._listed(mover.tag).buff_ids:
                 return
-        raise RuntimeError(f"no buff within {_MAKING_STEPS} steps of the stim")
+        raise RuntimeError(f"no buff within {_MAKING_STEPS} steps of {ability.name}")
+
+    def _charged(self, target_at: Point, made_tags: list[int], mover: raw_pb2.Unit) -> None:
+        """Make a zergling of the computer's at `target_at`, adding its tag to `made_tags`, and order `mover` to charge
+        it, which moves it, with no move ordered after."""
+        computer = 2 if self._game.player == 1 else 1
+        target = self._make(UnitTypeId.ZERGLING, target_at, owner=computer)
+        made_tags.append(target.tag)
+        if (verdict := self._game.order(RawAbilityId.Effect_Charge, mover.tag, target.tag)) != SUCCESS:
+            raise RuntimeError(f"the game refused the charge: {verdict}")
+
+    def run_self_buff_trials(self) -> tuple[list[dict[str, object]], dict[str, str]]:
+        """The trials of the race's `_SELF_BUFFS`, once the speed upgrades are in, researching what each needs, as
+        findings or errors, and why each research that failed did."""
+        trials: list[dict[str, object]] = []
+        not_researched: dict[str, str] = {}
+        for unit_type, ability, needed in _SELF_BUFFS.get(self._race, ()):
+            if needed is not None and needed not in self._researched():
+                try:
+                    self._research(needed)
+                except RuntimeError as error:
+                    logger.warning("{} was not researched: {}", needed.name, error)
+                    not_researched[needed.name] = str(error)
+                    trials.append({"unit_type": unit_type.name, "condition": ability.name, "error": str(error)})
+                    continue
+            speed_upgrade = self.speed_upgrades.get(unit_type)
+            if ability is RawAbilityId.Effect_Charge:
+                course = self._ground_courses[_HEADINGS_DEGREES[0]]
+                target_at = _point_toward(course.start, math.radians(_HEADINGS_DEGREES[0]), _CHARGE_TARGET_DISTANCE)
+                made_tags: list[int] = []
+                trials.append(
+                    self._recorded(
+                        unit_type,
+                        speed_upgrade,
+                        _HEADINGS_DEGREES[0],
+                        upgraded=speed_upgrade is not None,
+                        condition=f"using {ability.name}",
+                        course=Course(course.start, target_at),
+                        before_move=functools.partial(self._charged, target_at, made_tags),
+                        made_tags=made_tags,
+                        order_move=False,
+                    )
+                )
+                continue
+            for heading in _HEADINGS_DEGREES:
+                trials.append(
+                    self._recorded(
+                        unit_type,
+                        speed_upgrade,
+                        heading,
+                        upgraded=speed_upgrade is not None,
+                        condition=f"using {ability.name}",
+                        before_move=functools.partial(self._buffed_by, ability),
+                    )
+                )
+        return trials, not_researched
 
     def _slowed(self, attacker_at: Point, attacker_tags: list[int], mover: raw_pb2.Unit) -> None:
         """Make a marauder at `attacker_at`, adding its tag to `attacker_tags`, order it to attack `mover`, and step
@@ -625,10 +694,12 @@ class MovementSweep:
         before_move: Callable[[raw_pb2.Unit], None] | None = None,
         each_step: Callable[[int], None] | None = None,
         made_tags: list[int] | None = None,
+        order_move: bool = True,
     ) -> dict[str, object]:
         """One trial as its finding, or as its error if the game would not set it up: along `course` if given, with
         `before_move` given the unit made before it is ordered, `each_step` given its tag after each step, and the tags
-        in `made_tags`, filled as the trial goes, removed with it."""
+        in `made_tags`, filled as the trial goes, removed with it; with no move ordered unless `order_move`, for a
+        `before_move` that moves the unit itself."""
         conditions = {
             "unit_type": unit_type.name,
             "upgraded": upgraded,
@@ -650,6 +721,7 @@ class MovementSweep:
                 before_move=before_move,
                 each_step=each_step,
                 made_tags=[] if made_tags is None else made_tags,
+                order_move=order_move,
             )
         except RuntimeError as error:
             logger.warning("{}: {}", conditions, error)
@@ -687,6 +759,7 @@ class MovementSweep:
         before_move: Callable[[raw_pb2.Unit], None] | None,
         each_step: Callable[[int], None] | None,
         made_tags: list[int],
+        order_move: bool,
     ) -> MoveFinding:
         """Make a `unit_type` at the start of its course along `heading_degrees`, or of `course`, order it to the end,
         and record how far it moved in each step and what it wore, as `_recorded` says."""
@@ -715,7 +788,7 @@ class MovementSweep:
                 before_move(mover)
             watch_speed_share = _WATCH_SPEED_SHARE if condition is None else _BUFFED_WATCH_SPEED_SHARE
             positions, buffs = self._watched_moving(
-                mover.tag, course, min(row.speed, row_speed), watch_speed_share, each_step
+                mover.tag, course, min(row.speed, row_speed), watch_speed_share, each_step, order_move=order_move
             )
         finally:
             self._game.remove(made_tags)
@@ -747,14 +820,18 @@ class MovementSweep:
         slower_row_speed: float,
         watch_speed_share: float,
         each_step: Callable[[int], None] | None,
+        *,
+        order_move: bool = True,
     ) -> tuple[list[Point], list[list[str]]]:
-        """Order the unit `tag` to the end of `course` and return where it stood and the buffs it wore as ordered and
-        after each step, until it arrived, stood still after moving, or had taken as long as the course takes it at
-        `watch_speed_share` of `slower_row_speed`, calling `each_step`, if given, with its tag after each step."""
+        """Order the unit `tag` to the end of `course`, if `order_move`, and return where it stood and the buffs it wore
+        as ordered and after each step, until it arrived, stood still after moving, or had taken as long as the course
+        takes it at `watch_speed_share` of `slower_row_speed`, calling `each_step`, if given, with its tag after each
+        step."""
         mover = self._listed(tag)
         positions = [_position_of(mover)]
         buffs = [_buff_names(mover)]
-        self._game.order(RawAbilityId.Move_Move, tag, course.end)
+        if order_move:
+            self._game.order(RawAbilityId.Move_Move, tag, course.end)
         watch_steps = math.ceil(course.length / (slower_row_speed * watch_speed_share / STEPS_PER_SECOND))
         still_steps = 0
         for _ in range(watch_steps):
@@ -1280,6 +1357,8 @@ def sweep_race(race: Race, installation: Installation) -> dict[str, object]:
         unupgraded = movement_sweep.run_trials(upgraded=False)
         not_researched = movement_sweep.research_speed_upgrades()
         upgraded = movement_sweep.run_trials(upgraded=True)
+        self_buffed, self_buffs_not_researched = movement_sweep.run_self_buff_trials()
+        not_researched |= self_buffs_not_researched
         buffed: list[dict[str, object]] = []
         if race is Race.TERRAN:
             not_researched |= movement_sweep.research_buff_upgrades()
@@ -1292,7 +1371,7 @@ def sweep_race(race: Race, installation: Installation) -> dict[str, object]:
             "speed_upgrades": {t.name: u.name for t, u in movement_sweep.speed_upgrades.items()},
             "creep_runners": [unit_type.name for unit_type in movement_sweep.creep_runners],
             "not_researched": not_researched,
-            "trials": unupgraded + upgraded + buffed,
+            "trials": unupgraded + upgraded + self_buffed + buffed,
         }
 
 
