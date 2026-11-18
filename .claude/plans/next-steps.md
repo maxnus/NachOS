@@ -469,13 +469,16 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      AvocaDOS works out until NachOS has it (Next); a flee's ties between tiles of equal threat broken down the field's
      slope at the unit (the owner, over the lowest address, farthest, nearest, toward the squad, its support or the main
      base, as measured in #99), and its two threats read as one field (the owner, over that field's `argmin`, which
-     breaks ties by address and knows no pathing). Threat and support in a pull request of their own, after #99, since
-     paths and grid arithmetic read them, and points in some 20 places (the owner, again in the review of aa238ab, over
-     doing it in #99). A flee kept away from unpathable tiles, so as not to be cornered, in a pull request after #99: a
-     penalty falling with each tile's distance to the nearest unpathable one, from the pathing grid's
-     `distance_transform`, added to the threat the flee reads (the owner, review of aa238ab, over doing it in #99 and
-     over a tile source in a `SourceField`, which would need `add_rectangle` and a source per blocked tile, could not
-     rule out the far side of a cliff, and whose `argmin` breaks ties by address).
+     breaks ties by address and knows no pathing). Threat and support followed in AvocaDOS #101, merged: fields of those
+     circles, each drawn onto the map's tiles every 4 steps for its readers, which read the grids (the owner, over every
+     read off the fields, which cost 12 to 16 µs a read of support with its 63 circles on average against a grid's 1.5
+     to 1.8, and over batching the heavy readers' points into `values_at`); building a field and drawing it costs less
+     than the smoothing did, the strength properties 582.7 µs a step against 846.8 over the recorded games. A flee kept
+     away from unpathable tiles, so as not to be cornered, next: a penalty falling with each tile's distance to the
+     nearest unpathable one, from the pathing grid's `distance_transform`, added to the threat the flee reads (the
+     owner, review of AvocaDOS #99 at aa238ab, over doing it in #99 and over a tile source in a `SourceField`, which
+     would need `add_rectangle` and a source per blocked tile, could not rule out the far side of a cliff, and whose
+     `argmin` breaks ties by address).
 
   Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
   holding the field's value at its center, for paths and grid arithmetic (the owner, review of AvocaDOS #99, over the
