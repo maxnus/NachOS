@@ -180,14 +180,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 ## Moving
 
 - **A unit ordered along a straight line moves at its row's speed once it is up to speed, a unit on the ground from the
-  first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for the 12
-  types a speed upgrade changes, with the upgrade and without: every step of a ground unit's run, and every window of
-  11, 22 or 44 steps, came within 0.0001 a second of the row's speed, an upgraded ultralisk's from its third step; a
-  flying unit's windows within 0.15% of it, though a single step of an overlord, an overseer or an observer fell up to
-  1.6% short. A banshee gained 0.0127 a step every step until it reached its speed, 14 steps without Hyperflight Rotors
-  and 19 with; an overlord took 10 steps, 28 with Pneumatized Carapace, and a transport overlord 14 and 32. Along 45
-  degrees every type read up to 0.6% slower, an overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299
-  for 4.1344 (tool `sweep_movement`, build 75689).
+  first step after the order and a flying one after 10 to 32.** Measured off creep along the x- and y-axes for the 13
+  types a speed upgrade changes, with the upgrade and without, a zealot's 3.15 and 4.725 with Charge among them (sc2 run
+  44296029839): every step of a ground unit's run, and every window of 11, 22 or 44 steps, came within 0.0001 a second
+  of the row's speed, an upgraded ultralisk's from its third step; a flying unit's windows within 0.15% of it, though a
+  single step of an overlord, an overseer or an observer fell up to 1.6% short. A banshee gained 0.0127 a step every
+  step until it reached its speed, 14 steps without Hyperflight Rotors and 19 with; an overlord took 10 steps, 28 with
+  Pneumatized Carapace, and a transport overlord 14 and 32. Along 45 degrees every type read up to 0.6% slower, an
+  overlord the most, 0.8971 a second for its 0.9023, and a zergling 4.1299 for 4.1344 (tool `sweep_movement`, build
+  75689).
 - **Creep makes most Zerg ground units 1.3 times as fast, to within 0.1%, a locust 1.4 times and a queen 2.66 times,
   and a drone, a broodling and a changeling no faster, but for what Muscular Augments and Anabolic Synthesis add**: a
   zergling 4.13 a second off it and 5.37 on it, 6.58 and 8.55 with Metabolic Boost; a baneling, a roach, a ravager, a
