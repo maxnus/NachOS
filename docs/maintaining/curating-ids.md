@@ -44,8 +44,9 @@ raw name suggests it is only a tint: `RavenShredderMissileTint` marks the target
 never warps a unit in, so it missed `WARP_GATE_WARPING_IN`, which a unit wears while warping in; the buff events'
 in-game test found it. It watches 128 steps after each order, and a bomb on a target that lives leaves its
 `PARASITIC_BOMB_LEFT_BEHIND` only after 175 steps, so it missed the two buffs that wears. Its oracle is never offered
-Stasis Ward, so it missed `STASIS_WARD_TRAPPED`, which each unit a ward traps wears. Playing AI Arena replays back
-found all three.
+Stasis Ward, so it missed `STASIS_WARD_TRAPPED`, which each unit a ward traps wears. It fills every energy bar, and a
+viper at full energy drops a Consume, so it missed `VIPER_CONSUMED`, which the structure a viper drains wears. Playing
+AI Arena replays back found all four.
 
 **A buff every unit of one type wears for as long as it is listed is left out, not curated**: it says nothing the type
 does not. It goes in `BuffId._SKIPPED_IDS`, which `IdEnum._read_each` passes over for a unit's buffs and the buff

@@ -786,6 +786,11 @@ class TestWhatAUnitReads:
         assert zergling.has_buff(BuffId.STASIS_WARD_TRAPPED)
         assert zergling.buff_duration_remaining == zergling.buff_duration_max == GameTime(steps=480)
 
+    def test_a_structure_a_viper_drains_wears_its_consume(self) -> None:
+        """The enemy's hive a viper drained, as the game listed it (in game)."""
+        drained = make_unit(1, RawUnitTypeId.Hive, alliance=_ENEMY, buff_ids=[RawBuffId.ViperConsumeStructure])
+        assert _one(drained).buffs == {BuffId.VIPER_CONSUMED}
+
     def test_an_uncurated_buff_raises_when_read(self) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
             _ = _one(make_unit(1, buff_ids=[RawBuffId.DutchMarauderSlow])).buffs

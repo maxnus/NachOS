@@ -51,6 +51,8 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
   `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
   (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.
+- **An enum's member is compared with `is`**, `circle.edge is Edge.SMOOTH`, never `==`, as everywhere in NachOS (the
+  owner, review of #253).
 - **`__all__`** only where it earns its place — package `__init__.py` files that curate a public surface.
 - **loguru**, not stdlib `logging`.
 - **Errors**: a failure of the library's own raises a subclass of `NachOSError`, which also subclasses the

@@ -7,6 +7,7 @@ from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import GameData
 from sc2nachos.gametime import GameTime
+from sc2nachos.geometry import Grid, Point
 from sc2nachos.match import Enemy, Race
 from sc2nachos.orders import OrderBook
 from sc2nachos.testing._shipped_game_data import load_game_data
@@ -35,7 +36,9 @@ class MadeUpUnits:
             game_data=game_data,
         )
         self._order_book = OrderBook(game_data)
-        self._tracker = _Tracker(game_data, enemy, order_book=self._order_book)
+        # Where creep covers the ground in the latest observation, if it said.
+        self._creep: Grid[bool] | None = None
+        self._tracker = _Tracker(game_data, enemy, order_book=self._order_book, on_creep=self._on_creep)
         self._step: int | None = None
 
     @property
@@ -55,10 +58,15 @@ class MadeUpUnits:
         return self._tracker.unit_tracker.present
 
     def observe(
-        self, *reports: UnitReport, step: int | None = None, dead: Iterable[UnitReport | int] = ()
+        self,
+        *reports: UnitReport,
+        step: int | None = None,
+        dead: Iterable[UnitReport | int] = (),
+        creep: Grid[bool] | None = None,
     ) -> list[Any]:
         """Take in an observation at `step` that lists the units of `reports` and reports `dead` dead, by their reports
         or tags, and return the units of `reports` in their order: this player's as `OwnUnit`, the others as `Unit`.
+        `creep` is where creep covers the ground in it, which `Unit.current_speed` reads; with none, no creep is known.
 
         `step` is by default the step after the latest observation's, and 0 for the first. A unit reported under a
         tag already seen is the same object as before, read anew; one seen before and not reported now is no longer
@@ -75,7 +83,12 @@ class MadeUpUnits:
         # Set first: an update that raises partway, as for a type the curated ids leave out, has taken in part of the
         # observation at this step, so the next one must come after it.
         self._step = step
+        self._creep = creep
         self._order_book._observe(GameTime(steps=step), ())
         self._tracker.update(observation, step)
         unit_tracker = self._tracker.unit_tracker
         return [unit_tracker.by_tag(report.tag) for report in reports]
+
+    def _on_creep(self, point: Point) -> bool:
+        """Whether the creep of the latest observation covers the ground at `point`: never, if it gave none."""
+        return self._creep is not None and self._creep[point]

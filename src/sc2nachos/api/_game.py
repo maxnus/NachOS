@@ -65,7 +65,7 @@ from sc2nachos.events._event_subscriptions import _EventSubscriptions
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamemap import Expansion, GameMap, StartLocation
 from sc2nachos.gametime import GameTime
-from sc2nachos.geometry import Area
+from sc2nachos.geometry import Area, Point
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Enemy, Player, Race, Result
 from sc2nachos.orders import OrderBook
@@ -144,13 +144,25 @@ class _Game:
             raise ValueError("the client has joined no game")
         enemy = Enemy._from_game(info, player_id, game_data=game_data, ladder_id=enemy_ladder_id)
         order_book = OrderBook(game_data)
+
+        def on_creep(point: Point) -> bool:
+            # A unit's speed reads the creep under it off the game's current state, which decodes it once an
+            # observation, if asked. The game is made below, before any unit's speed is asked.
+            return game.state.creep[point]
+
         fog_off_playback = None
         if client.fog_disabled:
-            fog_off_playback = _FogOffPlayback(game_data, enemy, order_book)
-            tracker = _Tracker(game_data, enemy, id_provider=fog_off_playback.id_of_unit, order_book=order_book)
+            fog_off_playback = _FogOffPlayback(game_data, enemy, order_book, on_creep=on_creep)
+            tracker = _Tracker(
+                game_data,
+                enemy,
+                id_provider=fog_off_playback.id_of_unit,
+                order_book=order_book,
+                on_creep=on_creep,
+            )
             observation = fog_off_playback.read(observation, step)
         else:
-            tracker = _Tracker(game_data, enemy, order_book=order_book)
+            tracker = _Tracker(game_data, enemy, order_book=order_book, on_creep=on_creep)
         game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present

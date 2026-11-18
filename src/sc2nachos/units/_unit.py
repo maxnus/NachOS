@@ -10,6 +10,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos._shared.errors import NotReportedError
 from sc2nachos.gamedata import Attribute, Cost, TargetDomain
 from sc2nachos.gamedata._missing_attacks import ATTACK_SPEED_BUFFS
+from sc2nachos.gamedata._movement_speeds import MOVEMENT_SPEED_BUFFS, MOVEMENT_SPEED_SHARE_BUFFS
 from sc2nachos.gamedata._repair_steps import REPAIR_COST_FRACTION, REPAIR_STEPS_EXCEPTIONS
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import STEPS_PER_SECOND, GameTime
@@ -54,6 +55,10 @@ _IDS_PER_ALLIANCE = 100_000
 _GROUND_TYPES_HIT_FROM_THE_AIR = frozenset({UnitTypeId.COLOSSUS})
 # How many times as often each buff has its wearer attack, by raw id, as a report lists its buffs.
 _ATTACK_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in ATTACK_SPEED_BUFFS.items()}
+# How many times as fast each buff has its wearer move, by raw id, as a report lists its buffs.
+_MOVEMENT_SPEED_BY_RAW_BUFF = {int(buff): multiplier for buff, multiplier in MOVEMENT_SPEED_BUFFS.items()}
+# The share of its type's speed before upgrades each buff sets its wearer's speed to, by raw id.
+_MOVEMENT_SPEED_SHARE_BY_RAW_BUFF = {int(buff): share for buff, share in MOVEMENT_SPEED_SHARE_BUFFS.items()}
 
 
 def _copy(report: raw_pb2.Unit) -> raw_pb2.Unit:
@@ -758,10 +763,41 @@ class Unit[K: UnitType.AnyType]:
         return self._tracker.upgrade_tracker.upgraded_type(self).weapons
 
     @property
-    def speed(self) -> float:
-        """The unit type's speed with its owner's upgrades applied, as for `weapons`, before creep or any buff. In
-        distance per second, like `velocity`."""
-        return self._tracker.upgrade_tracker.upgraded_type(self).speed
+    def current_speed(self) -> float:
+        """How fast the unit can move where it stands, as it stands now, in distance per second: `speed_with()`, which
+        counts its owner's upgrades, the creep under it and the buffs it wears. How fast it moves now is `velocity`."""
+        return self.speed_with()
+
+    def speed_with(self, *, upgrades: bool = True, buffs: bool = True, on_creep: bool | None = None) -> float:
+        """How fast the unit would move, in distance per second, like `velocity`, as measured in game
+        (`docs/reference/game-behavior/units.md`): its type's speed with its owner's upgrades applied, as for `weapons`,
+        or before any without `upgrades`; for a unit on the ground on creep, its type's `UnitTypeData.creep_speed`
+        instead, on creep where `on_creep` says so, or, with it `None`, where creep covers the ground the unit stands
+        on; and, with `buffs`, as the buffs it wears make it. A void ray in prismatic alignment and a zealot charging
+        move at the share of their type's speed before any upgrade that the buff sets, 0.75 and 3.3, and any unit at
+        its speed times what each other buff makes of it: stim 1.5, afterburners 1.7, a lunge 2, concussive shells 0.5,
+        an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25.
+
+        Two buffs at once were measured to multiply, but for the four a unit puts on itself, which were measured alone.
+        A unit not visible now stands where it was last seen and wears no buff, since a buff lasts seconds. Nothing else
+        counts: no acceleration zone, unmeasured, and no creep where the game gives none, as for a made-up unit observed
+        without it.
+        """
+        type_data = self._tracker.upgrade_tracker.upgraded_type(self) if upgrades else self.type_data
+        speed = type_data.speed
+        # Reading the creep only for a type it speeds up spares decoding it for any other.
+        if type_data.creep_speed != speed and not self.is_flying:
+            if on_creep is None:
+                on_creep = self._tracker.on_creep(self.position)
+            if on_creep:
+                speed = type_data.creep_speed
+        if buffs and self.is_visible:
+            buff_ids = self._latest_report.buff_ids
+            for buff in buff_ids:
+                if (share := _MOVEMENT_SPEED_SHARE_BY_RAW_BUFF.get(buff)) is not None:
+                    speed = self.type_data.speed * share
+            speed *= math.prod(_MOVEMENT_SPEED_BY_RAW_BUFF.get(buff, 1.0) for buff in buff_ids)
+        return speed
 
     @property
     def armor(self) -> float:

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.events import EventPriority, TurnStartEvent
@@ -14,7 +13,7 @@ from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
 from sc2nachos.units import Alliance
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Sequence
 
     from sc2nachos import Api
     from sc2nachos.gamedata import GameData
@@ -22,17 +21,6 @@ if TYPE_CHECKING:
 
 # Upgrade inference reads Charge off the buff a charging zealot wears, not off its speed.
 _READ_OFF_BUFFS: Final[frozenset[UpgradeId]] = frozenset({UpgradeId.CHARGE})
-# How fast each Zerg ground type a speed upgrade changes moves on creep, without the upgrade and with it, in distance
-# per second at the Faster speed: the rows hold no creep speed (in game).
-_CREEP_SPEEDS: Final[Mapping[UnitTypeId, tuple[float, float]]] = MappingProxyType(
-    {
-        UnitTypeId.BANELING: (4.55, 5.3703),
-        UnitTypeId.HYDRALISK: (4.0906, 4.8289),
-        UnitTypeId.ROACH: (4.0906, 5.4578),
-        UnitTypeId.ULTRALISK: (5.3703, 5.5344),
-        UnitTypeId.ZERGLING: (5.3703, 8.5477),
-    }
-)
 _NO_BUFFS: Final[frozenset[BuffId]] = frozenset()
 
 
@@ -215,18 +203,14 @@ class MovementWindows:
 
     @staticmethod
     def _speeds_by_type(data: GameData) -> dict[UnitTypeId, _SpeedsOfAType]:
-        """The speeds of each type `speed_upgrade_by_type` gives, a step at a time."""
+        """The speeds of each type `speed_upgrade_by_type` gives, a step at a time, off creep and on it."""
         speeds: dict[UnitTypeId, _SpeedsOfAType] = {}
         for unit_type, upgrade in speed_upgrade_by_type(data).items():
             row = data.units[unit_type]
-            off_creep = (row.speed / STEPS_PER_SECOND, row.with_upgrades({upgrade}).speed / STEPS_PER_SECOND)
-            creep_speeds = _CREEP_SPEEDS.get(unit_type)
-            on_creep = (
-                off_creep
-                if creep_speeds is None
-                else (creep_speeds[0] / STEPS_PER_SECOND, creep_speeds[1] / STEPS_PER_SECOND)
-            )
-            speeds[unit_type] = _SpeedsOfAType(upgrade, off_creep, on_creep, creep_speeds is not None)
+            upgraded = row.with_upgrades({upgrade})
+            off_creep = (row.speed / STEPS_PER_SECOND, upgraded.speed / STEPS_PER_SECOND)
+            on_creep = (row.creep_speed / STEPS_PER_SECOND, upgraded.creep_speed / STEPS_PER_SECOND)
+            speeds[unit_type] = _SpeedsOfAType(upgrade, off_creep, on_creep, row.creep_speed != row.speed)
         return speeds
 
     def _measure(self, *_: object) -> None:

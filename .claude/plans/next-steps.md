@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-08:
+As of 2026-11-18:
 
 - **The build planner is the work in progress**: `sc2nachos.extensions.planner`, a solver of build orders any bot hands
   its reward. [planner-plan.md](planner-plan.md) holds its decisions, the measurements behind them, its design and its
@@ -34,14 +34,34 @@ As of 2026-11-08:
 - **0.4.0 is out** (2026-11-05, from 9f56f9a), with #236 and #237: orders given apart go out as one command where one
   order could have named their units. Its notes say a bot changes nothing in its code, only what `api.action_failures`
   lists. AvocaDOS took it in AvocaDOS #95.
-- **Since 0.4.0**, on main: #240 to #248. The next release, 0.5.0 since #241, #242 and #247 remove and
-  rename what a bot uses, says in its notes what a bot has to change: `issue` takes no `data` (#241), a bot keeping its
-  own data per unit in a `UnitDict`; the order a bot gave is an `IssuedOrder`, in `sc2nachos.orders`, where it was an
-  `Order`, and what a unit reports doing an `Order`, in `sc2nachos.units`, where it was a `UnitOrder` (#242); and
-  `InProduction` and `Research` are a `Progress`, whose `product` and `fraction` were their `type_id` or `upgrade` and
-  their `progress` (#247). It adds `unit.issue` (#240), `Unit.morph_progress` (#243), `train`, `build` and `research`
-  (#245), and `UnitTypeData.equivalent_types` (#248). AvocaDOS #97, a draft, takes it: its production trains a unit,
-  builds an add-on and morphs an orbital command, and it bumps its pin once 0.5.0 is out.
+- **0.5.0 is out** (2026-11-14, from 606626a), with #238 and #240 to #249. Its notes say what a bot has to change:
+  `issue` takes no `data` (#241); the order a bot gave is an `IssuedOrder`, and what a unit reports doing an `Order`
+  (#242); `InProduction` and `Research` are a `Progress`, read through `product` and `fraction` (#247), a structure's
+  morph reading how far it has got where it read `None`; and a grid's `argmin()` and `argmax()` answer a `Point`, the
+  `Tile` being `argmin_tile()` and `argmax_tile()` (#238). Its 48 in-game tests passed on 606626a (sc2 run
+  43625063574), and AvocaDOS's tests failed only on the renamed `InProduction` reads. AvocaDOS #97 takes it: its
+  production trains a unit, builds an add-on and morphs an orbital command, and its `units_in_production` leaves out
+  what makes a structure, which it had left out by a progress of `None`.
+- **0.5.1 is out** (2026-11-15, from 01113bf), with #250 to #252: `UnitType.NonStructure` (#251), and a
+  `SourceField`'s `max` and `min` read quicker (#252). AvocaDOS #99 takes it: its `units_in_production` asks
+  `api.in_production(UnitType.NonStructure)`, and its effect threat is a `SourceField` (Fields, step 3).
+- **0.6.0 is out** (2026-11-15, from cfa5be5), with #253. Its notes say that a bot's `falloff=w` is
+  `edge=Edge.LINEAR, edge_width=w` now, the default edge `Edge.SHARP` taking no width, and that it adds `Edge.SMOOTH`.
+  Its 48 in-game tests passed on cfa5be5 (sc2 run 43749840344), and AvocaDOS's tests on it, unchanged. AvocaDOS #99
+  takes it.
+- **0.7.0 is out** (2026-11-17, from 5a8fb0e), with #254. Its notes say that a bot's
+  `add_circle(Circle(center, radius), value, ...)` is `add_circle(center, radius, value, ...)` now; that a linear or
+  smooth edge is centered on the circle's edge, so 0.6.0's `add_circle(Circle(center, r), value, edge=e, edge_width=w)`
+  reads as `add_circle(center, r - w / 2, value, edge=e, edge_width=w)` does now; and that a field has no truth value,
+  as a grid has none. Its 48 in-game tests passed on 5a8fb0e (sc2 run 44089362974), and AvocaDOS's tests failed only on
+  its two `add_circle` calls. AvocaDOS #99 takes it.
+- **0.8.0 is out** (2026-11-18, from 1b571a3), with #255 and #256: a field's `spacing` moves from the field to its
+  reads over an area, which read at points 0.1 apart by default, and a unit's `speed` is gone, `speed_with(buffs=False,
+  on_creep=False)` now, beside the new `current_speed`, which counts creep and buffs where the unit stands. AvocaDOS #99
+  takes it.
+- **Since 0.8.0**, on main: the buff a viper's Consume puts on the structure it drains, `VIPER_CONSUMED`. It had ended
+  AvocaDOS's AI Arena match 5118204 (AvocaDOS #98): upgrade inference read an enemy unit's buffs, and `Unit.buffs`
+  raised `UncuratedIdError`. Proposed: 0.8.1, a fix alone, which a bot takes with no change.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -121,6 +141,11 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   the actions' `units` hold one.
 - **NachOS names only the categories the game draws**: no `army` and no `mobile` (#157). What counts as army is the
   bot's call, through the type groups, `of_type` and `excluding_type`.
+- **`UnitType.NonStructure` is every type `Structure` leaves out** (the owner, review of AvocaDOS #97, 2026-11-14,
+  #251), so that a bot asks `api.in_production(UnitType.NonStructure)`, over a set of those ids in AvocaDOS and over
+  its filter by `Structure`. The first group of the types another leaves out: read from the tables' structure
+  attribute, so every type is in one of the two, and a group of non-structures alone, `Worker` or `BarracksUnit`, is in
+  it. Singular, as `Structure` is. `Units.non_structures` reads it.
 - **A unit type names what makes it, not what the tables alias it to** (#75): no `UnitTypeData.base_type`, the
   game's `unit_alias`, which aliases an adept's shade to the adept. `morphed_from` gives a form's source, and
   `equivalent_types` the group of the types a unit converts between and back.
@@ -203,6 +228,18 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   -1 for a tile never in sight, and one read, `time_unseen`, a length of time over a tile or an area,
   `GameTime.INFINITE` for one never in sight, over `None`. Not an extension, no aliases for the old grids, and
   `api.creep` stays out.
+- **A value at every map position is a `Field`** (#18, the owner, 2026-11-06): a protocol that `Grid`, one value per
+  tile, and `SourceField`, circles, both satisfy, over a cell size on `Grid` (#18's own proposal) and over a second grid
+  class, either of which would make `Grid` do too many things. A protocol, not a base class: the two
+  share no code. Named over `Layer`, `Surface` and `ScalarField`, though "field" also names a mineral field;
+  `SourceField`, each shape a source, the sources adding up, over `ShapeField`, `AreaField`, `KernelField` and others
+  (the owner: snappy but accurate).
+- **A rectangle holds its lower edges and not its upper ones, as a tile does** (the owner, 2026-11-14, over closed
+  rectangles): the convention of graphics libraries, whose rectangles sit on a grid of pixels, so that rectangles on
+  whole tiles tile, agree with their tiles, and hold a point exactly where a grid's `bounds` covers it. What an area
+  hands out agrees with `in` (#249): `closest_point_to` and `random_point` answer a point the area holds, the least a
+  float can move inside an upper edge, and a circle's stepped toward its center, where rounding had left about half
+  its edge points just outside.
 
 ### Running, recordings and replays
 
@@ -322,6 +359,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   found, and copies each fog-off observation whole (#163).
 - **`playback` names a `ReplayPlayback`, and `game` a `GameProcess`** (the owner, #176, 2026-11-04), over
   `replay_playback` and `game_process`, which the rule that a name follows its class would give.
+- **A circle's nearest and drawn points step toward its center until `in` holds them** (the owner, review of #249),
+  over shrinking the distance by a margin, 0.13 µs a call cheaper but sufficient only as far as measured.
 
 ## Next
 
@@ -329,11 +368,197 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
   the owner to settle: the 3-second exit, the count-form cut, and workers per base, which the owner wants to come back
   to.
+- **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
+  1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
+     `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
+     owner: a value at a point, or the max or min within an area, and gradients; `value_at` over `__getitem__`, and
+     `argmin` and `argmax` in #238 over later, review of #238). `grid[point]` stays beside `grid.value_at(point)`. A
+     grid's max and min within an area read every tile the area overlaps, a tile it only touches at an edge or a corner
+     left out, so a tile's own rectangle reads that tile alone; a tile beyond the grid reads `outside`, and raises
+     `IndexError` without one (the owner, over clipping to the grid, as `grid[area]` does); an empty area raises
+     `ValueError`. A grid's `argmin` and `argmax` answer a `Point`, the center of the extreme tile, the lowest address
+     on a tie, which `within` may not hold (the owner, second review of #238, over a point of the area inside the tile,
+     which each shape picked by its own rule, and over the middle of the part the area covers), and `argmin_tile` and
+     `argmax_tile` answer the `Tile`, with or without an area (the owner, over `Tile` from `argmin` without an area,
+     and over the field naming its own reads). This breaks `grid.argmin()`, a `Tile` until now, for the release notes.
+     Its gradient is the central difference across the tile's neighbors, per map unit, a `tuple[float, float]` (the
+     owner, over `Point`, which is a position, and over `tuple[T, T]`, since an integer grid's slope can be 1.5); a
+     neighbor beyond the grid reads `outside`, the difference one-sided where there is none (the owner, over raising);
+     a grid of booleans raises `TypeError` (the owner, over reading 0 and 1), at run time only: a self type ruling
+     booleans out would make a boolean grid no `Field` at all, or need a second protocol for the gradient (the owner,
+     review of #238, over both and over a deprecated overload).
+  2. Done in #249: `SourceField`, circles alone (the owner, review of #249, reversing circles and rectangles: no bot
+     needs a rectangle yet), each with a value, summed where they overlap (the owner, over the largest), and 0 beyond
+     every circle, of floats alone (the owner, review of #249, over booleans or-ed, which a bot writes as circles of
+     1.0: whether `max` reads above 0 is as exact, and a read over a unit's circle some 6% slower). A bot builds one by
+     `add_circle(center, radius, value, *, edge=Edge.SHARP, edge_width=0.0)`, so it is mutable (the owner, over one
+     built whole and frozen from a list of sources; since #254 it can also start from a list, below), and named for its
+     shape so that `add_rectangle` can follow (the owner, review of #249, over `add`). It took a `Circle` until #254
+     (the owner, review of AvocaDOS #99: the call spelled the circle twice, and the field never kept it; over `value`
+     keyword-only, though a radius and a value side by side can be swapped). Since #254, the field holds and hands out
+     `CircleSource`s, a public frozen dataclass of a `Circle`, a value, an edge and its width, checked as it is made,
+     `dataclasses.replace` included, and holding private copies of what the reads compare, the center's x and y, the
+     radius and the squares, worked out as it is made (the owner, review of #254, over two records, a public one built
+     on demand and a private one the reads looped over, and over a center and a radius in place of the `Circle`): a
+     circle added 1.68 µs against 1.16, iterating over 10 0.19 µs against 6.91, the reads unchanged. `len(field)` counts
+     its circles and `bool(field)` raises `TypeError`, as a grid's does, since whether a field holds a circle and
+     whether it reads anything differ for circles of 0 or ones that cancel (the owner, 2026-11-16, over truthy when it
+     holds one, as `Units` is, and over a `circle_count`); iterating hands out its `CircleSource`s in the order added
+     (the owner, over tuples and over waiting for a caller); and `clear()` removes every circle, as `UnitDict.clear`
+     does (the owner, though building a new field takes 0.10 µs). Also since #254, the owner's further asks
+     (2026-11-16): `SourceField(sources)` holds `CircleSource`s, with no spacing since #255, so `SourceField(other)`
+     holds another field's circles, reversing #249's field built by `add_circle` alone (over `sources=` keyword-only);
+     `copy()`, a new field of the same circles, which a circle added to either leaves out of the other; `a + b`,
+     `a - b`, `-a`, `k * a`, `a * k` and `a / k` each make a new field, a sum holding both fields' circles, a number
+     scaling each circle's value, with no in-place `+=`, so a field one reader holds never changes under it (over
+     `combined_with` and `scaled`, as `Units` has); `transformed(transformation)` remakes each circle, a `CircleSource`
+     from a `CircleSource`, its value, circle or edge (the owner, review of #254, over `with_values`, `with_radii` and
+     `with_edges`, and over values alone); and `sources_reaching(area)` lists the circles the reads over an area take,
+     in the order added (over a field of them). No helper adds a disc blurred by a Gaussian (the owner: a caller gets as
+     much from a smooth circle's parameters, and nothing makes the blur a better choice a priori).
+     A circle holds its value out to half its `edge_width` inside its edge, falling to 0 as far beyond, so a constant
+     circle, a cone and a threat fading near its range are one code path (the owner, over two kinds of circle). The edge
+     lay inside the circle until #254, so the circle was all the ground the field reaches and an edge as wide as the
+     radius made a cone, and is named for its width, `falloff` until #253 (the owner, review of #249, over
+     `full_within`, `inner_radius` and a ramp beyond the circle, which reaches past the shape given and has no cone).
+     Since #254 it is centered on the circle's edge, half the value on it, so the field reaches half the width beyond
+     the circle (the owner, 2026-11-16, reversing #249, and over an edge beyond the circle, full throughout it): the
+     radius stays the circle's size whatever the width, as antialiasing and signed-distance shapes soften one; no width
+     is too wide, one wider than the circle leaving no point with the whole value and lowering its peak, as blurring a
+     small disc does; and an edge as wide as the circle makes a cone reaching twice its radius. Since #253 an
+     `Edge` says how it falls, set on each circle (the owner, 2026-11-15, over once for the field and over a field's
+     default each circle may override): `SHARP`, at once, the default, taking no width, or across the width `LINEAR`,
+     evenly, or `SMOOTH`, by the smoothstep `t²(3 − 2t)`, its slope easing to 0 at both ends, each needing a width above
+     0, so that no read divides by 0 (the owner, review of #253, over a width of 0 making any edge sharp and over
+     `edge=None`), and no other sloping kind (the owner, over smootherstep too, and over a disc blurred by a flat disc,
+     the one whose peak drops for a small disc as a Gaussian blur's does, at some 6 times the cost), named `edge` and
+     `edge_width` (the owner, over `falloff` and `falloff_width`, and over `decay` and `falloff`). Against AvocaDOS's
+     threat grid, a disc blurred by a Gaussian of σ 1, each edge at its best width comes within 0.06 to 0.14 for a
+     radius of 2 and up, and neither keeps a small disc's lower peak; a smooth edge costs 10 to 20% more in a read over
+     an area, and nothing more at a point (2026-11-15). Its gradient is exact. Its max and min within an area are read
+     at points at most `spacing` apart over the area, a keyword of each read over an area, 0.1 by default (the owner,
+     2026-11-17, #255, reversing #238's spacing set on the field, 0.25 by default: how finely to read is the read's to
+     choose, two readers of one field may want different, and a sum of fields had to pick one; review of #249, over
+     `resolution`, which reads both ways, and of #255, over `sampling`, which names the method and not the distance;
+     its default one private constant, `_DEFAULT_SPACING`, the owner), and at the area's point nearest each touching
+     circle's center: where every circle's value is positive, exact in whether `max` reads above 0 and in the largest
+     value of one circle alone, and up to the spacing off for the rest, min included (the owner, building it, kept the
+     rule and had the plan's "exact for booleans and for one shape" corrected). Every point read is one the area holds,
+     as `in` has it (below), so a circle touching only an edge the area leaves out reads nothing, as a grid leaves out a
+     tile touched only at an edge; ties go to the lowest x, then y, as a grid's go to the lowest address. Measured
+     2026-11-14: a read over a unit's circle costs some 30 to 55 µs where circles reach it, against a grid's 4 to 8, and
+     1.5 to 3 where none does. Since #252, `max` and `min` read 0 at once from a field of no circle, and where one
+     circle reaches the area alone, read the area's point nearest its center alone when that holds the answer, as for
+     the largest value of a positive circle: an empty field's read over a unit's circle 0.40 µs, from 1.28.
+  3. AvocaDOS takes its effect threat, biles, storms and reapers' grenades, as a `SourceField`, each unit reading the
+     max within its own circle, and reads its melee grid apart, `melee_effect_threat` gone; it flees to the tile of
+     least melee threat plus the field's value at its center. Prototyped on its branch `ccr-614226b3-szxe0s`, to take
+     0.5.1. Over its seven recorded games, played through the bot, the step avoiding effects took 290 µs a step with
+     #252's return from an empty field and the melee grid read first, against main's 304 in runs interleaved with it,
+     where it took 313 against 286 with neither. A storm on 20 marines takes 78 µs to build and read, a grid of the
+     map's tiles 29, and several effects overlapping a clump some 0.5 ms more than the grid, since a marine two circles
+     reach reads the spaced points: the owner accepted it (2026-11-14), over reading each unit's center alone, which
+     misses a unit whose body alone is in an effect, and over a read in NachOS of whether any circle reaches an area.
+     The field finds 16 marines in that storm, the grid 13, and a bile on a tile's corner, which covers no tile's
+     center. Its splash zone waits: `squad_splash_spacing` is 0, so only the debug overlay reads it. #99, open, takes
+     0.7.0, and with it the owner's review of its first version: its smoothed strength grids, melee threat, threat and
+     support, become fields of smooth circles, what #253's edges were for (the owner, 2026-11-16, over keeping them
+     grids). A disc of radius R blurred by a Gaussian of σ 1 comes within 0.06 of a smooth circle reaching R + 2, its
+     edge the lesser of 4.2 and R + 2 wide, centered on a radius of R + 2 less half that width, about R from R 2.2 up,
+     and the value times the blurred disc's peak, 1 − exp(−R²/2), for R from 0.5 to 15, and within 0.017 to 0.025
+     fitting each R alone (2026-11-16, worked out in #253's terms, an edge inside a circle of radius R + 2). The field
+     reaches R + 2, where the smoothed grid reads above 0 out to R + 4, its filter's truncation: 373 tiles for 10
+     zerglings, against 31 in their circles.
+     That fit is a starting point, not a target: the owner, since the smoothed grids' values were never evaluated as
+     best either, so the circles' radius, width and value are AvocaDOS's parameters to tune. The melee threat first, in
+     #99, a field read as a field, a unit's check at its position and a flee at its tiles' centers, with no grid drawn
+     from it (the owner, 2026-11-17, over drawing it onto the map's grid every 4 steps: its field holds 0 to 3 circles
+     on average in the recorded games, so a point read off it costs less than a grid lookup); its reach R + 2 at first
+     (the owner, over R + 4, as far as the blur read above 0, and over a threshold), then, in the owner's review of
+     a3463ca, a unit's strength out to its attack range and radius, falling smoothly to 0 as far beyond as it moves in
+     0.5 s at its speed where it stands (the owner, over 0.25 and 1 s, and over a width as a share of the reach), which
+     AvocaDOS works out until NachOS has it (Next); a flee's ties between tiles of equal threat broken down the field's
+     slope at the unit (the owner, over the lowest address, farthest, nearest, toward the squad, its support or the main
+     base, as measured in #99), and its two threats read as one field (the owner, over that field's `argmin`, which
+     breaks ties by address and knows no pathing). Threat and support in a pull request of their own, after #99, since
+     paths and grid arithmetic read them, and points in some 20 places.
+
+  Done in #254: `SourceField.to_grid(rectangle)`, the grid over the tiles `Grid.cropped` takes of the rectangle, each
+  holding the field's value at its center, for paths and grid arithmetic (the owner, review of AvocaDOS #99, over the
+  largest value within each tile, which spaced reads would cost some 30 to 50 µs a tile, and over `to_grid(like=grid)`).
+  It came ahead of the public tile rules it was to be planned with (second review of #238), since it returns no
+  `TileSet`. Each circle adds its values over the tiles its bounding box overlaps, 17 to 33 µs a circle over a map of
+  200 by 176 tiles, 80 circles in 1.4 to 1.5 ms, where smoothing that grid alone takes 0.56 ms; over a 4 by 4 area,
+  18 µs with one circle near and 0.7 ms with 40, where a prototype working every tile against every circle at once took
+  52 to 74 µs but 26 ms over the map with 40 (2026-11-16): not built, since AvocaDOS reads many circles over a small
+  area off a grid drawn once.
+
+  Later, when a bot needs one: rectangles in a `SourceField`, by `add_rectangle` (the owner, review of #249). And public
+  tile rules returning `TileSet`s: every tile whose center an area holds, as `tiles()` gives, every tile it overlaps,
+  and every tile it holds whole once a use shows; `TileMask` stays private (the owner, second review of #238, over the
+  rules now, a public `TileMask` and conversions, and leaving all private).
+
+  Done in #254: `values_at(points)` on the `Field` protocol, a sequence of points or an (n, 2) array in, a numpy array
+  out, on `SourceField` and `Grid` alike (the owner, 2026-11-16, over `SourceField` alone and over a list of floats). A
+  field's is a numpy pass a circle, `_values_at`, as its reads over an area take, and agrees with `value_at` to the last
+  bit. Measured 2026-11-16, best of 9: 16 points and 40 circles 348 µs against 55 looping `value_at`; 100 and 10, 89 to
+  161 against 101 to 109; 1,000 and 10, 166 against 1,420; 10,000 and 40, 2.7 ms against 34. A pass working every
+  point against every circle at once, its columns summed circle by circle so that it agreed to the last bit, took 94,
+  49, 280 and 23,417 µs: quicker for a few points and many circles, as a read over a unit's circle has, slower from
+  some hundreds of points, so not built. A grid's from an array 16 µs for 100 points, from a list of points 44, against
+  54 looping `value_at`.
+
+  Also later, only if a bot reads scattered tile sets often (the owner, review of #238): a grid reading a `TileSet` by
+  its addresses rather than its cached mask. It pays only where the set fills little of its bounding box and that box
+  lies on the grid, so it needs a second read path, chosen by fill, and addresses sorted by x, then y. Measured
+  2026-11-06 on a 160 x 140 grid, mask against addresses: 16 scattered tiles 7.2 against 2.8 µs, 200 scattered 10.6
+  against 5.2, two clumps far apart 7.1 against 2.9; but 134 compact tiles 3.5 against 3.6, 1,000 compact 5.5
+  against 7.9, a block of 5,000 7.5 against 26.7. Checking each tile against the grid's bounds, which a set reaching
+  past it needs, takes the gain away.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
 - #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
   an orbital's morph, which let its base's workers go, is fixed there.
+- **A unit's speed where it stands** (the owner, 2026-11-18, after AvocaDOS #99 worked out its melee units' speed
+  itself): `Unit.speed` counts the creep under the unit and the buffs it wears, and `Unit.base_speed` is what `speed` is
+  now, its type's with its owner's upgrades, for planning a path, which creep changes tile by tile (the owner, over
+  `speed` kept and a new `current_speed`, and over one `speed`). The owner's reviews of #256 reversed the names (step
+  3): `Unit.current_speed` counts them, and `speed_with(buffs=False, on_creep=False)` is the old `speed`, which is gone,
+  so that a bot reading it fails rather than reading creep and buffs unawares. It covers creep for every Zerg ground
+  type, and stim, concussive shells, time warp, a fungal and the inhibitor zone (the owner, over creep first and over
+  only what is measured): the rows hold none of them, and only five types' speeds on creep (above) and time warp's 0.6
+  are measured. A step at a time:
+  1. Done: `tools/sweep_movement.py` measured each in game (sc2 runs 44272083769, 44273048633 and
+     44278966397), and `docs/reference/game-behavior/units.md` holds it, under Moving. Creep makes most Zerg ground
+     units 1.3 times as fast, a locust 1.4 and a queen 2.66, a drone, a broodling and a changeling no faster, and
+     Muscular Augments and Anabolic Synthesis add less on it, so a type's speed on creep is a measured table, not a
+     factor. Stim makes a marine and a marauder 1.5 times as fast; concussive shells, but on a massive unit, make one
+     0.5; an inhibitor zone 0.65, a time warp 0.6 and a fungal 0.25, which roots nothing, each flying or not. In #256,
+     after the owner asked why a medivac's afterburners went unmeasured, the buffs a unit puts on itself: afterburners
+     1.7 and a hydralisk's lunge 2, factors, and a void ray's prismatic alignment and a zealot's charge, which set the
+     speed to a share of the type's before upgrades, 0.75 and 3.3 (the owner pointed to Liquipedia's 5.95 and 25%,
+     which agree). Not measured: an acceleration zone and a flying inhibitor zone, which the game does not make, and
+     these four with anything else.
+  2. Decided with the owner (2026-11-18): a unit out of sight reads its speed with the creep where it was last seen,
+     and no buffs, which last seconds (over its last buffs and over raising); a type's speed on creep is public,
+     `UnitTypeData.creep_speed`, which `with_upgrades` updates as it does `speed`, and on `Unit`, with the owner's
+     upgrades, which upgrade inference reads where it holds a private table (over `UnitTypeData` alone and over
+     private); and two modifiers at once are measured before `speed` counts them (over multiplying them unmeasured and
+     over the strongest slow alone): stim with concussive shells or an inhibitor zone, concussive shells with a zone,
+     creep with each slow, and a fungal with a time warp. Measured (sc2 runs 44280840577 and 44280846865): every pair
+     multiplies, to within the rounding of a step's distance, so `speed` is the speed on creep or off times each buff's
+     factor.
+  3. Built: `UnitTypeData.creep_speed`, from the table measured in step 1, which `with_upgrades` updates;
+     `Unit.current_speed`, which multiplies the speed on creep or off by each buff's factor, in sight, and reads the
+     creep of the turn off the game's state, which decodes it once an observation and only for a type creep speeds up,
+     through a point test the tracker is made with (the owner's review of #256, over a setter and a grid that may be
+     `None`), and `Unit.speed_with(*, upgrades=True, buffs=True, on_creep=None)`, which leaves any of them out or
+     assumes creep or none (the owner's review of #256, over `base_speed` and `base_creep_speed` beside `speed`, over an
+     upgraded type on `Unit`, and over one method with no property; the owner's second review named the property
+     `current_speed`, over keeping `speed`, and the creep test `on_creep`); `MadeUpUnits.observe(creep=...)` for a bot's
+     tests; and upgrade inference reading `creep_speed`, its private table gone. Proposed for 0.8.0 with #255, so that a
+     bot changes once. AvocaDOS then reads `unit.current_speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:
   1. Done in #212: `tools/sweep_movement.py` measured each type's speed with and without its upgrade,
      the Zerg ground types on and off creep, and a sentry's hallucinations, in `docs/reference/game-behavior/units.md`
@@ -436,8 +661,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   an `OwnActionEvent` handler, which raised `UnknownTagError` before, then drop this item.
 - **Ids AI Arena's replays report that the curated ids leave out**, found playing back matches 4805282 and 4846375
   raw while curating the parasitic bomb's dummy, and 40 more of the season with the fog off, 4 steps a turn
-  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: buff 59,
-  `ViperConsumeStructure`, worn by the hive a viper consumed, from step 14,132 and 15,245; ability 1662,
+  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: ability 1662,
   `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by itself, which `OwnUnit.orders` raises on
   for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42 (17 of the 42), each worn by every collapsible
   tower of one kind, in the fog, in the first observation of a playback with the fog off, and never again, nor ever

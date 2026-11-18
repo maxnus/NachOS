@@ -18,9 +18,9 @@ _TOWNHALL = 7
 
 
 def _playback() -> _FogOffPlayback:
-    """A playback with the fog off, from its first observation."""
+    """A playback with the fog off, from its first observation, with no creep anywhere."""
     tables = make_tables()
-    return _FogOffPlayback(tables, make_enemy(tables), OrderBook(tables))
+    return _FogOffPlayback(tables, make_enemy(tables), OrderBook(tables), on_creep=lambda _point: False)
 
 
 def _observed(

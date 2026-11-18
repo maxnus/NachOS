@@ -57,6 +57,7 @@ class BuffId(IdEnum):
     SENTRY_GUARDIAN_SHIELD = RawBuffId.GuardianShield
     STASIS_WARD_TRAPPED = RawBuffId.OracleStasisTrapTarget  # on each unit the ward traps, never on the ward (in game)
     VIPER_BLINDING_CLOUD = RawBuffId.BlindingCloud
+    VIPER_CONSUMED = RawBuffId.ViperConsumeStructure  # on the structure it drains, never on the viper (in game)
     VIPER_PARASITIC_BOMB = RawBuffId.ParasiticBomb  # on its target
     VOID_RAY_PRISMATIC_ALIGNMENT = RawBuffId.VoidRaySwarmDamageBoost
     WARP_GATE_WARPING_IN = RawBuffId.PowerUserWarpable  # on a unit warping in, until the step after it finishes
