@@ -202,9 +202,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - **Stim makes a marine and a marauder 1.5 times as fast**: 4.725 a second for 3.15, wearing `MARINE_STIMMED` and
   `MARAUDER_STIMMED` (tool `sweep_movement`, build 75689).
 - **Concussive shells halve the speed of a unit they hit, but a massive one**: wearing
-  `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, a zergling 2.07 a second
-  for 4.13, and a marine, a zealot and a roach 1.57 for 3.15, chased by a marauder ordered to attack it, the median of
-  the steps it began and ended slowed; an ultralisk was hit and never wore it (tool `sweep_movement`, build 75689).
+  `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, a zergling 2.07 a second for 4.13, and a marine, a zealot and a roach 1.57 for
+  3.15, chased by a marauder ordered to attack it, the median of the steps it began and ended slowed; an ultralisk was
+  hit and never wore it (tool `sweep_movement`, build 75689).
 - **An inhibitor zone slows a unit in it to 0.65 of its speed, flying or not, whatever the zone's size**: wearing
   `INHIBITOR_ZONE`, a marine 2.045 a second for 3.15, a zergling 2.685 for 4.134 and a medivac 2.270 for 3.5, the same
   in a small, a medium and a large zone, made neutral by debug command; the game makes no flying zone, nor an
