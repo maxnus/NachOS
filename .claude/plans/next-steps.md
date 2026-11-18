@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-14:
+As of 2026-11-18:
 
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
@@ -51,13 +51,13 @@ As of 2026-11-14:
   reads as `add_circle(center, r - w / 2, value, edge=e, edge_width=w)` does now; and that a field has no truth value,
   as a grid has none. Its 48 in-game tests passed on 5a8fb0e (sc2 run 44089362974), and AvocaDOS's tests failed only on
   its two `add_circle` calls. AvocaDOS #99 takes it.
-- **Since 0.7.0**, on main: #255. The next release, 0.8.0 since #255 moves a field's `spacing` from the field to its
-  reads, says in its notes that a bot's `SourceField(..., spacing=s)` is `SourceField(...)` now, its `max(within=area)`
-  and the other reads over an area taking `spacing=s` instead, and that they read at points 0.1 apart by default, where
-  they read 0.25 apart. Proposed: it waits for a unit's speed (Next), which breaks `speed` too, so that its notes also
-  say that a bot's `unit.speed`, its type's with its owner's upgrades, is gone, `unit.speed_with(buffs=False,
-  on_creep=False)` now, and that the new `unit.current_speed` counts creep and buffs where the unit stands; and that
-  it adds `unit.speed_with(...)`, `UnitTypeData.creep_speed` and `MadeUpUnits.observe(creep=...)`.
+- **0.8.0 is out** (2026-11-18, from 1b571a3), with #255 and #256: a field's `spacing` moves from the field to its
+  reads over an area, which read at points 0.1 apart by default, and a unit's `speed` is gone, `speed_with(buffs=False,
+  on_creep=False)` now, beside the new `current_speed`, which counts creep and buffs where the unit stands. AvocaDOS #99
+  takes it.
+- **Since 0.8.0**, on main: the buff a viper's Consume puts on the structure it drains, `VIPER_CONSUMED`. It had ended
+  AvocaDOS's AI Arena match 5118204 (AvocaDOS #98): upgrade inference read an enemy unit's buffs, and `Unit.buffs`
+  raised `UncuratedIdError`. Proposed: 0.8.1, a fix alone, which a bot takes with no change.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -654,8 +654,7 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   an `OwnActionEvent` handler, which raised `UnknownTagError` before, then drop this item.
 - **Ids AI Arena's replays report that the curated ids leave out**, found playing back matches 4805282 and 4846375
   raw while curating the parasitic bomb's dummy, and 40 more of the season with the fog off, 4 steps a turn
-  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: buff 59,
-  `ViperConsumeStructure`, worn by the hive a viper consumed, from step 14,132 and 15,245; ability 1662,
+  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: ability 1662,
   `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by itself, which `OwnUnit.orders` raises on
   for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42 (17 of the 42), each worn by every collapsible
   tower of one kind, in the fog, in the first observation of a playback with the fog off, and never again, nor ever

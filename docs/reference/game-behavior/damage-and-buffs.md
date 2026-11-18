@@ -180,7 +180,7 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
 
 - The buff sweep saw a melee game put 45 buffs on units, 5 of them for carrying resources: minerals under one buff for
   every race and another for rich minerals, gas under a buff per race's worker. Map zones put buffs on units too (tool
-  `sweep_buffs`, #24). It missed a parasitic bomb's two and a stasis ward's (below).
+  `sweep_buffs`, #24). It missed a parasitic bomb's two, a stasis ward's and a viper's Consume's (below).
 - Workers gain and lose a buff on every mineral trip, picking up and delivering: all but 13 of the corpus's 16,760
   buff changes are those (corpus, #37).
 - A worker carries gas from a rich geyser under no buff at all. On PylonAIE a worker of each race, mining its race's
@@ -217,6 +217,15 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
   2,871 steps left to its own player of a timed life of 3,808, 170 seconds from when it finished. Nothing else wore
   the buff. Tool `sweep_buffs` never saw it, since its oracle is never offered Stasis Ward (below). Played back every
   step as each player, with the fog off (2026-11-04, with a probe, build 75689).
+- A viper's Consume puts `ViperConsumeStructure` on the structure it drains, and no buff on the viper. A viper with 50
+  energy, ordered to consume its own player's hatchery, held the order for 328 to 360 steps. The hatchery wore the buff
+  from within 8 steps of the order until 328 to 336 steps after it, reading 0 steps of 0 left, and lost 145 health,
+  while the viper gained 62 energy, its own regeneration included. A viper at full energy, 200, was answered `Success`
+  and dropped the order within 8 steps, draining nothing and putting no buff on anything, so tool `sweep_buffs`, which
+  fills every energy bar, never saw it. Ordered to consume again about 420 and 840 steps after a Consume, drained or dropped,
+  a viper was refused with the generic `Error`, and about 2,260 steps after, accepted (in game, scratch checks on
+  PylonAIE, 2026-11-18, build 75689). A hive a viper drained wore it in AI Arena replays played back with the fog off
+  (2026-11-04), and an enemy unit wore it to AvocaDOS in AI Arena match 5118204 (its log, 2026-11-12).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what
