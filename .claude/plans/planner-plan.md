@@ -43,8 +43,8 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    node instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00. Depots kept
    whole for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1 first kept
    townhalls, production and tech structures whole over the whole horizon and the rest for 90 seconds, which left the
-   reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it is proven
-   optimal in 8 to 10 seconds (Open 7).
+   reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it was proven
+   optimal in 8 to 10 seconds, and is in 2.5 to 4.3 since each item's starts are held as running totals (Open 7).
 4. **The reward is a discounted sum over time of concave terms in one currency.** Never the terminal state alone:
    under replanning a terminal reward defers the army forever, and it is far harder to solve. The discount
    half-life, not the horizon, is the economy knob: workers appear once it exceeds a worker's payback time, an
@@ -101,6 +101,7 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
 | concave reward | a mix of types; 9% gap at 10 s instead of 0.5% |
 | all-fluid LP | 10 ms, 3% above optimal, fractions of a command center over three buckets, no rounding feasible |
 | Python matrix build | 18 to 150 ms |
+| the planner's reference, starts held as running totals | optimal in 2.5 to 4.3 s, from 8.4 to 10.4 |
 
 The gap is the solver's bound on how far the incumbent may be from optimal, relative to the whole objective; a
 large one means a poor incumbent or a loose bound, and the plans were judged by their content. Objectives are not
@@ -168,7 +169,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 ## Phases
 
 1. **The extension, for Terran, synchronous**, in NachOS, built in phase 1's pull request but for its exit's 3
-   seconds (Open 7). Model from `api.data`, grid, reward, matrix, solve, plan,
+   seconds, met at two half-lives of four (Open 7). Model from `api.data`, grid, reward, matrix, solve, plan,
    `plan_now()`. Tests on tiny instances with known optimal plans (the first depot at 8 seconds from 50 minerals and
    twelve SCVs; one marine at a time from one barracks; the command center at 48 seconds after uninterrupted SCVs),
    on the toy's cases as `tools/benchmark_planner.py`, and on made-up games through `sc2nachos.testing` for the
@@ -215,10 +216,11 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    out of phase 3's games.
 6. **The discount against the solver.** A discount made a 7-minute solve faster and a 10-minute one slower; settle
    it on the real model.
-7. **Phase 1's exit: the reference configuration is not solved within 3 seconds** (measured in phase 1's pull
-   request). With decision 3's windows by cost, the concave reward is proven optimal in 8 to 10 s at every half-life,
-   and the plan found after 3 s is worth 0.5 to 0.8% less than the optimal one, the solver's bound still 2.0 to 2.5%
-   above it; the toy's linear reward is optimal in 8 s, but 6.5% short after 3. With phase 1's first windows,
+7. **Phase 1's exit: the reference configuration is solved within 3 seconds at two half-lives of four, and within
+   4.3 at the others** (measured in phase 1's pull request). First, with each item's starts a bucket at a time and
+   decision 3's windows by cost, the concave reward was proven optimal in 8 to 10 s at every half-life, and the plan
+   found after 3 s was worth 0.5 to 0.8% less than the optimal one, the solver's bound still 2.0 to 2.5% above it; the
+   toy's linear reward was optimal in 8 s, but 6.5% short after 3. With phase 1's first windows,
    townhalls, production and tech structures whole over the horizon, the concave reward was 7.6% from its bound after
    3 s at a half-life of 240 s and 12% undiscounted, still 7 to 11% after 10 s: the root relaxation of the whole
    structures is what stayed loose, and a tighter big-M did not help. Left for the owner: the incumbent at 3 s, or
@@ -226,6 +228,16 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    rows' big-M of a morph and a refinery with them, to about 101 and 202 at a game's start, where a limit of three
    gave 4 and 8; the reference was no slower, optimal in 7.0 to 11.0 s. A valid tighter bound, if the 3 seconds call
    for one: the command centers the horizon's resources can pay for.
+
+   Since 2026-11-18 the program's variables are each item's starts so far by each bucket's end, a bucket's starts
+   being those less the bucket's before: the same program in other variables, in #239 (the owner, over a pull request
+   of its own). A row that counts what has started or is done by a time then takes one variable an item, where it took
+   every bucket's before: the reference program's 87,024 coefficients are 14,417, in 3,019 rows from 2,137, and it is
+   proven optimal in 3.9 s undiscounted, 2.9 at a half-life of 120 s, 4.2 at 240 and 2.5 at 480, where it took 9.2,
+   10.4, 8.4 and 8.5. After 3 s the plan is the optimal one at 120 and 480 s, 0.05% short undiscounted and 0.7% at
+   240. The best plan's worth is unchanged at each; of plans worth the same the solver now returns another, and three
+   tests that counted on which were made to count only the units done by the horizon. Still for the owner: whether
+   the exit is the proof, or the plan found by 3 seconds.
 8. **The count-form cut holds only where a bucket's starts are whole** (phase 1, for the owner to confirm). The toy
    applied it in every bucket shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
    buckets a barracks made a marine every 32 seconds, not every 17.86. Held to whole buckets, the toy's linear case

@@ -46,14 +46,14 @@ class _WorkerTier:
 class PlanProgram:
     """The mixed-integer linear program of one plan over the buckets between `edges`, in seconds from `state`'s time.
 
-    Each item's starts in each bucket are a variable, whole where the bucket starts before the item's time in
-    `whole_until_seconds`, one for each item in the order of `items`. A start pays from the stock at its bucket's start
-    plus half the bucket's income, keeps its producer busy for its build time over the buckets it spans, its SCV from
-    the walk there through the build to the walk back, takes its supply at once, and counts as done from the first edge
-    at or after its end. Workers mine, collect or build, pooled over every field and refinery, in the tiers of
-    `economy`'s rates, and each orbital command adds its MULEs' income. A unit counts as it survives its loss rate in
-    `loss_rates`, for income, supply, the reward and coverage. At most `new_command_center_limit` command centers
-    start, any number if `None`.
+    Each item's starts so far by each bucket's end are a variable, and a bucket's starts those so far less those of the
+    bucket before; both are whole where the bucket starts before the item's time in `whole_until_seconds`, one for each
+    item in the order of `items`. A start pays from the stock at its bucket's start plus half the bucket's income, keeps
+    its producer busy for its build time over the buckets it spans, its SCV from the walk there through the build to the
+    walk back, takes its supply at once, and counts as done from the first edge at or after its end. Workers mine,
+    collect or build, pooled over every field and refinery, in the tiers of `economy`'s rates, and each orbital command
+    adds its MULEs' income. A unit counts as it survives its loss rate in `loss_rates`, for income, supply, the reward
+    and coverage. At most `new_command_center_limit` command centers start, any number if `None`.
 
     Raises `ValueError` unless `whole_until_seconds` hold one time for each item, and for a negative walk from
     `economy`'s `walk_time`.
@@ -78,7 +78,7 @@ class PlanProgram:
         "_objective",
         "_program",
         "_reward",
-        "_starts",
+        "_starts_so_far",
         "_state",
         "_vespene",
         "_walk_seconds",
@@ -120,7 +120,9 @@ class PlanProgram:
         self._program = LinearProgram()
         self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
         self._whole = [self._edges[:-1] < whole_until - SECONDS_TOLERANCE for whole_until in whole_until_seconds]
-        self._starts = [self._add_starts(item, whole) for item, whole in zip(self._items, self._whole, strict=True)]
+        self._starts_so_far: list[VariableBlock] = []
+        for item, whole in zip(self._items, self._whole, strict=True):
+            self._add_starts_so_far(item, whole)
         self._minerals = self._add_stock(state.minerals)
         self._vespene = self._add_stock(state.vespene)
         self._mining = self._add_worker_tiers(economy.minerals_per_miner_second)
@@ -180,18 +182,22 @@ class PlanProgram:
             builders_free_after.append(done_after + walk)
         return tuple(completions), tuple(builders_free_after)
 
-    def _add_starts(self, item: Item, whole: NDArray[np.bool_]) -> VariableBlock:
-        """The variables of `item`'s starts in each bucket: none before an SCV could walk there, and none of an upgrade
-        done or being researched."""
+    def _add_starts_so_far(self, item: Item, whole: NDArray[np.bool_]) -> None:
+        """Add the variables of the next item, `item`: its starts so far by each bucket's end, whole in the buckets
+        `whole` marks, which run from the first, so that each of those buckets' starts is whole too. A bucket's starts
+        are held between none and the most the bucket takes: none before an SCV could walk there, and none of an
+        upgrade done or being researched."""
         bucket_starts = self._edges[:-1]
-        upper = np.full(len(bucket_starts), self._most_starts_in_a_bucket(item))
+        most_in_bucket = np.full(len(bucket_starts), self._most_starts_in_a_bucket(item))
         if item.unit_type is not None and item.is_built_by_worker:
-            upper[bucket_starts < self._walk_seconds.get(item.unit_type, 0.0) - SECONDS_TOLERANCE] = 0.0
+            most_in_bucket[bucket_starts < self._walk_seconds.get(item.unit_type, 0.0) - SECONDS_TOLERANCE] = 0.0
         if item.upgrade is not None and (
             item.upgrade in self._state.upgrades or item.upgrade in self._state.upgrade_completions
         ):
-            upper[:] = 0.0
-        return self._program.add_variables(len(bucket_starts), upper=upper, integral=whole)
+            most_in_bucket[:] = 0.0
+        block = self._program.add_variables(len(bucket_starts), upper=np.cumsum(most_in_bucket), integral=whole)
+        self._starts_so_far.append(block)
+        self._program.constrain(self._starts_in_bucket(len(self._starts_so_far) - 1), lower=0.0, upper=most_in_bucket)
 
     def _add_stock(self, initial: float) -> VariableBlock:
         """The variables of a resource's stock at each edge, the first `initial`."""
@@ -253,14 +259,29 @@ class PlanProgram:
         """The index of the edge each bucket's row counts at: its start, or its end."""
         return np.arange(self._bucket_count, dtype=float) + (1.0 if at_end else 0.0)
 
+    def _add_starts_to(
+        self, expression: RowExpression, index: int, per_start_in_bucket: FloatArray | float
+    ) -> RowExpression:
+        """Add to `expression` the starts of item `index` in each bucket, each times `per_start_in_bucket`: a matrix of
+        a row to each of the expression's rows and a column to each bucket, or one number for every one of them;
+        returns `expression`. A bucket's starts being those so far less those of the bucket before, the starts so far
+        by a bucket's end take the bucket's column less the next one's."""
+        per_start = np.broadcast_to(np.asarray(per_start_in_bucket, dtype=float), (expression.rows, self._bucket_count))
+        per_start_so_far = per_start.copy()
+        per_start_so_far[:, :-1] -= per_start[:, 1:]
+        return expression.add(self._starts_so_far[index], per_start_so_far)
+
     def _started_so_far(self, index: int) -> RowExpression:
         """The starts of item `index` in each bucket and the buckets before."""
-        buckets = self._bucket_count
-        return RowExpression(buckets).add(self._starts[index], np.tril(np.ones((buckets, buckets))))
+        return RowExpression(self._bucket_count).add(self._starts_so_far[index], np.eye(self._bucket_count))
 
     def _starts_in_bucket(self, index: int) -> RowExpression:
         """The starts of item `index` in each bucket."""
-        return RowExpression(self._bucket_count).add(self._starts[index], np.eye(self._bucket_count))
+        return self._add_starts_to(RowExpression(self._bucket_count), index, np.eye(self._bucket_count))
+
+    def _starts_over_the_plan(self, index: int) -> RowExpression:
+        """One row: the starts of item `index` over the whole plan."""
+        return self._add_starts_to(RowExpression(1), index, 1.0)
 
     def _starts_done(self, index: int, *, at_end: bool, rate: float = 0.0) -> RowExpression:
         """The starts of item `index` done by each bucket's start, or its end, each as it survives `rate` a second."""
@@ -270,7 +291,7 @@ class PlanProgram:
             completed = self._edges[:-1] + self._items[index].build_seconds
             since = np.maximum(self._edges[rows.astype(int)][:, None] - completed[None, :], 0.0)
             done *= np.exp(-rate * since)
-        return RowExpression(len(rows)).add(self._starts[index], done)
+        return self._add_starts_to(RowExpression(len(rows)), index, done)
 
     def _done_by(self, seconds: float, *, at_end: bool, rate: float = 0.0) -> FloatArray:
         """For each bucket's start, or its end, whether something done after `seconds` is done, as it survives `rate`
@@ -396,7 +417,8 @@ class PlanProgram:
         built = [(index, item) for index, item in enumerate(self._items) if item.is_built_by_worker]
         for index, item in built:
             walk = self._walk_seconds_of(item)
-            builders.add(self._starts[index], self._busy_seconds(item, before=walk, after=walk) / self._widths[:, None])
+            busy_share = self._busy_seconds(item, before=walk, after=walk) / self._widths[:, None]
+            self._add_starts_to(builders, index, busy_share)
         for free_after in self._builders_free_after:
             builders.constant += self._busy_seconds_until(free_after) / self._widths
         workers = self._count_alive(UnitTypeId.SCV, at_end=False)
@@ -406,7 +428,8 @@ class PlanProgram:
         short_and_whole = self._shorter_than_every_build_and_whole([index for index, _ in built])
         builders_whole = RowExpression(buckets).add_expression(working)
         for index, item in built:
-            builders_whole.add(self._starts[index], (self._busy_seconds(item) > SECONDS_TOLERANCE).astype(float))
+            is_busy = (self._busy_seconds(item) > SECONDS_TOLERANCE).astype(float)
+            self._add_starts_to(builders_whole, index, is_busy)
         for free_after in self._builders_free_after:
             builders_whole.constant += self._busy_seconds_until(free_after) > SECONDS_TOLERANCE
         self._constrain_at_most(builders_whole.selected(short_and_whole), workers.selected(short_and_whole))
@@ -474,8 +497,8 @@ class PlanProgram:
         running = RowExpression(buckets)
         for index in members:
             busy_seconds = self._busy_seconds(self._items[index])
-            busy.add(self._starts[index], busy_seconds)
-            running.add(self._starts[index], (busy_seconds > SECONDS_TOLERANCE).astype(float))
+            self._add_starts_to(busy, index, busy_seconds)
+            self._add_starts_to(running, index, (busy_seconds > SECONDS_TOLERANCE).astype(float))
         for occupation in occupations:
             seconds = self._busy_seconds_until(
                 occupation.time_left.seconds, start_seconds=occupation.time_until_start.seconds
@@ -505,7 +528,7 @@ class PlanProgram:
         self._constrain_add_ons_and_morphs()
         command_center = self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)
         if command_center is not None and self._new_command_center_limit is not None:
-            expansions = RowExpression(1).add(self._starts[command_center], 1.0)
+            expansions = self._starts_over_the_plan(command_center)
             self._program.constrain(expansions, upper=float(self._new_command_center_limit))
         if (refinery := self._index_of_unit_type.get(UnitTypeId.REFINERY)) is not None:
             geysers = RowExpression(buckets).add_expression(new_bases, economy.geysers_per_new_base)
@@ -513,7 +536,7 @@ class PlanProgram:
             self._constrain_at_most(self._started_so_far(refinery), geysers)
         for index, item in enumerate(self._items):
             if item.upgrade is not None:
-                self._program.constrain(RowExpression(1).add(self._starts[index], 1.0), upper=1.0)
+                self._program.constrain(self._starts_over_the_plan(index), upper=1.0)
 
     def _constrain_add_ons_and_morphs(self) -> None:
         """At most one add-on a host, those standing and those in production counted, and at most one morph a
@@ -649,7 +672,7 @@ class PlanProgram:
             made = item.unit_type if item.unit_type is not None else item.upgrade
             if made is None:
                 continue
-            whole = np.floor(np.cumsum(_values_of(self._starts[index], values)) + 0.5)
+            whole = np.floor(_values_of(self._starts_so_far[index], values) + 0.5)
             for bucket, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._state.time + GameTime(seconds=float(self._edges[bucket]))
                 planned += [(bucket, index, PlannedItem(item=made, start=start))] * int(count)

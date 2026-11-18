@@ -102,6 +102,14 @@ def _start_seconds(plan: Plan, item: UnitTypeId | UpgradeId) -> list[float]:
     return [round((planned.start - plan.made_at).seconds, 6) for planned in plan.items if planned.item == item]
 
 
+def _start_seconds_of_units_done_in_time(plan: Plan, unit_type: UnitTypeId) -> list[float]:
+    """The seconds after the plan's start at which it starts each unit of `unit_type` that is done by its horizon. One
+    started later is worth nothing to the plan and costs it nothing, so whether it starts is the solver's choice."""
+    build_seconds = _TERRAN_MODEL.unit_items[unit_type].build_seconds
+    horizon_seconds = (plan.times[-1] - plan.made_at).seconds
+    return [start for start in _start_seconds(plan, unit_type) if start + build_seconds <= horizon_seconds]
+
+
 class TestTimeGrid:
     def test_the_doubling_grid_runs_2_second_buckets_to_0_45_doubling_to_32_seconds_63_to_10_minutes(self) -> None:
         edges = TimeGrid.doubling().edges(GameTime(seconds=600))
@@ -242,8 +250,8 @@ class TestKnownPlans:
     def test_one_barracks_trains_one_marine_at_a_time_and_two_with_a_reactor(
         self, reactors: int, marine_starts: list[float]
     ) -> None:
-        """With no SCV to build more, and too little time for a reactor to pay, over a minute: a marine started later
-        would not be done by its end, and so be worth nothing."""
+        """With no SCV to build more, and too little time for a reactor to pay, over a minute, of the marines done by
+        its end: one started later is worth nothing."""
         state = _game_start(
             minerals=1000.0,
             supply_used=0.0,
@@ -252,7 +260,7 @@ class TestKnownPlans:
             mineral_fields=0,
         )
         plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=60)
-        assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == marine_starts
 
     def test_a_unit_in_production_counts_from_the_first_edge_after_it_is_done(self) -> None:
         """With nothing to spend, a marine 9 seconds from done is the plan's only one, alive from the edge at 10."""
@@ -384,7 +392,7 @@ class TestKnownPlans:
         )
         curve = [CurveSegment(slope=1.0, up_to=3), CurveSegment(slope=-0.1)]
         plan = _best_plan(state, Reward(curves={UnitTypeId.MARINE: curve}), horizon_seconds=40)
-        assert len(_start_seconds(plan, UnitTypeId.MARINE)) == 3
+        assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 3
 
     def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
         """A barracks nothing else is worth gets built by when the previous plan had it, for a bonus above its cost in

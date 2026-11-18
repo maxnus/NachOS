@@ -30,6 +30,9 @@ class Plan:
     A bot carries it out in order, each item as soon as it can be afforded, rather than to the second: the times are the
     model's, which rounds each start to a bucket's first second and plans far starts in fractions, each item of those
     starting once their sum reaches it, rounded.
+
+    Of plans worth the same, which one it is is the solver's choice. So it may start an item worth nothing to the
+    reward, a unit that would not be done by the horizon, say, where nothing else needs what it costs.
     """
 
     made_at: GameTime
