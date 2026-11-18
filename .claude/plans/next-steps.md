@@ -531,7 +531,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      owner's upgrades, which upgrade inference reads where it holds a private table (over `UnitTypeData` alone and over
      private); and two modifiers at once are measured before `speed` counts them (over multiplying them unmeasured and
      over the strongest slow alone): stim with concussive shells or an inhibitor zone, concussive shells with a zone,
-     creep with each slow, and a fungal with a time warp.
+     creep with each slow, and a fungal with a time warp. Measured (sc2 runs 44280840577 and 44280846865): every pair
+     multiplies, to within the rounding of a step's distance, so `speed` is the speed on creep or off times each buff's
+     factor.
   3. `base_speed` and `speed`, proposed for 0.8.0 with #255, so that a bot changes once. AvocaDOS then reads
      `unit.speed` where its melee threat works it out (AvocaDOS #99).
 - **Speed upgrades read off how fast enemy units move** (above), a step at a time, each with the owner:

@@ -217,6 +217,14 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   player's time warp (tool `sweep_movement`, build 75689); zerglings with Metabolic Boost 3.94 against their 6.58, at
   every step of 11 at a time (tool `replay_movement`, AI Arena's 2026 Season 1 replay 4704095 played back as player 2,
   build 75689).
+- **Two of these at once multiply, creep among them**, to within the rounding of a step's distance: a marine or a
+  marauder stimmed and slowed by concussive shells 2.36 a second for 3.15, 1.5 times 0.5; a marine stimmed in an
+  inhibitor zone 3.06, 1.5 times 0.65; a zergling slowed in a zone 1.34 for 4.13, 0.5 times 0.65; a zergling, a marine,
+  a roach and a mutalisk of the enemy's under a fungal and a time warp at once 0.62, 0.47, 0.47 and 0.84 for 4.13,
+  3.15, 3.15 and 5.6, 0.25 times 0.6; and on creep, a zergling with Metabolic Boost 4.27 slowed by concussive shells and
+  5.55 in a zone, for its 8.55, a roach with Glial Reconstitution 2.73 and 3.54 for its 5.46, and the enemy's zergling
+  and roach, unupgraded, 1.34 and 1.02 under a fungal and 3.22 and 2.45 under a time warp, for their 5.37 and 4.09 (tool
+  `sweep_movement`, build 75689).
 - **A hallucination moves as fast as the unit it copies, its owner's speed upgrades included**: a sentry's void ray
   and warp prism, every window within 0.2% of the row's speed, with Flux Vanes and Gravitic Drive and without (tool
   `sweep_movement`, build 75689).
