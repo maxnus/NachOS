@@ -1,4 +1,4 @@
-"""Measure how fast each unit type a speed upgrade changes moves, without the upgrade and with it.
+"""Measure how fast units move: with each speed upgrade and without, on creep and off, and under buffs that change it.
 
 Needs StarCraft II installed. Plays a game as each race named, or as every race, against the easiest computer, which is
 cleared down to one structure, under `show_map`, `free` and `fast_build`. The types measured are those the tables give
@@ -21,8 +21,8 @@ marauder run stimmed; a zergling, a marine, a zealot, a roach and an ultralisk r
 this player's, ordered to attack it, slows it with concussive shells, its life and shields set back to full at every
 step; and a marine, a zergling and a medivac run through an inhibitor zone of each size, made neutral at the course's
 middle. Then two at once: a marine and a marauder stimmed and slowed, a marine stimmed through a medium zone, and a
-zergling slowed through it. As Zerg, once the speed upgrades are in, Concussive Shells is researched too, and a zergling
-and a roach run on creep slowed by concussive shells, and through a medium zone on creep::
+zergling slowed through it. As Zerg, once the speed upgrades are in, Stimpack and Concussive Shells are researched too,
+and a zergling and a roach run on creep slowed by concussive shells, and through a medium zone on creep::
 
     uv run python tools/sweep_movement.py
     uv run python tools/sweep_movement.py zerg --out movement-zerg.json
