@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Final, final
 
-from sc2nachos.extensions.planner._economy import Economy
+from sc2nachos.extensions.planner._economy import Economy, minerals_mined_a_second
 from sc2nachos.extensions.planner._errors import NoPlanFoundError
 from sc2nachos.extensions.planner._game_state import GameState, read_game_state
 from sc2nachos.extensions.planner._plan_program import PlanProgram
@@ -21,8 +21,16 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._plan import Plan
     from sc2nachos.extensions.planner._reward import Reward
     from sc2nachos.extensions.planner._terran_model import Item
+    from sc2nachos.ids import UpgradeId
 
 _NO_LOSSES: Mapping[UnitTypeId, float] = MappingProxyType({})
+# By default an item starts whole for this long for each 100 minerals and vespene it costs at the income a game starts
+# with, that of so many workers on so many mineral fields, less in proportion at a higher income, but at least the
+# shortest.
+_DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES: Final = 60.0
+_SHORTEST_DEFAULT_WHOLE_SECONDS: Final = 30.0
+_WORKERS_AS_A_GAME_STARTS: Final = 12
+_MINERAL_FIELDS_AS_A_GAME_STARTS: Final = 8
 
 
 @final
@@ -71,11 +79,15 @@ class Planner:
       starts a whole number of buckets apart while its starts are whole: SCVs every 14 seconds on 2-second buckets.
     - An item starts in whole numbers until a time from the plan's start, and in fractions after it, so that the solver
       weighs the far term without branching over it; the bot carries out the near term and plans again before the
-      rest. The time is what `whole_until` returns for the item's unit type, or where it returns `None`, or is `None`,
-      60 seconds for each 100 minerals and vespene the item costs, but at least 30: a command center 4:00, a factory or
-      a starport 2:30, a barracks or an orbital command 1:30, a supply depot 1:00, an SCV or a marine 0:30. An upgrade
-      starts whole over any horizon, since each is made once at most, and `GameTime.INFINITE` keeps a unit type so.
-      Longer times make a plan exact further ahead, and the solve slower.
+      rest. The time is what `whole_until` returns for the unit type the item makes or the upgrade it researches, or
+      where it returns `None`, or is `None`, a default by what the item costs and what the state brings in. At the
+      income a game starts with, twelve workers on eight mineral fields, it is 60 seconds for each 100 minerals and
+      vespene: a command center 4:00, a factory or a starport 2:30, an upgrade of 100 and 100 2:00, a barracks or an
+      orbital command 1:30, a supply depot 1:00. At a higher income it is shorter in proportion, a command center
+      1:12 at 3.3 times the income, since an item is then less of what comes in; at a lower one it is no longer. It is
+      never under 30 seconds, an SCV's or a marine's at any income. The income is what the state's SCVs mine by the
+      economy if every one mines, with its orbital commands' MULEs. `GameTime.INFINITE` keeps an item whole over any
+      horizon. Longer times make a plan exact further ahead, and the solve slower.
 
     The solve stops at `time_limit` seconds of wall-clock time, or after `node_limit` nodes of branching, each
     unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
@@ -101,7 +113,7 @@ class Planner:
         grid: TimeGrid | None = None,
         time_limit: float | None = 3.0,
         node_limit: int | None = None,
-        whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
+        whole_until: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     ) -> None:
         if api.player.race != Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -168,16 +180,19 @@ class Planner:
             raise ValueError("a hysteresis bonus needs the previous plan it favors")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+        planned_from = self.game_state() if state is None else state
         program = PlanProgram(
             items=items,
             model=self._model,
             edges=edges,
-            state=self.game_state() if state is None else state,
+            state=planned_from,
             reward=reward,
             economy=economy,
             loss_rates=loss_rates,
             new_command_center_limit=new_command_center_limit,
-            whole_until_seconds=whole_until_seconds_of(items, whole_until=self._whole_until),
+            whole_until_seconds=whole_until_seconds_of(
+                items, whole_until=self._whole_until, state=planned_from, economy=economy
+            ),
             previous_plan=previous_plan,
             hysteresis_bonus=hysteresis_bonus,
         )
@@ -189,17 +204,44 @@ class Planner:
 
 
 def whole_until_seconds_of(
-    items: Sequence[Item], *, whole_until: Callable[[UnitTypeId], GameTime | None] | None
+    items: Sequence[Item],
+    *,
+    whole_until: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None,
+    state: GameState,
+    economy: Economy,
 ) -> tuple[float, ...]:
-    """The seconds from the plan's start until which each of `items` starts in whole numbers: for a unit, what
-    `whole_until` returns for its type, or its default where that is `None`; for an upgrade, its default.
+    """The seconds from the plan's start until which each of `items` starts in whole numbers: what `whole_until`
+    returns for what it makes or researches, or where that is `None`, its default for a plan from `state` by
+    `economy`, as `Planner` says.
 
     Raises `ValueError` for a negative time from `whole_until`.
     """
+    seconds_a_hundred_resources = _DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES * _start_income_as_a_share_of_the_income(
+        state, economy
+    )
     seconds: list[float] = []
     for item in items:
-        chosen = None if whole_until is None or item.unit_type is None else whole_until(item.unit_type)
-        if chosen is not None and chosen < GameTime.ZERO:
+        chosen = None if whole_until is None or item.made is None else whole_until(item.made)
+        if chosen is None:
+            by_cost = seconds_a_hundred_resources * (item.minerals + item.vespene) / 100
+            seconds.append(max(_SHORTEST_DEFAULT_WHOLE_SECONDS, by_cost))
+        elif chosen < GameTime.ZERO:
             raise ValueError(f"whole_until must not return a negative time, but returned {chosen} for {item.name}")
-        seconds.append((item.default_whole_until if chosen is None else chosen).seconds)
+        else:
+            seconds.append(chosen.seconds)
     return tuple(seconds)
+
+
+def _start_income_as_a_share_of_the_income(state: GameState, economy: Economy) -> float:
+    """The income a game starts with as a share of that of `state`, at most 1, each by `economy`: what the SCVs mine if
+    every one mines, with the orbital commands' MULEs. It is 1 where the state brings in nothing."""
+    start_income = minerals_mined_a_second(
+        economy, workers=_WORKERS_AS_A_GAME_STARTS, mineral_fields=_MINERAL_FIELDS_AS_A_GAME_STARTS, orbital_commands=0
+    )
+    income = minerals_mined_a_second(
+        economy,
+        workers=state.counts.get(UnitTypeId.SCV, 0),
+        mineral_fields=state.mineral_fields,
+        orbital_commands=state.counts.get(UnitTypeId.ORBITAL_COMMAND, 0),
+    )
+    return min(1.0, start_income / income) if income > 0 else 1.0

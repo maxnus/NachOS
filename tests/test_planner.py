@@ -67,7 +67,7 @@ def _best_plan(
     *,
     horizon_seconds: float,
     grid: TimeGrid = _TWO_SECOND_BUCKETS,
-    whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
+    whole_until: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: dict[UnitTypeId, float] | None = None,
     new_command_center_limit: int | None = None,
@@ -87,7 +87,7 @@ def _best_plan(
         economy=economy,
         loss_rates=loss_rates or {},
         new_command_center_limit=new_command_center_limit,
-        whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
+        whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until, state=state, economy=economy),
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
     )
@@ -112,9 +112,18 @@ _A_PLAN_OF_ONE_BARRACKS = Plan(
 )
 
 
-def _whole_over_any_horizon(_: UnitTypeId) -> GameTime:
-    """Every unit type whole over any horizon."""
+def _whole_over_any_horizon(_: UnitTypeId | UpgradeId) -> GameTime:
+    """Every item whole over any horizon."""
     return GameTime.INFINITE
+
+
+def _default_whole_seconds_by_name(state: GameState, economy: Economy) -> dict[str, float]:
+    """The default seconds each item of a plan for marines and stimpack starts whole for, from `state` by `economy`, by
+    the item's name, but those of add-ons, barracks and refineries."""
+    items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE, UnitTypeId.FACTORY], upgrades=[UpgradeId.STIMPACK])
+    seconds = whole_until_seconds_of(items, whole_until=None, state=state, economy=economy)
+    named = ("COMMAND_CENTER", "FACTORY", "STIMPACK", "ORBITAL_COMMAND", "SUPPLY_DEPOT", "SCV", "MARINE")
+    return {item.name: window for item, window in zip(items, seconds, strict=True) if item.name in named}
 
 
 def _start_seconds(plan: Plan, item: UnitTypeId | UpgradeId) -> list[float]:
@@ -234,17 +243,6 @@ class TestTerranModel:
         assert orbital.producers == {UnitTypeId.COMMAND_CENTER}
         assert orbital.supply_provided == 0.0
         assert (orbital.minerals, orbital.build_seconds) == (150.0, 25.0)
-
-    def test_a_unit_starts_whole_by_default_60_seconds_each_100_resources_at_least_30_and_an_upgrade_always(
-        self,
-    ) -> None:
-        windows = {unit_type: item.default_whole_until for unit_type, item in _TERRAN_MODEL.unit_items.items()}
-        assert windows[UnitTypeId.COMMAND_CENTER] == GameTime(seconds=240)
-        assert windows[UnitTypeId.FACTORY] == GameTime(seconds=150)
-        assert windows[UnitTypeId.ORBITAL_COMMAND] == GameTime(seconds=90)
-        assert windows[UnitTypeId.SUPPLY_DEPOT] == GameTime(seconds=60)
-        assert windows[UnitTypeId.SCV] == windows[UnitTypeId.MARINE] == GameTime(seconds=30)
-        assert all(item.default_whole_until == GameTime.INFINITE for item in _TERRAN_MODEL.upgrade_items.values())
 
     @pytest.mark.parametrize("unit_type", [UnitTypeId.ZERGLING, UnitTypeId.MULE, UnitTypeId.AUTO_TURRET])
     def test_a_type_terran_does_not_make_raises(self, unit_type: UnitTypeId) -> None:
@@ -430,30 +428,98 @@ class TestKnownPlans:
 
 
 class TestWholeUntil:
-    def test_a_unit_type_has_what_whole_until_returns_or_its_default_for_none_and_an_upgrade_its_default(self) -> None:
+    def test_an_item_has_what_whole_until_returns_or_its_default_for_none(self) -> None:
         items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[UpgradeId.STIMPACK])
-        asked: list[UnitTypeId] = []
+        asked: list[UnitTypeId | UpgradeId] = []
 
-        def whole_until(unit_type: UnitTypeId) -> GameTime | None:
-            asked.append(unit_type)
-            return GameTime(seconds=20) if unit_type == UnitTypeId.SUPPLY_DEPOT else None
+        def whole_until(item: UnitTypeId | UpgradeId) -> GameTime | None:
+            asked.append(item)
+            if item == UpgradeId.STIMPACK:
+                return GameTime.INFINITE
+            return GameTime(seconds=20) if item == UnitTypeId.SUPPLY_DEPOT else None
 
-        seconds = whole_until_seconds_of(items, whole_until=whole_until)
+        seconds = whole_until_seconds_of(items, whole_until=whole_until, state=_game_start(), economy=Economy())
 
         seconds_by_name = {item.name: window for item, window in zip(items, seconds, strict=True)}
         assert seconds_by_name["SUPPLY_DEPOT"] == 20.0
         assert seconds_by_name["COMMAND_CENTER"] == 240.0
         assert seconds_by_name["STIMPACK"] == math.inf
-        assert asked == [item.unit_type for item in items if item.unit_type is not None]
-        assert whole_until_seconds_of(items, whole_until=None) == tuple(
-            item.default_whole_until.seconds for item in items
+        assert asked == [item.made for item in items]
+
+    def test_at_a_games_start_it_is_by_default_60_seconds_each_100_resources_and_at_least_30(self) -> None:
+        assert _default_whole_seconds_by_name(_game_start(), Economy()) == {
+            "COMMAND_CENTER": 240.0,
+            "FACTORY": 150.0,
+            "STIMPACK": 120.0,
+            "ORBITAL_COMMAND": 90.0,
+            "SUPPLY_DEPOT": 60.0,
+            "SCV": 30.0,
+            "MARINE": 30.0,
+        }
+
+    def test_at_a_higher_income_it_is_by_default_shorter_in_proportion_and_at_least_30_seconds(self) -> None:
+        # Thirty SCVs mine sixteen fields and an orbital command's MULEs add three SCVs' worth, against a game's twelve.
+        state = _game_start(counts={UnitTypeId.SCV: 30, UnitTypeId.ORBITAL_COMMAND: 1}, mineral_fields=16)
+        economy = Economy(minerals_per_miner_second=(1.0, 1.0, 0.5), mule_minerals_per_orbital_second=3.0)
+
+        seconds_by_name = _default_whole_seconds_by_name(state, economy)
+
+        assert seconds_by_name["COMMAND_CENTER"] == pytest.approx(240 * 12 / 33)
+        assert seconds_by_name["FACTORY"] == pytest.approx(seconds_by_name["COMMAND_CENTER"] * 250 / 400)
+        assert seconds_by_name["STIMPACK"] == pytest.approx(seconds_by_name["COMMAND_CENTER"] * 200 / 400)
+        assert seconds_by_name["ORBITAL_COMMAND"] == pytest.approx(seconds_by_name["COMMAND_CENTER"] * 150 / 400)
+        assert seconds_by_name["SUPPLY_DEPOT"] == seconds_by_name["SCV"] == seconds_by_name["MARINE"] == 30.0
+
+    def test_workers_past_what_the_fields_take_add_what_they_would_mine_there(self) -> None:
+        saturated = _game_start(counts={UnitTypeId.SCV: 16})
+        with_a_third_worker_a_field = _game_start(counts={UnitTypeId.SCV: 24})
+        with_more_than_the_fields_take = _game_start(counts={UnitTypeId.SCV: 40})
+
+        command_center_seconds = [
+            _default_whole_seconds_by_name(state, Economy())["COMMAND_CENTER"]
+            for state in (saturated, with_a_third_worker_a_field, with_more_than_the_fields_take)
+        ]
+
+        assert command_center_seconds == pytest.approx([240 * 12 / 16, 240 * 12 / 20, 240 * 12 / 20])
+
+    @pytest.mark.parametrize(
+        "state",
+        [
+            _game_start(counts={UnitTypeId.SCV: 6}),
+            _game_start(counts={}),
+            _game_start(mineral_fields=0),
+        ],
+    )
+    def test_at_a_lower_income_or_none_it_is_by_default_what_it_is_at_a_games_start(self, state: GameState) -> None:
+        assert _default_whole_seconds_by_name(state, Economy()) == _default_whole_seconds_by_name(
+            _game_start(), Economy()
         )
+
+    def test_the_income_is_by_the_economy_it_is_handed(self) -> None:
+        state = _game_start(counts={UnitTypeId.SCV: 12, UnitTypeId.ORBITAL_COMMAND: 2})
+        with_mules_of_three_workers = Economy(
+            minerals_per_miner_second=(1.0, 1.0, 0.5), mule_minerals_per_orbital_second=3.0
+        )
+        mining_half_as_fast = Economy(minerals_per_miner_second=(0.5, 0.5, 0.25))
+        with_no_mules = Economy(mule_minerals_per_orbital_second=0.0)
+        mining_nothing = Economy(minerals_per_miner_second=(), mule_minerals_per_orbital_second=0.0)
+
+        with_mules_seconds = _default_whole_seconds_by_name(state, with_mules_of_three_workers)["COMMAND_CENTER"]
+        slower_seconds = _default_whole_seconds_by_name(_game_start(), mining_half_as_fast)["COMMAND_CENTER"]
+
+        assert with_mules_seconds == pytest.approx(240 * 12 / 18)
+        assert slower_seconds == 240.0
+        assert _default_whole_seconds_by_name(state, with_no_mules)["COMMAND_CENTER"] == 240.0
+        assert _default_whole_seconds_by_name(state, mining_nothing)["COMMAND_CENTER"] == 240.0
 
     def test_a_negative_time_raises(self) -> None:
         items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[])
         with pytest.raises(ValueError, match="SCV"):
             whole_until_seconds_of(
-                items, whole_until=lambda unit_type: GameTime(seconds=-1) if unit_type == UnitTypeId.SCV else None
+                items,
+                whole_until=lambda item: GameTime(seconds=-1) if item == UnitTypeId.SCV else None,
+                state=_game_start(),
+                economy=Economy(),
             )
 
     def test_starts_are_whole_in_the_buckets_that_start_before_their_items_time(self) -> None:

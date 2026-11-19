@@ -89,6 +89,18 @@ def rate_tiers(rates: Sequence[float]) -> tuple[tuple[int, float], ...]:
     return tuple((len(list(run)), rate) for rate, run in itertools.groupby(rates) if rate > 0)
 
 
+def minerals_mined_a_second(economy: Economy, *, workers: int, mineral_fields: int, orbital_commands: int) -> float:
+    """The minerals `workers` mine a second by `economy` if every one mines, at `mineral_fields`, as many at each
+    field's better rates as the fields take, with what the MULEs of `orbital_commands` mine."""
+    mined = economy.mule_minerals_per_orbital_second * orbital_commands
+    workers_left = workers
+    for workers_a_field, rate in rate_tiers(economy.minerals_per_miner_second):
+        mining = min(workers_left, workers_a_field * mineral_fields)
+        mined += rate * mining
+        workers_left -= mining
+    return mined
+
+
 def walk_seconds_of(economy: Economy, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
     """The seconds an SCV walks to build each of `unit_types`, by `economy`.
 

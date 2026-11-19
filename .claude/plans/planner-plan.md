@@ -34,17 +34,25 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    constraints in exact seconds split across the buckets it overlaps; only a start sits on a bucket's first second
    and a completion on the next edge.
 3. **Whole numbers where an item is lumpy, fluid flows where it is not**, for longer the more it costs (the owner,
-   phase 1): an item's starts are integer from the plan's start for 60 seconds for each 100 minerals and vespene, at
-   least 30, and fluid after: a command center to 4:00, a factory or a starport to 2:30, a barracks or an orbital
-   command to 1:30, a depot to 1:00, an SCV or a marine to 0:30. Upgrades stay integer over any horizon. A bot sets
-   its own for any unit type, `Planner(whole_until=...)` taking a function of the unit type that returns `None` for
-   the default. The rule: an item stays whole where its cost exceeds a bucket's income and it is made once a bucket
-   at most. Fluid far-term starts make the far term the value function of the near term, computed by the LP at each
-   node instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00. Depots kept
-   whole for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1 first kept
-   townhalls, production and tech structures whole over the whole horizon and the rest for 90 seconds, which left the
-   reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it was proven
-   optimal in 8 to 10 seconds, and is in 2.5 to 4.3 since each item's starts are held as running totals (Open 7).
+   phase 1) and the less comes in (the owner, 2026-11-19): an item's starts are integer from the plan's start for 60
+   seconds for each 100 minerals and vespene at the income a game starts with, at least 30, and fluid after: a
+   command center to 4:00, a factory or a starport to 2:30, a barracks or an orbital command to 1:30, a depot to
+   1:00, an SCV or a marine to 0:30. At a higher income the time is shorter in proportion, never under the 30
+   seconds, and at a lower one no longer: the income is what the state's SCVs mine if every one mines, with its
+   orbital commands' MULEs, against a game's twelve SCVs on eight fields, each by the economy the plan is handed.
+   An upgrade has its time by its cost as a unit has (the owner, 2026-11-19), where phase 1 kept it integer over any
+   horizon. A bot sets its own for any unit type or upgrade, `Planner(whole_until=...)` taking a function of either
+   that returns `None` for the default. The rule: an item stays whole where its cost exceeds a bucket's income and it
+   is made once a bucket at most. The owner's question behind the income was whether a type the state holds many of
+   could be fluid sooner, 60 workers against 12: a time divided by the count of the type gained little alone and
+   nothing beside the income's, which already brings most items to the 30 seconds, and was not built (Open 3 holds
+   the measurements). Fluid far-term starts make the far term the value function of the near term, computed by the LP
+   at each node instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00.
+   Depots kept whole for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1
+   first kept townhalls, production and tech structures whole over the whole horizon and the rest for 90 seconds,
+   which left the reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it
+   was proven optimal in 8 to 10 seconds, and is in 2.5 to 4.3 since each item's starts are held as running totals
+   (Open 7).
 4. **The reward is a discounted sum over time of concave terms in one currency.** Never the terminal state alone:
    under replanning a terminal reward defers the army forever, and it is far harder to solve. The discount
    half-life, not the horizon, is the economy knob: workers appear once it exceeds a worker's payback time, an
@@ -105,6 +113,8 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
 | all-fluid LP | 10 ms, 3% above optimal, fractions of a command center over three buckets, no rounding feasible |
 | Python matrix build | 18 to 150 ms |
 | the planner's reference, starts held as running totals | optimal in 2.5 to 4.3 s, from 8.4 to 10.4 |
+| replans from 3:00 and 6:00, times by the state's income, 245 to 265 integers from 419 | optimal in 2.1 to 5.2 s, from 4.2 to 18.2 |
+| a wide reward, 38 items, upgrades' times by cost, 1,291 integers from 1,494 | optimal in 14 to 30 s, from 36 to 38 and a 2.1% gap at 40 s |
 
 The gap is the solver's bound on how far the incumbent may be from optimal, relative to the whole objective; a
 large one means a poor incumbent or a loose bound, and the plans were judged by their content. Objectives are not
@@ -220,9 +230,28 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    10 s plans 0.8 to 1.6% short; and it is proven optimal in 36 to 38 s at three half-lives, 2.1% from its bound after
    40 at 240 s. A replan in the middle of a game with the toy's 14 items is no such trouble (`replans`, from two
    made-up states at 3:00 and 6:00 with units in production, a reward that never saturates): a plan within 1.1% of
-   the best after 1 s and within 0.3% after 3, proven optimal in 4 to 18 s. Open: prune to what the reward reaches,
-   a shorter window for the upgrades' whole starts, or phase 3's start from the previous plan; and what a bot is
-   handed when no plan is found in time, where `plan_now` raises `NoPlanFoundError`.
+   the best after 1 s and within 0.3% after 3, proven optimal in 4 to 18 s.
+
+   Since 2026-11-19 the default times follow the state's income and an upgrade has one by its cost (decision 3, the
+   owner), which leaves the reference as it was, a game's start with no upgrade. The replans have 245 to 265 whole
+   variables, from 419: a plan within 0.9% of the best after 1 s and within 0.06% after 3, proven optimal in 2.1 to
+   5.2 s. The wide reward has 1,291 from the game's start, the upgrades' 301 of them, and 813 and 729 from the two
+   mid-game states (`items`, which plans from them too since). From the start it is proven optimal in 14 to 30 s; after
+   1 s it has no plan at 120 s and plans 1.7 to 3.3% short at the others, after 3 s the best plan undiscounted and
+   plans 0.6 to 6.5% short at the others, after 10 s plans at most 1.0% short. From 3:00 and 6:00 it has a plan after
+   1 s in one case of eight, after 3 s plans within 0.5% of the best, and is proven optimal in 7 to 18 s; before, by
+   a script outside the package, it was 0.4 to 1.1% from its bound after 40. What the shorter times cost was judged
+   by the program with the times before: a plan's starts of the first 30 seconds fixed in it, the rest solved anew
+   within 60 s, against the best plan known. The plans found in 3 s lose 0.02 to 0.09% so for the replans, where
+   those by the times before lose 0.00 to 0.21%, and 0.11 to 0.43% for the wide reward from mid-game, where those
+   lose 0.45 to 1.84%; the plans proven optimal lose at most 0.14%, within what the judge's own unproven solves
+   leave. A wide reward's plan after 3 s from the start, 28% short by its objective before, lost 1.2% so: most of
+   what it lacked was in the far term. Dividing a type's time by how many the state holds was measured beside these
+   (decision 3): 306 to 332 whole variables for the replans alone, 233 to 259 with the income's 245 to 265, and no
+   faster with it.
+
+   Open: prune to what the reward reaches, or phase 3's start from the previous plan; and what a bot is handed when
+   no plan is found in time, where `plan_now` raises `NoPlanFoundError`, as a wide reward's replan does at 1 s.
 4. **Build space.** A bound on structures per base from the map, as the one physical limit the model lacks;
    `api.placement` may answer it.
 5. **Replanning defaults.** The interval, the budget and the hysteresis bonus are parameters; their defaults come

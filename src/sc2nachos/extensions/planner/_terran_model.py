@@ -8,7 +8,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.gamedata import Tech
-from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Race
 from sc2nachos.units import UnitType
@@ -26,9 +25,6 @@ ECONOMY_TYPES: Final = (
     UnitTypeId.ORBITAL_COMMAND,
     UnitTypeId.REFINERY,
 )
-# By default a unit starts whole for this long for each 100 minerals and vespene it costs, but at least the shortest.
-_DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES: Final = 60.0
-_SHORTEST_DEFAULT_WHOLE_SECONDS: Final = 30.0
 _TECH_LAB_TYPES: Final = UnitType.AnyTechLab.type_ids
 _REACTOR_TYPES: Final = UnitType.AnyReactor.type_ids
 
@@ -67,15 +63,9 @@ class Item:
     """Whether an SCV builds it, away from its work from the walk there through the build to the walk back."""
 
     @property
-    def default_whole_until(self) -> GameTime:
-        """The time from a plan's start until which it starts in whole numbers, unless the bot chooses another: for a
-        unit, 60 seconds for each 100 minerals and vespene it costs, but at least 30, so a command center 4:00, a
-        barracks or an orbital command 1:30, a supply depot 1:00, and an SCV or a marine 0:30; for an upgrade, over any
-        horizon, since each is made once at most."""
-        if self.is_upgrade:
-            return GameTime.INFINITE
-        seconds = _DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES * (self.minerals + self.vespene) / 100
-        return GameTime(seconds=max(_SHORTEST_DEFAULT_WHOLE_SECONDS, seconds))
+    def made(self) -> UnitTypeId | UpgradeId | None:
+        """What it makes or researches."""
+        return self.unit_type if self.unit_type is not None else self.upgrade
 
     @property
     def is_upgrade(self) -> bool:
@@ -85,8 +75,7 @@ class Item:
     @property
     def name(self) -> str:
         """The name of what it makes or researches."""
-        made = self.unit_type if self.unit_type is not None else self.upgrade
-        return "" if made is None else made.name
+        return "" if self.made is None else self.made.name
 
 
 @final

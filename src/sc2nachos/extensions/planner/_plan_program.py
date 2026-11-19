@@ -677,7 +677,7 @@ class PlanProgram:
         one each time their sum reaches a whole number, rounded."""
         planned: list[tuple[int, int, PlannedItem]] = []
         for index, item in enumerate(self._items):
-            made = item.unit_type if item.unit_type is not None else item.upgrade
+            made = item.made
             if made is None:
                 continue
             whole = np.floor(_values_of(self._starts_so_far[index], values) + 0.5)

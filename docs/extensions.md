@@ -277,13 +277,14 @@ class ThreatMap:
 
   An item starts in whole numbers for a time from the plan's start, and in fractions after it: the solver weighs
   fractions far faster, and the bot carries out only the near term before it plans again. By default that time grows
-  with what the item costs: 4 minutes for a command center, 1 for a supply depot and 30 seconds for an SCV, and an
-  upgrade is whole throughout. `Planner(api, whole_until=...)` takes a function that returns another time for a unit
-  type, or `None` for its default:
+  with what the item costs and shrinks as the income grows. At the income a game starts with it is 4 minutes for a
+  command center, 2 for an upgrade of 100 minerals and 100 vespene, 1 for a supply depot and 30 seconds for an SCV; at
+  three times that income it is a third of each, but never under 30 seconds. `Planner(api, whole_until=...)` takes a
+  function that returns another time for a unit type or an upgrade, or `None` for its default:
 
   ```python
-  def whole_until(unit_type: UnitTypeId) -> GameTime | None:
-      return GameTime(seconds=20) if unit_type == UnitTypeId.SUPPLY_DEPOT else None
+  def whole_until(item: UnitTypeId | UpgradeId) -> GameTime | None:
+      return GameTime(seconds=20) if item == UnitTypeId.SUPPLY_DEPOT else None
   ```
 
-  `GameTime.INFINITE` keeps a type whole throughout. Longer makes a plan exact further ahead, and the solve slower.
+  `GameTime.INFINITE` keeps an item whole throughout. Longer makes a plan exact further ahead, and the solve slower.

@@ -1,9 +1,10 @@
 """Benchmark the build planner on the cases of its toy, `tools/planner_toy/`, from the game's data rather than the toy's
 14 hand-written items: each solve's time, objective, gap and counts, and the first part of its plan.
 
-Every case but `replans` plans from the start of a game, twelve SCVs on a main's eight fields beside its command
-center, 50 minerals and 12 of 15 supply, and every case with at most three new command centers, over 10 minutes. But
-for `replans` and `items`, each values marines, marauders and medivacs as the toy did, with no walks unless it says so:
+Every case but `replans` and `items` plans from the start of a game, twelve SCVs on a main's eight fields beside its
+command center, 50 minerals and 12 of 15 supply, and every case with at most three new command centers, over 10
+minutes. But for those two, each values marines, marauders and medivacs as the toy did, with no walks unless it says
+so:
 
 - `reference`: the reference configuration, the doubling grid, the planner's default windows of whole starts, and a
   discounted concave reward, at each half-life given by `--half-lives`, with walks: 25 seconds to the expansion and 6
@@ -20,8 +21,8 @@ for `replans` and `items`, each values marines, marauders and medivacs as the to
   bases at 3:00 and at 6:00 with units in production, with the reference's grid, windows and walks, at each half-life,
   for a reward on marines, marauders and medivacs that never saturates, each count still worth something.
 - `items`: the item set a wide reward brings, 38 items where the toy's has 14: the reward of `replans` and ten more
-  army types, and eight upgrades, from the game's start with the reference's grid, windows and walks, at each
-  half-life.
+  army types, and eight upgrades, from the game's start and from the states of `replans`, with the reference's grid,
+  windows and walks, at each half-life.
 
     uv run python tools/benchmark_planner.py reference --time-limit 3
     uv run python tools/benchmark_planner.py grids --time-limit 10
@@ -290,7 +291,7 @@ def _solve_and_print(
     *,
     grid: TimeGrid,
     time_limit: float,
-    whole_until: Callable[[UnitTypeId], GameTime | None] | None = None,
+    whole_until: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: Economy | None = None,
     loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
     state: GameState | None = None,
@@ -299,17 +300,21 @@ def _solve_and_print(
     windows of whole starts `whole_until` gives, as `Planner` takes it, by `economy`, with no walks if `None`, and
     `loss_rates`, and print what came of it."""
     items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+    planned_from = _game_start() if state is None else state
+    planned_by = _walking(_NO_WALKS) if economy is None else economy
     started = time.perf_counter()
     program = PlanProgram(
         items=items,
         model=model,
         edges=grid.edges(_HORIZON),
-        state=_game_start() if state is None else state,
+        state=planned_from,
         reward=reward,
-        economy=_walking(_NO_WALKS) if economy is None else economy,
+        economy=planned_by,
         loss_rates=loss_rates,
         new_command_center_limit=_NEW_COMMAND_CENTER_LIMIT,
-        whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until),
+        whole_until_seconds=whole_until_seconds_of(
+            items, whole_until=whole_until, state=planned_from, economy=planned_by
+        ),
         previous_plan=None,
         hysteresis_bonus=0.0,
     )
@@ -365,19 +370,21 @@ def _run_replans(model: TerranModel, time_limit: float, half_lives: Sequence[Gam
 
 
 def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None]) -> None:
-    """The wide reward from the game's start, at each half-life."""
+    """The wide reward from the game's start and from each mid-game state, at each half-life."""
     curves: dict[UnitTypeId, tuple[CurveSegment, ...]] = dict(_GROWING_CURVES)
     for unit_type, slope in _FIRST_SIX_SLOPES_OF_THE_WIDE_REWARD.items():
         curves[unit_type] = (CurveSegment(slope=slope, up_to=6), CurveSegment(slope=slope / 3))
-    for half_life in half_lives:
-        _solve_and_print(
-            f"wide reward, {_half_life_label(half_life)}",
-            model,
-            Reward(curves=curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
-            grid=TimeGrid.doubling(),
-            time_limit=time_limit,
-            economy=_reference_economy(model),
-        )
+    for name, state in ({"0:00": _game_start()} | _mid_game_states()).items():
+        for half_life in half_lives:
+            _solve_and_print(
+                f"wide reward at {name}, {_half_life_label(half_life)}",
+                model,
+                Reward(curves=curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
+                grid=TimeGrid.doubling(),
+                time_limit=time_limit,
+                economy=_reference_economy(model),
+                state=state,
+            )
 
 
 def _reference_economy(model: TerranModel) -> Economy:
@@ -469,14 +476,17 @@ def _run_discount(model: TerranModel, time_limit: float, half_lives: Sequence[Ga
         _solve_and_print(_half_life_label(half_life), model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
 
 
-def _whole_for_90_seconds(_: UnitTypeId) -> GameTime:
-    """Every unit type whole for 90 seconds, as in the toy's runs before run8."""
-    return GameTime(seconds=90)
+def _whole_for_90_seconds(item: UnitTypeId | UpgradeId) -> GameTime | None:
+    """Every unit type whole for 90 seconds, as in the toy's runs before run8, and an upgrade by its default."""
+    return GameTime(seconds=90) if isinstance(item, UnitTypeId) else None
 
 
-def _whole_as_in_the_toy(unit_type: UnitTypeId) -> GameTime:
-    """The toy's run8 windows: its lumpy items whole over the horizon, the rest for 90 seconds."""
-    return GameTime.INFINITE if unit_type in _WHOLE_OVER_THE_HORIZON_IN_THE_TOY else GameTime(seconds=90)
+def _whole_as_in_the_toy(item: UnitTypeId | UpgradeId) -> GameTime | None:
+    """The toy's run8 windows: its lumpy items whole over the horizon, the other unit types for 90 seconds, and an
+    upgrade by its default."""
+    if not isinstance(item, UnitTypeId):
+        return None
+    return GameTime.INFINITE if item in _WHOLE_OVER_THE_HORIZON_IN_THE_TOY else GameTime(seconds=90)
 
 
 def _print_starts_by_minute(plan: Plan, unit_types: Sequence[UnitTypeId]) -> None:
