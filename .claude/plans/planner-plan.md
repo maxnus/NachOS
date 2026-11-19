@@ -290,9 +290,10 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    to 1.5% from a game's start; from mid-game all were within 0.5%, doubling from 544 within 0.11%. The wide reward
    from a game's start at a half-life of 240 s was proven in 14.0 s doubling from 544, and not in 40 from 816 on.
 
-   Open: prune to what the reward reaches, or phase 3's start from the previous plan; and what a bot is handed when
-   no plan is found in time, where `plan_now` raises `NoPlanFoundError`, as a wide reward's replan still does at 1 s
-   in one case of twelve.
+   Open: prune to what the reward reaches, or phase 3's start from the previous plan. Where no plan is found in
+   time, as for a wide reward's replan at 1 s in one case of twelve, `plan_now` returns `None` and `plan` stays the
+   one before (the owner, 2026-11-19), where it raised a `NoPlanFoundError`: a bot keeps the plan it has, and the
+   type makes it check.
 4. **Build space.** A bound on structures per base from the map, as the one physical limit the model lacks;
    `api.placement` may answer it.
 5. **Replanning defaults.** The interval, the budget and the hysteresis bonus are parameters; their defaults come

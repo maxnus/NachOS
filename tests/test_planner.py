@@ -127,6 +127,12 @@ def _default_whole_seconds_by_name(state: GameState, economy: Economy) -> dict[s
     return {item.name: window for item, window in zip(items, seconds, strict=True) if item.name in named}
 
 
+def _plan_found(plan: Plan | None) -> Plan:
+    """`plan`, which the solver found."""
+    assert plan is not None
+    return plan
+
+
 def _start_seconds(plan: Plan, item: UnitTypeId | UpgradeId) -> list[float]:
     """The seconds after the plan's start at which it starts each `item`, to a millionth."""
     return [round((planned.start - plan.made_at).seconds, 6) for planned in plan.items if planned.item == item]
@@ -1120,7 +1126,9 @@ class TestPlanner:
             plans.append(
                 (
                     before,
-                    api.extensions.plan_now(Reward(weights={UnitTypeId.MARINE: 1.0}), horizon=GameTime(seconds=60)),
+                    _plan_found(
+                        api.extensions.plan_now(Reward(weights={UnitTypeId.MARINE: 1.0}), horizon=GameTime(seconds=60))
+                    ),
                 )
             )
 
@@ -1132,6 +1140,49 @@ class TestPlanner:
         assert plan.made_at == GameTime.ZERO
         assert plan.minerals[0] == 200.0
         assert UnitTypeId.MARINE in {planned.item for planned in plan.items}
+
+    def test_it_returns_none_and_holds_no_plan_if_the_solver_finds_none_within_its_limits(self) -> None:
+        """A billionth of a second ends the solve before it has begun."""
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=lambda api: Planner(api, time_limit=1e-9))
+        plans: list[Plan | None] = []
+
+        @api.on(TurnEvent)
+        def plan_marines(_: TurnEvent) -> None:
+            plans.append(
+                api.extensions.plan_now(Reward(weights={UnitTypeId.MARINE: 1.0}), horizon=GameTime(seconds=60))
+            )
+
+        api.play(game.joined())
+
+        assert plans == [None]
+        assert api.extensions.plan is None
+
+    def test_it_holds_the_plan_before_if_the_solver_finds_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        plans: list[Plan | None] = []
+
+        def find_no_plan(_: PlanProgram, *, time_limit: float | None, node_limit: int | None) -> None:
+            return None
+
+        @api.on(TurnEvent)
+        def plan_marines_twice(_: TurnEvent) -> None:
+            reward = Reward(weights={UnitTypeId.MARINE: 1.0})
+            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60)))
+            monkeypatch.setattr(PlanProgram, "solve", find_no_plan)
+            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60)))
+
+        api.play(game.joined())
+
+        found, not_found = plans
+        assert found is not None
+        assert not_found is None
+        assert api.extensions.plan is found
 
     def test_it_plans_for_terran_alone(self) -> None:
         zerg = (
@@ -1190,7 +1241,7 @@ class TestPlanner:
         def plan_with_nothing_in_stock(_: TurnEvent) -> None:
             state = dataclasses.replace(api.extensions.game_state(), minerals=0.0)
             reward = Reward(weights={UnitTypeId.MARINE: 1.0})
-            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), state=state))
+            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), state=state)))
 
         api.play(game.joined())
 
@@ -1214,14 +1265,16 @@ class TestPlanner:
             state = dataclasses.replace(api.extensions.game_state(), minerals=150.0, mineral_fields=0)
             reward = Reward(weights={UnitTypeId.SCV: 1.0})
             horizon = GameTime(seconds=40)
-            plans.append(api.extensions.plan_now(reward, horizon=horizon, state=state))
+            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon, state=state)))
             plans.append(
-                api.extensions.plan_now(
-                    reward,
-                    horizon=horizon,
-                    state=state,
-                    previous_plan=previous_plan,
-                    hysteresis_bonus=100.0,
+                _plan_found(
+                    api.extensions.plan_now(
+                        reward,
+                        horizon=horizon,
+                        state=state,
+                        previous_plan=previous_plan,
+                        hysteresis_bonus=100.0,
+                    )
                 )
             )
 
@@ -1244,8 +1297,9 @@ class TestPlanner:
         def plan_scvs_twice(_: TurnEvent) -> None:
             reward = Reward(weights={UnitTypeId.SCV: 1.0})
             horizon = GameTime(seconds=40)
-            plans.append(api.extensions.plan_now(reward, horizon=horizon))
-            plans.append(api.extensions.plan_now(reward, horizon=horizon, start_limits={UnitTypeId.SCV: 1}))
+            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon)))
+            limited_to_one_scv = api.extensions.plan_now(reward, horizon=horizon, start_limits={UnitTypeId.SCV: 1})
+            plans.append(_plan_found(limited_to_one_scv))
 
         api.play(game.joined())
 

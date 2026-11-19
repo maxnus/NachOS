@@ -267,8 +267,9 @@ class ThreatMap:
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
   to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and what
   the planner expects at each of its `times`: the `minerals` and `vespene` in stock, and the `counts` of each unit type
-  alive. `planner.plan` holds the last one. The planner orders nothing and holds no unit: where a structure goes, which
-  SCV builds it, and what to drop once the game moves on stay the bot's.
+  alive. `plan_now` returns `None` if the solver finds no plan within its limits, and `planner.plan` holds the last one
+  it found. The planner orders nothing and holds no unit: where a structure goes, which SCV builds it, and what to drop
+  once the game moves on stay the bot's.
 
   `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that much
   longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan

@@ -7,7 +7,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.extensions.planner._economy import Economy, minerals_mined_a_second
-from sc2nachos.extensions.planner._errors import NoPlanFoundError
 from sc2nachos.extensions.planner._game_state import GameState, read_game_state
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._terran_model import TerranModel
@@ -138,7 +137,7 @@ class Planner:
 
     @property
     def plan(self) -> Plan | None:
-        """The plan `plan_now` returned last, or `None` before it has."""
+        """The plan `plan_now` found last, or `None` before it found one."""
         return self._plan
 
     def game_state(self) -> GameState:
@@ -156,7 +155,7 @@ class Planner:
         start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
         previous_plan: Plan | None = None,
         hysteresis_bonus: float = 0.0,
-    ) -> Plan:
+    ) -> Plan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `game_state()` now if `None`, and its time is the plan's start. The plan's workers mine, collect and walk as
         `economy` says. A unit of a type in `loss_rates` is expected lost at that share a second, those alive now and
@@ -167,12 +166,12 @@ class Planner:
         of those of one type, and one on what the plan would not make anyway does nothing. With a `previous_plan`, such
         as `plan`, each of its items the new plan starts no later than that one expected, counting those of its kind
         before it, is worth `hysteresis_bonus` once, beside the reward, so that the new plan differs from it only for
-        more than that. It solves within the planner's limits, before it returns.
+        more than that. It solves within the planner's limits, before it returns, and returns `None` if the solver
+        finds no plan within them, which leaves `plan` the one before.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
         than 0, a negative loss rate, start limit or `hysteresis_bonus`, a `hysteresis_bonus` with no `previous_plan`,
-        or a negative time from `fluid_after` or from `economy`'s `walk_time`; and `NoPlanFoundError` if the solver
-        finds no plan within its limits.
+        or a negative time from `fluid_after` or from `economy`'s `walk_time`.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
@@ -201,9 +200,8 @@ class Planner:
             hysteresis_bonus=hysteresis_bonus,
         )
         plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)
-        if plan is None:
-            raise NoPlanFoundError(f"the solver found no plan within {self._time_limit} s and {self._node_limit} nodes")
-        self._plan = plan
+        if plan is not None:
+            self._plan = plan
         return plan
 
 
