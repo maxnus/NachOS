@@ -293,3 +293,5 @@ class ThreatMap:
   ```
 
   `GameTime.INFINITE` keeps an item whole throughout. Longer makes a plan exact further ahead, and the solve slower.
+  A `PlannedItem` that starts where its item is fluid reads `is_fluid`: it stands for the fractions whose sum reached
+  a whole number there, rounded, so a bot can tell what the plan started in whole from what it only expects to follow.

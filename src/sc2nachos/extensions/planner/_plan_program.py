@@ -670,7 +670,7 @@ class PlanProgram:
 
     def _planned_items(self, values: FloatArray) -> tuple[PlannedItem, ...]:
         """Each item started, in order of start, those of one bucket in the order of the items: of fractional starts,
-        one each time their sum reaches a whole number, rounded."""
+        one each time their sum reaches a whole number, rounded, and fluid where its bucket's starts are."""
         planned: list[tuple[int, int, PlannedItem]] = []
         for index, item in enumerate(self._items):
             made = item.made
@@ -679,7 +679,8 @@ class PlanProgram:
             whole = np.floor(_values_of(self._starts_so_far[index], values) + 0.5)
             for bucket, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._state.time + GameTime(seconds=float(self._edges[bucket]))
-                planned += [(bucket, index, PlannedItem(item=made, start=start))] * int(count)
+                is_fluid = not self._whole[index][bucket]
+                planned += [(bucket, index, PlannedItem(item=made, start=start, is_fluid=is_fluid))] * int(count)
         return tuple(entry for _, _, entry in sorted(planned, key=lambda entry: (entry[0], entry[1])))
 
     def _index_of(self, planned: PlannedItem) -> int | None:

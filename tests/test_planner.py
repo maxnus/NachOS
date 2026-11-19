@@ -101,7 +101,7 @@ def _best_plan(
 # A plan that starts one barracks, 30 seconds after it was made at the game's start.
 _A_PLAN_OF_ONE_BARRACKS = Plan(
     made_at=GameTime.ZERO,
-    items=(PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30)),),
+    items=(PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30), is_fluid=False),),
     times=(),
     minerals=(),
     vespene=(),
@@ -400,7 +400,7 @@ class TestKnownPlans:
         assert plan.minerals[0] == 50.0
         assert plan.vespene[0] == 0.0
         assert plan.counts[UnitTypeId.SCV][0] == 12.0
-        assert plan.items[0] == PlannedItem(item=UnitTypeId.SCV, start=GameTime(seconds=30))
+        assert plan.items[0] == PlannedItem(item=UnitTypeId.SCV, start=GameTime(seconds=30), is_fluid=False)
 
     def test_a_unit_counts_as_it_survives_its_loss_rate(self) -> None:
         """No barracks, so no marine is made."""
@@ -587,6 +587,21 @@ class TestFluidAfter:
         assert whole_numbers(GameTime.ZERO) == 0
         assert whole_numbers(GameTime(seconds=10)) == 5 * len(items)
         assert whole_numbers(GameTime.INFINITE) == 30 * len(items)
+
+    def test_a_plans_item_is_fluid_if_it_starts_no_earlier_than_its_items_time(self) -> None:
+        plan = _best_plan(
+            _game_start(),
+            Reward(weights={UnitTypeId.SCV: 1.0}),
+            horizon_seconds=60,
+            fluid_after=lambda _: GameTime(seconds=20),
+        )
+
+        fluid_starts = [planned.start for planned in plan.items if planned.is_fluid]
+        whole_starts = [planned.start for planned in plan.items if not planned.is_fluid]
+        assert whole_starts
+        assert max(whole_starts) < GameTime(seconds=20)
+        assert fluid_starts
+        assert min(fluid_starts) >= GameTime(seconds=20)
 
 
 class TestEconomy:
@@ -1191,7 +1206,7 @@ class TestPlanner:
         )
         api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
         plans: list[Plan] = []
-        a_barracks_at_32_seconds = PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=32))
+        a_barracks_at_32_seconds = PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=32), is_fluid=False)
         previous_plan = dataclasses.replace(_A_PLAN_OF_ONE_BARRACKS, items=(a_barracks_at_32_seconds,))
 
         @api.on(TurnEvent)
