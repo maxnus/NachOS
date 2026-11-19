@@ -47,7 +47,7 @@ class PlanProgram:
     """The mixed-integer linear program of one plan over the buckets between `edges`, in seconds from `state`'s time.
 
     Each item's starts so far by each bucket's end are a variable, and a bucket's starts those so far less those of the
-    bucket before; both are whole where the bucket starts before the item's time in `whole_until_seconds`, one for each
+    bucket before; both are whole where the bucket starts before the item's time in `fluid_after_seconds`, one for each
     item in the order of `items`. A start pays from the stock at its bucket's start plus half the bucket's income, keeps
     its producer busy for its build time over the buckets it spans, its SCV from the walk there through the build to the
     walk back, takes its supply at once, and counts as done from the first edge at or after its end. Workers mine,
@@ -57,7 +57,7 @@ class PlanProgram:
     `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
     worth `hysteresis_bonus` once, beside the reward.
 
-    Raises `ValueError` unless `whole_until_seconds` hold one time for each item, and for a negative walk from
+    Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, and for a negative walk from
     `economy`'s `walk_time`.
     """
 
@@ -101,12 +101,12 @@ class PlanProgram:
         economy: Economy,
         loss_rates: Mapping[UnitTypeId, float],
         new_command_center_limit: int | None,
-        whole_until_seconds: Sequence[float],
+        fluid_after_seconds: Sequence[float],
         previous_plan: Plan | None,
         hysteresis_bonus: float,
     ) -> None:
-        if len(whole_until_seconds) != len(items):
-            raise ValueError(f"{len(whole_until_seconds)} windows for {len(items)} items")
+        if len(fluid_after_seconds) != len(items):
+            raise ValueError(f"{len(fluid_after_seconds)} windows for {len(items)} items")
         self._items = tuple(items)
         self._model = model
         self._state = state
@@ -127,7 +127,7 @@ class PlanProgram:
         self._index_of_upgrade = {item.upgrade: i for i, item in enumerate(self._items) if item.upgrade is not None}
         self._program = LinearProgram()
         self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
-        self._whole = [self._edges[:-1] < whole_until - SECONDS_TOLERANCE for whole_until in whole_until_seconds]
+        self._whole = [self._edges[:-1] < fluid_after - SECONDS_TOLERANCE for fluid_after in fluid_after_seconds]
         self._starts_so_far: list[VariableBlock] = []
         for item, whole in zip(self._items, self._whole, strict=True):
             self._add_starts_so_far(item, whole)

@@ -28,7 +28,7 @@ from sc2nachos.extensions.planner import (
 )
 from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._plan_program import PlanProgram
-from sc2nachos.extensions.planner._planner import whole_until_seconds_of
+from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
@@ -67,14 +67,14 @@ def _best_plan(
     *,
     horizon_seconds: float,
     grid: TimeGrid = _TWO_SECOND_BUCKETS,
-    whole_until: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
+    fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: dict[UnitTypeId, float] | None = None,
     new_command_center_limit: int | None = None,
     previous_plan: Plan | None = None,
     hysteresis_bonus: float = 0.0,
 ) -> Plan:
-    """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `whole_until`, by
+    """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
     `economy`, with `loss_rates` and `new_command_center_limit`, keeping to `previous_plan` for `hysteresis_bonus`,
     proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
@@ -87,7 +87,7 @@ def _best_plan(
         economy=economy,
         loss_rates=loss_rates or {},
         new_command_center_limit=new_command_center_limit,
-        whole_until_seconds=whole_until_seconds_of(items, whole_until=whole_until, state=state, economy=economy),
+        fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
     )
@@ -121,7 +121,7 @@ def _default_whole_seconds_by_name(state: GameState, economy: Economy) -> dict[s
     """The default seconds each item of a plan for marines and stimpack starts whole for, from `state` by `economy`, by
     the item's name, but those of add-ons, barracks and refineries."""
     items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE, UnitTypeId.FACTORY], upgrades=[UpgradeId.STIMPACK])
-    seconds = whole_until_seconds_of(items, whole_until=None, state=state, economy=economy)
+    seconds = fluid_after_seconds_of(items, fluid_after=None, state=state, economy=economy)
     named = ("COMMAND_CENTER", "FACTORY", "STIMPACK", "ORBITAL_COMMAND", "SUPPLY_DEPOT", "SCV", "MARINE")
     return {item.name: window for item, window in zip(items, seconds, strict=True) if item.name in named}
 
@@ -314,7 +314,7 @@ class TestKnownPlans:
         grid, every start whole. An SCV starts each 14 seconds, its 12.14 rounded up to whole 2-second buckets."""
         reward = Reward(weights={UnitTypeId.SCV: 2.0, UnitTypeId.COMMAND_CENTER: 1.0})
         plan = _best_plan(
-            _game_start(), reward, horizon_seconds=150, grid=TimeGrid.doubling(), whole_until=_whole_over_any_horizon
+            _game_start(), reward, horizon_seconds=150, grid=TimeGrid.doubling(), fluid_after=_whole_over_any_horizon
         )
 
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER)[0] == 48.0
@@ -342,7 +342,7 @@ class TestKnownPlans:
             worker_builds=(build,),
         )
         plan = _best_plan(
-            state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=100, whole_until=_whole_over_any_horizon
+            state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=100, fluid_after=_whole_over_any_horizon
         )
 
         depot_counts = zip(plan.times, plan.counts[UnitTypeId.SUPPLY_DEPOT], strict=False)
@@ -427,18 +427,18 @@ class TestKnownPlans:
         assert _start_seconds(kept, UnitTypeId.BARRACKS)[0] <= 30.0
 
 
-class TestWholeUntil:
-    def test_an_item_has_what_whole_until_returns_or_its_default_for_none(self) -> None:
+class TestFluidAfter:
+    def test_an_item_has_what_fluid_after_returns_or_its_default_for_none(self) -> None:
         items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[UpgradeId.STIMPACK])
         asked: list[UnitTypeId | UpgradeId] = []
 
-        def whole_until(item: UnitTypeId | UpgradeId) -> GameTime | None:
+        def fluid_after(item: UnitTypeId | UpgradeId) -> GameTime | None:
             asked.append(item)
             if item == UpgradeId.STIMPACK:
                 return GameTime.INFINITE
             return GameTime(seconds=20) if item == UnitTypeId.SUPPLY_DEPOT else None
 
-        seconds = whole_until_seconds_of(items, whole_until=whole_until, state=_game_start(), economy=Economy())
+        seconds = fluid_after_seconds_of(items, fluid_after=fluid_after, state=_game_start(), economy=Economy())
 
         seconds_by_name = {item.name: window for item, window in zip(items, seconds, strict=True)}
         assert seconds_by_name["SUPPLY_DEPOT"] == 20.0
@@ -515,9 +515,9 @@ class TestWholeUntil:
     def test_a_negative_time_raises(self) -> None:
         items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[])
         with pytest.raises(ValueError, match="SCV"):
-            whole_until_seconds_of(
+            fluid_after_seconds_of(
                 items,
-                whole_until=lambda item: GameTime(seconds=-1) if item == UnitTypeId.SCV else None,
+                fluid_after=lambda item: GameTime(seconds=-1) if item == UnitTypeId.SCV else None,
                 state=_game_start(),
                 economy=Economy(),
             )
@@ -526,7 +526,7 @@ class TestWholeUntil:
         reward = Reward(weights={UnitTypeId.MARINE: 1.0})
         items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
 
-        def whole_numbers(whole_until: GameTime) -> int:
+        def whole_numbers(fluid_after: GameTime) -> int:
             program = PlanProgram(
                 items=items,
                 model=_TERRAN_MODEL,
@@ -536,7 +536,7 @@ class TestWholeUntil:
                 economy=Economy(),
                 loss_rates={},
                 new_command_center_limit=None,
-                whole_until_seconds=[whole_until.seconds] * len(items),
+                fluid_after_seconds=[fluid_after.seconds] * len(items),
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
@@ -676,7 +676,7 @@ class TestEconomy:
             reward,
             horizon_seconds=150,
             grid=TimeGrid.doubling(),
-            whole_until=_whole_over_any_horizon,
+            fluid_after=_whole_over_any_horizon,
             new_command_center_limit=0,
         )
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER) == []
@@ -1049,9 +1049,9 @@ class TestPlanner:
         with pytest.raises(ValueError, match="loss rates"):
             api.play(game.joined())
 
-    def test_a_negative_time_from_whole_until_raises(self) -> None:
+    def test_a_negative_time_from_fluid_after_raises(self) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
-        api = Api(extensions=lambda api: Planner(api, whole_until=lambda _: GameTime(seconds=-1)))
+        api = Api(extensions=lambda api: Planner(api, fluid_after=lambda _: GameTime(seconds=-1)))
 
         @api.on(TurnEvent)
         def plan_marines(_: TurnEvent) -> None:

@@ -50,7 +50,7 @@ from sc2nachos.extensions.planner import (
     WorkerBuild,
 )
 from sc2nachos.extensions.planner._plan_program import PlanProgram
-from sc2nachos.extensions.planner._planner import whole_until_seconds_of
+from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.testing import load_game_data
@@ -291,13 +291,13 @@ def _solve_and_print(
     *,
     grid: TimeGrid,
     time_limit: float,
-    whole_until: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
+    fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: Economy | None = None,
     loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
     state: GameState | None = None,
 ) -> Plan | None:
     """Plan for `reward` from `state`, the game's start if `None`, on `grid` within `time_limit` seconds, with the
-    windows of whole starts `whole_until` gives, as `Planner` takes it, by `economy`, with no walks if `None`, and
+    windows of whole starts `fluid_after` gives, as `Planner` takes it, by `economy`, with no walks if `None`, and
     `loss_rates`, and print what came of it."""
     items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     planned_from = _game_start() if state is None else state
@@ -312,8 +312,8 @@ def _solve_and_print(
         economy=planned_by,
         loss_rates=loss_rates,
         new_command_center_limit=_NEW_COMMAND_CENTER_LIMIT,
-        whole_until_seconds=whole_until_seconds_of(
-            items, whole_until=whole_until, state=planned_from, economy=planned_by
+        fluid_after_seconds=fluid_after_seconds_of(
+            items, fluid_after=fluid_after, state=planned_from, economy=planned_by
         ),
         previous_plan=None,
         hysteresis_bonus=0.0,
@@ -409,14 +409,14 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             reward,
             grid=grid,
             time_limit=time_limit,
-            whole_until=_whole_for_90_seconds,
+            fluid_after=_whole_for_90_seconds,
         )
 
 
 def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
     """Every start whole for 90 seconds, against the toy's lumpy items whole over the horizon, and the default."""
     reward = Reward(weights=_TOY_WEIGHTS)
-    for label, whole_until in (
+    for label, fluid_after in (
         ("everything whole for 90 s only", _whole_for_90_seconds),
         ("lumpy whole over the horizon, the rest for 90 s", _whole_as_in_the_toy),
         ("the planner's default", None),
@@ -427,7 +427,7 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
             reward,
             grid=TimeGrid.doubling(),
             time_limit=time_limit,
-            whole_until=whole_until,
+            fluid_after=fluid_after,
         )
 
 

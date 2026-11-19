@@ -39,20 +39,20 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    command center to 4:00, a factory or a starport to 2:30, a barracks or an orbital command to 1:30, a depot to
    1:00, an SCV or a marine to 0:30. At a higher income the time is shorter in proportion, never under the 30
    seconds, and at a lower one no longer: the income is what the state's SCVs mine if every one mines, with its
-   orbital commands' MULEs, against a game's twelve SCVs on eight fields, each by the economy the plan is handed.
-   An upgrade has its time by its cost as a unit has (the owner, 2026-11-19), where phase 1 kept it integer over any
-   horizon. A bot sets its own for any unit type or upgrade, `Planner(whole_until=...)` taking a function of either
-   that returns `None` for the default. The rule: an item stays whole where its cost exceeds a bucket's income and it
-   is made once a bucket at most. The owner's question behind the income was whether a type the state holds many of
-   could be fluid sooner, 60 workers against 12: a time divided by the count of the type gained little alone and
-   nothing beside the income's, which already brings most items to the 30 seconds, and was not built (Open 3 holds
-   the measurements). Fluid far-term starts make the far term the value function of the near term, computed by the LP
-   at each node instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00.
-   Depots kept whole for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1
-   first kept townhalls, production and tech structures whole over the whole horizon and the rest for 90 seconds,
-   which left the reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it
-   was proven optimal in 8 to 10 seconds, and is in 2.5 to 4.3 since each item's starts are held as running totals
-   (Open 7).
+   orbital commands' MULEs, against a game's twelve SCVs on eight fields, each by the economy the plan is handed. An
+   upgrade has its time by its cost as a unit has (the owner, 2026-11-19), where phase 1 kept it integer over any
+   horizon. A bot sets its own for any unit type or upgrade, `Planner(fluid_after=...)` taking a function of either
+   that returns `None` for the default, named so by the owner (2026-11-19) over `whole_until` and
+   `whole_starts_until`. The rule: an item stays whole where its cost exceeds a bucket's income and it is made once a
+   bucket at most. The owner's question behind the income was whether a type the state holds many of could be fluid
+   sooner, 60 workers against 12: a time divided by the count of the type gained little alone and nothing beside the
+   income's, which already brings most items to the 30 seconds, and was not built (Open 3 holds the measurements).
+   Fluid far-term starts make the far term the value function of the near term, computed by the LP at each node
+   instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00. Depots kept whole
+   for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1 first kept
+   townhalls, production and tech structures whole over the whole horizon and the rest for 90 seconds, which left the
+   reference configuration 7.6 to 12% from its bound after 3 seconds and 7 to 11% after 10; by cost it was proven
+   optimal in 8 to 10 seconds, and is in 2.5 to 4.3 since each item's starts are held as running totals (Open 7).
 4. **The reward is a discounted sum over time of concave terms in one currency.** Never the terminal state alone:
    under replanning a terminal reward defers the army forever, and it is far harder to solve. The discount
    half-life, not the horizon, is the economy knob: workers appear once it exceeds a worker's payback time, an
@@ -249,6 +249,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    what it lacked was in the far term. Dividing a type's time by how many the state holds was measured beside these
    (decision 3): 306 to 332 whole variables for the replans alone, 233 to 259 with the income's 245 to 265, and no
    faster with it.
+
+   An upgrade done or being researched stays an item, its starts held at none, and so does what only it needed, an
+   engineering bay. Leaving those out changes nothing that shows: with the wide reward's eight upgrades done at 3:00
+   and at 6:00, 813 and 729 whole variables against 610 and 554 without their nine items, the same objectives, and
+   proofs in 3.9 to 8.7 s against 5.1 to 9.1 (a script outside the package, one run each). Leaving out what a bot
+   would build but for its own choice does more from a game's start: without reactors and the orbital command the
+   reward of `replans` has 333 whole variables from 419 there and is proven in 2.3 to 2.8 s from 4.1 to 5.3, the wide
+   reward in 15.3 s from 30.8, and from mid-game neither is faster; a limit on the starts of an item, none for one
+   left out, is proposed and not decided.
 
    Open: prune to what the reward reaches, or phase 3's start from the previous plan; and what a bot is handed when
    no plan is found in time, where `plan_now` raises `NoPlanFoundError`, as a wide reward's replan does at 1 s.
