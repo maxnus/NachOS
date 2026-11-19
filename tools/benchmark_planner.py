@@ -1,10 +1,11 @@
 """Benchmark the build planner on the cases of its toy, `tools/planner_toy/`, from the game's data rather than the toy's
 14 hand-written items: each solve's time, objective, gap and counts, and the first part of its plan.
 
-Every case but `replans` and `items` plans from the start of a game, twelve SCVs on a main's eight fields beside its
-command center, 50 minerals and 12 of 15 supply, and every case with at most three new command centers, over 10
-minutes. But for those two, each values marines, marauders and medivacs as the toy did, with no walks unless it says
-so:
+The toy's cases keep its grid, 2-second buckets doubling from 45 seconds, and `reference`, `replans` and `items` plan
+on the planner's default. Every case but `replans` and `items` plans from the start of a game, twelve SCVs on a main's
+eight fields beside its command center, 50 minerals and 12 of 15 supply, and every case with at most three new command
+centers, over 10 minutes. But for those two, each values marines, marauders and medivacs as the toy did, with no walks
+unless it says so:
 
 - `reference`: the reference configuration, the doubling grid, the planner's default windows of whole starts, and a
   discounted concave reward, at each half-life given by `--half-lives`, with walks: 25 seconds to the expansion and 6
@@ -154,10 +155,18 @@ _TOY_GRIDS = {
             (GameTime(seconds=60), GameTime.INFINITE),
         ]
     ),
-    "double60": TimeGrid.doubling(first_doubling=GameTime(seconds=60)),
-    "double90": TimeGrid.doubling(first_doubling=GameTime(seconds=90), longest_bucket=GameTime(seconds=16)),
-    "double45": TimeGrid.doubling(),
+    "double60": TimeGrid.doubling(
+        first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=60), longest_bucket=GameTime(seconds=32)
+    ),
+    "double90": TimeGrid.doubling(
+        first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=90), longest_bucket=GameTime(seconds=16)
+    ),
+    "double45": TimeGrid.doubling(
+        first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=45), longest_bucket=GameTime(seconds=32)
+    ),
 }
+# The grid of the toy's later runs, which the planner's default was before it was cut to a worker's build time.
+_TOY_DOUBLING_GRID = _TOY_GRIDS["double45"]
 
 
 def main() -> None:
@@ -425,7 +434,7 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
             label,
             model,
             reward,
-            grid=TimeGrid.doubling(),
+            grid=_TOY_DOUBLING_GRID,
             time_limit=time_limit,
             fluid_after=fluid_after,
         )
@@ -434,7 +443,7 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
 def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
     """The linear reward against the concave one."""
     for label, reward in (("linear", Reward(weights=_TOY_WEIGHTS)), ("concave", Reward(curves=_TOY_CURVES))):
-        _solve_and_print(f"{label} reward", model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+        _solve_and_print(f"{label} reward", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit)
 
 
 def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
@@ -445,7 +454,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             for kind, counts in scenario.items()
         ]
         reward = Reward(weights=_STANDING_WEIGHTS, coverages=coverages)
-        plan = _solve_and_print(f"enemy {name}", model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+        plan = _solve_and_print(f"enemy {name}", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit)
         if plan is not None:
             _print_starts_by_minute(plan, (UnitTypeId.MARINE, UnitTypeId.MARAUDER))
 
@@ -454,7 +463,7 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
     """No walks against the toy's Terran walks."""
     reward = Reward(weights=_TOY_WEIGHTS)
     for label, walks in (("no walks", _NO_WALKS), ("Terran walks", _TOY_WALKS)):
-        _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit, economy=_walking(walks))
+        _solve_and_print(label, model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, economy=_walking(walks))
 
 
 def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | None]) -> None:
@@ -464,7 +473,7 @@ def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | No
         ("army lost at 0.002/s", dict.fromkeys(_TOY_WEIGHTS, 0.002)),
         ("workers lost at 0.001/s", {UnitTypeId.SCV: 0.001}),
     ):
-        plan = _solve_and_print(label, model, reward, grid=TimeGrid.doubling(), time_limit=time_limit, loss_rates=rates)
+        plan = _solve_and_print(label, model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, loss_rates=rates)
         if plan is not None:
             _print_starts_by_minute(plan, (UnitTypeId.MARINE, UnitTypeId.MARAUDER, UnitTypeId.BARRACKS, UnitTypeId.SCV))
 
@@ -473,7 +482,7 @@ def _run_discount(model: TerranModel, time_limit: float, half_lives: Sequence[Ga
     """The linear reward at each half-life."""
     for half_life in half_lives:
         reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life)
-        _solve_and_print(_half_life_label(half_life), model, reward, grid=TimeGrid.doubling(), time_limit=time_limit)
+        _solve_and_print(_half_life_label(half_life), model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit)
 
 
 def _whole_for_90_seconds(item: UnitTypeId | UpgradeId) -> GameTime | None:

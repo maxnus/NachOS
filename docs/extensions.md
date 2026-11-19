@@ -270,13 +270,15 @@ class ThreatMap:
   alive. `planner.plan` holds the last one. The planner orders nothing and holds no unit: where a structure goes, which
   SCV builds it, and what to drop once the game moves on stay the bot's.
 
-  `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that
-  much longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a
-  plan the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the
-  items from the game's data, pruned to what the reward needs, the workers pooled over every field and refinery, the
-  SCV away from the walk to a structure through the build to the walk back, and starts on the first second of a bucket
-  of its `TimeGrid`, 2 seconds long at first and doubling every time the time from the plan's start doubles from 45
-  seconds.
+  `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that much
+  longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan
+  the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the items
+  from the game's data, pruned to what the reward needs, the workers pooled over every field and refinery, the SCV away
+  from the walk to a structure through the build to the walk back, and starts on the first second of a bucket of its
+  `TimeGrid`, by default 34 game steps long at first, 1.5 seconds, and doubling every time the time from the plan's
+  start doubles from 544 steps, 24 seconds. A worker's 272 steps are eight of the first buckets, so workers trained one
+  after another start as far apart as in the game; a build no bucket divides, a marine's 400 steps, is planned up to a
+  bucket longer where one follows another.
 
   An item starts in whole numbers for a time from the plan's start and is fluid after it, starting in fractions: the
   solver weighs fractions far faster, and the bot carries out only the near term before it plans again. By default that

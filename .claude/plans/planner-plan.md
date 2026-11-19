@@ -27,12 +27,17 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    would not beat it, and the Python side of a solve costs under 0.2 s. The lever is the formulation, below. No
    compiled code of our own: the ladder zip takes compiled packages from locked manylinux wheels, and an extension
    of ours would need a wheel built in CI.
-2. **A grid that widens with time: 2-second buckets doubling every 45 seconds** or so, to 32 seconds by ten minutes,
-   62 buckets in all. Ten-second buckets undertrained workers, an SCV every 20 to 30 seconds instead of every 12, and
-   undervalued the plan by 5%; 2 seconds is within 0.01% of 1 second at half the solve time. A doubling grid keeps
-   the relative timing error constant along the plan. Durations are never rounded: a build enters the producer
+2. **A grid that widens with time, cut to a worker's build time: buckets of 34 game steps doubling from 544** (the
+   owner, 2026-11-19, over 2-second buckets doubling every 45 seconds, 63 in all), 68 until 1,088, 136 until 2,176,
+   272 until 4,352 and 544 after, 1.5 seconds to 24.3, 57 buckets by ten minutes. Ten-second buckets undertrained
+   workers, an SCV every 20 to 30 seconds instead of every 12, and undervalued the plan by 5%; 2 seconds was within
+   0.01% of 1 second at half the solve time, but still trained an SCV every 14 seconds for the game's 12.14, a start
+   sitting on a bucket's first second (Open 9). Every build time is a whole number of game steps, and of 16: a
+   worker's 272, of every race, are eight buckets of 34, and stay a whole number of buckets while the buckets double
+   to 272, so SCVs chain as in the game; 2 seconds are 44.8 steps and divide nothing. A doubling grid keeps the
+   relative timing error constant along the plan. Durations are never rounded: a build enters the producer
    constraints in exact seconds split across the buckets it overlaps; only a start sits on a bucket's first second
-   and a completion on the next edge.
+   and a completion on the next edge. A bot hands `Planner` any other `TimeGrid`.
 3. **Whole numbers where an item is lumpy, fluid flows where it is not**, for longer the more it costs (the owner,
    phase 1) and the less comes in (the owner, 2026-11-19): an item's starts are integer from the plan's start for 60
    seconds for each 100 minerals and vespene at the income a game starts with, at least 30, and fluid after: a
@@ -119,6 +124,8 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
 | the planner's reference, starts held as running totals | optimal in 2.5 to 4.3 s, from 8.4 to 10.4 |
 | replans from 3:00 and 6:00, times by the state's income, 245 to 265 integers from 419 | optimal in 2.1 to 5.2 s, from 4.2 to 18.2 |
 | a wide reward, 38 items, upgrades' times by cost, 1,291 integers from 1,494 | optimal in 14 to 30 s, from 36 to 38 and a 2.1% gap at 40 s |
+| the planner's reference on buckets of 34 steps doubling from 544, 57 buckets, 401 integers | optimal in 1.5 to 2.2 s, from 2.5 to 4.3 |
+| replans and the wide reward on that grid | optimal in 1.8 to 3.6 s, from 2.1 to 5.2, and in 5.1 to 13.1 s, from 7 to 30 |
 
 The gap is the solver's bound on how far the incumbent may be from optimal, relative to the whole objective; a
 large one means a poor incumbent or a loose bound, and the plans were judged by their content. Objectives are not
@@ -186,15 +193,14 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 
 ## Phases
 
-1. **The extension, for Terran, synchronous**, in NachOS, built in phase 1's pull request but for its exit's 3
-   seconds, met at two half-lives of four (Open 7). Model from `api.data`, grid, reward, matrix, solve, plan,
-   `plan_now()`. Tests on tiny instances with known optimal plans (the first depot at 8 seconds from 50 minerals and
-   twelve SCVs; one marine at a time from one barracks; the command center at 48 seconds after uninterrupted SCVs),
-   on the toy's cases as `tools/benchmark_planner.py`, and on made-up games through `sc2nachos.testing` for the
-   snapshot. A section under "NachOS's own" in `docs/extensions.md`, this plan and the toy moved in, and
-   `next-steps.md` pointing here. Exit: the toy's results reproduced from the
-   game's data, and the reference configuration, doubling grid with the windows above, solved within 3 seconds on a
-   developer machine.
+1. **The extension, for Terran, synchronous**, in NachOS, built in phase 1's pull request, its exit's 3 seconds met
+   since the grid was cut to a worker's build time (Open 7). Model from `api.data`, grid, reward, matrix, solve,
+   plan, `plan_now()`. Tests on tiny instances with known optimal plans (the first depot at 8 seconds from 50
+   minerals and twelve SCVs; one marine at a time from one barracks; the command center with the fifth SCV after
+   uninterrupted SCVs), on the toy's cases as `tools/benchmark_planner.py`, and on made-up games through
+   `sc2nachos.testing` for the snapshot. A section under "NachOS's own" in `docs/extensions.md`, this plan and the
+   toy moved in, and `next-steps.md` pointing here. Exit: the toy's results reproduced from the game's data, and the
+   reference configuration, doubling grid with the windows above, solved within 3 seconds on a developer machine.
 2. **Playing it**, in AvocaDOS against the checkout. `PlanManager` driving objective priorities, the overlay, and a
    build `BuildOrderName.PLANNER` in `enabled_builds` with a static reward. Games against the built-in AI through
    `scripts/run.py`. Exit: it wins against VeryHard on the pool's maps as the current builds do, and plays a
@@ -266,16 +272,29 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    to 4.0% less for what they go without; from 3:00 and 6:00 in 2.8 to 3.6 s from 2.7 to 5.2 and in 6.5 to 10.4 s
    from 8.2 to 15.5, worth at most 0.2% less.
 
+   On the grid of decision 2 since 2026-11-19, 57 buckets: the replans have 292 and 274 whole variables, a plan
+   within 0.15% of the best after 1 s and within 0.08% after 3, and are proven optimal in 1.8 to 3.6 s. The wide
+   reward has 1,202 from the game's start, 860 from 3:00 and 787 from 6:00, and a plan after 1 s in eleven cases of
+   twelve: from the start 2.9 to 6.4% short after 1 s and at most 1.1% after 3, proven optimal in 5.1 to 13.1 s; from
+   3:00 and 6:00 at most 0.8% short after 1 s and 0.16% after 3, proven in 5.5 to 11.2 s. When the grid first doubles
+   was chosen by a script outside the package, each plan's first 30 seconds, or 24, fixed in a grid of 34-step
+   buckets to 2,176 steps: doubling from 544 steps, 816, 1,088 and 1,632 gave 57, 73, 89 and 121 buckets and proofs
+   of the reward of `replans` from a game's start in 1.8 to 2.1 s, 2.7 to 3.6, 7.1 to 7.2 and 18.6 to 22.9, where
+   2-second buckets took 4.1 to 5.3, and none lost more than 0.07% so, where the plans on 2-second buckets lost 0.5
+   to 1.5% from a game's start; from mid-game all were within 0.5%, doubling from 544 within 0.11%. The wide reward
+   from a game's start at a half-life of 240 s was proven in 14.0 s doubling from 544, and not in 40 from 816 on.
+
    Open: prune to what the reward reaches, or phase 3's start from the previous plan; and what a bot is handed when
-   no plan is found in time, where `plan_now` raises `NoPlanFoundError`, as a wide reward's replan does at 1 s.
+   no plan is found in time, where `plan_now` raises `NoPlanFoundError`, as a wide reward's replan still does at 1 s
+   in one case of twelve.
 4. **Build space.** A bound on structures per base from the map, as the one physical limit the model lacks;
    `api.placement` may answer it.
 5. **Replanning defaults.** The interval, the budget and the hysteresis bonus are parameters; their defaults come
    out of phase 3's games.
 6. **The discount against the solver.** A discount made a 7-minute solve faster and a 10-minute one slower; settle
    it on the real model.
-7. **Phase 1's exit: the reference configuration is solved within 3 seconds at two half-lives of four, and within
-   4.3 at the others** (measured in phase 1's pull request). First, with each item's starts a bucket at a time and
+7. **Phase 1's exit, the reference configuration solved within 3 seconds, is met since the grid of 34 steps: proven
+   optimal in 1.5 to 2.2 s** (measured in phase 1's pull request). First, with each item's starts a bucket at a time and
    decision 3's windows by cost, the concave reward was proven optimal in 8 to 10 s at every half-life, and the plan
    found after 3 s was worth 0.5 to 0.8% less than the optimal one, the solver's bound still 2.0 to 2.5% above it; the
    toy's linear reward was optimal in 8 s, but 6.5% short after 3. With phase 1's first windows,
@@ -294,16 +313,25 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    proven optimal in 3.9 s undiscounted, 2.9 at a half-life of 120 s, 4.2 at 240 and 2.5 at 480, where it took 9.2,
    10.4, 8.4 and 8.5. After 3 s the plan is the optimal one at 120 and 480 s, 0.05% short undiscounted and 0.7% at
    240. The best plan's worth is unchanged at each; of plans worth the same the solver now returns another, and three
-   tests that counted on which were made to count only the units done by the horizon. Still for the owner: whether
-   the exit is the proof, or the plan found by 3 seconds.
+   tests that counted on which were made to count only the units done by the horizon.
+
+   Since 2026-11-19 the exit is met: on the grid cut to a worker's build time (decision 2), 57 buckets and 401 whole
+   variables where it had 63 and 419, the reference is proven optimal in 1.6 s undiscounted, 1.8 at a half-life of
+   120 s, 1.5 at 240 and 2.2 at 480, the same to 0.02 s in three runs. Its objectives are 2.5 to 6.2% above those on
+   2-second buckets, of another grid and so no measure, but in the direction of an SCV every 12.14 seconds for every
+   14. The owner's question of the proof or the plan found by 3 seconds no longer decides the exit.
 8. **The count-form cut holds only where a bucket's starts are whole** (phase 1, for the owner to confirm). The toy
    applied it in every bucket shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
    buckets a barracks made a marine every 32 seconds, not every 17.86. Held to whole buckets, the toy's linear case
    was worth 6.4% more, with 7 barracks instead of 13.
 9. **Production chained on one producer starts a whole number of buckets apart while its starts are whole**, since a
-   start sits on a bucket's first second: an SCV every 14 seconds on 2-second buckets and every 16 on 4-second ones,
-   against 12.14 in game. The toy's 12-second SCV hid it. Phase 6's simulator, or starts queued behind the build ahead,
-   would answer it.
+   start sits on a bucket's first second. For workers the grid answers it since 2026-11-19 (decision 2): on 2-second
+   buckets an SCV started every 14 seconds, and every 16 on 4-second ones, against 12.14 in game, which the toy's
+   12-second SCV hid; on buckets of 34 steps it starts every 272 steps. What is left is every build no bucket
+   divides, up to a bucket longer each: a marine's 400 steps planned as 408, 2%, where 2-second buckets had 0.8%, and
+   a marauder's or a supply depot's 480 as 510, 6%, where they had 2.7%. Only buckets of 16 steps divide every build,
+   at 2.5 times the whole variables. Starts queued behind the build ahead, or phase 6's simulator, would answer the
+   rest; whether it matters is for phase 2's games.
 10. **Workers per base** (the owner, review of #239: to come back to). The planner pools workers over every field
     and refinery, so a new SCV mines from when it is done, even one that has to walk to another base, about 10
     minerals too many each, and a new base's fields count from when its command center is done. Separate workers per

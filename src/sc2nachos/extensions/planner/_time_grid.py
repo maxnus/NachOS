@@ -42,14 +42,19 @@ class TimeGrid:
     def doubling(
         cls,
         *,
-        first_bucket: GameTime = GameTime(seconds=2),
-        first_doubling: GameTime = GameTime(seconds=45),
-        longest_bucket: GameTime = GameTime(seconds=32),
+        first_bucket: GameTime = GameTime(steps=34),
+        first_doubling: GameTime = GameTime(steps=544),
+        longest_bucket: GameTime = GameTime(steps=544),
     ) -> Self:
         """A grid whose buckets double in length each time the time from the plan's start doubles, from
         `first_bucket` until `first_doubling` to the longest doubling of it not above `longest_bucket`, which runs on to
-        any horizon: by default, 2 seconds until 0:45, 4 until 1:30, 8 until 3:00, 16 until 6:00, and 32 after, 63
-        buckets to a 10-minute horizon.
+        any horizon: by default, 34 game steps until 544, 68 until 1,088, 136 until 2,176, 272 until 4,352, and 544
+        after, which is 1.5 seconds until 0:24, doubling to 24.3 seconds from 3:14, 57 buckets to a 10-minute horizon.
+
+        The default is cut to a worker's 272 steps, the same for every race, eight of its first buckets: workers
+        trained one after another each start on a bucket's first second, as they do while the buckets double. A build
+        time no bucket divides is planned up to a bucket longer where one follows another on a producer: a marine's 400
+        steps as 408.
 
         Raises `ValueError` unless `first_bucket` and `first_doubling` are longer than 0 and `longest_bucket` is at
         least `first_bucket`.

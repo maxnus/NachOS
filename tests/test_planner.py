@@ -2,6 +2,7 @@
 off a made-up game, and the extension itself."""
 
 import dataclasses
+import itertools
 import math
 from collections.abc import Callable
 from typing import Any
@@ -140,9 +141,31 @@ def _start_seconds_of_units_done_in_time(plan: Plan, unit_type: UnitTypeId) -> l
 
 
 class TestTimeGrid:
-    def test_the_doubling_grid_runs_2_second_buckets_to_0_45_doubling_to_32_seconds_63_to_10_minutes(self) -> None:
-        edges = TimeGrid.doubling().edges(GameTime(seconds=600))
-        widths = [later - earlier for earlier, later in zip(edges, edges[1:], strict=False)]
+    def test_the_doubling_grid_runs_34_step_buckets_to_544_steps_doubling_to_544_steps_57_to_10_minutes(self) -> None:
+        edges = [GameTime(seconds=edge).steps for edge in TimeGrid.doubling().edges(GameTime(seconds=600))]
+        widths = [later - earlier for earlier, later in itertools.pairwise(edges)]
+
+        assert len(widths) == 57
+        assert edges[:3] == pytest.approx([0, 34, 68])
+        assert edges[15:18] == pytest.approx([510, 544, 612])
+        assert [edges[index] for index in (24, 32, 40)] == pytest.approx([1088, 2176, 4352])
+        assert edges[-3:] == pytest.approx([12512, 13056, 13440])
+        assert sorted({round(width) for width in widths}) == [34, 68, 136, 272, 384, 544]
+
+    def test_a_worker_takes_a_whole_number_of_the_doubling_grids_buckets_while_they_are_shorter_than_it(self) -> None:
+        worker_steps = GameTime(seconds=_TERRAN_MODEL.unit_items[UnitTypeId.SCV].build_seconds).steps
+        edges = [GameTime(seconds=edge).steps for edge in TimeGrid.doubling().edges(GameTime(seconds=600))]
+
+        assert worker_steps == pytest.approx(272)
+        for one_after_another in range(17):
+            assert any(edge == pytest.approx(one_after_another * worker_steps) for edge in edges)
+
+    def test_a_doubling_grid_takes_its_first_bucket_its_first_doubling_and_its_longest_bucket(self) -> None:
+        grid = TimeGrid.doubling(
+            first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=45), longest_bucket=GameTime(seconds=32)
+        )
+        edges = grid.edges(GameTime(seconds=600))
+        widths = [later - earlier for earlier, later in itertools.pairwise(edges)]
 
         assert len(widths) == 63
         assert edges[:3] == (0.0, 2.0, 4.0)
@@ -309,16 +332,17 @@ class TestKnownPlans:
         assert _start_seconds(plan, UnitTypeId.HELLION) == [0.0, 22.0]
         assert UnitTypeId.HELLBAT not in plan.counts
 
-    def test_a_command_center_starts_at_48_seconds_after_uninterrupted_scv_production(self) -> None:
+    def test_a_command_center_starts_with_the_fifth_scv_after_uninterrupted_scv_production(self) -> None:
         """SCVs worth more than a command center, which is built as soon as it does not hold one up, on the doubling
-        grid, every start whole. An SCV starts each 14 seconds, its 12.14 rounded up to whole 2-second buckets."""
+        grid, every start whole. An SCV starts each 272 steps, as in the game: eight of the grid's first buckets."""
         reward = Reward(weights={UnitTypeId.SCV: 2.0, UnitTypeId.COMMAND_CENTER: 1.0})
         plan = _best_plan(
             _game_start(), reward, horizon_seconds=150, grid=TimeGrid.doubling(), fluid_after=_whole_over_any_horizon
         )
 
-        assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER)[0] == 48.0
-        assert _start_seconds(plan, UnitTypeId.SCV)[:5] == [0.0, 14.0, 28.0, 42.0, 56.0]
+        scv_seconds = GameTime(steps=272).seconds
+        assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER)[0] == pytest.approx(4 * scv_seconds)
+        assert _start_seconds(plan, UnitTypeId.SCV)[:5] == pytest.approx([scv_seconds * count for count in range(5)])
 
     @pytest.mark.parametrize(
         ("walks_there", "depot_done", "scv_start"),
@@ -1142,12 +1166,15 @@ class TestPlanner:
 
     def test_it_keeps_to_a_previous_plan_it_is_handed_for_a_bonus(self) -> None:
         """With 150 minerals and none mined, a barracks costs the plan its SCVs, which the reward is for: it starts
-        one for a bonus worth more."""
+        one for a bonus worth more. The barracks waits for the supply depot an SCV is walking to build, done 27.4
+        seconds in, so the previous plan has it at 32."""
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
         api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
         plans: list[Plan] = []
+        a_barracks_at_32_seconds = PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=32))
+        previous_plan = dataclasses.replace(_A_PLAN_OF_ONE_BARRACKS, items=(a_barracks_at_32_seconds,))
 
         @api.on(TurnEvent)
         def plan_scvs_twice(_: TurnEvent) -> None:
@@ -1160,7 +1187,7 @@ class TestPlanner:
                     reward,
                     horizon=horizon,
                     state=state,
-                    previous_plan=_A_PLAN_OF_ONE_BARRACKS,
+                    previous_plan=previous_plan,
                     hysteresis_bonus=100.0,
                 )
             )

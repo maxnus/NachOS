@@ -77,7 +77,8 @@ class Planner:
       tech lab makes the units that need one and researches on its own.
     - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
       from the first edge at or after their end; build times are never rounded. So production chained on one producer
-      starts a whole number of buckets apart while its starts are whole: SCVs every 14 seconds on 2-second buckets.
+      starts a whole number of buckets apart while its starts are whole: on the default grid SCVs every 272 game
+      steps, as in the game, and marines every 408 for their 400.
     - An item starts in whole numbers until a time from the plan's start and is fluid after it, starting in fractions,
       so that the solver weighs the far term without branching over it; the bot carries out the near term and plans
       again before the rest. The time is what `fluid_after` returns for the unit type the item makes or the upgrade it
