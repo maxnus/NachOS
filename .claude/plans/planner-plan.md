@@ -37,7 +37,11 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    to 272, so SCVs chain as in the game; 2 seconds are 44.8 steps and divide nothing. A doubling grid keeps the
    relative timing error constant along the plan. Durations are never rounded: a build enters the producer
    constraints in exact seconds split across the buckets it overlaps; only a start sits on a bucket's first second
-   and a completion on the next edge. A bot hands `Planner` any other `TimeGrid`.
+   and a completion on the next edge. A bot hands `Planner` any other `TimeGrid`. `TimeGrid.doubling` takes
+   `initial_bucket_length`, `initial_bucket_count`, an even number, and `max_bucket_doublings` (the owner,
+   2026-11-19, the names too), counts where it took the time of the first doubling and the longest bucket: a time
+   need not be a whole number of buckets, and the grid then doubled at the last edge before it, at 0:44 for the 0:45
+   it was asked, which a grid cut to a worker cannot afford.
 3. **Whole numbers where an item is lumpy, fluid flows where it is not**, for longer the more it costs (the owner,
    phase 1) and the less comes in (the owner, 2026-11-19): an item's starts are integer from the plan's start for 60
    seconds for each 100 minerals and vespene at the income a game starts with, at least 30, and fluid after: a

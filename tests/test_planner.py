@@ -160,9 +160,9 @@ class TestTimeGrid:
         for one_after_another in range(17):
             assert any(edge == pytest.approx(one_after_another * worker_steps) for edge in edges)
 
-    def test_a_doubling_grid_takes_its_first_bucket_its_first_doubling_and_its_longest_bucket(self) -> None:
+    def test_a_doubling_grid_takes_its_initial_buckets_length_and_count_and_its_most_doublings(self) -> None:
         grid = TimeGrid.doubling(
-            first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=45), longest_bucket=GameTime(seconds=32)
+            initial_bucket_length=GameTime(seconds=2), initial_bucket_count=22, max_bucket_doublings=4
         )
         edges = grid.edges(GameTime(seconds=600))
         widths = [later - earlier for earlier, later in itertools.pairwise(edges)]
@@ -172,6 +172,24 @@ class TestTimeGrid:
         assert edges[22:24] == (44.0, 48.0)
         assert edges[-3:] == (544.0, 576.0, 600.0)
         assert sorted(set(widths)) == [2.0, 4.0, 8.0, 16.0, 24.0, 32.0]
+
+    def test_a_doubling_grid_of_no_doublings_is_uniform(self) -> None:
+        grid = TimeGrid.doubling(initial_bucket_length=GameTime(seconds=5), max_bucket_doublings=0)
+        assert grid.edges(GameTime(seconds=22)) == TimeGrid.uniform(GameTime(seconds=5)).edges(GameTime(seconds=22))
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [
+            {"initial_bucket_length": GameTime.ZERO},
+            {"initial_bucket_count": 0},
+            {"initial_bucket_count": 15},
+            {"max_bucket_doublings": -1},
+        ],
+        ids=["a length of 0", "no initial buckets", "an odd count", "negative doublings"],
+    )
+    def test_a_doubling_grid_that_cannot_be_laid_out_raises(self, arguments: dict[str, Any]) -> None:
+        with pytest.raises(ValueError):
+            TimeGrid.doubling(**arguments)
 
     def test_a_segments_buckets_follow_while_the_next_ends_by_its_time_and_the_last_is_cut_at_the_horizon(self) -> None:
         grid = TimeGrid(

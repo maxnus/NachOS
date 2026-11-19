@@ -156,13 +156,18 @@ _TOY_GRIDS = {
         ]
     ),
     "double60": TimeGrid.doubling(
-        first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=60), longest_bucket=GameTime(seconds=32)
+        initial_bucket_length=GameTime(seconds=2), initial_bucket_count=30, max_bucket_doublings=4
     ),
-    "double90": TimeGrid.doubling(
-        first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=90), longest_bucket=GameTime(seconds=16)
+    "double90": TimeGrid(
+        segments=[
+            (GameTime(seconds=2), GameTime(seconds=90)),
+            (GameTime(seconds=4), GameTime(seconds=180)),
+            (GameTime(seconds=8), GameTime(seconds=360)),
+            (GameTime(seconds=16), GameTime.INFINITE),
+        ]
     ),
     "double45": TimeGrid.doubling(
-        first_bucket=GameTime(seconds=2), first_doubling=GameTime(seconds=45), longest_bucket=GameTime(seconds=32)
+        initial_bucket_length=GameTime(seconds=2), initial_bucket_count=22, max_bucket_doublings=4
     ),
 }
 # The grid of the toy's later runs, which the planner's default was before it was cut to a worker's build time.

@@ -42,31 +42,32 @@ class TimeGrid:
     def doubling(
         cls,
         *,
-        first_bucket: GameTime = GameTime(steps=34),
-        first_doubling: GameTime = GameTime(steps=544),
-        longest_bucket: GameTime = GameTime(steps=544),
+        initial_bucket_length: GameTime = GameTime(steps=34),
+        initial_bucket_count: int = 16,
+        max_bucket_doublings: int = 4,
     ) -> Self:
-        """A grid whose buckets double in length each time the time from the plan's start doubles, from
-        `first_bucket` until `first_doubling` to the longest doubling of it not above `longest_bucket`, which runs on to
-        any horizon: by default, 34 game steps until 544, 68 until 1,088, 136 until 2,176, 272 until 4,352, and 544
-        after, which is 1.5 seconds until 0:24, doubling to 24.3 seconds from 3:14, 57 buckets to a 10-minute horizon.
+        """A grid whose buckets double in length each time the time from the plan's start doubles:
+        `initial_bucket_count` buckets of `initial_bucket_length`, then half as many of each doubling of it, the last of
+        at most `max_bucket_doublings`, which runs on to any horizon. By default 16 buckets of 34 game steps, 8 each of
+        68, 136 and 272, and buckets of 544 after: 1.5 seconds until 0:24, doubling to 24.3 seconds from 3:14, 57
+        buckets to a 10-minute horizon.
 
         The default is cut to a worker's 272 steps, the same for every race, eight of its first buckets: workers
         trained one after another each start on a bucket's first second, as they do while the buckets double. A build
         time no bucket divides is planned up to a bucket longer where one follows another on a producer: a marine's 400
         steps as 408.
 
-        Raises `ValueError` unless `first_bucket` and `first_doubling` are longer than 0 and `longest_bucket` is at
-        least `first_bucket`.
+        Raises `ValueError` unless `initial_bucket_length` is longer than 0, `initial_bucket_count` is even and above
+        0, and `max_bucket_doublings` is not negative.
         """
-        if first_doubling <= GameTime.ZERO:
-            raise ValueError(f"the first doubling must come after 0, not at {first_doubling}")
-        if longest_bucket < first_bucket:
-            raise ValueError(f"the longest bucket, {longest_bucket}, is shorter than the first, {first_bucket}")
+        if initial_bucket_count <= 0 or initial_bucket_count % 2:
+            raise ValueError(f"the initial bucket count must be even and above 0, not {initial_bucket_count}")
+        if max_bucket_doublings < 0:
+            raise ValueError(f"the bucket doublings must not be negative, not {max_bucket_doublings}")
         segments: list[tuple[GameTime, GameTime]] = []
-        bucket = first_bucket
-        end = first_doubling
-        while bucket * 2 <= longest_bucket:
+        bucket = initial_bucket_length
+        end = initial_bucket_length * initial_bucket_count
+        for _ in range(max_bucket_doublings):
             segments.append((bucket, end))
             bucket *= 2
             end *= 2
