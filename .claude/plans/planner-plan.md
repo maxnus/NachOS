@@ -52,11 +52,12 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    upgrade has its time by its cost as a unit has (the owner, 2026-11-19), where phase 1 kept it integer over any
    horizon. A bot sets its own for any unit type or upgrade, `Planner(fluid_after=...)` taking a function of either
    that returns `None` for the default, named so by the owner (2026-11-19) over `whole_until` and
-   `whole_starts_until`. A plan's item says whether it is one, `PlannedItem.is_fluid` (the owner, 2026-11-19), since
-   a fluid one stands for fractions summed and rounded. The rule: an item stays whole where its cost exceeds a bucket's income and it is made once a
-   bucket at most. The owner's question behind the income was whether a type the state holds many of could be fluid
-   sooner, 60 workers against 12: a time divided by the count of the type gained little alone and nothing beside the
-   income's, which already brings most items to the 30 seconds, and was not built (Open 3 holds the measurements).
+   `whole_starts_until`. A plan's item says whether it is fluid, `PlannedItem.is_fluid` (the owner, 2026-11-19), since
+   a fluid one stands for fractions summed and rounded. The rule: an item stays whole where its cost exceeds a
+   bucket's income and it is made once a bucket at most. The owner's question behind the income was whether a type
+   the state holds many of could be fluid sooner, 60 workers against 12: a time divided by the count of the type
+   gained little alone and nothing beside the income's, which already brings most items to the 30 seconds, and was
+   not built (Open 3 holds the measurements).
    Fluid far-term starts make the far term the value function of the near term, computed by the LP at each node
    instead of learned; the near-term plan did not change when the window moved from 1:30 to 10:00. Depots kept whole
    for minutes stall the solver: 22 near-identical integer starts are symmetric branches. Phase 1 first kept
