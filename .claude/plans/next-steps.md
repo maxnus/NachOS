@@ -366,8 +366,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 - **The build planner**, a phase at a time, as [planner-plan.md](planner-plan.md) orders them: after phase 1, playing it
   in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
-  the owner to settle: a wide reward's item set, which is not solved in 3 seconds, the count-form cut, production
-  chained on a producer other than a worker's, and workers per base, which the owner wants to come back to. Its
+  the owner to settle: a wide reward's item set, which is not solved in 3 seconds, the count-form cut, and workers
+  per base, which the owner wants to come back to. Its
   3-second exit is met since its grid was cut to a worker's build time.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads

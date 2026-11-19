@@ -334,8 +334,18 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    12-second SCV hid; on buckets of 34 steps it starts every 272 steps. What is left is every build no bucket
    divides, up to a bucket longer each: a marine's 400 steps planned as 408, 2%, where 2-second buckets had 0.8%, and
    a marauder's or a supply depot's 480 as 510, 6%, where they had 2.7%. Only buckets of 16 steps divide every build,
-   at 2.5 times the whole variables. Starts queued behind the build ahead, or phase 6's simulator, would answer the
-   rest; whether it matters is for phase 2's games.
+   at 2.5 times the whole variables. Starts queued behind the build ahead would answer the rest, and are not to be
+   built (the owner, 2026-11-19): what exact chains could add was measured by a script outside the package, a grid of
+   16-step buckets until 4,352 steps, on which every chain is exact while its starts are whole, against one of
+   34-step buckets of the same shape. The reward of `replans` was worth 0.07% more on it from 6:00 at a half-life of
+   240 s and 0.05% undiscounted, both proven, and at least 0.03% more from a game's start, unproven after two
+   minutes, the finer buckets' every other gain included. Against that, a queued start is done by its place in the
+   queue and not by its bucket, so each item a producer makes would need a count done by each bucket, whole and so
+   more integers, or fluid and so 1.9 marines done; and a barracks queues marines and marauders together, which sums
+   cannot order. Per-item bucket lengths were weighed too: grids of other lengths merge to nearly 16-step buckets,
+   and each item starting only on a doubling of 34 steps of its own, a share of its build time, left 18 to 66% fewer
+   whole variables free, proved the reward of `replans` no sooner, and halved the wide reward's proof for plans worth
+   0.7 to 1.4% less, the one grid's plan the better after 3 s in all eight cases.
 10. **Workers per base** (the owner, review of #239: to come back to). The planner pools workers over every field
     and refinery, so a new SCV mines from when it is done, even one that has to walk to another base, about 10
     minerals too many each, and a new base's fields count from when its command center is done. Separate workers per
