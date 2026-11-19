@@ -56,7 +56,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.testing import load_game_data
 
 _HORIZON = GameTime(seconds=600)
-_NEW_COMMAND_CENTER_LIMIT = 3
+_START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER: 3}
 _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
@@ -311,7 +311,7 @@ def _solve_and_print(
         reward=reward,
         economy=planned_by,
         loss_rates=loss_rates,
-        new_command_center_limit=_NEW_COMMAND_CENTER_LIMIT,
+        start_limits=_START_LIMITS,
         fluid_after_seconds=fluid_after_seconds_of(
             items, fluid_after=fluid_after, state=planned_from, economy=planned_by
         ),

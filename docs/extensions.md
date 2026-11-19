@@ -238,12 +238,14 @@ class ThreatMap:
   free geysers at its bases, pooled, since the planner never knows which base a worker is at. `plan_now(state=...)`
   plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what each worker at a field or a
   refinery brings in a second, a list from the first worker on, what each orbital command's MULEs mine, what a new
-  command center brings, and how long an SCV walks to build each structure. Its defaults are the rates measured
-  speed mining, and a walk of 10 seconds to a command center and 6 to anything else. `new_command_center_limit`
-  caps the command centers a plan starts, none by default: the bot's own count, such as the expansions it means to
-  take less those an SCV is already on its way to build on, which the state holds as worker builds. A base about to
-  fall, with no refinery yet, left out, and the
-  MULEs' energy spent on scans:
+  command center brings, and how long an SCV walks to build each structure. Its defaults are the rates measured speed
+  mining, and a walk of 10 seconds to a command center and 6 to anything else. `plan_now(start_limits=...)` takes the
+  most a plan may start of a unit type or an upgrade, none of it for 0. A plan makes only what the reward values and
+  what that needs, with SCVs, supply depots, command centers, orbital commands, refineries and add-ons, so the limits
+  are for those the bot will not make itself, a reactor or an orbital command, and for its own count of command centers,
+  such as the expansions it means to take less those an SCV is already on its way to build on, which the state holds as
+  worker builds. A base about to fall, with no refinery yet, left out, the MULEs' energy spent on scans, one expansion
+  more and no reactor on a starport:
 
   ```python
   import dataclasses
@@ -258,7 +260,8 @@ class ThreatMap:
       free_geysers=state.free_geysers - len(falling_base.geysers),
   )
   economy = Economy(mule_minerals_per_orbital_second=0.0)
-  plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy)
+  start_limits = {UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.REACTOR_STARPORT: 0}
+  plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy, start_limits=start_limits)
   ```
 
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected

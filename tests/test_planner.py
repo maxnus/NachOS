@@ -70,12 +70,12 @@ def _best_plan(
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: dict[UnitTypeId, float] | None = None,
-    new_command_center_limit: int | None = None,
+    start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
     previous_plan: Plan | None = None,
     hysteresis_bonus: float = 0.0,
 ) -> Plan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
-    `economy`, with `loss_rates` and `new_command_center_limit`, keeping to `previous_plan` for `hysteresis_bonus`,
+    `economy`, with `loss_rates` and `start_limits`, keeping to `previous_plan` for `hysteresis_bonus`,
     proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
@@ -86,7 +86,7 @@ def _best_plan(
         reward=reward,
         economy=economy,
         loss_rates=loss_rates or {},
-        new_command_center_limit=new_command_center_limit,
+        start_limits=start_limits or {},
         fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
@@ -535,7 +535,7 @@ class TestFluidAfter:
                 reward=reward,
                 economy=Economy(),
                 loss_rates={},
-                new_command_center_limit=None,
+                start_limits={},
                 fluid_after_seconds=[fluid_after.seconds] * len(items),
                 previous_plan=None,
                 hysteresis_bonus=0.0,
@@ -677,9 +677,71 @@ class TestEconomy:
             horizon_seconds=150,
             grid=TimeGrid.doubling(),
             fluid_after=_whole_over_any_horizon,
-            new_command_center_limit=0,
+            start_limits={UnitTypeId.COMMAND_CENTER: 0},
         )
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER) == []
+
+
+class TestStartLimits:
+    @pytest.mark.parametrize(
+        "fluid_after", [_whole_over_any_horizon, lambda _: GameTime.ZERO], ids=["whole starts", "fluid starts"]
+    )
+    def test_an_item_starts_at_most_its_limit_over_the_plan(
+        self, fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None]
+    ) -> None:
+        reward = Reward(weights={UnitTypeId.SCV: 1.0})
+
+        without = _best_plan(_game_start(), reward, horizon_seconds=60, fluid_after=fluid_after)
+        limited = _best_plan(
+            _game_start(), reward, horizon_seconds=60, fluid_after=fluid_after, start_limits={UnitTypeId.SCV: 2}
+        )
+
+        assert len(_start_seconds(without, UnitTypeId.SCV)) > 2
+        assert len(_start_seconds(limited, UnitTypeId.SCV)) == 2
+
+    def test_an_upgrade_with_a_limit_of_none_is_not_researched(self) -> None:
+        state = _game_start(
+            minerals=100.0,
+            vespene=100.0,
+            counts={UnitTypeId.SCV: 12, UnitTypeId.BARRACKS: 1, UnitTypeId.TECH_LAB_BARRACKS: 1},
+        )
+        reward = Reward(upgrade_weights={UpgradeId.STIMPACK: 1.0})
+
+        without = _best_plan(state, reward, horizon_seconds=120)
+        limited = _best_plan(state, reward, horizon_seconds=120, start_limits={UpgradeId.STIMPACK: 0})
+
+        assert _start_seconds(without, UpgradeId.STIMPACK) == [0.0]
+        assert _start_seconds(limited, UpgradeId.STIMPACK) == []
+
+    def test_a_unit_types_limit_is_that_of_the_type_it_counts_as_and_the_lowest_of_them(self) -> None:
+        """Twelve SCVs of 15 supply: a supply depot lets a plan for SCVs train more than three."""
+        reward = Reward(weights={UnitTypeId.SCV: 1.0})
+
+        without = _best_plan(_game_start(), reward, horizon_seconds=90)
+        limited = _best_plan(
+            _game_start(),
+            reward,
+            horizon_seconds=90,
+            start_limits={UnitTypeId.SUPPLY_DEPOT: 5, UnitTypeId.SUPPLY_DEPOT_LOWERED: 0},
+        )
+
+        assert _start_seconds(without, UnitTypeId.SUPPLY_DEPOT) != []
+        assert _start_seconds(limited, UnitTypeId.SUPPLY_DEPOT) == []
+        assert len(_start_seconds(limited, UnitTypeId.SCV)) == 3
+
+    def test_a_limit_on_what_the_plan_would_not_make_does_nothing(self) -> None:
+        reward = Reward(weights={UnitTypeId.SCV: 1.0})
+        limits: dict[UnitTypeId | UpgradeId, int] = {
+            UnitTypeId.BATTLECRUISER: 0,
+            UnitTypeId.ZERGLING: 0,
+            UpgradeId.STIMPACK: 0,
+        }
+
+        without = _best_plan(_game_start(), reward, horizon_seconds=60)
+        limited = _best_plan(_game_start(), reward, horizon_seconds=60, start_limits=limits)
+
+        assert limited.items == without.items
+        assert limited.objective == without.objective
 
 
 class TestReward:
@@ -1111,16 +1173,36 @@ class TestPlanner:
         assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
         assert _start_seconds(kept, UnitTypeId.SCV) == []
 
+    def test_it_starts_no_more_of_an_item_than_the_limit_it_is_handed(self) -> None:
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        plans: list[Plan] = []
+
+        @api.on(TurnEvent)
+        def plan_scvs_twice(_: TurnEvent) -> None:
+            reward = Reward(weights={UnitTypeId.SCV: 1.0})
+            horizon = GameTime(seconds=40)
+            plans.append(api.extensions.plan_now(reward, horizon=horizon))
+            plans.append(api.extensions.plan_now(reward, horizon=horizon, start_limits={UnitTypeId.SCV: 1}))
+
+        api.play(game.joined())
+
+        without, limited = plans
+        assert len(_start_seconds(without, UnitTypeId.SCV)) > 1
+        assert len(_start_seconds(limited, UnitTypeId.SCV)) == 1
+
     @pytest.mark.parametrize(
         "arguments",
         [
-            {"new_command_center_limit": -1},
+            {"start_limits": {UnitTypeId.COMMAND_CENTER: -1}},
             {"economy": Economy(walk_time=lambda _: GameTime(seconds=-1))},
             {"hysteresis_bonus": 1.0},
             {"previous_plan": _A_PLAN_OF_ONE_BARRACKS, "hysteresis_bonus": -1.0},
         ],
         ids=[
-            "a negative command center limit",
+            "a negative start limit",
             "a negative walk",
             "a bonus with no previous plan",
             "a negative bonus",

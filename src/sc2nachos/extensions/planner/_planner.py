@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from sc2nachos.ids import UpgradeId
 
 _NO_LOSSES: Mapping[UnitTypeId, float] = MappingProxyType({})
+_NO_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = MappingProxyType({})
 # By default an item starts whole for this long for each 100 minerals and vespene it costs at the income a game starts
 # with, that of so many workers on so many mineral fields, less in proportion at a higher income, but at least the
 # shortest.
@@ -151,29 +152,31 @@ class Planner:
         state: GameState | None = None,
         economy: Economy = Economy(),
         loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
-        new_command_center_limit: int | None = None,
+        start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
         previous_plan: Plan | None = None,
         hysteresis_bonus: float = 0.0,
     ) -> Plan:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `game_state()` now if `None`, and its time is the plan's start. The plan's workers mine, collect and walk as
         `economy` says. A unit of a type in `loss_rates` is expected lost at that share a second, those alive now and
-        those the plan makes, so that only the share expected alive counts. The plan starts at most
-        `new_command_center_limit` command centers, any number if `None`: the bot's own count, such as the expansions it
-        means to take less those an SCV is already on its way to build on, which `state` holds as worker builds. With a
-        `previous_plan`, such as `plan`, each of its items the new plan starts no later than that one expected,
-        counting those of its kind before it, is worth `hysteresis_bonus` once, beside the reward, so that the new plan
-        differs from it only for more than that. It solves within the planner's limits, before it returns.
+        those the plan makes, so that only the share expected alive counts. Of a unit type or an upgrade in
+        `start_limits` the plan starts at most that many, none for 0, beside what the state holds in production: a
+        reactor the bot does not build, an orbital command it does not morph, or the expansions it means to take less
+        those an SCV is already on its way to build on. A unit type's limit is that of the type it counts as, the lowest
+        of those of one type, and one on what the plan would not make anyway does nothing. With a `previous_plan`, such
+        as `plan`, each of its items the new plan starts no later than that one expected, counting those of its kind
+        before it, is worth `hysteresis_bonus` once, beside the reward, so that the new plan differs from it only for
+        more than that. It solves within the planner's limits, before it returns.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate, `new_command_center_limit` or `hysteresis_bonus`, a `hysteresis_bonus` with no
-        `previous_plan`, or a negative time from `fluid_after` or from `economy`'s `walk_time`; and `NoPlanFoundError`
-        if the solver finds no plan within its limits.
+        than 0, a negative loss rate, start limit or `hysteresis_bonus`, a `hysteresis_bonus` with no `previous_plan`,
+        or a negative time from `fluid_after` or from `economy`'s `walk_time`; and `NoPlanFoundError` if the solver
+        finds no plan within its limits.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
-        if new_command_center_limit is not None and new_command_center_limit < 0:
-            raise ValueError(f"new_command_center_limit must not be negative, not {new_command_center_limit}")
+        if any(limit < 0 for limit in start_limits.values()):
+            raise ValueError(f"start limits must not be negative: {dict(start_limits)}")
         if hysteresis_bonus < 0:
             raise ValueError(f"hysteresis_bonus must not be negative, not {hysteresis_bonus}")
         if hysteresis_bonus and previous_plan is None:
@@ -189,7 +192,7 @@ class Planner:
             reward=reward,
             economy=economy,
             loss_rates=loss_rates,
-            new_command_center_limit=new_command_center_limit,
+            start_limits=start_limits,
             fluid_after_seconds=fluid_after_seconds_of(
                 items, fluid_after=self._fluid_after, state=planned_from, economy=economy
             ),

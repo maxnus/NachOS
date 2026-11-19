@@ -53,7 +53,8 @@ class PlanProgram:
     walk back, takes its supply at once, and counts as done from the first edge at or after its end. Workers mine,
     collect or build, pooled over every field and refinery, in the tiers of `economy`'s rates, and each orbital command
     adds its MULEs' income. A unit counts as it survives its loss rate in `loss_rates`, for income, supply, the reward
-    and coverage. At most `new_command_center_limit` command centers start, any number if `None`. Each item of
+    and coverage. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of
+    the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item of
     `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
     worth `hysteresis_bonus` once, beside the reward.
 
@@ -70,7 +71,6 @@ class PlanProgram:
         "_economy",
         "_edges",
         "_hysteresis_bonus",
-        "_new_command_center_limit",
         "_index_of_unit_type",
         "_index_of_upgrade",
         "_items",
@@ -82,6 +82,7 @@ class PlanProgram:
         "_previous_plan",
         "_program",
         "_reward",
+        "_start_limits",
         "_starts_so_far",
         "_state",
         "_vespene",
@@ -100,7 +101,7 @@ class PlanProgram:
         reward: Reward,
         economy: Economy,
         loss_rates: Mapping[UnitTypeId, float],
-        new_command_center_limit: int | None,
+        start_limits: Mapping[UnitTypeId | UpgradeId, int],
         fluid_after_seconds: Sequence[float],
         previous_plan: Plan | None,
         hysteresis_bonus: float,
@@ -113,7 +114,7 @@ class PlanProgram:
         self._reward = reward
         self._economy = economy
         self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
-        self._new_command_center_limit = new_command_center_limit
+        self._start_limits = _limits_by_counted_type(start_limits, model)
         self._previous_plan = previous_plan
         self._hysteresis_bonus = hysteresis_bonus
         built_by_worker = (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
@@ -225,23 +226,19 @@ class PlanProgram:
     def _most_starts_in_a_bucket(self, item: Item) -> float:
         """The most of `item` that can start in one bucket."""
         state = self._state
-        new_townhalls = (
-            _MOST_STARTS_IN_A_BUCKET
-            if self._new_command_center_limit is None
-            else float(self._new_command_center_limit)
-        )
+        new_townhalls = self._start_limits.get(UnitTypeId.COMMAND_CENTER, _MOST_STARTS_IN_A_BUCKET)
         townhalls_coming = new_townhalls + _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
         if item.upgrade is not None:
-            return 1.0
-        if item.unit_type == UnitTypeId.COMMAND_CENTER:
-            return new_townhalls
-        if item.unit_type == UnitTypeId.REFINERY:
-            return float(state.free_geysers + self._economy.geysers_per_new_base * townhalls_coming)
-        if item.morphed_from is not None:
-            return float(state.counts.get(item.morphed_from, 0) + townhalls_coming)
-        if item.supply_used > 0:
-            return float(math.floor(SUPPLY_LIMIT / item.supply_used))
-        return _MOST_STARTS_IN_A_BUCKET
+            most = 1.0
+        elif item.unit_type == UnitTypeId.REFINERY:
+            most = float(state.free_geysers + self._economy.geysers_per_new_base * townhalls_coming)
+        elif item.morphed_from is not None:
+            most = float(state.counts.get(item.morphed_from, 0) + townhalls_coming)
+        elif item.supply_used > 0:
+            most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
+        else:
+            most = _MOST_STARTS_IN_A_BUCKET
+        return most if item.made is None else min(most, self._start_limits.get(item.made, math.inf))
 
     def _discounts_of(self, reward: Reward) -> FloatArray:
         """What each bucket's seconds count for, discounted from the plan's start, the last bucket's with what the state
@@ -520,8 +517,7 @@ class PlanProgram:
 
     def _constrain_counts(self) -> None:
         """What the game's counts bound: workers at the fields and refineries there are, each tier its share of each, an
-        add-on a host, a morph a townhall, command centers their limit, a refinery a geyser, and an upgrade
-        once."""
+        add-on a host, a morph a townhall, an item its limit of starts, a refinery a geyser, and an upgrade once."""
         buckets = self._bucket_count
         economy = self._economy
         new_bases = self._made_since_start(UnitTypeId.COMMAND_CENTER)
@@ -534,10 +530,10 @@ class PlanProgram:
                 working = RowExpression(buckets).add(tier.block, np.eye(buckets))
                 self._constrain_at_most(working, RowExpression(buckets).add_expression(sites, tier.workers_per_site))
         self._constrain_add_ons_and_morphs()
-        command_center = self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)
-        if command_center is not None and self._new_command_center_limit is not None:
-            expansions = self._starts_over_the_plan(command_center)
-            self._program.constrain(expansions, upper=float(self._new_command_center_limit))
+        for index, item in enumerate(self._items):
+            limit = None if item.made is None else self._start_limits.get(item.made)
+            if limit is not None:
+                self._program.constrain(self._starts_over_the_plan(index), upper=limit)
         if (refinery := self._index_of_unit_type.get(UnitTypeId.REFINERY)) is not None:
             geysers = RowExpression(buckets).add_expression(new_bases, economy.geysers_per_new_base)
             geysers.constant += self._state.free_geysers
@@ -695,6 +691,17 @@ class PlanProgram:
     def _walk_seconds_of(self, item: Item) -> float:
         """The seconds an SCV walks to build `item`, and back."""
         return 0.0 if item.unit_type is None else self._walk_seconds.get(item.unit_type, 0.0)
+
+
+def _limits_by_counted_type(
+    start_limits: Mapping[UnitTypeId | UpgradeId, int], model: TerranModel
+) -> dict[UnitTypeId | UpgradeId, float]:
+    """`start_limits`, each unit type's under the type it counts as by `model`, the lowest of those of one type."""
+    limits: dict[UnitTypeId | UpgradeId, float] = {}
+    for made, limit in start_limits.items():
+        counted = model.counted_as(made) if isinstance(made, UnitTypeId) else made
+        limits[counted] = min(float(limit), limits.get(counted, math.inf))
+    return limits
 
 
 def _values_of(block: VariableBlock, values: FloatArray) -> FloatArray:

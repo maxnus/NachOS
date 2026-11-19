@@ -84,19 +84,23 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    arrival, dropping what it already started. A new plan is never worse only if the old plan is a candidate, by a
    warm start from the shifted previous plan or by re-scoring it, and only with the hysteresis; both are required.
    A synchronous mode with a node limit is deterministic for tests and recordings.
-10. **No caps on production structures.** Their number is bounded by the economics; the physical bounds stay: the
-    command centers the bot lets a plan start, none by default, two refineries a base, one add-on a barracks, one of
-    each upgrade, supply 200, and room to build near a base once the map supplies it.
+10. **No caps on production structures.** Their number is bounded by the economics; the physical bounds stay: what
+    the bot lets a plan start of an item, `start_limits`, its expansions say, with no limit by default, two
+    refineries a base, one add-on a barracks, one of each upgrade, supply 200, and room to build near a base once the
+    map supplies it.
 11. **Every input is visible and the bot's to change** (the owner, review of #239). What the game shows is a public
     `GameState`, which `Planner.game_state` reads and `plan_now(state=...)` takes back changed, a base about to fall
     left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `Economy`
     handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
-    worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and
-    `new_command_center_limit`, the bot's own count, beside it. The constructor keeps only how to solve: the grid, the
+    worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and `start_limits`
+    beside it, the most a plan may start of a unit type or an upgrade, none for 0 (the owner, 2026-11-19, over
+    `new_command_center_limit`, now one entry of it): a plan makes only what the reward values and what that needs,
+    so the limits are for what the model adds itself, add-ons, the orbital command and expansions, and a bot that
+    opts out by situation hands another mapping to that plan. The constructor keeps only how to solve: the grid, the
     limits and the windows. Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to
     and the bonus for it are `plan_now`'s `previous_plan` and `hysteresis_bonus` too (the owner, 2026-11-18, over the
-    reward holding them, and over the planner keeping to its own last plan, an input the bot would not see): they
-    say how plans follow one another, not what the bot wants, so a reward is built once and handed to every plan.
+    reward holding them, and over the planner keeping to its own last plan, an input the bot would not see): they say
+    how plans follow one another, not what the bot wants, so a reward is built once and handed to every plan.
 
 ## Measurements
 
@@ -253,11 +257,14 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    An upgrade done or being researched stays an item, its starts held at none, and so does what only it needed, an
    engineering bay. Leaving those out changes nothing that shows: with the wide reward's eight upgrades done at 3:00
    and at 6:00, 813 and 729 whole variables against 610 and 554 without their nine items, the same objectives, and
-   proofs in 3.9 to 8.7 s against 5.1 to 9.1 (a script outside the package, one run each). Leaving out what a bot
-   would build but for its own choice does more from a game's start: without reactors and the orbital command the
-   reward of `replans` has 333 whole variables from 419 there and is proven in 2.3 to 2.8 s from 4.1 to 5.3, the wide
-   reward in 15.3 s from 30.8, and from mid-game neither is faster; a limit on the starts of an item, none for one
-   left out, is proposed and not decided.
+   over six half-lives of each 87 s of proofs in all against 86, the faster of the two in five cases and the slower
+   in seven (a script outside the package, one run each). What a bot would not build though a plan would is
+   `start_limits`' (decision 11), the item kept and its starts held to the limit: a program without the item lost
+   what bound those the state holds, and planned for more than it could have. With none of reactors and the orbital
+   command, by a script outside the package, one run each: the reward of `replans` from a game's start is proven
+   optimal in 2.4 to 2.9 s from 4.1 to 5.3 and the wide one in 7.5 to 15.3 s from 24.3 to 30.6, their plans worth 2.4
+   to 4.0% less for what they go without; from 3:00 and 6:00 in 2.8 to 3.6 s from 2.7 to 5.2 and in 6.5 to 10.4 s
+   from 8.2 to 15.5, worth at most 0.2% less.
 
    Open: prune to what the reward reaches, or phase 3's start from the previous plan; and what a bot is handed when
    no plan is found in time, where `plan_now` raises `NoPlanFoundError`, as a wide reward's replan does at 1 s.
