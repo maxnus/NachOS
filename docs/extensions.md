@@ -296,6 +296,10 @@ class ThreatMap:
       return GameTime(seconds=20) if item == UnitTypeId.SUPPLY_DEPOT else None
   ```
 
-  `GameTime.INFINITE` keeps an item whole throughout. Longer makes a plan exact further ahead, and the solve slower.
-  A `PlannedItem` that starts where its item is fluid reads `is_fluid`: it stands for the fractions whose sum reached
-  a whole number there, rounded, so a bot can tell what the plan started in whole from what it only expects to follow.
+  `GameTime.INFINITE` keeps an item whole throughout. Longer makes a plan exact further ahead, and the solve slower. A
+  `PlannedItem` that starts where its item is fluid reads `is_fluid`: it stands for the fractions whose sum reached a
+  whole number there, rounded, so a bot can tell what the plan started in whole from what it only expects to follow.
+  What an item needs first, a structure that unlocks it or the upgrade before it, it needs whole, fluid or not: no
+  starport starts before a whole factory is done. `Planner(api, whole_prerequisites=False)` leaves that out, for a
+  faster solve: a plan then makes its far units on a fraction of what they need, a hundredth of a factory, which it
+  never lists as an item, so a bot that follows it never builds one.

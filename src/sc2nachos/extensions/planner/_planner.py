@@ -74,6 +74,10 @@ class Planner:
       each way.
     - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a
       tech lab makes the units that need one and researches on its own.
+    - Nothing starts before what it needs first is done whole, a structure granting its tech or the upgrade before
+      it, fluid or not: no starport before a whole factory is done. With `whole_prerequisites` false the fractions done
+      of it count instead, a hundredth of a factory unlocking a starport: the solve is faster, and a plan then makes
+      its far units on a fraction of a structure it never lists as an item.
     - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
       from the first edge at or after their end. So production chained on one producer starts a whole number of
       buckets apart while its starts are whole. A build that runs into a bucket by less than `max_ignored_overrun` of
@@ -109,6 +113,7 @@ class Planner:
         "_plan",
         "_time_limit",
         "_fluid_after",
+        "_whole_prerequisites",
     )
 
     def __init__(
@@ -120,6 +125,7 @@ class Planner:
         node_limit: int | None = None,
         fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
         max_ignored_overrun: float = 0.25,
+        whole_prerequisites: bool = True,
     ) -> None:
         if api.player.race != Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -135,6 +141,7 @@ class Planner:
         self._node_limit = node_limit
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
+        self._whole_prerequisites = whole_prerequisites
         self._model = TerranModel(api.data)
         self._plan: Plan | None = None
 
@@ -205,6 +212,7 @@ class Planner:
                 items, fluid_after=self._fluid_after, state=planned_from, economy=economy
             ),
             max_ignored_overrun=self._max_ignored_overrun,
+            whole_prerequisites=self._whole_prerequisites,
             previous_plan=previous_plan,
             hysteresis_bonus=hysteresis_bonus,
         )

@@ -51,13 +51,15 @@ class PlanProgram:
     item in the order of `items`. A start pays from the stock at its bucket's start plus half the bucket's income, keeps
     its producer busy for its build time over the buckets it spans, its SCV from the walk there through the build to the
     walk back, takes its supply at once, and counts as done from the first edge at or after its end. A whole start, or
-    a build under way, that runs into a bucket by less than `max_ignored_overrun` of it leaves the bucket free. Workers
-    mine, collect or build, pooled over every field and refinery, in the tiers of `economy`'s rates, and each orbital
-    command adds its MULEs' income. A unit counts as it survives its loss rate in `loss_rates`, for income, supply, the
-    reward and coverage. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is
-    that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item
-    of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
-    worth `hysteresis_bonus` once, beside the reward.
+    a build under way, that runs into a bucket by less than `max_ignored_overrun` of it leaves the bucket free. With
+    `whole_prerequisites` nothing starts before a whole structure granting each tech it needs, and the whole of each
+    upgrade, is done; without, the fractions done of them count. Workers mine, collect or build, pooled over every
+    field and refinery, in the tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A unit
+    counts as it survives its loss rate in `loss_rates`, for income, supply, the reward and coverage. Of an item in
+    `start_limits` at most that many start over the plan: a unit type's limit is that of the type it counts as, the
+    lowest of those of one type, and a limit on no item here does nothing. Each item of `previous_plan` that the plan
+    starts no later than that one expected, counting those of its kind before it, is worth `hysteresis_bonus` once,
+    beside the reward.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, and for a negative walk from
     `economy`'s `walk_time`.
@@ -90,6 +92,7 @@ class PlanProgram:
         "_vespene",
         "_walk_seconds",
         "_whole",
+        "_whole_prerequisites",
         "_widths",
     )
 
@@ -106,6 +109,7 @@ class PlanProgram:
         start_limits: Mapping[UnitTypeId | UpgradeId, int],
         fluid_after_seconds: Sequence[float],
         max_ignored_overrun: float,
+        whole_prerequisites: bool,
         previous_plan: Plan | None,
         hysteresis_bonus: float,
     ) -> None:
@@ -119,6 +123,7 @@ class PlanProgram:
         self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
         self._start_limits = _limits_by_counted_type(start_limits, model)
         self._max_ignored_overrun = max_ignored_overrun
+        self._whole_prerequisites = whole_prerequisites
         self._previous_plan = previous_plan
         self._hysteresis_bonus = hysteresis_bonus
         self._walk_seconds = walk_seconds_of(
@@ -137,8 +142,7 @@ class PlanProgram:
         self._starts_so_far: list[VariableBlock] = []
         for item, whole in zip(self._items, self._whole, strict=True):
             self._add_starts_so_far(item, whole)
-        self._minerals = self._add_stock(state.minerals)
-        self._vespene = self._add_stock(state.vespene)
+        self._minerals, self._vespene = self._add_stock(state.minerals), self._add_stock(state.vespene)
         self._mining = self._add_worker_tiers(economy.minerals_per_miner_second)
         self._collecting = self._add_worker_tiers(economy.vespene_per_collector_second)
         self._discounts = self._discounts_of(reward)
@@ -586,25 +590,57 @@ class PlanProgram:
             self._constrain_at_most(started, available)
 
     def _constrain_prerequisites(self) -> None:
-        """No item starts in a bucket before the techs and upgrades it needs are done by the bucket's start."""
+        """No item starts in a bucket before the techs and upgrades it needs are done by the bucket's start: before a
+        whole structure granting each tech and the whole of each upgrade is, with whole prerequisites, and in the
+        share that the fractions done of them allow, without."""
+        met: dict[frozenset[UnitTypeId] | UpgradeId, RowExpression] = {}
         for index, item in enumerate(self._items):
             needed: list[RowExpression] = []
             for tech in item.techs:
                 granting = self._model.types_granting(tech)
-                if not any(self._state.counts.get(unit_type, 0) for unit_type in granting):
+                if any(self._state.counts.get(unit_type, 0) for unit_type in granting):
+                    continue
+                if granting not in met:
                     granted = RowExpression(self._bucket_count)
                     for unit_type in sorted(granting):
                         granted.add_expression(self._count_alive(unit_type, at_end=False, survive=False))
-                    needed.append(granted)
-            needed += [
-                self._upgrade_done(upgrade, at_end=False)
-                for upgrade in item.upgrades_needed
-                if upgrade not in self._state.upgrades
-            ]
+                    counted = [
+                        made
+                        for made, other in enumerate(self._items)
+                        if other.unit_type in granting or other.morphed_from in granting
+                    ]
+                    met[granting] = self._whether_one_is_done(granted, counted)
+                needed.append(met[granting])
+            for upgrade in item.upgrades_needed:
+                if upgrade in self._state.upgrades:
+                    continue
+                if upgrade not in met:
+                    researched = self._index_of_upgrade.get(upgrade)
+                    is_under_way = upgrade in self._state.upgrade_completions
+                    counted = [] if researched is None or is_under_way else [researched]
+                    met[upgrade] = self._whether_one_is_done(self._upgrade_done(upgrade, at_end=False), counted)
+                needed.append(met[upgrade])
             bound = self._most_starts_in_a_bucket(item)
             for done in needed:
                 available = RowExpression(self._bucket_count).add_expression(done, bound)
                 self._constrain_at_most(self._starts_in_bucket(index), available)
+
+    def _whether_one_is_done(self, done: RowExpression, counted: Sequence[int]) -> RowExpression:
+        """Whether one whole of what `done` counts by each bucket's start is done, 0 or 1, with whole prerequisites,
+        and `done` itself without. `done` counts the starts of the items `counted`, and so in whole numbers until a
+        fluid start of one of them can be done: the 0 or 1 is held whole from that edge on alone, and `done` returned
+        if there is no such edge."""
+        buckets = self._bucket_count
+        fractional_from = min(
+            (self._completion_edges[index][~self._whole[index]].min(initial=math.inf) for index in counted),
+            default=math.inf,
+        )
+        if not self._whole_prerequisites or fractional_from >= buckets:
+            return done
+        one_is_done = self._program.add_variables(buckets, upper=1.0, integral=np.arange(buckets) >= fractional_from)
+        whether = RowExpression(buckets).add(one_is_done, np.eye(buckets))
+        self._constrain_at_most(whether, done)
+        return whether
 
     # The reward.
 

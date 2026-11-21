@@ -80,6 +80,7 @@ def _best_plan(
     loss_rates: dict[UnitTypeId, float] | None = None,
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
     max_ignored_overrun: float = 0.25,
+    whole_prerequisites: bool = True,
     previous_plan: Plan | None = None,
     hysteresis_bonus: float = 0.0,
 ) -> Plan:
@@ -98,6 +99,7 @@ def _best_plan(
         start_limits=start_limits or {},
         fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
         max_ignored_overrun=max_ignored_overrun,
+        whole_prerequisites=whole_prerequisites,
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
     )
@@ -662,6 +664,7 @@ class TestFluidAfter:
                 start_limits={},
                 fluid_after_seconds=[fluid_after.seconds] * len(items),
                 max_ignored_overrun=0.25,
+                whole_prerequisites=False,
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
@@ -685,6 +688,101 @@ class TestFluidAfter:
         assert max(whole_starts) < GameTime(seconds=20)
         assert fluid_starts
         assert min(fluid_starts) >= GameTime(seconds=20)
+
+
+class TestWholePrerequisites:
+    @staticmethod
+    def _plan_for_medivacs(*, whole_prerequisites: bool) -> Plan:
+        """The best plan for medivacs from a barracks with the resources in hand, a factory's starts fluid throughout:
+        a starport needs a factory."""
+        state = _game_start(
+            minerals=2000.0,
+            vespene=1000.0,
+            supply_cap=100.0,
+            counts={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+        )
+        return _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MEDIVAC: 1.0}),
+            horizon_seconds=240,
+            grid=TimeGrid.uniform(GameTime(seconds=10)),
+            fluid_after=lambda item: GameTime.ZERO if item == UnitTypeId.FACTORY else None,
+            whole_prerequisites=whole_prerequisites,
+        )
+
+    def test_nothing_starts_before_a_whole_structure_granting_its_tech_is_done(self) -> None:
+        plan = self._plan_for_medivacs(whole_prerequisites=True)
+
+        factory_start = _start_seconds(plan, UnitTypeId.FACTORY)[0]
+        factory_seconds = _TERRAN_MODEL.unit_items[UnitTypeId.FACTORY].build_seconds
+        assert _start_seconds(plan, UnitTypeId.STARPORT)[0] >= factory_start + factory_seconds
+        assert _start_seconds(plan, UnitTypeId.MEDIVAC) != []
+
+    def test_without_whole_prerequisites_a_fraction_of_a_structure_grants_its_tech(self) -> None:
+        """The plan makes its medivacs at a starport, on a fraction of a factory too small to be an item of it."""
+        plan = self._plan_for_medivacs(whole_prerequisites=False)
+
+        assert _start_seconds(plan, UnitTypeId.FACTORY) == []
+        assert _start_seconds(plan, UnitTypeId.STARPORT) != []
+        assert _start_seconds(plan, UnitTypeId.MEDIVAC) != []
+
+    @pytest.mark.parametrize("whole_prerequisites", [True, False], ids=["whole", "in fractions"])
+    def test_an_upgrade_needs_the_whole_of_the_upgrade_before_it(self, whole_prerequisites: bool) -> None:
+        """With what the second level of infantry weapons costs and a quarter of the first level's, and nothing coming
+        in, both fluid: a quarter of the first level lets a quarter of the second start in each bucket, too little of
+        the first to be an item of the plan. Needing the whole of the first, the plan pays for it, and for what is left
+        of the second."""
+        first = _TERRAN_MODEL.upgrade_items[UpgradeId.TERRAN_INFANTRY_WEAPONS_1]
+        second = _TERRAN_MODEL.upgrade_items[UpgradeId.TERRAN_INFANTRY_WEAPONS_2]
+        state = _game_start(
+            minerals=second.minerals + first.minerals / 4,
+            vespene=second.vespene + first.vespene / 4,
+            counts={UnitTypeId.ENGINEERING_BAY: 1, UnitTypeId.ARMORY: 1},
+            mineral_fields=0,
+        )
+        plan = _best_plan(
+            state,
+            Reward(upgrade_weights={UpgradeId.TERRAN_INFANTRY_WEAPONS_2: 1.0}),
+            horizon_seconds=400,
+            grid=TimeGrid.uniform(GameTime(seconds=20)),
+            fluid_after=lambda _: GameTime.ZERO,
+            whole_prerequisites=whole_prerequisites,
+        )
+        assert (_start_seconds(plan, UpgradeId.TERRAN_INFANTRY_WEAPONS_1) != []) == whole_prerequisites
+        assert _start_seconds(plan, UpgradeId.TERRAN_INFANTRY_WEAPONS_2) != []
+
+    def test_it_adds_whole_numbers_only_where_what_is_needed_may_be_done_in_fractions(self) -> None:
+        """A starport needs a factory: whether one is done is a whole number in each bucket a fluid factory can be
+        done by, and none where every factory starts whole."""
+        reward = Reward(weights={UnitTypeId.MEDIVAC: 1.0})
+        items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+        state = _game_start(counts={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1})
+
+        def whole_numbers(factory_fluid_after: GameTime, *, whole_prerequisites: bool) -> int:
+            program = PlanProgram(
+                items=items,
+                model=_TERRAN_MODEL,
+                edges=TimeGrid.uniform(GameTime(seconds=10)).edges(GameTime(seconds=100)),
+                state=state,
+                reward=reward,
+                economy=_WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
+                loss_rates={},
+                start_limits={},
+                fluid_after_seconds=[
+                    factory_fluid_after.seconds if item.unit_type == UnitTypeId.FACTORY else math.inf for item in items
+                ],
+                max_ignored_overrun=0.25,
+                whole_prerequisites=whole_prerequisites,
+                previous_plan=None,
+                hysteresis_bonus=0.0,
+            )
+            return program.linear_program.integral_count
+
+        every_start_whole = whole_numbers(GameTime.INFINITE, whole_prerequisites=False)
+        assert whole_numbers(GameTime.INFINITE, whole_prerequisites=True) == every_start_whole
+        # A factory fluid from 30 seconds on: three of its ten buckets whole, and one started at 30 is done at 80.
+        assert whole_numbers(GameTime(seconds=30), whole_prerequisites=False) == every_start_whole - 7
+        assert whole_numbers(GameTime(seconds=30), whole_prerequisites=True) == every_start_whole - 7 + 2
 
 
 class TestEconomy:
