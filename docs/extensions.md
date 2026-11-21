@@ -217,18 +217,21 @@ class ThreatMap:
       if api.step % 448 == 0:
           marines = [CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.3)]
           reward = Reward(curves={UnitTypeId.MARINE: marines}, half_life=GameTime(seconds=240))
-          plan = api.extensions.planner.plan_now(reward, horizon=GameTime(seconds=600))
+          plan = api.extensions.planner.plan_now(reward)
   ```
 
   What the bot supplies is the reward, summed a second at a time over the horizon and discounted by its `half_life`:
-  what each unit alive is worth, a weight for each type or a concave curve of pieces over its count, so that a plan
-  buys a mix rather than only the best type for its cost; what each upgrade done is worth; enemy units covered, each
-  kind a `Coverage` of how many the bot expects from when, how much of one each own type covers and what one covered is
-  worth; counts wanted at least, each a `Floor` with what a unit short costs; and how long the state at the horizon
-  counts for after it. `plan_now` takes the horizon and the share of each unit type the bot expects lost a second, so
-  that only what is expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and a
-  `hysteresis_bonus` for each of its items the new plan keeps to, so that a new plan differs from the last only for
-  more than that.
+  what each unit alive is worth, a weight for each type or a concave curve of pieces over its count, so that a plan buys
+  a mix rather than only the best type for its cost; what each upgrade done is worth; enemy units covered, each kind a
+  `Coverage` of how many the bot expects from when, how much of one each own type covers and what one covered is worth;
+  counts wanted at least, each a `Floor` with what a unit short costs; and how long the state at the horizon counts for
+  after it. `plan_now` takes the horizon, 5 minutes by default, and the share of each unit type the bot expects lost a
+  second, so that only what is expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and
+  a `hysteresis_bonus` for each of its items the new plan keeps to, so that a new plan differs from the last only for
+  more than that. A plan makes nothing that pays back only past its horizon: over 5 minutes from a game's start, a
+  reward on army units alone takes no expansion, and one that also values SCVs, or command centers, takes it. A longer
+  horizon weighs such things itself and solves slower, half again to twice as long over 10 minutes; under 4 minutes a
+  plan's first steps get worse.
   A unit counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a
   hellbat as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 

@@ -1373,6 +1373,24 @@ class TestPlanner:
         assert not_found is None
         assert api.extensions.plan is found
 
+    def test_it_plans_over_5_minutes_unless_handed_a_horizon(self) -> None:
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=Planner)
+        plans: list[Plan] = []
+
+        @api.on(TurnEvent)
+        def plan_twice(_: TurnEvent) -> None:
+            plans.append(_plan_found(api.extensions.plan_now(Reward())))
+            plans.append(_plan_found(api.extensions.plan_now(Reward(), horizon=GameTime(seconds=60))))
+
+        api.play(game.joined())
+
+        by_default, over_a_minute = plans
+        assert by_default.times[-1] - by_default.made_at == GameTime(seconds=300)
+        assert over_a_minute.times[-1] - over_a_minute.made_at == GameTime(seconds=60)
+
     def test_it_plans_for_terran_alone(self) -> None:
         zerg = (
             sc2api_pb2.PlayerInfo(

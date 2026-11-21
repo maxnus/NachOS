@@ -392,8 +392,25 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     30 seconds were worth by 0.3% at most and the solve little; a producer whole as long as its products made the
     solve slower and the plan no better; a horizon of 5 or 6 minutes lost 0.3% at most of those 30 seconds; first
     buckets of 68 steps about halved the solve of the reward of `replans` for 0.2% at most; and whole times twice as
-    long bought nothing. Open: the horizon the docs and the benchmark recommend, and a wide reward from mid-game,
-    which an unlock fraction above 0 leaves unproven in 3 s over any horizon tried.
+    long bought nothing. Open: a wide reward from mid-game, which an unlock fraction above 0 leaves unproven in 3 s
+    over any horizon tried.
+12. **`plan_now` plans over 5 minutes by default** (the owner, 2026-11-21, who first asked whether 5 or 6 would do,
+    2026-11-20), where the horizon had no default and every measurement before was over the toy's 10. Measured by a
+    script outside the package with an unlock fraction of 1, nine cases, each horizon's plan after 3 s with its first
+    30 seconds fixed in the 10-minute program and the rest solved anew: against the best of them, 6 minutes lost 0.00
+    to 0.38%, 5 minutes 0.00 to 0.73%, 4 minutes 0.00 to 0.23% and 3 minutes up to 5.09%, 3.95% on the reference's
+    reward from a game's start; so 4 to 6 minutes plan the next 30 seconds alike, and 3 do not. The reward of
+    `replans` was proven in 0.9 to 4.9 s over 5 minutes, 1.2 to 3.8 over 6 and 2.3 to 6.8 over 10; the wide reward in
+    2.0, 17.9 and 6.7 s over 5 minutes, and over 10 in none of its three cases within 30 s. What that measure cannot
+    see is what pays back late: from a game's start, undiscounted, the 10-minute plan for marines, marauders and
+    medivacs starts a command center at 0:49, and the plans over 6, 5 and 4 minutes none, nor with the end state
+    counted 5 minutes longer, since the reward values no income; each replan choosing alike, a bot stays on one base.
+    The owner: the expansion is built if the bot adds it to the reward. Over 5 minutes, 1 a second for each SCV
+    beside that reward starts the command center at 0:49 too, and 20 a second for each command center starts three,
+    at 0:36, 1:13 and 1:37. `tools/benchmark_planner.py` plans `reference`, `replans` and `items` over the 5 minutes
+    since, and any case over `--horizon` seconds; `--horizon 600` is what every measurement above was made over.
+    Phase 1's exit (Open 7) with it: the reference is proven in 1.4 to 2.5 s over 5 minutes, and with an unlock
+    fraction of 1 in 2.2 to 4.4 s over 10.
 
 ## Risks
 
