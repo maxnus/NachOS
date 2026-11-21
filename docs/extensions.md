@@ -300,6 +300,7 @@ class ThreatMap:
   `PlannedItem` that starts where its item is fluid reads `is_fluid`: it stands for the fractions whose sum reached a
   whole number there, rounded, so a bot can tell what the plan started in whole from what it only expects to follow.
   What an item needs first, a structure that unlocks it or the upgrade before it, it needs whole, fluid or not: no
-  starport starts before a whole factory is done. `Planner(api, whole_prerequisites=False)` leaves that out, for a
-  faster solve: a plan then makes its far units on a fraction of what they need, a hundredth of a factory, which it
-  never lists as an item, so a bot that follows it never builds one.
+  starport starts before a whole factory is done. `Planner(api, unlock_fraction=...)` takes the share of one that
+  unlocks, 1 by default. Under a half it is less of a structure than a plan lists as an item. With 0 the fractions done
+  count as they are, for a faster solve: a plan then makes its far units on a hundredth of a factory, which it never
+  lists, so a bot that follows it never builds one.

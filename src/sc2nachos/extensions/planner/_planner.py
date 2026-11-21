@@ -74,10 +74,11 @@ class Planner:
       each way.
     - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a
       tech lab makes the units that need one and researches on its own.
-    - Nothing starts before what it needs first is done whole, a structure granting its tech or the upgrade before
-      it, fluid or not: no starport before a whole factory is done. With `whole_prerequisites` false the fractions done
-      of it count instead, a hundredth of a factory unlocking a starport: the solve is faster, and a plan then makes
-      its far units on a fraction of a structure it never lists as an item.
+    - Nothing starts before `unlock_fraction` of what it needs first is done, a structure granting its tech or the
+      upgrade before it: by default 1, no starport before a whole factory, though a factory's starts be fluid. A
+      lower one unlocks on that share of one; under a half, on less of a structure than a plan lists as an item. With
+      0 the fractions done count as they are, a hundredth of a factory unlocking a starport: the solve is faster, and
+      a plan then makes its far units on a structure it never lists.
     - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
       from the first edge at or after their end. So production chained on one producer starts a whole number of
       buckets apart while its starts are whole. A build that runs into a bucket by less than `max_ignored_overrun` of
@@ -101,7 +102,7 @@ class Planner:
     unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
 
     Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, or a
-    `max_ignored_overrun` outside 0 to 1; and `NotPlayingError` if built before the game starts.
+    `max_ignored_overrun` or an `unlock_fraction` outside 0 to 1; and `NotPlayingError` if built before the game starts.
     """
 
     __slots__ = (
@@ -113,7 +114,7 @@ class Planner:
         "_plan",
         "_time_limit",
         "_fluid_after",
-        "_whole_prerequisites",
+        "_unlock_fraction",
     )
 
     def __init__(
@@ -125,7 +126,7 @@ class Planner:
         node_limit: int | None = None,
         fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
         max_ignored_overrun: float = 0.25,
-        whole_prerequisites: bool = True,
+        unlock_fraction: float = 1.0,
     ) -> None:
         if api.player.race != Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -135,13 +136,15 @@ class Planner:
             raise ValueError(f"a node limit must be above 0, not {node_limit}")
         if not 0 <= max_ignored_overrun <= 1:
             raise ValueError(f"the overrun ignored must be a share of a bucket, 0 to 1, not {max_ignored_overrun}")
+        if not 0 <= unlock_fraction <= 1:
+            raise ValueError(f"the unlock fraction must be 0 to 1, not {unlock_fraction}")
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._time_limit = time_limit
         self._node_limit = node_limit
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
-        self._whole_prerequisites = whole_prerequisites
+        self._unlock_fraction = unlock_fraction
         self._model = TerranModel(api.data)
         self._plan: Plan | None = None
 
@@ -212,7 +215,7 @@ class Planner:
                 items, fluid_after=self._fluid_after, state=planned_from, economy=economy
             ),
             max_ignored_overrun=self._max_ignored_overrun,
-            whole_prerequisites=self._whole_prerequisites,
+            unlock_fraction=self._unlock_fraction,
             previous_plan=previous_plan,
             hysteresis_bonus=hysteresis_bonus,
         )

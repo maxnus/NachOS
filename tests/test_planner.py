@@ -80,13 +80,13 @@ def _best_plan(
     loss_rates: dict[UnitTypeId, float] | None = None,
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
     max_ignored_overrun: float = 0.25,
-    whole_prerequisites: bool = True,
+    unlock_fraction: float = 1.0,
     previous_plan: Plan | None = None,
     hysteresis_bonus: float = 0.0,
 ) -> Plan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
-    `economy`, with `loss_rates`, `start_limits` and `max_ignored_overrun`, keeping to `previous_plan` for
-    `hysteresis_bonus`, proven best."""
+    `economy`, with `loss_rates`, `start_limits`, `max_ignored_overrun` and `unlock_fraction`, keeping to
+    `previous_plan` for `hysteresis_bonus`, proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
         items=items,
@@ -99,7 +99,7 @@ def _best_plan(
         start_limits=start_limits or {},
         fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
         max_ignored_overrun=max_ignored_overrun,
-        whole_prerequisites=whole_prerequisites,
+        unlock_fraction=unlock_fraction,
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
     )
@@ -664,7 +664,7 @@ class TestFluidAfter:
                 start_limits={},
                 fluid_after_seconds=[fluid_after.seconds] * len(items),
                 max_ignored_overrun=0.25,
-                whole_prerequisites=False,
+                unlock_fraction=0.0,
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
@@ -690,9 +690,9 @@ class TestFluidAfter:
         assert min(fluid_starts) >= GameTime(seconds=20)
 
 
-class TestWholePrerequisites:
+class TestUnlockFraction:
     @staticmethod
-    def _plan_for_medivacs(*, whole_prerequisites: bool) -> Plan:
+    def _plan_for_medivacs(*, unlock_fraction: float) -> Plan:
         """The best plan for medivacs from a barracks with the resources in hand, a factory's starts fluid throughout:
         a starport needs a factory."""
         state = _game_start(
@@ -707,31 +707,29 @@ class TestWholePrerequisites:
             horizon_seconds=240,
             grid=TimeGrid.uniform(GameTime(seconds=10)),
             fluid_after=lambda item: GameTime.ZERO if item == UnitTypeId.FACTORY else None,
-            whole_prerequisites=whole_prerequisites,
+            unlock_fraction=unlock_fraction,
         )
 
     def test_nothing_starts_before_a_whole_structure_granting_its_tech_is_done(self) -> None:
-        plan = self._plan_for_medivacs(whole_prerequisites=True)
+        plan = self._plan_for_medivacs(unlock_fraction=1.0)
 
         factory_start = _start_seconds(plan, UnitTypeId.FACTORY)[0]
         factory_seconds = _TERRAN_MODEL.unit_items[UnitTypeId.FACTORY].build_seconds
         assert _start_seconds(plan, UnitTypeId.STARPORT)[0] >= factory_start + factory_seconds
         assert _start_seconds(plan, UnitTypeId.MEDIVAC) != []
 
-    def test_without_whole_prerequisites_a_fraction_of_a_structure_grants_its_tech(self) -> None:
+    def test_with_an_unlock_fraction_of_0_any_fraction_of_a_structure_grants_its_tech(self) -> None:
         """The plan makes its medivacs at a starport, on a fraction of a factory too small to be an item of it."""
-        plan = self._plan_for_medivacs(whole_prerequisites=False)
+        plan = self._plan_for_medivacs(unlock_fraction=0.0)
 
         assert _start_seconds(plan, UnitTypeId.FACTORY) == []
         assert _start_seconds(plan, UnitTypeId.STARPORT) != []
         assert _start_seconds(plan, UnitTypeId.MEDIVAC) != []
 
-    @pytest.mark.parametrize("whole_prerequisites", [True, False], ids=["whole", "in fractions"])
-    def test_an_upgrade_needs_the_whole_of_the_upgrade_before_it(self, whole_prerequisites: bool) -> None:
-        """With what the second level of infantry weapons costs and a quarter of the first level's, and nothing coming
-        in, both fluid: a quarter of the first level lets a quarter of the second start in each bucket, too little of
-        the first to be an item of the plan. Needing the whole of the first, the plan pays for it, and for what is left
-        of the second."""
+    @staticmethod
+    def _plan_for_the_second_level(*, unlock_fraction: float) -> Plan:
+        """The best plan for the second level of infantry weapons, which needs the first, both fluid: with what the
+        second costs and a quarter of the first's, and nothing coming in."""
         first = _TERRAN_MODEL.upgrade_items[UpgradeId.TERRAN_INFANTRY_WEAPONS_1]
         second = _TERRAN_MODEL.upgrade_items[UpgradeId.TERRAN_INFANTRY_WEAPONS_2]
         state = _game_start(
@@ -740,16 +738,32 @@ class TestWholePrerequisites:
             counts={UnitTypeId.ENGINEERING_BAY: 1, UnitTypeId.ARMORY: 1},
             mineral_fields=0,
         )
-        plan = _best_plan(
+        return _best_plan(
             state,
             Reward(upgrade_weights={UpgradeId.TERRAN_INFANTRY_WEAPONS_2: 1.0}),
             horizon_seconds=400,
             grid=TimeGrid.uniform(GameTime(seconds=20)),
             fluid_after=lambda _: GameTime.ZERO,
-            whole_prerequisites=whole_prerequisites,
+            unlock_fraction=unlock_fraction,
         )
-        assert (_start_seconds(plan, UpgradeId.TERRAN_INFANTRY_WEAPONS_1) != []) == whole_prerequisites
+
+    @pytest.mark.parametrize("unlock_fraction", [1.0, 0.0], ids=["the whole of it", "any fraction"])
+    def test_an_upgrade_needs_the_unlock_fraction_of_the_upgrade_before_it(self, unlock_fraction: float) -> None:
+        """A quarter of the first level lets a quarter of the second start in each bucket, too little of the first to
+        be an item of the plan. Needing the whole of the first, the plan pays for it, and for what is left of the
+        second."""
+        plan = self._plan_for_the_second_level(unlock_fraction=unlock_fraction)
+
+        assert (_start_seconds(plan, UpgradeId.TERRAN_INFANTRY_WEAPONS_1) != []) == (unlock_fraction == 1.0)
         assert _start_seconds(plan, UpgradeId.TERRAN_INFANTRY_WEAPONS_2) != []
+
+    def test_a_higher_unlock_fraction_leaves_less_for_what_it_unlocks(self) -> None:
+        """A quarter of the first level, then a half, then the whole of it has to be paid before the second starts."""
+        worths = [
+            self._plan_for_the_second_level(unlock_fraction=unlock_fraction).objective
+            for unlock_fraction in (0.25, 0.5, 1.0)
+        ]
+        assert worths[0] > worths[1] > worths[2]
 
     def test_it_adds_whole_numbers_only_where_what_is_needed_may_be_done_in_fractions(self) -> None:
         """A starport needs a factory: whether one is done is a whole number in each bucket a fluid factory can be
@@ -758,7 +772,7 @@ class TestWholePrerequisites:
         items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
         state = _game_start(counts={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1})
 
-        def whole_numbers(factory_fluid_after: GameTime, *, whole_prerequisites: bool) -> int:
+        def whole_numbers(factory_fluid_after: GameTime, *, unlock_fraction: float) -> int:
             program = PlanProgram(
                 items=items,
                 model=_TERRAN_MODEL,
@@ -772,17 +786,17 @@ class TestWholePrerequisites:
                     factory_fluid_after.seconds if item.unit_type == UnitTypeId.FACTORY else math.inf for item in items
                 ],
                 max_ignored_overrun=0.25,
-                whole_prerequisites=whole_prerequisites,
+                unlock_fraction=unlock_fraction,
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
             return program.linear_program.integral_count
 
-        every_start_whole = whole_numbers(GameTime.INFINITE, whole_prerequisites=False)
-        assert whole_numbers(GameTime.INFINITE, whole_prerequisites=True) == every_start_whole
+        every_start_whole = whole_numbers(GameTime.INFINITE, unlock_fraction=0.0)
+        assert whole_numbers(GameTime.INFINITE, unlock_fraction=1.0) == every_start_whole
         # A factory fluid from 30 seconds on: three of its ten buckets whole, and one started at 30 is done at 80.
-        assert whole_numbers(GameTime(seconds=30), whole_prerequisites=False) == every_start_whole - 7
-        assert whole_numbers(GameTime(seconds=30), whole_prerequisites=True) == every_start_whole - 7 + 2
+        assert whole_numbers(GameTime(seconds=30), unlock_fraction=0.0) == every_start_whole - 7
+        assert whole_numbers(GameTime(seconds=30), unlock_fraction=0.5) == every_start_whole - 7 + 2
 
 
 class TestEconomy:
@@ -1377,10 +1391,24 @@ class TestPlanner:
 
     @pytest.mark.parametrize(
         "arguments",
-        [{"time_limit": 0.0}, {"node_limit": 0}, {"max_ignored_overrun": -0.1}, {"max_ignored_overrun": 1.1}],
-        ids=["a time limit of 0", "a node limit of 0", "an overrun ignored below 0", "an overrun ignored above 1"],
+        [
+            {"time_limit": 0.0},
+            {"node_limit": 0},
+            {"max_ignored_overrun": -0.1},
+            {"max_ignored_overrun": 1.1},
+            {"unlock_fraction": -0.1},
+            {"unlock_fraction": 1.1},
+        ],
+        ids=[
+            "a time limit of 0",
+            "a node limit of 0",
+            "an overrun ignored below 0",
+            "an overrun ignored above 1",
+            "an unlock fraction below 0",
+            "an unlock fraction above 1",
+        ],
     )
-    def test_a_bad_limit_or_overrun_ignored_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_limit_of_0_or_a_share_outside_0_to_1_raises(self, arguments: dict[str, Any]) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)])
         with pytest.raises(ValueError):
             Api(extensions=lambda api: Planner(api, **arguments)).play(game.joined())

@@ -61,7 +61,7 @@ _START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER
 # The planner's default: a whole build running into a bucket by less than a quarter of it leaves the bucket free.
 _MAX_IGNORED_OVERRUN = 0.25
 # The planner's default: nothing starts before a whole structure granting each tech it needs is done.
-_WHOLE_PREREQUISITES = True
+_UNLOCK_FRACTION = 1.0
 _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
@@ -334,7 +334,7 @@ def _solve_and_print(
             items, fluid_after=fluid_after, state=planned_from, economy=planned_by
         ),
         max_ignored_overrun=_MAX_IGNORED_OVERRUN,
-        whole_prerequisites=_WHOLE_PREREQUISITES,
+        unlock_fraction=_UNLOCK_FRACTION,
         previous_plan=None,
         hysteresis_bonus=0.0,
     )

@@ -362,34 +362,38 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     base, with transfers, would roughly double the reference program's 1388 variables and add some 125 integers to its
     419, whether each future base stands yet, with the solver already short of optimal at 3 seconds; unmeasured. A
     cheaper middle way, a delay the `Economy` sets before each new SCV mines, was left for this discussion.
-11. **What an item needs first is whole** (the owner, 2026-11-20: built, and the bot's to switch off). The
-    prerequisite rows hold an item's starts in a bucket at most the bucket's most times the count granting its tech,
-    a switch while that count is whole and a dial once it is fluid: a hundredth of a factory unlocked a starport. The
-    reference plan from a game's start listed a starport at 4:03 and five medivacs and never a factory, 0.00 of one
-    alive at its end; a wide reward's plans made six ghosts on 0.02 of a ghost academy and thors on half an armory.
-    It changes what a bot does: from the state of `replans` at 3:00 with 600 minerals and 300 vespene more, the plan
-    had its first starport at 1:49, its first medivac at 2:50 and no factory, where with whole prerequisites it
-    starts a factory at 0:11, the starport at 0:55 and the first medivac at 1:31; each replan choosing alike, the
-    factory is never built. `Planner(whole_prerequisites=True)`, the default, adds for each tech no structure of the
-    state grants, and each upgrade another needs, a 0 or 1 in each bucket, at most the count done, which holds the
-    item's starts instead; it is whole only from the edge at which a fluid start of what it counts can be done, the
-    count being whole before. Measured (`tools/benchmark_planner.py --time-limit 30`, the runs side by side):
-    `reference` 465 whole variables from 401, proven in 2.3 to 4.4 s from 1.7 to 2.5; `replans` 300 to 316 from 274
-    to 292, 2.2 to 6.5 s from 2.4 to 5.0; `items` 910 to 1,335 from 787 to 1,202, none of twelve proven in 30 s, 0.2
-    to 5.1% from the bound, where all were in 5.0 to 14.6 s. Over 6 minutes, by a script outside the package that
-    sets the benchmark's horizon: `reference` 1.3 to 1.9 s, `replans` 1.7 to 4.0, `items` 2.6 to 5.5 s from a game's
-    start and one of eight proven from mid-game; over 5 minutes 1.4 to 2.5, 1.5 to 4.7, and `items` 1.8 to 3.1 s from
-    a game's start, 13.5 to 20.3 from 3:00 and 6.4 to 11.2 from 6:00. The 0 or 1 of an upgrade another needs costs
-    little: without it `items` over 5 minutes took 101.7 s in all against 107.5. Keeping every structure that grants
-    a needed tech whole throughout closed the flaw too, at more cost: the reference from a game's start was not
-    proven in 30 s. Also measured then, by scripts outside the package, each plan's first 30 seconds fixed in a
-    10-minute program and the rest solved anew: an item fluid no later than its producer, or every product of a
-    producer fluid together, changed what those 30 seconds were worth by 0.3% at most and the solve little; a
-    producer whole as long as its products made the solve slower and the plan no better; a horizon of 5 or 6 minutes
-    lost 0.3% at most of those 30 seconds; first buckets of 68 steps about halved the solve of the reward of
-    `replans` for 0.2% at most; and whole times twice as long bought nothing. Open: the horizon the docs and the
-    benchmark recommend, and a wide reward from mid-game, which whole prerequisites leave unproven in 3 s over any
-    horizon tried.
+11. **What an item needs first is whole** (the owner, 2026-11-20: built, and the bot's to set). The prerequisite rows
+    hold an item's starts in a bucket at most the bucket's most times the count granting its tech, a switch while
+    that count is whole and a dial once it is fluid: a hundredth of a factory unlocked a starport. The reference plan
+    from a game's start listed a starport at 4:03 and five medivacs and never a factory, 0.00 of one alive at its
+    end; a wide reward's plans made six ghosts on 0.02 of a ghost academy and thors on half an armory. It changes
+    what a bot does: from the state of `replans` at 3:00 with 600 minerals and 300 vespene more, the plan had its
+    first starport at 1:49, its first medivac at 2:50 and no factory, where needing a whole factory it starts one at
+    0:11, the starport at 0:55 and the first medivac at 1:31; each replan choosing alike, the factory is never built.
+    `Planner(unlock_fraction=1.0)`, the default, adds for each tech no structure of the state grants, and each
+    upgrade another needs, a 0 or 1 in each bucket, 1 only where that fraction of one is done, which holds the item's
+    starts instead; it is whole only from the edge at which a fluid start of what it counts can be done, the count
+    being whole before. It was first an on or off, `whole_prerequisites`; the owner (2026-11-21) made it a fraction
+    and named it, the planner to offer many arguments since nobody knows yet how it works best: under 1 a plan pays
+    for that share of a structure alone, under a half for less than it lists as an item, and with 0 no 0 or 1 is
+    added and the program is what it was. A half solves as a whole does: `reference` in 14.3 s in all against 13.8,
+    `replans` 32.1 against 32.6 and `items` over 5 minutes 104.6 against 107.1, where 0 took 8.3, 29.3 and 46.0.
+    Measured (`tools/benchmark_planner.py --time-limit 30`, the runs side by side): `reference` 465 whole variables
+    from 401, proven in 2.3 to 4.4 s from 1.7 to 2.5; `replans` 300 to 316 from 274 to 292, 2.2 to 6.5 s from 2.4 to
+    5.0; `items` 910 to 1,335 from 787 to 1,202, none of twelve proven in 30 s, 0.2 to 5.1% from the bound, where all
+    were in 5.0 to 14.6 s. Over 6 minutes, by a script outside the package that sets the benchmark's horizon:
+    `reference` 1.3 to 1.9 s, `replans` 1.7 to 4.0, `items` 2.6 to 5.5 s from a game's start and one of eight proven
+    from mid-game; over 5 minutes 1.4 to 2.5, 1.5 to 4.7, and `items` 1.8 to 3.1 s from a game's start, 13.5 to 20.3
+    from 3:00 and 6.4 to 11.2 from 6:00. The 0 or 1 of an upgrade another needs costs little: without it `items` over
+    5 minutes took 101.7 s in all against 107.5. Keeping every structure that grants a needed tech whole throughout
+    closed the flaw too, at more cost: the reference from a game's start was not proven in 30 s. Also measured then,
+    by scripts outside the package, each plan's first 30 seconds fixed in a 10-minute program and the rest solved
+    anew: an item fluid no later than its producer, or every product of a producer fluid together, changed what those
+    30 seconds were worth by 0.3% at most and the solve little; a producer whole as long as its products made the
+    solve slower and the plan no better; a horizon of 5 or 6 minutes lost 0.3% at most of those 30 seconds; first
+    buckets of 68 steps about halved the solve of the reward of `replans` for 0.2% at most; and whole times twice as
+    long bought nothing. Open: the horizon the docs and the benchmark recommend, and a wide reward from mid-game,
+    which an unlock fraction above 0 leaves unproven in 3 s over any horizon tried.
 
 ## Risks
 
