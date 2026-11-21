@@ -50,12 +50,13 @@ class PlanProgram:
     bucket before; both are whole where the bucket starts before the item's time in `fluid_after_seconds`, one for each
     item in the order of `items`. A start pays from the stock at its bucket's start plus half the bucket's income, keeps
     its producer busy for its build time over the buckets it spans, its SCV from the walk there through the build to the
-    walk back, takes its supply at once, and counts as done from the first edge at or after its end. Workers mine,
-    collect or build, pooled over every field and refinery, in the tiers of `economy`'s rates, and each orbital command
-    adds its MULEs' income. A unit counts as it survives its loss rate in `loss_rates`, for income, supply, the reward
-    and coverage. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of
-    the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item of
-    `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
+    walk back, takes its supply at once, and counts as done from the first edge at or after its end. A whole start, or
+    a build under way, that runs into a bucket by less than `max_ignored_overrun` of it leaves the bucket free. Workers
+    mine, collect or build, pooled over every field and refinery, in the tiers of `economy`'s rates, and each orbital
+    command adds its MULEs' income. A unit counts as it survives its loss rate in `loss_rates`, for income, supply, the
+    reward and coverage. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is
+    that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item
+    of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
     worth `hysteresis_bonus` once, beside the reward.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, and for a negative walk from
@@ -75,6 +76,7 @@ class PlanProgram:
         "_index_of_upgrade",
         "_items",
         "_loss_rates",
+        "_max_ignored_overrun",
         "_minerals",
         "_mining",
         "_model",
@@ -103,6 +105,7 @@ class PlanProgram:
         loss_rates: Mapping[UnitTypeId, float],
         start_limits: Mapping[UnitTypeId | UpgradeId, int],
         fluid_after_seconds: Sequence[float],
+        max_ignored_overrun: float,
         previous_plan: Plan | None,
         hysteresis_bonus: float,
     ) -> None:
@@ -115,10 +118,12 @@ class PlanProgram:
         self._economy = economy
         self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
         self._start_limits = _limits_by_counted_type(start_limits, model)
+        self._max_ignored_overrun = max_ignored_overrun
         self._previous_plan = previous_plan
         self._hysteresis_bonus = hysteresis_bonus
-        built_by_worker = (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
-        self._walk_seconds = walk_seconds_of(economy, built_by_worker)
+        self._walk_seconds = walk_seconds_of(
+            economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
+        )
         self._completions, self._builders_free_after = self._completions_and_builders()
         self._edges: FloatArray = np.asarray(edges, dtype=float)
         self._widths: FloatArray = np.diff(self._edges)
@@ -345,18 +350,34 @@ class PlanProgram:
             done.add_expression(self._starts_done(index, at_end=at_end))
         return done
 
-    def _busy_seconds(self, item: Item, *, before: float = 0.0, after: float = 0.0) -> FloatArray:
-        """The seconds of each bucket, by row, that one start of `item` in each bucket, by column, keeps busy: from
-        `before` seconds ahead of the start to `after` seconds past its end."""
-        starts = self._edges[:-1][None, :]
-        overlap_start = np.maximum(starts - before, self._edges[:-1][:, None])
-        overlap_end = np.minimum(starts + item.build_seconds + after, self._edges[1:][:, None])
-        return np.maximum(overlap_end - overlap_start, 0.0)
+    def _busy_seconds(self, index: int, *, before: float = 0.0, after: float = 0.0) -> FloatArray:
+        """The seconds of each bucket, by row, that one start of item `index` in each bucket, by column, keeps busy:
+        from `before` seconds ahead of the start to `after` seconds past its end, less the overrun ignored of a whole
+        start."""
+        busy_from = self._edges[:-1][None, :] - before
+        busy_until = self._edges[:-1][None, :] + self._items[index].build_seconds + after
+        overlap_start = np.maximum(busy_from, self._edges[:-1][:, None])
+        overlap_end = np.minimum(busy_until, self._edges[1:][:, None])
+        busy = np.maximum(overlap_end - overlap_start, 0.0)
+        began_before = self._edges[:-1][:, None] > busy_from + SECONDS_TOLERANCE
+        ignored = self._is_overrun_ignored(busy, self._widths[:, None], began_before) & self._whole[index][None, :]
+        return np.where(ignored, 0.0, busy)
 
     def _busy_seconds_until(self, end_seconds: float, *, start_seconds: float = 0.0) -> FloatArray:
-        """The seconds of each bucket within `start_seconds` to `end_seconds` from the plan's start."""
+        """The seconds of each bucket within `start_seconds` to `end_seconds` from the plan's start, less the overrun
+        ignored. What is busy from the plan's start began before it."""
         overlap_start = np.maximum(self._edges[:-1], start_seconds)
-        return np.maximum(np.minimum(self._edges[1:], end_seconds) - overlap_start, 0.0)
+        busy = np.maximum(np.minimum(self._edges[1:], end_seconds) - overlap_start, 0.0)
+        began_before = (self._edges[:-1] > start_seconds + SECONDS_TOLERANCE) | (start_seconds <= SECONDS_TOLERANCE)
+        return np.where(self._is_overrun_ignored(busy, self._widths, began_before), 0.0, busy)
+
+    def _is_overrun_ignored(
+        self, busy: FloatArray, widths: FloatArray, began_before: NDArray[np.bool_]
+    ) -> NDArray[np.bool_]:
+        """Whether the `busy` seconds of each bucket, `widths` long, are an overrun to ignore: of what `began_before`
+        the bucket and ends in it, less than `max_ignored_overrun` of the bucket."""
+        most_ignored = self._max_ignored_overrun * widths - SECONDS_TOLERANCE
+        return began_before & (busy > SECONDS_TOLERANCE) & (busy < most_ignored)
 
     def _shorter_than_every_build_and_whole(self, indices: list[int]) -> NDArray[np.bool_]:
         """Whether each bucket is no longer than every build of the items `indices`, and their starts in it are whole:
@@ -422,7 +443,7 @@ class PlanProgram:
         built = [(index, item) for index, item in enumerate(self._items) if item.is_built_by_worker]
         for index, item in built:
             walk = self._walk_seconds_of(item)
-            busy_share = self._busy_seconds(item, before=walk, after=walk) / self._widths[:, None]
+            busy_share = self._busy_seconds(index, before=walk, after=walk) / self._widths[:, None]
             self._add_starts_to(builders, index, busy_share)
         for free_after in self._builders_free_after:
             builders.constant += self._busy_seconds_until(free_after) / self._widths
@@ -432,8 +453,8 @@ class PlanProgram:
             return
         short_and_whole = self._shorter_than_every_build_and_whole([index for index, _ in built])
         builders_whole = RowExpression(buckets).add_expression(working)
-        for index, item in built:
-            is_busy = (self._busy_seconds(item) > SECONDS_TOLERANCE).astype(float)
+        for index, _ in built:
+            is_busy = (self._busy_seconds(index) > SECONDS_TOLERANCE).astype(float)
             self._add_starts_to(builders_whole, index, is_busy)
         for free_after in self._builders_free_after:
             builders_whole.constant += self._busy_seconds_until(free_after) > SECONDS_TOLERANCE
@@ -501,7 +522,7 @@ class PlanProgram:
         busy = RowExpression(buckets)
         running = RowExpression(buckets)
         for index in members:
-            busy_seconds = self._busy_seconds(self._items[index])
+            busy_seconds = self._busy_seconds(index)
             self._add_starts_to(busy, index, busy_seconds)
             self._add_starts_to(running, index, (busy_seconds > SECONDS_TOLERANCE).astype(float))
         for occupation in occupations:

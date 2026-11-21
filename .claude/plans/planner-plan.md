@@ -348,7 +348,14 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    cannot order. Per-item bucket lengths were weighed too: grids of other lengths merge to nearly 16-step buckets,
    and each item starting only on a doubling of 34 steps of its own, a share of its build time, left 18 to 66% fewer
    whole variables free, proved the reward of `replans` no sooner, and halved the wide reward's proof for plans worth
-   0.7 to 1.4% less, the one grid's plan the better after 3 s in all eight cases.
+   0.7 to 1.4% less, the one grid's plan the better after 3 s in all eight cases. What is built instead rounds either
+   way (the owner, 2026-11-20, to whom a marauder's 480 steps planned as 544 on 68-step buckets, where 476 is seven
+   of them, was plainly wrong): a whole start, or a build under way, that runs into a bucket by less than a share of
+   it leaves the bucket free, `Planner(max_ignored_overrun=...)`, by default a quarter, 0 for none and a half for the
+   nearest bucket; the owner chose a parameter and the quarter over the nearest, so that a plan runs ahead of the
+   game by a quarter of a bucket at most, 0.4 s on the default grid. On it a marauder is planned every 476 steps, a
+   siege tank every 714 for its 720 and a thor every 952 for its 960, a marine every 408 as before; fluid starts keep
+   their build time, and a build counts as done from the first edge at or after its end as before.
 10. **Workers per base** (the owner, review of #239: to come back to). The planner pools workers over every field
     and refinery, so a new SCV mines from when it is done, even one that has to walk to another base, about 10
     minerals too many each, and a new base's fields count from when its command center is done. Separate workers per

@@ -278,8 +278,11 @@ class ThreatMap:
   from the walk to a structure through the build to the walk back, and starts on the first second of a bucket of its
   `TimeGrid`, by default 34 game steps long at first, 1.5 seconds, and doubling every time the time from the plan's
   start doubles from 544 steps, 24 seconds. A worker's 272 steps are eight of the first buckets, so workers trained one
-  after another start as far apart as in the game; a build no bucket divides, a marine's 400 steps, is planned up to a
-  bucket longer where one follows another.
+  after another start as far apart as in the game. A build no bucket divides is planned to the bucket where one follows
+  another: one that runs into a bucket by less than a quarter of it leaves the bucket free, so marauders follow each
+  other every 476 steps for their 480, and one that runs further takes all of it, marines every 408 for their 400.
+  `Planner(api, max_ignored_overrun=...)` takes another share of a bucket, 0 for none: a higher one lets a plan start
+  the next build up to that much of a bucket before the game could.
 
   An item starts in whole numbers for a time from the plan's start and is fluid after it, starting in fractions: the
   solver weighs fractions far faster, and the bot carries out only the near term before it plans again. By default that

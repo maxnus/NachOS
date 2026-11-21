@@ -58,6 +58,8 @@ from sc2nachos.testing import load_game_data
 
 _HORIZON = GameTime(seconds=600)
 _START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER: 3}
+# The planner's default: a whole build running into a bucket by less than a quarter of it leaves the bucket free.
+_MAX_IGNORED_OVERRUN = 0.25
 _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
@@ -329,6 +331,7 @@ def _solve_and_print(
         fluid_after_seconds=fluid_after_seconds_of(
             items, fluid_after=fluid_after, state=planned_from, economy=planned_by
         ),
+        max_ignored_overrun=_MAX_IGNORED_OVERRUN,
         previous_plan=None,
         hysteresis_bonus=0.0,
     )

@@ -42,6 +42,13 @@ _TERRAN_MODEL = TerranModel(load_game_data())
 _TWO_SECOND_BUCKETS = TimeGrid.uniform(GameTime(seconds=2))
 # Enough branching for every tiny game here to be proven best, the same on every machine.
 _NODE_LIMIT = 20_000
+# Limits that leave a plan its units alone: no structure an SCV builds and no morph.
+_NOTHING_BUT_UNITS: dict[UnitTypeId | UpgradeId, int] = {
+    UnitTypeId.COMMAND_CENTER: 0,
+    UnitTypeId.ORBITAL_COMMAND: 0,
+    UnitTypeId.SUPPLY_DEPOT: 0,
+    UnitTypeId.REFINERY: 0,
+}
 # The economy the known plans are worked out with: the default, but an SCV walking 6 seconds to every structure.
 _WALKING_6_SECONDS_TO_EVERY_STRUCTURE = Economy(walk_time=lambda _: GameTime(seconds=6))
 
@@ -72,12 +79,13 @@ def _best_plan(
     economy: Economy = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: dict[UnitTypeId, float] | None = None,
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
+    max_ignored_overrun: float = 0.25,
     previous_plan: Plan | None = None,
     hysteresis_bonus: float = 0.0,
 ) -> Plan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
-    `economy`, with `loss_rates` and `start_limits`, keeping to `previous_plan` for `hysteresis_bonus`,
-    proven best."""
+    `economy`, with `loss_rates`, `start_limits` and `max_ignored_overrun`, keeping to `previous_plan` for
+    `hysteresis_bonus`, proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
     program = PlanProgram(
         items=items,
@@ -89,6 +97,7 @@ def _best_plan(
         loss_rates=loss_rates or {},
         start_limits=start_limits or {},
         fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
+        max_ignored_overrun=max_ignored_overrun,
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
     )
@@ -304,8 +313,75 @@ class TestKnownPlans:
         reward = Reward(weights={UnitTypeId.SCV: 1.0, UnitTypeId.SUPPLY_DEPOT: 0.01})
         plan = _best_plan(_game_start(), reward, horizon_seconds=40)
 
-        assert _start_seconds(plan, UnitTypeId.SCV)[:2] == [0.0, 14.0]
+        assert _start_seconds(plan, UnitTypeId.SCV)[:2] == [0.0, 12.0]
         assert _start_seconds(plan, UnitTypeId.SUPPLY_DEPOT)[0] == 8.0
+
+    @pytest.mark.parametrize(
+        ("max_ignored_overrun", "scv_starts"),
+        [(0.0, [0.0, 14.0, 28.0, 42.0]), (0.05, [0.0, 14.0, 28.0, 42.0]), (0.25, [0.0, 12.0, 24.0, 36.0])],
+        ids=["none ignored", "less than it runs over", "a quarter of a bucket"],
+    )
+    def test_a_whole_build_running_into_a_bucket_by_less_than_the_overrun_ignored_leaves_it_free(
+        self, max_ignored_overrun: float, scv_starts: list[float]
+    ) -> None:
+        """An SCV's 12.14 seconds run 0.14 into a seventh bucket of 2 seconds, 0.07 of it: the next SCV starts in that
+        bucket if that is ignored, and in the one after if not. Of the SCVs done by the plan's end."""
+        plan = _best_plan(
+            _game_start(minerals=1000.0, supply_cap=100.0),
+            Reward(weights={UnitTypeId.SCV: 1.0}),
+            horizon_seconds=60,
+            fluid_after=lambda _: GameTime.INFINITE,
+            start_limits=_NOTHING_BUT_UNITS,
+            max_ignored_overrun=max_ignored_overrun,
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.SCV) == scv_starts
+
+    def test_every_overrun_is_ignored_with_an_overrun_ignored_of_1(self) -> None:
+        """A marine's 17.86 seconds run 1.86 into a ninth bucket of 2 seconds: the next starts in it."""
+        state = _game_start(
+            minerals=1000.0, supply_used=0.0, supply_cap=100.0, counts={UnitTypeId.BARRACKS: 1}, mineral_fields=0
+        )
+        plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=60, max_ignored_overrun=1.0)
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [0.0, 16.0, 32.0]
+
+    def test_a_fluid_start_keeps_its_producer_busy_for_its_build_time_whatever_overrun_is_ignored(self) -> None:
+        worths = [
+            _best_plan(
+                _game_start(minerals=1000.0, supply_cap=100.0),
+                Reward(weights={UnitTypeId.SCV: 1.0}),
+                horizon_seconds=60,
+                fluid_after=lambda _: GameTime.ZERO,
+                start_limits=_NOTHING_BUT_UNITS,
+                max_ignored_overrun=max_ignored_overrun,
+            ).objective
+            for max_ignored_overrun in (0.0, 1.0)
+        ]
+        assert worths[0] == pytest.approx(worths[1])
+
+    @pytest.mark.parametrize(
+        ("max_ignored_overrun", "next_marine_start"), [(0.0, 6.0), (0.25, 4.0)], ids=["none ignored", "a quarter"]
+    )
+    def test_a_build_under_way_running_into_a_bucket_by_less_than_the_overrun_ignored_leaves_it_free(
+        self, max_ignored_overrun: float, next_marine_start: float
+    ) -> None:
+        """A marine 4.2 seconds from done runs 0.2 into the third bucket of 2 seconds, a tenth of it."""
+        time_left = GameTime(seconds=4.2)
+        training = Occupation(
+            producer=UnitTypeId.BARRACKS, time_until_start=GameTime.ZERO, time_left=time_left, needs_tech_lab=False
+        )
+        state = _game_start(
+            minerals=1000.0,
+            supply_used=1.0,
+            supply_cap=100.0,
+            counts={UnitTypeId.BARRACKS: 1},
+            mineral_fields=0,
+            unit_completions=(UnitCompletion(unit_type=UnitTypeId.MARINE, time_left=time_left),),
+            occupations=(training,),
+        )
+        plan = _best_plan(
+            state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=40, max_ignored_overrun=max_ignored_overrun
+        )
+        assert _start_seconds(plan, UnitTypeId.MARINE)[0] == next_marine_start
 
     @pytest.mark.parametrize(
         ("reactors", "marine_starts"),
@@ -585,6 +661,7 @@ class TestFluidAfter:
                 loss_rates={},
                 start_limits={},
                 fluid_after_seconds=[fluid_after.seconds] * len(items),
+                max_ignored_overrun=0.25,
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
@@ -714,7 +791,7 @@ class TestEconomy:
         self, mule_rate: float, marine_starts: list[float]
     ) -> None:
         """No SCV and no minerals, on 1-second buckets: the MULEs' 3.5 minerals a second pay for a marine at 14 seconds,
-        and with none, nothing pays for one."""
+        and with none, nothing pays for one. Of the marines done by the plan's end."""
         state = _game_start(
             minerals=0.0,
             supply_used=0.0,
@@ -729,7 +806,7 @@ class TestEconomy:
                 _WALKING_6_SECONDS_TO_EVERY_STRUCTURE, mule_minerals_per_orbital_second=mule_rate
             ),
         )
-        assert _start_seconds(plan, UnitTypeId.MARINE) == marine_starts
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == marine_starts
 
     def test_with_a_limit_of_no_new_command_center_none_starts(self) -> None:
         """The known plan that starts one at 48 seconds."""
@@ -1201,9 +1278,11 @@ class TestPlanner:
             Api(extensions=Planner).play(game.joined())
 
     @pytest.mark.parametrize(
-        "arguments", [{"time_limit": 0.0}, {"node_limit": 0}], ids=["a time limit of 0", "a node limit of 0"]
+        "arguments",
+        [{"time_limit": 0.0}, {"node_limit": 0}, {"max_ignored_overrun": -0.1}, {"max_ignored_overrun": 1.1}],
+        ids=["a time limit of 0", "a node limit of 0", "an overrun ignored below 0", "an overrun ignored above 1"],
     )
-    def test_a_bad_limit_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_bad_limit_or_overrun_ignored_raises(self, arguments: dict[str, Any]) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)])
         with pytest.raises(ValueError):
             Api(extensions=lambda api: Planner(api, **arguments)).play(game.joined())

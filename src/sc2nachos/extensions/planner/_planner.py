@@ -75,9 +75,12 @@ class Planner:
     - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a
       tech lab makes the units that need one and researches on its own.
     - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
-      from the first edge at or after their end; build times are never rounded. So production chained on one producer
-      starts a whole number of buckets apart while its starts are whole: on the default grid SCVs every 272 game
-      steps, as in the game, and marines every 408 for their 400.
+      from the first edge at or after their end. So production chained on one producer starts a whole number of
+      buckets apart while its starts are whole. A build that runs into a bucket by less than `max_ignored_overrun` of
+      it, by default a quarter, leaves the bucket free, and one that runs further into it takes all of it: on the
+      default grid SCVs start every 272 game steps, as in the game, marauders every 476 for their 480, and marines
+      every 408 for their 400. With 0 no overrun is ignored; with 1 every one is. Fluid starts keep their producer
+      busy for their build time alone.
     - An item starts in whole numbers until a time from the plan's start and is fluid after it, starting in fractions,
       so that the solver weighs the far term without branching over it; the bot carries out the near term and plans
       again before the rest. The time is what `fluid_after` returns for the unit type the item makes or the upgrade it
@@ -93,13 +96,14 @@ class Planner:
     The solve stops at `time_limit` seconds of wall-clock time, or after `node_limit` nodes of branching, each
     unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
 
-    Raises `ValueError` for a player of a race other than Terran, or a `time_limit` or `node_limit` not above 0; and
-    `NotPlayingError` if built before the game starts.
+    Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, or a
+    `max_ignored_overrun` outside 0 to 1; and `NotPlayingError` if built before the game starts.
     """
 
     __slots__ = (
         "_api",
         "_grid",
+        "_max_ignored_overrun",
         "_model",
         "_node_limit",
         "_plan",
@@ -115,6 +119,7 @@ class Planner:
         time_limit: float | None = 3.0,
         node_limit: int | None = None,
         fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
+        max_ignored_overrun: float = 0.25,
     ) -> None:
         if api.player.race != Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -122,11 +127,14 @@ class Planner:
             raise ValueError(f"a time limit must be above 0 seconds, not {time_limit}")
         if node_limit is not None and node_limit <= 0:
             raise ValueError(f"a node limit must be above 0, not {node_limit}")
+        if not 0 <= max_ignored_overrun <= 1:
+            raise ValueError(f"the overrun ignored must be a share of a bucket, 0 to 1, not {max_ignored_overrun}")
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._time_limit = time_limit
         self._node_limit = node_limit
         self._fluid_after = fluid_after
+        self._max_ignored_overrun = max_ignored_overrun
         self._model = TerranModel(api.data)
         self._plan: Plan | None = None
 
@@ -196,6 +204,7 @@ class Planner:
             fluid_after_seconds=fluid_after_seconds_of(
                 items, fluid_after=self._fluid_after, state=planned_from, economy=economy
             ),
+            max_ignored_overrun=self._max_ignored_overrun,
             previous_plan=previous_plan,
             hysteresis_bonus=hysteresis_bonus,
         )
