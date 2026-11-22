@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, final
 
+from sc2nachos.gamedata import Resources
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.units import UnitType
@@ -68,15 +69,13 @@ class GameState:
 
     time: GameTime
     """The game time it was taken at, from which the plan's times count."""
-    minerals: float
-    """The minerals in stock."""
-    vespene: float
-    """The vespene in stock."""
+    resources: Resources
+    """The minerals and vespene in stock."""
     supply_used: float
     """The supply taken, by units alive and in production."""
     supply_cap: float
     """The supply cap, up to the game's limit."""
-    counts: Mapping[UnitTypeId, int]
+    units: Mapping[UnitTypeId, int]
     """The number of this player's finished units alive counted as each type, those inside a gas building or a
     transport included, which the observation leaves out."""
     upgrades: frozenset[UpgradeId] = frozenset()
@@ -112,11 +111,10 @@ def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
     upgrade_completions, research_occupations = _researches_of(api, model)
     return GameState(
         time=api.time,
-        minerals=api.resources.minerals,
-        vespene=api.resources.vespene,
+        resources=api.resources,
         supply_used=api.supply.used,
         supply_cap=api.supply.cap,
-        counts=counts,
+        units=counts,
         upgrades=api.upgrades,
         unit_completions=tuple(unit_completions),
         upgrade_completions=upgrade_completions,

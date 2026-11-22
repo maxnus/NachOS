@@ -41,7 +41,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 
-from sc2nachos import GameTime
+from sc2nachos import GameTime, Resources
 from sc2nachos.extensions.planner import (
     Coverage,
     CurveSegment,
@@ -210,11 +210,10 @@ def _game_start() -> GameState:
     """The state a game starts in."""
     return GameState(
         time=GameTime.ZERO,
-        minerals=50.0,
-        vespene=0.0,
+        resources=Resources(50.0, 0.0),
         supply_used=12.0,
         supply_cap=15.0,
-        counts={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1},
+        units={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1},
         mineral_fields=8,
         free_geysers=2,
     )
@@ -259,11 +258,10 @@ def _mid_game_states() -> dict[str, GameState]:
     return {
         "3:00": GameState(
             time=GameTime(seconds=180),
-            minerals=110.0,
-            vespene=10.0,
+            resources=Resources(110.0, 10.0),
             supply_used=38.0,
             supply_cap=46.0,
-            counts={
+            units={
                 UnitTypeId.SCV: 24,
                 UnitTypeId.ORBITAL_COMMAND: 2,
                 UnitTypeId.SUPPLY_DEPOT: 2,
@@ -288,11 +286,10 @@ def _mid_game_states() -> dict[str, GameState]:
         ),
         "6:00": GameState(
             time=GameTime(seconds=360),
-            minerals=440.0,
-            vespene=60.0,
+            resources=Resources(440.0, 60.0),
             supply_used=114.0,
             supply_cap=126.0,
-            counts={
+            units={
                 UnitTypeId.SCV: 34,
                 UnitTypeId.ORBITAL_COMMAND: 2,
                 UnitTypeId.SUPPLY_DEPOT: 12,

@@ -273,13 +273,15 @@ class ThreatMap:
 
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
   to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and its
-  `intervals`, each a `PlanInterval` from its `start` to its `end` with what the planner expects at that end: the
-  `minerals` and `vespene` in stock, and the `counts` of each unit type alive. The last interval's are those at the
-  horizon, and what the first starts from is the state. `plan.interval_at(time)` is the interval a game time is in, or
-  `None` outside the plan: its workers are those the plan has at that time, and between an interval's start and its end
-  the plan says nothing of the stock or the counts. `plan_now` returns `None` if the solver finds no plan within
-  its limits, and `planner.plan` holds the last one it found. The planner orders nothing and holds no unit: where a
-  structure goes, which SCV builds it, and what to drop once the game moves on stay the bot's.
+  `intervals`, each a `PlanInterval` with the workers the plan has in it, from its `start` to its `end`. Each of the
+  two is a `PlanMoment`, what the planner expects at that `time`: the `resources` in stock, the `units` of each type
+  alive, and the `upgrades` done. One interval's end is the next one's start, the same object; the first interval's
+  start is the state the plan was made from, and the last one's end its horizon, so `plan.intervals[-1].end.units` is
+  what the plan comes to. `plan.interval_at(time)` is the interval a game time is in, or `None` outside the plan: its
+  workers are those the plan has at that time, and between its start and its end the plan says nothing of the stock,
+  the units or the upgrades. `plan_now` returns `None` if the solver finds no plan within its limits, and
+  `planner.plan` holds the last one it found. The planner orders nothing and holds no unit: where a structure goes,
+  which SCV builds it, and what to drop once the game moves on stay the bot's.
 
   How many workers mine and how many collect vespene is the plan's to choose, interval by interval, and each interval
   holds them as its `miners` and `collectors`. A bot holds its collectors at the first interval's,

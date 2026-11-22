@@ -269,8 +269,8 @@ def _start_income_as_a_share_of_the_income(state: GameState, economy: Economy) -
     )
     income = minerals_mined_a_second(
         economy,
-        workers=state.counts.get(UnitTypeId.SCV, 0),
+        workers=state.units.get(UnitTypeId.SCV, 0),
         mineral_fields=state.mineral_fields,
-        orbital_commands=state.counts.get(UnitTypeId.ORBITAL_COMMAND, 0),
+        orbital_commands=state.units.get(UnitTypeId.ORBITAL_COMMAND, 0),
     )
     return min(1.0, start_income / income) if income > 0 else 1.0

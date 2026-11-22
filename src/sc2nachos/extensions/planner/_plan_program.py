@@ -12,10 +12,11 @@ from numpy.typing import NDArray
 
 from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
-from sc2nachos.extensions.planner._plan import Plan, PlanInterval, PlannedItem
+from sc2nachos.extensions.planner._plan import Plan, PlanInterval, PlanMoment, PlannedItem
 from sc2nachos.extensions.planner._reward import count_at
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
+from sc2nachos.gamedata import Resources
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
 _MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
 # A start pays from the stock at its interval's start and this share of the interval's income.
 _SHARE_OF_INCOME_SPENT: Final = 0.5
+# An upgrade reads as done from this share of it, as a fluid start is listed from half of one.
+_SHARE_OF_AN_UPGRADE_READ_AS_DONE: Final = 0.5
 
 
 @final
@@ -144,7 +147,10 @@ class PlanProgram:
         self._starts_so_far: list[VariableBlock] = []
         for item, whole in zip(self._items, self._whole, strict=True):
             self._add_starts_so_far(item, whole)
-        self._minerals, self._vespene = self._add_stock(state.minerals), self._add_stock(state.vespene)
+        self._minerals, self._vespene = (
+            self._add_stock(state.resources.minerals),
+            self._add_stock(state.resources.vespene),
+        )
         self._mining = self._add_worker_tiers(economy.minerals_per_miner_second)
         self._collecting = self._add_worker_tiers(economy.vespene_per_collector_second)
         self._started_mining, self._started_collecting = self._add_work_starts()
@@ -253,7 +259,7 @@ class PlanProgram:
         elif item.unit_type == UnitTypeId.REFINERY:
             most = float(state.free_geysers + self._economy.geysers_per_new_base * townhalls_coming)
         elif item.morphed_from is not None:
-            most = float(state.counts.get(item.morphed_from, 0) + townhalls_coming)
+            most = float(state.units.get(item.morphed_from, 0) + townhalls_coming)
         elif item.supply_used > 0:
             most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
         else:
@@ -333,7 +339,7 @@ class PlanProgram:
         rate = self._loss_rates.get(unit_type, 0.0) if survive else 0.0
         rows = self._row_edges(at_end=at_end)
         count = RowExpression(len(rows))
-        count.constant = self._state.counts.get(unit_type, 0) * np.exp(-rate * self._edges[rows.astype(int)])
+        count.constant = self._state.units.get(unit_type, 0) * np.exp(-rate * self._edges[rows.astype(int)])
         for completion_type, seconds in self._completions:
             if completion_type == unit_type:
                 count.constant += self._done_by(seconds, at_end=at_end, rate=rate)
@@ -500,7 +506,7 @@ class PlanProgram:
         state = self._state
         collecting_now = float(state.vespene_collectors)
         building_now = len(self._builders_free_after)
-        mining_now = max(state.counts.get(UnitTypeId.SCV, 0) - collecting_now - building_now, 0.0)
+        mining_now = max(state.units.get(UnitTypeId.SCV, 0) - collecting_now - building_now, 0.0)
         self._hold_starts_at_rises(
             self._collecting, self._started_collecting, working_now=collecting_now, sites=state.refineries_with_vespene
         )
@@ -669,9 +675,9 @@ class PlanProgram:
                 started.add_expression(self._started_so_far(index))
             started.constant += sum(unit_type in made_types for unit_type, _ in self._completions)
             if self._items[indices[0]].morphed_from is None:
-                started.constant += sum(self._state.counts.get(made, 0) for made in made_types if made is not None)
+                started.constant += sum(self._state.units.get(made, 0) for made in made_types if made is not None)
             available = self._made_since_start(source)
-            available.constant += self._state.counts.get(source, 0)
+            available.constant += self._state.units.get(source, 0)
             self._constrain_at_most(started, available)
 
     def _constrain_prerequisites(self) -> None:
@@ -683,7 +689,7 @@ class PlanProgram:
             needed: list[RowExpression] = []
             for tech in item.techs:
                 granting = self._model.types_granting(tech)
-                if any(self._state.counts.get(unit_type, 0) for unit_type in granting):
+                if any(self._state.units.get(unit_type, 0) for unit_type in granting):
                     continue
                 if granting not in met:
                     granted = RowExpression(self._interval_count)
@@ -832,27 +838,61 @@ class PlanProgram:
         return tuple(entry for _, _, entry in sorted(planned, key=lambda entry: (entry[0], entry[1])))
 
     def _planned_intervals(self, values: FloatArray) -> tuple[PlanInterval, ...]:
-        """Each interval of the grid with the workers the plan has in it and what it comes to at its end."""
-        times = [self._state.time + GameTime(seconds=edge) for edge in self._edges.tolist()]
-        minerals, vespene = _values_of(self._minerals, values), _values_of(self._vespene, values)
+        """Each interval of the grid with the workers the plan has in it, from the moment at one edge to the moment at
+        the next, which two intervals share."""
+        moments = self._planned_moments(values)
         miners = self._working_in(self._mining).value_of(values)
         collectors = self._working_in(self._collecting).value_of(values)
-        counts_at_ends = {
-            unit_type: self._count_alive(unit_type, at_end=True).value_of(values)
-            for unit_type in self._index_of_unit_type
-        }
         return tuple(
             PlanInterval(
-                start=times[interval],
-                end=times[interval + 1],
+                start=moments[interval],
+                end=moments[interval + 1],
                 miners=float(miners[interval]),
                 collectors=float(collectors[interval]),
-                minerals=float(minerals[interval + 1]),
-                vespene=float(vespene[interval + 1]),
-                counts={unit_type: float(counts[interval]) for unit_type, counts in counts_at_ends.items()},
             )
             for interval in range(self._interval_count)
         )
+
+    def _planned_moments(self, values: FloatArray) -> list[PlanMoment]:
+        """What the plan expects at each edge of the grid: the state's at the first, and at each other what the
+        interval before it comes to at its end."""
+        minerals, vespene = _values_of(self._minerals, values), _values_of(self._vespene, values)
+        state = self._state
+        in_production = {completion_type for completion_type, _ in self._completions}
+        unit_types = sorted(self._index_of_unit_type.keys() | state.units.keys() | in_production)
+        upgrades = sorted(state.upgrades | state.upgrade_completions.keys() | self._index_of_upgrade.keys())
+        # A row to each edge: the first interval's start, then every interval's end.
+        at_edges = {
+            unit_type: np.concatenate(
+                [
+                    self._count_alive(unit_type, at_end=False).value_of(values)[:1],
+                    self._count_alive(unit_type, at_end=True).value_of(values),
+                ]
+            )
+            for unit_type in unit_types
+        }
+        done_at_edges = {
+            upgrade: np.concatenate(
+                [
+                    self._upgrade_done(upgrade, at_end=False).value_of(values)[:1],
+                    self._upgrade_done(upgrade, at_end=True).value_of(values),
+                ]
+            )
+            for upgrade in upgrades
+        }
+        return [
+            PlanMoment(
+                time=state.time + GameTime(seconds=seconds),
+                resources=Resources(float(minerals[edge]), float(vespene[edge])),
+                units={unit_type: float(counts[edge]) for unit_type, counts in at_edges.items()},
+                upgrades=frozenset(
+                    upgrade
+                    for upgrade, done in done_at_edges.items()
+                    if done[edge] >= _SHARE_OF_AN_UPGRADE_READ_AS_DONE
+                ),
+            )
+            for edge, seconds in enumerate(self._edges.tolist())
+        ]
 
     def _index_of(self, planned: PlannedItem) -> int | None:
         """The index of the item `planned` makes, or `None` if this plan has none."""

@@ -471,6 +471,19 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     14 seconds read 8 miners in the first interval and no minerals at its end: 16 starts counted in the tier at half
     rate, where no worker mined, took the 17 minerals the 8 brought in.
 
+    **An interval runs from one moment to the next** (the owner, the same day, to six questions on its shape). A
+    `PlanMoment` holds what the planner expects at an edge of the grid: its `time`, the `resources` in stock as the
+    library's `Resources`, the `units` of each type alive, and the `upgrades` done, which a plan did not hold. A
+    `PlanInterval` holds its `start` and its `end`, two moments, with its `miners` and `collectors`; one interval's
+    end is the next one's start, the same object, so no edge is spelled twice, and the first interval's start is the
+    state again. `GameState` reads alike: `resources` for `minerals` and `vespene`, and `units` for `counts`. The
+    units are every type the plan makes and those of the state and its production, where they were the plan's
+    alone. An upgrade reads as done from half of it, where its start is fluid, as a fluid item is listed from half
+    of one. Decided against, for now: an interval holding its items, since a bot carries a plan's items out in
+    order rather than by interval, and a fluid item is listed where its fractions add up, not where the plan pays;
+    and a generic `PlannedItem`, since pyright narrows `planned.item` by `isinstance` already and does not narrow
+    `planned` with it.
+
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never
     worth nothing, so no start is counted that no worker makes and no worker stands idle, the last intervals'
