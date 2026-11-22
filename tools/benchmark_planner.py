@@ -43,13 +43,13 @@ from types import MappingProxyType
 
 from sc2nachos import GameTime, Resources
 from sc2nachos.extensions.planner import (
-    Coverage,
     CurveSegment,
     Economy,
     GameState,
     Occupation,
     Plan,
     Reward,
+    RewardTerm,
     TimeGrid,
     UnitCompletion,
     WorkerBuild,
@@ -401,7 +401,7 @@ def _run_reference(
 ) -> None:
     """The reference configuration at each half-life."""
     for half_life in half_lives:
-        reward = Reward(weights=_TOY_CURVES, half_life=half_life)
+        reward = Reward.weighted(_TOY_CURVES, half_life=half_life)
         _solve_and_print(
             f"reference, {_half_life_label(half_life)}",
             model,
@@ -422,7 +422,7 @@ def _run_replans(
             _solve_and_print(
                 f"replan at {name}, {_half_life_label(half_life)}",
                 model,
-                Reward(weights=_GROWING_CURVES, half_life=half_life),
+                Reward.weighted(_GROWING_CURVES, half_life=half_life),
                 grid=TimeGrid.doubling(),
                 time_limit=time_limit,
                 horizon=horizon,
@@ -441,7 +441,7 @@ def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameT
             _solve_and_print(
                 f"wide reward at {name}, {_half_life_label(half_life)}",
                 model,
-                Reward(weights=curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
+                Reward.weighted(curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
                 grid=TimeGrid.doubling(),
                 time_limit=time_limit,
                 horizon=horizon,
@@ -464,7 +464,7 @@ def _half_life_label(half_life: GameTime | None) -> str:
 
 def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The toy's grids, every start whole for 90 seconds."""
-    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
     for name, grid in _TOY_GRIDS.items():
         _solve_and_print(
             f"grid {name}",
@@ -479,7 +479,7 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """Every start whole for 90 seconds, against the toy's lumpy items whole over the horizon, and the default."""
-    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
     for label, fluid_after in (
         ("everything whole for 90 s only", _whole_for_90_seconds),
         ("lumpy whole over the horizon, the rest for 90 s", _whole_as_in_the_toy),
@@ -499,8 +499,8 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
 def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The linear reward against the concave one."""
     for label, reward in (
-        ("linear", Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)),
-        ("concave", Reward(weights=_TOY_CURVES, stock_weight=0.0)),
+        ("linear", Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)),
+        ("concave", Reward.weighted(_TOY_CURVES, stock_weight=0.0)),
     ):
         _solve_and_print(
             f"{label} reward", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
@@ -511,10 +511,9 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
     """Covering each of the toy's enemies."""
     for name, scenario in _ENEMY_SCENARIOS.items():
         coverages = [
-            Coverage(enemy_counts=counts, effectiveness=_EFFECTIVENESS_AGAINST[kind], value=1.0)
-            for kind, counts in scenario.items()
+            RewardTerm.covering(_EFFECTIVENESS_AGAINST[kind], counts, value=1.0) for kind, counts in scenario.items()
         ]
-        reward = Reward(weights=_STANDING_WEIGHTS, coverages=coverages, stock_weight=0.0)
+        reward = Reward.weighted(_STANDING_WEIGHTS, terms=coverages, stock_weight=0.0)
         plan = _solve_and_print(
             f"enemy {name}", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
         )
@@ -524,7 +523,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """No walks against the toy's Terran walks."""
-    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
     for label, walks in (("no walks", _NO_WALKS), ("Terran walks", _TOY_WALKS)):
         _solve_and_print(
             label,
@@ -539,7 +538,7 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """Army units lost at 0.002 a second, or workers at 0.001."""
-    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
     for label, rates in (
         ("army lost at 0.002/s", dict.fromkeys(_TOY_WEIGHTS, 0.002)),
         ("workers lost at 0.001/s", {UnitTypeId.SCV: 0.001}),
@@ -556,7 +555,7 @@ def _run_discount(
 ) -> None:
     """The linear reward at each half-life."""
     for half_life in half_lives:
-        reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life, stock_weight=0.0)
+        reward = Reward.weighted(_TOY_WEIGHTS, half_life=half_life, stock_weight=0.0)
         _solve_and_print(
             _half_life_label(half_life), model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
         )

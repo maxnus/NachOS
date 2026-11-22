@@ -13,7 +13,6 @@ from numpy.typing import NDArray
 from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._plan import Plan, PlanInterval, PlanMoment, PlannedItem
-from sc2nachos.extensions.planner._reward import count_at
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
 from sc2nachos.gamedata import Resources
@@ -23,7 +22,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 if TYPE_CHECKING:
     from sc2nachos.extensions.planner._economy import Economy
     from sc2nachos.extensions.planner._game_state import GameState
-    from sc2nachos.extensions.planner._reward import Coverage, CurveSegment, Floor, Reward
+    from sc2nachos.extensions.planner._reward import Reward, RewardTerm
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
 
 # The most an item without a tighter bound starts in one interval.
@@ -60,7 +59,7 @@ class PlanProgram:
     over every field and refinery, in the tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A
     worker more mining or collecting in a tier than the interval before, or than `state` has, brings in nothing for
     `economy`'s `reassignment_time` from the interval's start, but a builder back from its walk. A unit counts as it
-    survives its loss rate in `loss_rates`, for income, supply, the reward and coverage. Of an item in `start_limits` at
+    survives its loss rate in `loss_rates`, for income, supply and the reward. Of an item in `start_limits` at
     most that many start over the plan: a unit type's limit is that of the type it counts as, the lowest of those of one
     type, and a limit on no item here does nothing. Each item of `previous_plan` that the plan starts no later than that
     one expected, counting those of its kind before it, is worth `hysteresis_bonus` once, beside the reward.
@@ -740,22 +739,10 @@ class PlanProgram:
         plan's items kept to."""
         reward = self._reward
         worth = RowExpression(self._interval_count)
-        identity = np.eye(self._interval_count)
-        for unit_type, weight in reward.weights.items():
-            counted_as = self._model.counted_as(unit_type)
-            if isinstance(weight, (int, float)):
-                worth.add_expression(self._count_alive(counted_as, at_end=True), weight)
-            elif len(weight) == 1:
-                # One piece runs on, so it is one weight for every unit.
-                worth.add_expression(self._count_alive(counted_as, at_end=True), weight[0].weight)
-            else:
-                worth.add(self._curve_values(counted_as, weight), identity)
+        for term in reward.terms:
+            worth.add_expression(self._worth_of(term))
         for upgrade, weight in reward.upgrade_weights.items():
             worth.add_expression(self._upgrade_done(upgrade, at_end=True), weight)
-        for coverage in reward.coverages:
-            worth.add(self._enemy_units_covered(coverage), identity * coverage.value)
-        for floor in reward.floors:
-            worth.add(self._units_short_of(floor), identity * -floor.penalty)
         objective = worth.summed(self._discounts)
         if reward.stock_weight:
             at_the_horizon = np.eye(1, self._interval_count + 1, k=self._interval_count) * reward.stock_weight
@@ -764,43 +751,37 @@ class PlanProgram:
             objective.add(self._previous_items_kept(self._previous_plan), self._hysteresis_bonus)
         return objective
 
-    def _curve_values(self, unit_type: UnitTypeId, segments: Sequence[CurveSegment]) -> VariableBlock:
-        """What the count of `unit_type` is worth at each interval's end by `segments`: a variable under each segment's
-        line, which the reward raises to the lowest."""
-        values = self._program.add_variables(self._interval_count, lower=-math.inf)
-        count = self._count_alive(unit_type, at_end=True)
-        worth_before = 0.0
-        count_before = 0.0
-        for segment in segments:
-            under_line = RowExpression(self._interval_count).add(values, np.eye(self._interval_count))
-            under_line.add_expression(count, -segment.weight)
-            self._program.constrain(under_line, upper=worth_before - segment.weight * count_before)
-            if math.isfinite(segment.end):
-                worth_before += segment.weight * (segment.end - count_before)
-                count_before = segment.end
-        return values
-
-    def _enemy_units_covered(self, coverage: Coverage) -> VariableBlock:
-        """How many enemy units of `coverage` are covered at each interval's end: at most how many are expected, and at
-        most what the own units are worth against them."""
-        expected = [
-            count_at(coverage.enemy_counts, self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:]
-        ]
-        covered = self._program.add_variables(self._interval_count, upper=np.maximum(np.asarray(expected), 0.0))
-        worth = RowExpression(self._interval_count)
-        for unit_type, effectiveness in coverage.effectiveness.items():
-            worth.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), effectiveness)
-        self._constrain_at_most(RowExpression(self._interval_count).add(covered, np.eye(self._interval_count)), worth)
-        return covered
-
-    def _units_short_of(self, floor: Floor) -> VariableBlock:
-        """How many units of `floor`'s type fall short of it at each interval's end."""
-        wanted = [count_at(floor.counts, self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:]]
-        shortfalls = self._program.add_variables(self._interval_count)
-        short = RowExpression(self._interval_count).add(shortfalls, -np.eye(self._interval_count))
-        short.add_expression(self._count_alive(self._model.counted_as(floor.unit_type), at_end=True), -1.0)
-        self._program.constrain(short, upper=-np.asarray(wanted, dtype=float))
-        return shortfalls
+    def _worth_of(self, term: RewardTerm) -> RowExpression:
+        """What `term`'s units are worth a second at each interval's end, by the curve it has then: their count times
+        the weight where no interval's curve has more than one piece, which runs on, and else a variable under each
+        piece's line, which the reward raises to the lowest."""
+        intervals = self._interval_count
+        count = RowExpression(intervals)
+        for unit_type, counts_for in term.units.items():
+            count.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), counts_for)
+        curves = [term.segments_at(self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:].tolist()]
+        most_pieces = max(len(curve) for curve in curves)
+        if most_pieces <= 1:
+            first_weights = np.array([curve[0].weight if curve else 0.0 for curve in curves])
+            return RowExpression(intervals).add_expression(count, first_weights)
+        values = self._program.add_variables(intervals, lower=-math.inf)
+        worth = RowExpression(intervals).add(values, np.eye(intervals))
+        worth_before = np.zeros(intervals)
+        count_before = np.zeros(intervals)
+        for piece in range(most_pieces):
+            has_piece = np.array([len(curve) > piece for curve in curves])
+            weights = np.array([curve[piece].weight if len(curve) > piece else 0.0 for curve in curves])
+            ends = np.array([curve[piece].end if len(curve) > piece else math.inf for curve in curves])
+            under_line = RowExpression(intervals).add_expression(worth).add_expression(count, -weights)
+            at_most = worth_before - weights * count_before
+            self._program.constrain(under_line.selected(has_piece), upper=at_most[has_piece])
+            ends_at = np.where(np.isfinite(ends), ends, count_before)
+            worth_before = worth_before + weights * (ends_at - count_before)
+            count_before = ends_at
+        has_no_curve = np.array([not curve for curve in curves])
+        if has_no_curve.any():
+            self._program.constrain(worth.selected(has_no_curve), upper=0.0)
+        return worth
 
     def _previous_items_kept(self, previous: Plan) -> VariableBlock:
         """Whether each of `previous`'s items still ahead is kept to: as many of its kind started by its interval as it
