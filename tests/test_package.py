@@ -3,6 +3,7 @@
 import ast
 import functools
 import importlib
+import importlib.resources
 import inspect
 import pkgutil
 import re
@@ -21,6 +22,11 @@ def test_version_is_exposed() -> None:
     """The package exposes a version string."""
     assert isinstance(sc2nachos.__version__, str)
     assert sc2nachos.__version__
+
+
+def test_the_package_says_it_is_typed() -> None:
+    """It ships `py.typed` (PEP 561), without which mypy reads none of its annotations in a bot's code."""
+    assert importlib.resources.files("sc2nachos").joinpath("py.typed").is_file()
 
 
 def test_protobuf_protocol_is_importable() -> None:
