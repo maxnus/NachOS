@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import final
@@ -77,3 +78,17 @@ class Plan:
     """Whether the solver proved it the best plan, to a relative gap of 0.0001, rather than stopping at a limit."""
     solve_seconds: float
     """The wall-clock seconds the solve took."""
+
+    def bucket_at(self, time: GameTime) -> PlanBucket | None:
+        """The bucket `time` is in, from its `start` to before its `end`, or `None` for a time before `made_at` or not
+        before the horizon. It holds the workers the plan has at `time`; the stock and the counts it holds are those at
+        its end, and those at its start the bucket before it holds, the first one's being the state's."""
+        position = bisect_right(self.buckets, time, key=_start_of) - 1
+        if position < 0 or time >= self.buckets[position].end:
+            return None
+        return self.buckets[position]
+
+
+def _start_of(bucket: PlanBucket) -> GameTime:
+    """When `bucket` starts."""
+    return bucket.start

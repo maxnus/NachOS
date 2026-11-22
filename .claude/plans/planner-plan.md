@@ -458,7 +458,10 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     bucket, one fewer. `Plan.buckets` is a tuple of `PlanBucket`: `start`, `end`, the `miners` and `collectors` in
     it, and the `minerals`, `vespene` and `counts` expected at its end, the last bucket's being the horizon's. The
     first edge is gone and held nothing: on the reference reward from 0:00, 3:00 and 6:00 its stocks and counts were
-    the state's to the last digit, and each bucket's end the next one's start to 1e-14. Seen while moving the tests
+    the state's to the last digit, and each bucket's end the next one's start to 1e-14. Buckets stay, with a start
+    and an end, rather than points in time, whose last, the horizon, would have no workers (the owner, the same
+    day), and `Plan.bucket_at(time)` finds the one a time is in; what the stock or a count is between two edges is
+    the bot's to estimate. Seen while moving the tests
     over: where minerals buy nothing more, a plan may count more starts of mining than its miners rise by, which
     costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and one more to train over
     14 seconds read 8 miners in the first bucket and no minerals at its end: 16 starts counted in the tier at half

@@ -275,7 +275,9 @@ class ThreatMap:
   to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and its
   `buckets`, each a `PlanBucket` from its `start` to its `end` with what the planner expects at that end: the
   `minerals` and `vespene` in stock, and the `counts` of each unit type alive. The last bucket's are those at the
-  horizon, and what the first starts from is the state. `plan_now` returns `None` if the solver finds no plan within
+  horizon, and what the first starts from is the state. `plan.bucket_at(time)` is the bucket a game time is in, or
+  `None` outside the plan: its workers are those the plan has at that time, and between a bucket's start and its end
+  the plan says nothing of the stock or the counts. `plan_now` returns `None` if the solver finds no plan within
   its limits, and `planner.plan` holds the last one it found. The planner orders nothing and holds no unit: where a
   structure goes, which SCV builds it, and what to drop once the game moves on stay the bot's.
 

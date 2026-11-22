@@ -561,6 +561,27 @@ class TestKnownPlans:
         assert _start_seconds(kept, UnitTypeId.BARRACKS)[0] <= 30.0
 
 
+class TestPlan:
+    def test_the_bucket_at_a_time_is_the_one_from_its_start_to_before_its_end(self) -> None:
+        state = _game_start(time=GameTime(seconds=30))
+        plan = _best_plan(state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        assert plan.bucket_at(GameTime(seconds=30)) is plan.buckets[0]
+        assert plan.bucket_at(GameTime(seconds=31.9)) is plan.buckets[0]
+        assert plan.bucket_at(GameTime(seconds=32)) is plan.buckets[1]
+        assert plan.bucket_at(GameTime(seconds=43.9)) is plan.buckets[-1]
+
+    @pytest.mark.parametrize("seconds", [29.9, 44.0, 50.0], ids=["before it was made", "the horizon", "after it"])
+    def test_no_bucket_is_at_a_time_outside_the_plan(self, seconds: float) -> None:
+        state = _game_start(time=GameTime(seconds=30))
+        plan = _best_plan(state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        assert plan.bucket_at(GameTime(seconds=seconds)) is None
+
+    def test_no_bucket_is_at_any_time_of_a_plan_with_none(self) -> None:
+        assert _A_PLAN_OF_ONE_BARRACKS.bucket_at(GameTime.ZERO) is None
+
+
 class TestFluidAfter:
     def test_an_item_has_what_fluid_after_returns_or_its_default_for_none(self) -> None:
         items = _TERRAN_MODEL.items_for(unit_types=[UnitTypeId.MARINE], upgrades=[UpgradeId.STIMPACK])
