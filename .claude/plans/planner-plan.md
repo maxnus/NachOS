@@ -538,7 +538,17 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     starts leaves no gap and no overlap. Terms adding up, that is every reward a list of curves by time gave, and a
     worth that changes at a game time is two terms from the helpers, no `RewardTerm` written out. In the program a term
     has a variable an interval within its times alone. The `enemy` case of the benchmark with `--time-limit 30`, twice
-    before and twice after, each proven: 3.5, 3.0 and 7.3 s both ways, the same objectives and integers.
+    before and twice after, each proven: 3.5, 3.0 and 7.3 s both ways, the same objectives and integers. And a term may
+    hold a `time_factor` (the owner, the same day: "a `Callable[[GameTime], float]` to the RewardTerm, which returns a
+    scaling factor for the entire curve for each point in time"; the name his of four offered, `scale` turned down): its
+    curve times what the function gives for the game time at each interval's end, between `start` and `end`, which stay
+    as the plain way to say from when to when. A factor may not be negative, which would turn a curve over, and
+    `RewardTerm.factor_at` raises for one where a plan is made, the first place it is seen. It is a callable where a
+    reward's parts stay mappings since it hides none of the unit types and upgrades a reward values. It scales how much
+    and not how many: a count that grows over time is still several terms. The factors are coefficients, no variable
+    more, and an interval of a factor of 0 has none. On the growing reward from 0:00, 3:00 and 6:00, each proven within
+    30 s: 2.2, 4.6 and 2.2 s as it is and with a factor of 1 alike, 1.9, 4.0 and 2.0 s with every curve times `1 +
+    seconds / 600`.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never

@@ -196,7 +196,8 @@ class Planner:
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
         than 0, a negative loss rate, start limit or `hysteresis_bonus`, a `hysteresis_bonus` with no `previous_plan`,
-        or a negative time from `fluid_after` or from `economy`'s `walk_time`.
+        a negative time from `fluid_after` or from `economy`'s `walk_time`, or a factor from a term's `time_factor`
+        that is negative or not finite.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")

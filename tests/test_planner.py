@@ -624,6 +624,64 @@ class TestKnownPlans:
         assert plan.items == ()
         assert plan.objective == pytest.approx(500 * 1e-4)
 
+    def test_a_time_factor_multiplies_what_a_term_is_worth_at_each_game_time(self) -> None:
+        """One marine to afford in a state at 100 seconds, done 18 seconds on, each second worth a tenth of the seconds
+        since the state: counted at the ends of the intervals of 2 seconds from 18 to 40, which sum to 348, a tenth of
+        each over its 2 seconds."""
+        state = _game_start(
+            time=GameTime(seconds=100),
+            minerals=50.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1},
+            mineral_fields=0,
+        )
+        rising = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda time: (time.seconds - 100) / 10)
+        plan = _best_plan(state, Reward(terms=[rising]), horizon_seconds=40)
+
+        assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
+        assert plan.objective == pytest.approx(348 / 10 * 2)
+
+    def test_a_time_factor_multiplies_a_curve_between_two_times(self) -> None:
+        """The marine of the curve between 20 and 30 seconds, worth three times its 5 intervals of 2 seconds."""
+        state = _game_start(
+            minerals=500.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
+            mineral_fields=0,
+        )
+        one_marine = RewardTerm.weight(
+            UnitTypeId.MARINE,
+            1.0,
+            end_count=1.0,
+            start=GameTime(seconds=20),
+            end=GameTime(seconds=30),
+            time_factor=lambda _: 3.0,
+        )
+        plan = _best_plan(state, Reward(terms=[one_marine]), horizon_seconds=40)
+
+        assert len(_start_seconds(plan, UnitTypeId.MARINE)) == 1
+        assert plan.objective == pytest.approx(3 * 5 * 2 + 450 * 1e-4)
+
+    def test_a_term_of_a_time_factor_of_0_is_worth_nothing(self) -> None:
+        state = _game_start(
+            minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
+        )
+        never = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, time_factor=lambda _: 0.0)
+        plan = _best_plan(state, Reward(terms=[never]), horizon_seconds=40)
+
+        assert plan.items == ()
+        assert plan.objective == pytest.approx(500 * 1e-4)
+
+    def test_a_negative_time_factor_raises_where_the_plan_is_made(self) -> None:
+        state = _game_start(
+            minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
+        )
+        falling = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda time: 1 - time.seconds / 20)
+        with pytest.raises(ValueError, match="time factor"):
+            _best_plan(state, Reward(terms=[falling]), horizon_seconds=40)
+
     def test_terms_that_count_the_same_units_add_up(self) -> None:
         """Two terms of half a weight each are worth what one of the whole weight is."""
         state = _game_start(
@@ -1524,11 +1582,29 @@ class TestReward:
         with pytest.raises(ValueError, match="later than it starts"):
             RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=60), end=GameTime(seconds=end_seconds))
 
-    def test_a_term_counts_from_its_start_and_before_its_end(self) -> None:
+    def test_a_terms_factor_is_1_from_its_start_and_0_from_its_end(self) -> None:
         term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=30), end=GameTime(seconds=60))
-        counted = [term.counts_at(GameTime(seconds=seconds)) for seconds in (28, 30, 58, 60)]
-        assert counted == [False, True, True, False]
-        assert RewardTerm.weight(UnitTypeId.MARINE, 1.0).counts_at(GameTime(seconds=10_000))
+        factors = [term.factor_at(GameTime(seconds=seconds)) for seconds in (28, 30, 58, 60)]
+        assert factors == [0.0, 1.0, 1.0, 0.0]
+        assert RewardTerm.weight(UnitTypeId.MARINE, 1.0).factor_at(GameTime(seconds=10_000)) == 1.0
+
+    def test_a_terms_factor_is_what_its_time_factor_gives_between_its_start_and_end(self) -> None:
+        """The function is not asked outside them, where it would give a negative factor here."""
+        term = RewardTerm.weight(
+            UnitTypeId.MARINE,
+            1.0,
+            start=GameTime(seconds=30),
+            end=GameTime(seconds=60),
+            time_factor=lambda time: (time.seconds - 30) / 10,
+        )
+        factors = [term.factor_at(GameTime(seconds=seconds)) for seconds in (20, 30, 50, 60)]
+        assert factors == pytest.approx([0.0, 0.0, 2.0, 0.0])
+
+    @pytest.mark.parametrize("factor", [-0.5, math.inf, math.nan], ids=["negative", "infinite", "not a number"])
+    def test_a_time_factor_that_is_negative_or_not_finite_raises(self, factor: float) -> None:
+        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda _: factor)
+        with pytest.raises(ValueError, match="time factor"):
+            term.factor_at(GameTime(seconds=10))
 
     @pytest.mark.parametrize(
         "arguments",
