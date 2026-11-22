@@ -58,10 +58,10 @@ class Economy:
     geysers_per_new_base: int = 2
     """The geysers a new command center brings."""
     reassignment_time: GameTime = GameTime(seconds=3)
-    """How long a worker moved to a refinery collects nothing, and one moved from a refinery neither mines nor builds,
-    by default 3 seconds (assumed). The planner takes every rise and fall in the number of workers collecting vespene
-    for such a move, a new SCV's first walk to a refinery too, but not the fall of those lost; with 0 a move costs
-    nothing."""
+    """How long a worker that starts to mine or to collect brings in nothing, by default 3 seconds (assumed): one
+    moved between minerals and vespene, and a new SCV on its first walk. The planner takes every rise in the workers
+    mining or collecting at one rate for such a start, but that of a builder back from its structure, whose walk back
+    it was; with 0 a worker brings in from when it starts."""
     walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
     """How long an SCV walks to build a structure of a unit type, and walks back after: what it returns, or where it
     returns `None`, or is `None`, 10 seconds to a command center and 6 to any other. A build an SCV has not begun, or

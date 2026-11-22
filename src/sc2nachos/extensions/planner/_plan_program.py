@@ -54,9 +54,9 @@ class PlanProgram:
     a build under way, that runs into a bucket by less than `max_ignored_overrun` of it leaves the bucket free. Nothing
     starts before `unlock_fraction` of a structure granting each tech it needs, and of each upgrade, is done; with 0, in
     the share that the fractions done of them allow. Workers mine, collect or build, pooled over every field and
-    refinery, in the tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A worker more
-    collecting than the bucket before, or than `state` has collecting, collects nothing for `economy`'s
-    `reassignment_time` from the bucket's start, and one fewer mines and builds nothing that long. A unit counts as it
+    refinery, in the tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A worker more mining
+    or collecting in a tier than the bucket before, or than `state` has, brings in nothing for `economy`'s
+    `reassignment_time` from the bucket's start, but a builder back from its walk. A unit counts as it
     survives its loss rate in `loss_rates`, for income, supply, the reward and coverage. Of an item in `start_limits` at
     most that many start over the plan: a unit type's limit is that of the type it counts as, the lowest of those of one
     type, and a limit on no item here does nothing. Each item of `previous_plan` that the plan starts no later than that
@@ -83,13 +83,13 @@ class PlanProgram:
         "_minerals",
         "_mining",
         "_model",
-        "_moved_from_refineries",
-        "_moved_to_refineries",
         "_objective",
         "_previous_plan",
         "_program",
         "_reward",
         "_start_limits",
+        "_started_collecting",
+        "_started_mining",
         "_starts_so_far",
         "_state",
         "_vespene",
@@ -147,7 +147,7 @@ class PlanProgram:
         self._minerals, self._vespene = self._add_stock(state.minerals), self._add_stock(state.vespene)
         self._mining = self._add_worker_tiers(economy.minerals_per_miner_second)
         self._collecting = self._add_worker_tiers(economy.vespene_per_collector_second)
-        self._moved_to_refineries, self._moved_from_refineries = self._add_reassignments()
+        self._started_mining, self._started_collecting = self._add_work_starts()
         self._discounts = self._discounts_of(reward)
         self._add_constraints()
         self._objective = self._reward_expression()
@@ -237,13 +237,13 @@ class PlanProgram:
             for workers, rate in rate_tiers(rates)
         )
 
-    def _add_reassignments(self) -> tuple[tuple[VariableBlock, ...], VariableBlock | None]:
-        """The variables of the workers moved in each bucket to a refinery, a block for each collecting tier, and from
-        one; none where the economy's `reassignment_time` is 0 or nothing collects."""
-        if not self._economy.reassignment_time.seconds or not self._collecting:
-            return (), None
-        moved_to = tuple(self._program.add_variables(self._bucket_count) for _ in self._collecting)
-        return moved_to, self._program.add_variables(self._bucket_count)
+    def _add_work_starts(self) -> tuple[tuple[VariableBlock, ...], tuple[VariableBlock, ...]]:
+        """The variables of the workers that start to mine in each bucket, a block for each mining tier, and of those
+        that start to collect, one for each collecting tier; none where the economy's `reassignment_time` is 0."""
+        if not self._economy.reassignment_time.seconds:
+            return (), ()
+        started_mining = tuple(self._program.add_variables(self._bucket_count) for _ in self._mining)
+        return started_mining, tuple(self._program.add_variables(self._bucket_count) for _ in self._collecting)
 
     def _working_in(self, tiers: Sequence[_WorkerTier]) -> RowExpression:
         """The workers working in `tiers` in each bucket."""
@@ -431,19 +431,12 @@ class PlanProgram:
 
     def _constrain_resources(self) -> None:
         """Each bucket's stock of minerals and vespene: the stock before, plus what was mined, less what started; and
-        what starts paid from the stock at the bucket's start and half its income. A worker moved to a refinery
-        collects nothing for the economy's `reassignment_time`."""
+        what starts paid from the stock at the bucket's start and half its income."""
         buckets = self._bucket_count
-        mineral_income = RowExpression(buckets)
-        for tier in self._mining:
-            mineral_income.add(tier.block, np.eye(buckets) * tier.per_worker_second)
+        mineral_income = self._income_of(self._mining, self._started_mining)
         if mule_rate := self._economy.mule_minerals_per_orbital_second:
             mineral_income.add_expression(self._count_alive(UnitTypeId.ORBITAL_COMMAND, at_end=False), mule_rate)
-        vespene_income = RowExpression(buckets)
-        for tier in self._collecting:
-            vespene_income.add(tier.block, np.eye(buckets) * tier.per_worker_second)
-        for tier, moved_to in zip(self._collecting, self._moved_to_refineries, strict=False):
-            vespene_income.add(moved_to, -tier.per_worker_second * self._reassignment_shares())
+        vespene_income = self._income_of(self._collecting, self._started_collecting)
         for stock, income, is_minerals in (
             (self._minerals, mineral_income, True),
             (self._vespene, vespene_income, False),
@@ -459,22 +452,36 @@ class PlanProgram:
             paid.add_expression(income, _SHARE_OF_INCOME_SPENT * self._widths).add_expression(spent, -1.0)
             self._program.constrain(paid, lower=0.0)
 
+    def _income_of(self, tiers: Sequence[_WorkerTier], started: Sequence[VariableBlock]) -> RowExpression:
+        """What the workers in `tiers` bring in a second in each bucket, less what those `started` in a tier do not
+        yet: nothing for the economy's `reassignment_time` from the start of the bucket they start in."""
+        income = RowExpression(self._bucket_count)
+        for tier in tiers:
+            income.add(tier.block, np.eye(self._bucket_count) * tier.per_worker_second)
+        for tier, started_in_tier in zip(tiers, started, strict=False):
+            income.add(started_in_tier, -tier.per_worker_second * self._reassignment_shares())
+        return income
+
     def _constrain_workers(self) -> None:
-        """Miners, collectors, each builder's share of a bucket and that of each worker moved from a refinery at most
-        the SCVs alive at its start; and, with no walks, the builders counted whole where a bucket is shorter than
-        every build."""
+        """Miners, collectors and each builder's share of a bucket at most the SCVs alive at its start; with no walks,
+        the builders counted whole where a bucket is shorter than every build; and the workers that start to mine or
+        to collect held at what the miners and collectors rise by."""
         buckets = self._bucket_count
         working = self._working_in((*self._mining, *self._collecting))
         builders = RowExpression(buckets)
+        back_from_builds = RowExpression(buckets)
         built = [(index, item) for index, item in enumerate(self._items) if item.is_built_by_worker]
         for index, item in built:
             walk = self._walk_seconds_of(item)
             busy_share = self._busy_seconds(index, before=walk, after=walk) / self._widths[:, None]
             self._add_starts_to(builders, index, busy_share)
+            self._add_starts_to(back_from_builds, index, _falls_of(busy_share, from_share=0.0))
         for free_after in self._builders_free_after:
-            builders.constant += self._busy_seconds_until(free_after) / self._widths
+            busy_share = self._busy_seconds_until(free_after) / self._widths
+            builders.constant += busy_share
+            back_from_builds.constant += _falls_of(busy_share[:, None], from_share=1.0)[:, 0]
+        self._constrain_work_starts(back_from_builds)
         workers = self._count_alive(UnitTypeId.SCV, at_end=False)
-        working.add_expression(self._constrain_reassignments(room=workers.constant - builders.constant))
         self._constrain_at_most(RowExpression(buckets).add_expression(working).add_expression(builders), workers)
         if not built or any(self._walk_seconds_of(item) for _, item in built):
             return
@@ -487,51 +494,63 @@ class PlanProgram:
             builders_whole.constant += self._busy_seconds_until(free_after) > SECONDS_TOLERANCE
         self._constrain_at_most(builders_whole.selected(short_and_whole), workers.selected(short_and_whole))
 
-    def _constrain_reassignments(self, *, room: FloatArray) -> RowExpression:
-        """Hold the workers moved to and from refineries at what the collectors rise and fall by, and return the share
-        of each bucket that those moved from one do nothing.
+    def _constrain_work_starts(self, back_from_builds: RowExpression) -> None:
+        """Hold the workers that start to mine or to collect in each bucket at no fewer than those of each tier rise by:
+        over what the bucket before had left of them, as its SCVs survive, or over those of the state, where every
+        SCV that neither collects nor builds mines. Of the miners, as many as are `back_from_builds` in the bucket
+        start for nothing: their walk back was the builder's."""
+        if not self._started_collecting:
+            return
+        state = self._state
+        collecting_now = float(state.vespene_collectors)
+        building_now = len(self._builders_free_after)
+        mining_now = max(state.counts.get(UnitTypeId.SCV, 0) - collecting_now - building_now, 0.0)
+        self._hold_starts_at_rises(
+            self._collecting, self._started_collecting, working_now=collecting_now, sites=state.refineries_with_vespene
+        )
+        self._hold_starts_at_rises(
+            self._mining,
+            self._started_mining,
+            working_now=mining_now,
+            sites=state.mineral_fields,
+            back_from_builds=back_from_builds,
+        )
 
-        Each worker more in a collecting tier than the bucket before had left, as its SCVs survive, or than the state
-        has in it, is one moved to a refinery, and each fewer collecting in all one moved from one. A fall that what is
-        now forces counts for none, so that a plan starting nothing more stays possible: where the SCVs alive now and
-        in production leave less `room` beside the builders under way than the collectors left, or the refineries take
-        fewer than the state has collecting."""
+    def _hold_starts_at_rises(
+        self,
+        tiers: Sequence[_WorkerTier],
+        started: Sequence[VariableBlock],
+        *,
+        working_now: float,
+        sites: int,
+        back_from_builds: RowExpression | None = None,
+    ) -> None:
+        """Hold the workers `started` in each of `tiers` in each bucket at no fewer than the tier rises by, from the
+        `working_now` in them, as many in each tier as the `sites` now take, the better tiers first; less as many in
+        all as are `back_from_builds`."""
         buckets = self._bucket_count
-        idle_share = RowExpression(buckets)
-        moved_from = self._moved_from_refineries
-        if moved_from is None:
-            return idle_share
         survival = np.exp(-self._loss_rates.get(UnitTypeId.SCV, 0.0) * self._widths)
         risen_by = np.eye(buckets) - np.eye(buckets, k=-1) * survival[None, :]
-        refineries = self._state.refineries_with_vespene
-        collecting_now = float(self._state.vespene_collectors)
-        fallen = RowExpression(buckets).add(moved_from, -np.eye(buckets))
-        not_yet_in_a_tier = collecting_now
-        for tier, moved_to in zip(self._collecting, self._moved_to_refineries, strict=True):
-            in_tier_now = min(not_yet_in_a_tier, float(tier.workers_per_site * refineries))
-            not_yet_in_a_tier -= in_tier_now
-            risen = RowExpression(buckets).add(tier.block, risen_by).add(moved_to, -np.eye(buckets))
+        started_for_nothing = RowExpression(buckets)
+        for tier, started_in_tier in zip(tiers, started, strict=True):
+            in_tier_now = min(working_now, float(tier.workers_per_site * sites))
+            working_now -= in_tier_now
+            risen = RowExpression(buckets).add(tier.block, risen_by).add(started_in_tier, -np.eye(buckets))
             risen.constant[0] = -in_tier_now
+            if back_from_builds is not None:
+                back_in_tier = self._program.add_variables(buckets)
+                risen.add(back_in_tier, -np.eye(buckets))
+                started_for_nothing.add(back_in_tier, np.eye(buckets))
             self._program.constrain(risen, upper=0.0)
-            fallen.add(tier.block, -risen_by)
-        fallen.constant[0] = collecting_now
-        room = np.maximum(room, 0.0)
-        room[0] = min(room[0], collecting_now - not_yet_in_a_tier)
-        forced_fall = np.zeros(buckets)
-        collecting = collecting_now
-        for bucket in range(buckets):
-            left = collecting * (survival[bucket - 1] if bucket else 1.0)
-            collecting = min(left, room[bucket])
-            forced_fall[bucket] = left - collecting
-        self._program.constrain(fallen, upper=forced_fall)
-        return idle_share.add(moved_from, self._reassignment_shares())
+        if back_from_builds is not None:
+            self._program.constrain(started_for_nothing.add_expression(back_from_builds, -1.0), upper=0.0)
 
     def _reassignment_shares(self) -> FloatArray:
         """The share of each bucket, by row, within the economy's `reassignment_time` of each bucket's start, by
-        column: what a worker moved at that start loses of it."""
-        moved_at = self._edges[:-1][None, :]
-        overlap_start = np.maximum(moved_at, self._edges[:-1][:, None])
-        overlap_end = np.minimum(moved_at + self._economy.reassignment_time.seconds, self._edges[1:][:, None])
+        column: what a worker that starts work at that start loses of it."""
+        started_at = self._edges[:-1][None, :]
+        overlap_start = np.maximum(started_at, self._edges[:-1][:, None])
+        overlap_end = np.minimum(started_at + self._economy.reassignment_time.seconds, self._edges[1:][:, None])
         return np.maximum(overlap_end - overlap_start, 0.0) / self._widths[:, None]
 
     def _constrain_supply(self) -> None:
@@ -830,6 +849,12 @@ def _limits_by_counted_type(
         counted = model.counted_as(made) if isinstance(made, UnitTypeId) else made
         limits[counted] = min(float(limit), limits.get(counted, math.inf))
     return limits
+
+
+def _falls_of(shares: FloatArray, *, from_share: float) -> FloatArray:
+    """How far each column of `shares` falls from the row before to each row, to the first row from `from_share`."""
+    before = np.vstack([np.full((1, shares.shape[1]), from_share), shares[:-1]])
+    return np.maximum(before - shares, 0.0)
 
 
 def _values_of(block: VariableBlock, values: FloatArray) -> FloatArray:

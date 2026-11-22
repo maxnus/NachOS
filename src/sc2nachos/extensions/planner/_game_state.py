@@ -94,7 +94,8 @@ class GameState:
     refineries_with_vespene: int = 0
     """This player's finished refineries with vespene left."""
     vespene_collectors: int = 0
-    """The workers collecting vespene now: those the game counts as assigned to those refineries."""
+    """The workers collecting vespene now: those the game counts as assigned to those refineries. The planner takes
+    every other SCV that builds nothing to be mining."""
     free_geysers: int = 0
     """The geysers without a gas building at bases with a finished townhall of this player's, less one for each refinery
     an SCV is on its way to build."""

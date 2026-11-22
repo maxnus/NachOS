@@ -242,14 +242,14 @@ class ThreatMap:
   is at. `plan_now(state=...)` plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what
   each worker at a field or a refinery brings in a second, a list from the first worker on, what each orbital command's
   MULEs mine, what a new command center brings, how long an SCV walks to build each structure, and how long a worker
-  moved to or from a refinery brings in nothing. Its defaults are the rates measured speed mining, a walk of 10 seconds
-  to a command center and 6 to anything else, and 3 seconds for a move. `plan_now(start_limits=...)` takes the
-  most a plan may start of a unit type or an upgrade, none of it for 0. A plan makes only what the reward values and
-  what that needs, with SCVs, supply depots, command centers, orbital commands, refineries and add-ons, so the limits
-  are for those the bot will not make itself, a reactor or an orbital command, and for its own count of command centers,
-  such as the expansions it means to take less those an SCV is already on its way to build on, which the state holds as
-  worker builds. A base about to fall, with no refinery yet, left out, the MULEs' energy spent on scans, one expansion
-  more and no reactor on a starport:
+  that starts to mine or to collect brings in nothing. Its defaults are the rates measured speed mining, a walk of 10
+  seconds to a command center and 6 to anything else, and 3 seconds before a worker's first income.
+  `plan_now(start_limits=...)` takes the most a plan may start of a unit type or an upgrade, none of it for 0. A plan
+  makes only what the reward values and what that needs, with SCVs, supply depots, command centers, orbital commands,
+  refineries and add-ons, so the limits are for those the bot will not make itself, a reactor or an orbital command, and
+  for its own count of command centers, such as the expansions it means to take less those an SCV is already on its way
+  to build on, which the state holds as worker builds. A base about to fall, with no refinery yet, left out, the MULEs'
+  energy spent on scans, one expansion more and no reactor on a starport:
 
   ```python
   import dataclasses
@@ -279,10 +279,11 @@ class ThreatMap:
   `miners` and `collectors`, one number for each bucket between its `times`. A bot holds its collectors at the first
   bucket's, moving a worker when the next plan says another number, and has every worker it needs nowhere else mine:
   a plan may leave workers idle where what they would bring in buys nothing before its horizon, as in its last buckets.
-  A plan moves no worker for nothing. One it moves to a refinery collects nothing for the economy's
-  `reassignment_time`, 3 seconds by default, and one it moves from a refinery mines nothing for as long; the state's
-  `vespene_collectors`, the workers the game counts at its refineries, are those it starts from, so a plan that keeps
-  them pays nothing.
+  A plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
+  `reassignment_time`, 3 seconds by default, whatever the bucket's length: a worker moved between minerals and vespene,
+  and a new SCV on its first walk. A builder back from its structure pays its walk back instead. The plan starts from
+  the state's `vespene_collectors`, the workers the game counts at its refineries, with every other SCV that builds
+  nothing mining, so a plan that keeps them pays nothing.
 
   `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that much
   longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan

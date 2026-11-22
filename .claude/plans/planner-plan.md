@@ -433,7 +433,24 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     wide one from 3:00 split their workers as before: each refinery takes three from when it is done and keeps them.
     Open: the 3 seconds are assumed, not measured in game; where what a worker would bring buys nothing before the
     horizon a plan leaves it idle, as in its last one or two buckets, so a bot reads the first bucket's `collectors`
-    and has the rest mine; and whether a new SCV's walk to a field should cost time too is Open 10's.
+    and has the rest mine.
+
+    **Every start of mining pays too** (the owner, the same day: "I think workers immediately assigned to mining
+    should pay too"), which is the cheaper middle way of Open 10. A worker that starts to mine or to collect brings in
+    nothing for the time: every rise of the workers in a tier of rates, mining or collecting, is such a start, a new
+    SCV's first walk to a field too. A worker from a refinery pays as it starts to mine, where it idled before, and one
+    that leaves for nothing pays nothing, so no fall is forced to cost and the room kept for forced falls is gone. A
+    builder back from its structure starts for nothing, its walk back being the builder's already: of the miners that
+    start in a bucket, as many as builders' shares of it fall by. The plan starts from the state's collectors and
+    takes every other SCV that builds nothing to be mining, so the state gained no field for it. The time is lost of
+    the bucket a worker starts in and those after it, never a whole bucket: in a 24-second bucket, 3 of its 24
+    seconds. Measured as above, against 0: `reference` proven in 1.9 to 3.0 s, 9.3 in all, with 0 in 1.4 to 2.5, 7.2
+    in all, worth 0.64 to 0.82% less; `replans` in 2.0 to 5.8 s, 28.3 in all, with 0 in 1.5 to 4.8, 23.1 in all,
+    worth 0.00 to 0.27% less; `items` all twelve in 2.5 to 22.6 s, 120.2 in all, with 0 in 1.8 to 20.0, 109.5 in
+    all, worth 1.35 to 1.46% less from a game's start, 0.43 to 0.56% from 3:00 and 0.13 to 0.16% from 6:00. So the
+    solve is a tenth to a quarter slower in all, single solves within their noise, and the reference at one half-life
+    took 2.96 s of phase 1's 3. A command center after uninterrupted SCVs is paid for one SCV later, the sixth's start
+    where it was the fifth's.
 
 ## Risks
 

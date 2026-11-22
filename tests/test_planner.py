@@ -438,10 +438,16 @@ class TestKnownPlans:
 
     def test_a_command_center_starts_with_the_fifth_scv_after_uninterrupted_scv_production(self) -> None:
         """SCVs worth more than a command center, which is built as soon as it does not hold one up, on the doubling
-        grid, every start whole. An SCV starts each 272 steps, as in the game: eight of the grid's first buckets."""
+        grid, every start whole, a new SCV mining at once. An SCV starts each 272 steps, as in the game: eight of the
+        grid's first buckets."""
         reward = Reward(weights={UnitTypeId.SCV: 2.0, UnitTypeId.COMMAND_CENTER: 1.0})
         plan = _best_plan(
-            _game_start(), reward, horizon_seconds=150, grid=TimeGrid.doubling(), fluid_after=_whole_over_any_horizon
+            _game_start(),
+            reward,
+            horizon_seconds=150,
+            grid=TimeGrid.doubling(),
+            fluid_after=_whole_over_any_horizon,
+            economy=dataclasses.replace(_WALKING_6_SECONDS_TO_EVERY_STRUCTURE, reassignment_time=GameTime.ZERO),
         )
 
         scv_seconds = GameTime(steps=272).seconds
@@ -959,6 +965,83 @@ class TestEconomy:
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
 
+    @pytest.mark.parametrize(("reassignment_seconds", "marine_start"), [(3.0, 55.0), (0.0, 52.0)], ids=["3 s", "none"])
+    def test_a_new_scv_mines_nothing_for_the_reassignment_time(
+        self, reassignment_seconds: float, marine_start: float
+    ) -> None:
+        """No minerals and no SCV but one done in 5 seconds, on 1-second buckets: the marine's 50 minerals, 47
+        seconds' mining of one, come that long after it is done."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=1.0,
+            counts={UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+            unit_completions=(UnitCompletion(unit_type=UnitTypeId.SCV, time_left=GameTime(seconds=5)),),
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=80,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            fluid_after=_whole_over_any_horizon,
+            economy=Economy(reassignment_time=GameTime(seconds=reassignment_seconds)),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
+
+    @pytest.mark.parametrize("reassignment_seconds", [3.0, 0.0], ids=["3 s", "none"])
+    def test_a_builder_back_from_its_structure_mines_from_the_end_of_its_walk_back(
+        self, reassignment_seconds: float
+    ) -> None:
+        """No minerals and the only SCV building a supply depot for 5 seconds more, 6 seconds' walk from the fields, on
+        1-second buckets: the marine's 50 minerals, 47 seconds' mining, come that long after its walk back, whatever a
+        reassignment takes."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=1.0,
+            counts={UnitTypeId.SCV: 1, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+            worker_builds=(
+                WorkerBuild(
+                    unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=5), builder_walks_there=False
+                ),
+            ),
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=80,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            fluid_after=_whole_over_any_horizon,
+            economy=Economy(reassignment_time=GameTime(seconds=reassignment_seconds)),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [58.0]
+
+    def test_a_reassignment_costs_its_time_of_a_bucket_however_long_the_bucket(self) -> None:
+        """No vespene and one refinery with no SCV at it, on 10-second buckets: three SCVs sent there collect for 7 of
+        the first 10 seconds, 19 vespene, which with half the next bucket's pay for a marauder at 10 seconds; nothing
+        from the first bucket would not."""
+        state = _game_start(
+            minerals=500.0,
+            counts={
+                UnitTypeId.SCV: 12,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.BARRACKS: 1,
+                UnitTypeId.TECH_LAB_BARRACKS: 1,
+                UnitTypeId.REFINERY: 1,
+            },
+            refineries_with_vespene=1,
+            free_geysers=1,
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARAUDER: 1.0}),
+            horizon_seconds=60,
+            grid=TimeGrid.uniform(GameTime(seconds=10)),
+            economy=Economy(reassignment_time=GameTime(seconds=3)),
+        )
+        assert _start_seconds(plan, UnitTypeId.MARAUDER)[0] == 10.0
+        assert plan.vespene[1] == pytest.approx(3 * 7 * Economy().vespene_per_collector_second[0])
+
     def test_a_plan_holds_how_many_workers_mine_and_collect_in_each_bucket(self) -> None:
         """One refinery and nothing to start but marauders, on 1-second buckets, with no reassignment time: until the
         first marauder starts, each stock rises by what the plan's miners and collectors bring in."""
@@ -994,8 +1077,8 @@ class TestEconomy:
             assert plan.miners[bucket] + plan.collectors[bucket] <= 12 + 1e-6
 
     def test_a_plan_is_found_where_fewer_scvs_are_left_than_the_state_has_collecting(self) -> None:
-        """Six collecting by the state, of three SCVs that are being lost, one of them to build a supply depot: the
-        collectors fall as they must, for no reassignment that nothing could pay."""
+        """Six collecting by the state, of three SCVs that are being lost, one of them building a supply depot, and no
+        field to mine: the collectors fall as they must."""
         state = _game_start(
             counts={UnitTypeId.SCV: 3, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1, UnitTypeId.REFINERY: 1},
             worker_builds=(
