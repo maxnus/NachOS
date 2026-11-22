@@ -69,10 +69,11 @@ class Reward:
     what it falls short of the floors, each second discounted by `half_life`. Only what is expected to survive counts,
     by the loss rates handed to `Planner.plan_now`.
 
-    `terminal_time` counts the state at the horizon for that much longer, as if it lasted, discounted alike.
+    `terminal_time` counts the state at the horizon for that much longer, as if it lasted, discounted alike. The stock
+    left at the horizon is worth `stock_weight` a mineral and a vespene besides.
 
     Raises `ValueError` for a unit type both weighted and given a curve, a curve that is not concave, its slopes
-    falling and its counts rising, a `half_life` not longer than 0, or a negative `terminal_time`.
+    falling and its counts rising, a `half_life` not longer than 0, or a negative `terminal_time` or `stock_weight`.
     """
 
     weights: Mapping[UnitTypeId, float] = field(default_factory=dict)
@@ -89,6 +90,13 @@ class Reward:
     """The time over which a second's worth halves, from the plan's start; `None` for no discount."""
     terminal_time: GameTime = GameTime.ZERO
     """How much longer the state at the horizon counts."""
+    stock_weight: float = 1e-4
+    """What each mineral and each vespene left in stock at the horizon is worth, once and not discounted: by default
+    0.0001, far less than what it could have bought under weights around 1, so that it decides only between plans
+    worth the same otherwise, and a reward of much smaller weights wants it smaller in proportion. With it, a plan's
+    workers bring in what they can where it buys nothing more. With 0 they may stand idle there, and a plan may count
+    starts of mining no worker makes, which cost it nothing, so that its stocks read less than its workers would bring
+    in."""
 
     def __post_init__(self) -> None:
         if both := self.weights.keys() & self.curves.keys():
@@ -99,6 +107,8 @@ class Reward:
             raise ValueError(f"a half-life must be longer than 0, not {self.half_life}")
         if self.terminal_time < GameTime.ZERO:
             raise ValueError(f"terminal_time must not be negative, not {self.terminal_time}")
+        if self.stock_weight < 0:
+            raise ValueError(f"stock_weight must not be negative, not {self.stock_weight}")
 
     @property
     def unit_types(self) -> frozenset[UnitTypeId]:

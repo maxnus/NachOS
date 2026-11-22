@@ -459,9 +459,24 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     it, and the `minerals`, `vespene` and `counts` expected at its end, the last bucket's being the horizon's. The
     first edge is gone and held nothing: on the reference reward from 0:00, 3:00 and 6:00 its stocks and counts were
     the state's to the last digit, and each bucket's end the next one's start to 1e-14. Seen while moving the tests
-    over, and open with the ties: where minerals buy nothing more, a plan may count more starts of mining than its
-    miners rise by, which costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and
-    one more to train over 14 seconds read 8 miners in the first bucket and no minerals at its end.
+    over: where minerals buy nothing more, a plan may count more starts of mining than its miners rise by, which
+    costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and one more to train over
+    14 seconds read 8 miners in the first bucket and no minerals at its end: 16 starts counted in the tier at half
+    rate, where no worker mined, took the 17 minerals the 8 brought in.
+
+    **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
+    `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never
+    worth nothing, so no start is counted that no worker makes and no worker stands idle, the last buckets'
+    included, which closes that half of Open 13. A weight of 0.00001, 0.0001 or 0.001 did the same on the growing and
+    the wide reward from 0:00, 3:00 and 6:00: no phantom start, where the growing reward from 6:00 counted 12.1 with
+    0, and no SCV idle in the last bucket, where all 18 to 36 were. Measured with `--time-limit 30` against 0, every
+    solve proven: `reference` in 1.6 to 2.0 s, 6.9 in all, with 0 in 1.8 to 2.8, 8.7; `replans` in 2.1 to 4.4 s, 22.0
+    in all, with 0 in 1.8 to 5.4, 26.7; `items` in 2.4 to 22.0 s, 112.7 in all, with 0 in 2.4 to 21.4, 114.1. The
+    reward less the stock's worth is the same to the cent on `reference` and within 0.01% on the others, 0.009% less
+    to 0.010% more, which is the solver's gap. The stock at the horizon is 559 to 6741 where it was 12 to 32. What it
+    changes beside: a plan that needs no more vespene mines rather than collects while a field brings in more than a
+    refinery, and the weight is in a plan's `objective`. Open: the default suits weights around 1, and a reward of
+    much smaller ones wants it smaller, which nothing checks.
 
 ## Risks
 

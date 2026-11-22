@@ -6,7 +6,8 @@ The toy's cases keep its grid, 2-second buckets doubling from 45 seconds, and it
 any case, in seconds. Every case but `replans` and `items` plans from the start of a game, twelve SCVs on a main's
 eight fields beside its command center, 50 minerals and 12 of 15 supply, and every case with at most three new command
 centers. But for those two, each values marines, marauders and medivacs as the toy did, with no walks unless it says
-so:
+so. Those three value the stock left at the horizon as the planner does by default, which is in their objective, and the
+toy's cases do not, as the toy did not:
 
 - `reference`: the reference configuration, the doubling grid, the planner's default windows of whole starts, and a
   discounted concave reward, at each half-life given by `--half-lives`, with walks: 25 seconds to the expansion and 6
@@ -450,7 +451,7 @@ def _half_life_label(half_life: GameTime | None) -> str:
 
 def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The toy's grids, every start whole for 90 seconds."""
-    reward = Reward(weights=_TOY_WEIGHTS)
+    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
     for name, grid in _TOY_GRIDS.items():
         _solve_and_print(
             f"grid {name}",
@@ -465,7 +466,7 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """Every start whole for 90 seconds, against the toy's lumpy items whole over the horizon, and the default."""
-    reward = Reward(weights=_TOY_WEIGHTS)
+    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
     for label, fluid_after in (
         ("everything whole for 90 s only", _whole_for_90_seconds),
         ("lumpy whole over the horizon, the rest for 90 s", _whole_as_in_the_toy),
@@ -484,7 +485,10 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
 
 def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The linear reward against the concave one."""
-    for label, reward in (("linear", Reward(weights=_TOY_WEIGHTS)), ("concave", Reward(curves=_TOY_CURVES))):
+    for label, reward in (
+        ("linear", Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)),
+        ("concave", Reward(curves=_TOY_CURVES, stock_weight=0.0)),
+    ):
         _solve_and_print(
             f"{label} reward", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
         )
@@ -497,7 +501,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             Coverage(enemy_counts=counts, effectiveness=_EFFECTIVENESS_AGAINST[kind], value=1.0)
             for kind, counts in scenario.items()
         ]
-        reward = Reward(weights=_STANDING_WEIGHTS, coverages=coverages)
+        reward = Reward(weights=_STANDING_WEIGHTS, coverages=coverages, stock_weight=0.0)
         plan = _solve_and_print(
             f"enemy {name}", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
         )
@@ -507,7 +511,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """No walks against the toy's Terran walks."""
-    reward = Reward(weights=_TOY_WEIGHTS)
+    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
     for label, walks in (("no walks", _NO_WALKS), ("Terran walks", _TOY_WALKS)):
         _solve_and_print(
             label,
@@ -522,7 +526,7 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """Army units lost at 0.002 a second, or workers at 0.001."""
-    reward = Reward(weights=_TOY_WEIGHTS)
+    reward = Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)
     for label, rates in (
         ("army lost at 0.002/s", dict.fromkeys(_TOY_WEIGHTS, 0.002)),
         ("workers lost at 0.001/s", {UnitTypeId.SCV: 0.001}),
@@ -539,7 +543,7 @@ def _run_discount(
 ) -> None:
     """The linear reward at each half-life."""
     for half_life in half_lives:
-        reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life)
+        reward = Reward(weights=_TOY_WEIGHTS, half_life=half_life, stock_weight=0.0)
         _solve_and_print(
             _half_life_label(half_life), model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
         )

@@ -723,7 +723,8 @@ class PlanProgram:
     # The reward.
 
     def _reward_expression(self) -> RowExpression:
-        """The reward of a plan: each bucket's worth, discounted, and the previous plan's items kept to."""
+        """The reward of a plan: each bucket's worth, discounted, the stock left at the horizon, and the previous plan's
+        items kept to."""
         reward = self._reward
         worth = RowExpression(self._bucket_count)
         identity = np.eye(self._bucket_count)
@@ -738,6 +739,9 @@ class PlanProgram:
         for floor in reward.floors:
             worth.add(self._units_short_of(floor), identity * -floor.penalty)
         objective = worth.summed(self._discounts)
+        if reward.stock_weight:
+            at_the_horizon = np.eye(1, self._bucket_count + 1, k=self._bucket_count) * reward.stock_weight
+            objective.add(self._minerals, at_the_horizon).add(self._vespene, at_the_horizon)
         if self._previous_plan is not None and self._hysteresis_bonus:
             objective.add(self._previous_items_kept(self._previous_plan), self._hysteresis_bonus)
         return objective

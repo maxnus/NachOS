@@ -225,9 +225,12 @@ class ThreatMap:
   a mix rather than only the best type for its cost; what each upgrade done is worth; enemy units covered, each kind a
   `Coverage` of how many the bot expects from when, how much of one each own type covers and what one covered is worth;
   counts wanted at least, each a `Floor` with what a unit short costs; and how long the state at the horizon counts for
-  after it. `plan_now` takes the horizon, 5 minutes by default, and the share of each unit type the bot expects lost a
-  second, so that only what is expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and
-  a `hysteresis_bonus` for each of its items the new plan keeps to, so that a new plan differs from the last only for
+  after it. Each mineral and each vespene left in stock at the horizon is worth the reward's `stock_weight` besides,
+  0.0001 by default: far less than what it could have bought under weights around 1, and enough that a plan's workers
+  bring in what they can where it buys nothing more. A reward of much smaller weights wants it smaller in proportion.
+  `plan_now` takes the horizon, 5 minutes by default, and the share of each unit type the bot expects lost a second, so
+  that only what is expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and a
+  `hysteresis_bonus` for each of its items the new plan keeps to, so that a new plan differs from the last only for
   more than that. A plan makes nothing that pays back only past its horizon: over 5 minutes from a game's start, a
   reward on army units alone takes no expansion, and one that also values SCVs, or command centers, takes it. A longer
   horizon weighs such things itself and solves slower, half again to twice as long over 10 minutes; under 4 minutes a
@@ -278,8 +281,10 @@ class ThreatMap:
 
   How many workers mine and how many collect vespene is the plan's to choose, bucket by bucket, and each bucket holds
   them as its `miners` and `collectors`. A bot holds its collectors at the first bucket's, `plan.buckets[0].collectors`,
-  moving a worker when the next plan says another number, and has every worker it needs nowhere else mine: a plan may
-  leave workers idle where what they would bring in buys nothing before its horizon, as in its last buckets.
+  moving a worker when the next plan says another number, and has every worker it needs nowhere else mine. Where a
+  plan needs no more vespene, its workers mine rather than collect it while a field brings in more than a refinery. With
+  a `stock_weight` of 0 a plan may leave workers idle where what they would bring in buys nothing before its horizon, as
+  in its last buckets, and its stocks may read less than its workers would bring in.
   A plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
   `reassignment_time`, 3 seconds by default, whatever the bucket's length: a worker moved between minerals and vespene,
   and a new SCV on its first walk. A builder back from its structure pays its walk back instead. The plan starts from

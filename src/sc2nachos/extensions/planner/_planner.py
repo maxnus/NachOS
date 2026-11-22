@@ -74,6 +74,7 @@ class Planner:
       as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
       `reassignment_time`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
       bucket by bucket, is such a start, from the state's collectors and every other SCV that builds nothing mining.
+      Nothing but the reward's `stock_weight` keeps a worker at work where what it brings in buys nothing more.
     - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
       each way.
     - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a

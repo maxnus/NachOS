@@ -1017,9 +1017,9 @@ class TestEconomy:
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [58.0]
 
     def test_a_reassignment_costs_its_time_of_a_bucket_however_long_the_bucket(self) -> None:
-        """No vespene and one refinery with no SCV at it, on 10-second buckets: three SCVs sent there collect for 7 of
-        the first 10 seconds, 19 vespene, which with half the next bucket's pay for a marauder at 10 seconds; nothing
-        from the first bucket would not."""
+        """No vespene and one refinery with no SCV at it, on 10-second buckets: each SCV sent there collects for 7 of
+        the first 10 seconds, up to 19 vespene from three, which with half the next bucket's pay for a marauder at 10
+        seconds; nothing from the first bucket would not."""
         state = _game_start(
             minerals=500.0,
             counts={
@@ -1040,7 +1040,9 @@ class TestEconomy:
             economy=Economy(reassignment_time=GameTime(seconds=3)),
         )
         assert _start_seconds(plan, UnitTypeId.MARAUDER)[0] == 10.0
-        assert plan.buckets[0].vespene == pytest.approx(3 * 7 * Economy().vespene_per_collector_second[0])
+        first = plan.buckets[0]
+        assert first.collectors > 0
+        assert first.vespene == pytest.approx(first.collectors * 7 * Economy().vespene_per_collector_second[0])
 
     def test_a_plan_holds_how_many_workers_mine_and_collect_in_each_bucket(self) -> None:
         """One refinery and nothing to start but marauders, on 1-second buckets, with no reassignment time: until the
@@ -1076,6 +1078,18 @@ class TestEconomy:
             assert bucket.vespene - vespene == pytest.approx(collected)
             assert bucket.miners + bucket.collectors <= 12 + 1e-6
             minerals, vespene = bucket.minerals, bucket.vespene
+
+    def test_every_worker_mines_and_its_minerals_are_in_stock_where_they_buy_nothing(self) -> None:
+        """One SCV to train over 14 seconds, done too late to mine, and nothing else to buy: for the stock left at the
+        horizon alone, the state's twelve mine throughout, and each bucket's stock rises by what they bring in."""
+        plan = _best_plan(_game_start(), Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        assert _start_seconds(plan, UnitTypeId.SCV) == [0.0]
+        mined_in_a_bucket = 12 * 2 * Economy().minerals_per_miner_second[0]
+        assert [bucket.miners for bucket in plan.buckets] == pytest.approx([12.0] * 7)
+        assert [bucket.minerals for bucket in plan.buckets] == pytest.approx(
+            [mined_in_a_bucket * buckets for buckets in range(1, 8)]
+        )
 
     def test_a_plan_is_found_where_fewer_scvs_are_left_than_the_state_has_collecting(self) -> None:
         """Six collecting by the state, of three SCVs that are being lost, one of them building a supply depot, and no
@@ -1226,10 +1240,10 @@ class TestReward:
 
     @pytest.mark.parametrize(
         "arguments",
-        [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}],
-        ids=["a half-life of 0", "a negative terminal time"],
+        [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}, {"stock_weight": -1e-4}],
+        ids=["a half-life of 0", "a negative terminal time", "a negative weight on the stock"],
     )
-    def test_a_bad_discount_or_tail_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_bad_discount_tail_or_stock_weight_raises(self, arguments: dict[str, Any]) -> None:
         with pytest.raises(ValueError):
             Reward(**arguments)
 
