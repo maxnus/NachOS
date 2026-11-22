@@ -765,41 +765,37 @@ class PlanProgram:
         return objective
 
     def _worth_of(self, term: RewardTerm) -> RowExpression:
-        """What `term`'s units are worth a second at each interval's end, by the curve it has then: their count times
-        the weight where it has one group and no interval's curve more than one piece, which runs on, and else a
-        variable under each piece's line of each group's count, which the reward raises to the lowest. That is the
-        curve of the smallest count, since no piece of a term of several groups falls."""
+        """What `term`'s units are worth a second at each interval's end, nothing at one outside the term's times:
+        their count times the weight where it has one group and one piece, which runs on, and else a variable an
+        interval within its times under each piece's line of each group's count, which the reward raises to the
+        lowest. That is the curve of the smallest count, since no piece of a term of several groups falls."""
         intervals = self._interval_count
+        ends = [self._state.time + GameTime(seconds=edge) for edge in self._edges[1:].tolist()]
+        counted = np.array([term.counts_at(time) for time in ends])
+        worth = RowExpression(intervals)
+        if not counted.any():
+            return worth
         counts = [self._count_of(group) for group in term.groups]
-        curves = [term.segments_at(self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:].tolist()]
-        most_pieces = max(len(curve) for curve in curves)
-        if len(counts) == 1 and most_pieces <= 1 and not term.requires:
-            first_weights = np.array([curve[0].weight if curve else 0.0 for curve in curves])
-            return RowExpression(intervals).add_expression(counts[0], first_weights)
-        values = self._program.add_variables(intervals, lower=-math.inf)
-        worth = RowExpression(intervals).add(values, np.eye(intervals))
-        worth_before = np.zeros(intervals)
-        count_before = np.zeros(intervals)
-        for piece in range(most_pieces):
-            has_piece = np.array([len(curve) > piece for curve in curves])
-            weights = np.array([curve[piece].weight if len(curve) > piece else 0.0 for curve in curves])
-            ends = np.array([curve[piece].end_count if len(curve) > piece else math.inf for curve in curves])
-            at_most = worth_before - weights * count_before
+        if len(counts) == 1 and len(term.segments) == 1 and not term.requires:
+            return worth.add_expression(counts[0], counted * term.segments[0].weight)
+        values = self._program.add_variables(int(counted.sum()), lower=-math.inf)
+        worth.add(values, np.eye(intervals)[:, counted])
+        worth_before = 0.0
+        count_before = 0.0
+        for segment in term.segments:
             for count in counts:
-                under_line = RowExpression(intervals).add_expression(worth).add_expression(count, -weights)
-                self._program.constrain(under_line.selected(has_piece), upper=at_most[has_piece])
-            ends_at = np.where(np.isfinite(ends), ends, count_before)
-            worth_before = worth_before + weights * (ends_at - count_before)
-            count_before = ends_at
-        has_no_curve = np.array([not curve for curve in curves])
-        if has_no_curve.any():
-            self._program.constrain(worth.selected(has_no_curve), upper=0.0)
+                under_line = RowExpression(intervals).add_expression(worth).add_expression(count, -segment.weight)
+                at_most = worth_before - segment.weight * count_before
+                self._program.constrain(under_line.selected(counted), upper=at_most)
+            if math.isfinite(segment.end_count):
+                worth_before += segment.weight * (segment.end_count - count_before)
+                count_before = segment.end_count
         if term.requires:
-            most_worth = np.array([_worth_at(curve, self._most_counted_by(term)) for curve in curves])
+            most_worth = _worth_at(term.segments, self._most_counted_by(term))
             for upgrade in term.requires:
                 not_done = RowExpression(intervals).add_expression(worth)
                 not_done.add_expression(self._upgrade_done(upgrade, at_end=True), -most_worth)
-                self._program.constrain(not_done, upper=0.0)
+                self._program.constrain(not_done.selected(counted), upper=0.0)
         return worth
 
     def _count_of(self, group: Mapping[UnitTypeId, float]) -> RowExpression:

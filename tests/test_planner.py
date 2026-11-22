@@ -527,11 +527,11 @@ class TestKnownPlans:
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0, 0.0, 18.0, 18.0]
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == []
 
-    def test_a_weight_up_to_a_count_since_a_time_buys_the_count_by_that_time(self) -> None:
+    def test_a_weight_up_to_a_count_from_a_time_buys_the_count_by_that_time(self) -> None:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        floor = RewardTerm.weight(UnitTypeId.MARINE, 10.0, end_count=2.0, since=GameTime(seconds=36))
+        floor = RewardTerm.weight(UnitTypeId.MARINE, 10.0, end_count=2.0, start=GameTime(seconds=36))
 
         without = _best_plan(state, Reward.weighted({UnitTypeId.SUPPLY_DEPOT: 1.0}), horizon_seconds=40)
         held = _best_plan(state, Reward.weighted({UnitTypeId.SUPPLY_DEPOT: 1.0}, terms=[floor]), horizon_seconds=40)
@@ -567,24 +567,62 @@ class TestKnownPlans:
         assert curved.objective == pytest.approx(weighted.objective)
         assert len(_start_seconds_of_units_done_in_time(curved, UnitTypeId.MARINE)) > 3
 
-    def test_a_weight_that_changes_at_a_game_time_buys_for_that_time(self) -> None:
+    def test_a_term_that_ends_where_another_starts_buys_for_that_time(self) -> None:
         """One marine to afford, which costs while it is alive before 20 seconds and is worth having from then: it
         starts at 2, to be done at 20, where one worth the same throughout starts at once."""
         state = _game_start(
             minerals=50.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        from_20_seconds = RewardTerm(
-            groups=[{UnitTypeId.MARINE: 1.0}],
-            curves=[
-                (GameTime.ZERO, [CurveSegment(weight=-1.0)]),
-                (GameTime(seconds=20), [CurveSegment(weight=1.0)]),
-            ],
-        )
+        from_20_seconds = [
+            RewardTerm.weight(UnitTypeId.MARINE, -1.0, end=GameTime(seconds=20)),
+            RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=20)),
+        ]
         throughout = _best_plan(state, Reward.weighted({UnitTypeId.MARINE: 1.0}), horizon_seconds=40)
-        late = _best_plan(state, Reward(terms=[from_20_seconds]), horizon_seconds=40)
+        late = _best_plan(state, Reward(terms=from_20_seconds), horizon_seconds=40)
 
         assert _start_seconds(throughout, UnitTypeId.MARINE) == [0.0]
         assert _start_seconds(late, UnitTypeId.MARINE) == [2.0]
+
+    def test_a_term_is_worth_nothing_from_its_end(self) -> None:
+        """One marine to afford, done at 18 and worth 1 a second up to 40: counted at the ends of the intervals of 2
+        seconds from 18 to 38, eleven of them, and not at 40."""
+        state = _game_start(
+            minerals=50.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
+        )
+        up_to_40_seconds = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end=GameTime(seconds=40))
+        plan = _best_plan(state, Reward(terms=[up_to_40_seconds]), horizon_seconds=80)
+
+        assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
+        assert plan.objective == pytest.approx(11 * 2)
+
+    def test_a_curve_between_two_times_is_worth_what_it_gives_between_them(self) -> None:
+        """A reactor could make two marines at once and the curve counts one, so one is made, done by 20: worth 1 a
+        second from 20 up to 30, at the ends of the five intervals from 20 to 28. The 450 minerals left are worth
+        0.0001 each."""
+        state = _game_start(
+            minerals=500.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
+            mineral_fields=0,
+        )
+        one_marine = RewardTerm.weight(
+            UnitTypeId.MARINE, 1.0, end_count=1.0, start=GameTime(seconds=20), end=GameTime(seconds=30)
+        )
+        plan = _best_plan(state, Reward(terms=[one_marine]), horizon_seconds=40)
+
+        assert len(_start_seconds(plan, UnitTypeId.MARINE)) == 1
+        assert plan.objective == pytest.approx(5 * 2 + 450 * 1e-4)
+
+    def test_a_term_that_starts_past_the_horizon_is_worth_nothing(self) -> None:
+        state = _game_start(
+            minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
+        )
+        too_late = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, start=GameTime(seconds=60))
+        plan = _best_plan(state, Reward(terms=[too_late]), horizon_seconds=40)
+
+        assert plan.items == ()
+        assert plan.objective == pytest.approx(500 * 1e-4)
 
     def test_terms_that_count_the_same_units_add_up(self) -> None:
         """Two terms of half a weight each are worth what one of the whole weight is."""
@@ -1481,13 +1519,16 @@ class TestReward:
             {UnitTypeId.MARINE: [CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.0, end_count=0)]}
         )
 
-    def test_curves_not_in_order_of_time_raise(self) -> None:
-        later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]
-        with pytest.raises(ValueError, match="order of time"):
-            RewardTerm(
-                groups=[{UnitTypeId.MARINE: 1.0}],
-                curves=[(time, [CurveSegment(weight=weight)]) for time, weight in later_first],
-            )
+    @pytest.mark.parametrize("end_seconds", [30, 60], ids=["before its start", "at its start"])
+    def test_a_term_that_ends_no_later_than_it_starts_raises(self, end_seconds: int) -> None:
+        with pytest.raises(ValueError, match="later than it starts"):
+            RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=60), end=GameTime(seconds=end_seconds))
+
+    def test_a_term_counts_from_its_start_and_before_its_end(self) -> None:
+        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=30), end=GameTime(seconds=60))
+        counted = [term.counts_at(GameTime(seconds=seconds)) for seconds in (28, 30, 58, 60)]
+        assert counted == [False, True, True, False]
+        assert RewardTerm.weight(UnitTypeId.MARINE, 1.0).counts_at(GameTime(seconds=10_000))
 
     @pytest.mark.parametrize(
         "arguments",

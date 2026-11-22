@@ -530,7 +530,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     with helpers, no subtype for each (the owner, the same day, to the recommendation), since `end_count`, `since` and
     `requires` combine with every one. On the growing reward from 0:00, 3:00 and 6:00, each proven within 30 s: 2.1, 2.9
     and 1.9 s with that term, 2.2, 4.7 and 2.2 without, the same integers; the plan from 6:00 ends with 16.6 medivacs
-    for 80 marines and 26.4 marauders, eight marines' worth each, where it had 5.4 without.
+    for 80 marines and 26.4 marauders, eight marines' worth each, where it had 5.4 without. And a term holds one curve
+    and the times it counts between (the owner, the same day: "just having a start and end time on each reward item and
+    then use multiple items to build the time dependence"): `segments`, `start` and `end` in place of `curves`, and the
+    helpers' `since` is `start` beside a new `end`, the names the owner's where `since` and `until` were proposed. A
+    term counts at an interval's end from its `start` and no longer at its `end`, so that one ending where another
+    starts leaves no gap and no overlap. Terms adding up, that is every reward a list of curves by time gave, and a
+    worth that changes at a game time is two terms from the helpers, no `RewardTerm` written out. In the program a term
+    has a variable an interval within its times alone. The `enemy` case of the benchmark with `--time-limit 30`, twice
+    before and twice after, each proven: 3.5, 3.0 and 7.3 s both ways, the same objectives and integers.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never

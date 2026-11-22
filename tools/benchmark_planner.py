@@ -511,9 +511,9 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
     """Covering each of the toy's enemies."""
     for name, scenario in _ENEMY_SCENARIOS.items():
         coverages = [
-            RewardTerm.weight(_EFFECTIVENESS_AGAINST[kind], 1.0, end_count=count, since=since)
+            RewardTerm.weight(_EFFECTIVENESS_AGAINST[kind], 1.0, end_count=count, start=start)
             for kind, counts in scenario.items()
-            for since, count in counts
+            for start, count in counts
         ]
         reward = Reward.weighted(_STANDING_WEIGHTS, terms=coverages, stock_weight=0.0)
         plan = _solve_and_print(

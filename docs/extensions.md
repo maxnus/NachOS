@@ -224,34 +224,34 @@ class ThreatMap:
   What units are worth is a list of `terms`, which add up. A `RewardTerm` counts a group of unit types together, each
   unit for what the group says, and gives their count a concave curve: a list of `CurveSegment`, each a `weight` for
   every unit up to its `end_count`, so that more of them are worth less each and a plan buys a mix rather than only the
-  best type for its cost. Which curve holds may change at game times, so a term says what is worth having from when.
-  Three classmethods build the usual terms. `RewardTerm.weight(units, weight)` is one worth for every unit, of one unit
-  type or of several counted together, a mapping of how much one unit of each counts: with `end_count=...` for each unit
-  up to a count the bot wants and none past it, such as one detector from a raven or a missile turret, or as many as the
-  enemy's air units from marines and vikings; with `since=...` for a game time it counts from; and with `requires=[...]`
-  for upgrades it counts only once done, such as what marines are worth more with combat shield, which a plan then
-  starts whole wherever in its horizon. `RewardTerm.curve(units, segments)` takes the same for a curve.
-  `RewardTerm.combination(groups, weight)` is for units worth something in combination: each group is counted, and each
-  unit of the smallest count is worth the weight, so that the scarcest group limits what the others are worth.
+  best type for its cost. A term counts from a game time, its `start`, to its `end`, the whole game by default. Three
+  classmethods build the usual terms. `RewardTerm.weight(units, weight)` is one worth for every unit, of one unit type
+  or of several counted together, a mapping of how much one unit of each counts: with `end_count=...` for each unit up
+  to a count the bot wants and none past it, such as one detector from a raven or a missile turret, or as many as the
+  enemy's air units from marines and vikings; with `start=...` and `end=...` for the game times it counts between; and
+  with `requires=[...]` for upgrades it counts only once done, such as what marines are worth more with combat shield,
+  which a plan then starts whole wherever in its horizon. `RewardTerm.curve(units, segments)` takes the same for a
+  curve. `RewardTerm.combination(groups, weight)` is for units worth something in combination: each group is counted,
+  and each unit of the smallest count is worth the weight, so that the scarcest group limits what the others are worth.
   `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER: 2}]` with 0.3 is 0.3 for each marine a medivac heals, of which it heals 8, a
   marauder for two, beside the terms for what each is worth without the other: a plan with 24 marines finds a third
-  medivac worth making and a fourth not. It takes `end_count`, `since` and `requires` as `weight` does, and no negative
-  weight. A count that changes more than once is a `RewardTerm` written out. `Reward.weighted({unit_type: weight})` is a
-  reward of a term for each type, a number or a curve, and takes more `terms` beside. A weight may be negative, for a
-  unit a plan should make only where something else needs it, and a curve's weights may not rise from piece to piece.
-  Beside its terms a reward holds what each upgrade done is worth, and how long the state at the horizon counts for
-  after it. Each mineral and each vespene left in stock at the horizon is worth the reward's `stock_weight` besides,
-  0.0001 by default: far less than what it could have bought under weights around 1, and enough that a plan's workers
-  bring in what they can where it buys nothing more. A reward of much smaller weights wants it smaller in proportion.
-  `plan_now` takes the horizon, 5 minutes by default, and the share of each unit type the bot expects lost a second, so
-  that only what is expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and a
-  `hysteresis_bonus` for each of its items the new plan keeps to, so that a new plan differs from the last only for more
-  than that. A plan makes nothing that pays back only past its horizon: over 5 minutes from a game's start, a reward on
-  army units alone takes no expansion, and one that also values SCVs, or command centers, takes it. A longer horizon
-  weighs such things itself and solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's
-  first steps get worse.
-  A unit counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a
-  hellbat as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
+  medivac worth making and a fourth not. It takes `end_count`, `start`, `end` and `requires` as `weight` does, and no
+  negative weight. What units are worth changes at a game time where one term ends and another starts, the time in both:
+  a term counts from its `start` and no longer at its `end`. `Reward.weighted({unit_type: weight})` is a reward of a
+  term for each type, a number or a curve, and takes more `terms` beside. A weight may be negative, for a unit a plan
+  should make only where something else needs it, and a curve's weights may not rise from piece to piece. Beside its
+  terms a reward holds what each upgrade done is worth, and how long the state at the horizon counts for after it. Each
+  mineral and each vespene left in stock at the horizon is worth the reward's `stock_weight` besides, 0.0001 by default:
+  far less than what it could have bought under weights around 1, and enough that a plan's workers bring in what they
+  can where it buys nothing more. A reward of much smaller weights wants it smaller in proportion. `plan_now` takes the
+  horizon, 5 minutes by default, and the share of each unit type the bot expects lost a second, so that only what is
+  expected to survive counts. It also takes a `previous_plan`, such as `planner.plan`, and a `hysteresis_bonus` for each
+  of its items the new plan keeps to, so that a new plan differs from the last only for more than that. A plan makes
+  nothing that pays back only past its horizon: over 5 minutes from a game's start, a reward on army units alone takes
+  no expansion, and one that also values SCVs, or command centers, takes it. A longer horizon weighs such things itself
+  and solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit
+  counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat
+  as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
   Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `GameState`
   `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and
