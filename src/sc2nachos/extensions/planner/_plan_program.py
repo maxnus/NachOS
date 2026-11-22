@@ -742,11 +742,16 @@ class PlanProgram:
         worth = RowExpression(self._interval_count)
         identity = np.eye(self._interval_count)
         for unit_type, weight in reward.weights.items():
-            worth.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), weight)
+            counted_as = self._model.counted_as(unit_type)
+            if isinstance(weight, (int, float)):
+                worth.add_expression(self._count_alive(counted_as, at_end=True), weight)
+            elif len(weight) == 1:
+                # One piece runs on, so it is one weight for every unit.
+                worth.add_expression(self._count_alive(counted_as, at_end=True), weight[0].weight)
+            else:
+                worth.add(self._curve_values(counted_as, weight), identity)
         for upgrade, weight in reward.upgrade_weights.items():
             worth.add_expression(self._upgrade_done(upgrade, at_end=True), weight)
-        for unit_type, segments in reward.curves.items():
-            worth.add(self._curve_values(self._model.counted_as(unit_type), segments), identity)
         for coverage in reward.coverages:
             worth.add(self._enemy_units_covered(coverage), identity * coverage.value)
         for floor in reward.floors:
@@ -768,11 +773,11 @@ class PlanProgram:
         count_before = 0.0
         for segment in segments:
             under_line = RowExpression(self._interval_count).add(values, np.eye(self._interval_count))
-            under_line.add_expression(count, -segment.slope)
-            self._program.constrain(under_line, upper=worth_before - segment.slope * count_before)
-            if math.isfinite(segment.up_to):
-                worth_before += segment.slope * (segment.up_to - count_before)
-                count_before = segment.up_to
+            under_line.add_expression(count, -segment.weight)
+            self._program.constrain(under_line, upper=worth_before - segment.weight * count_before)
+            if math.isfinite(segment.up_to_count):
+                worth_before += segment.weight * (segment.up_to_count - count_before)
+                count_before = segment.up_to_count
         return values
 
     def _enemy_units_covered(self, coverage: Coverage) -> VariableBlock:

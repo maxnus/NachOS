@@ -484,6 +484,12 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     and a generic `PlannedItem`, since pyright narrows `planned.item` by `isinstance` already and does not narrow
     `planned` with it.
 
+    **A reward's weights hold its curves** (the owner, the same day, of the two: "Isn't the latter just a more general
+    form of the former?"). `Reward.curves` is gone: `Reward.weights` holds for each unit type one number or a list of
+    `CurveSegment`, so no type can be given both. A segment's `slope` is its `weight` and its `up_to` its
+    `up_to_count`, names the owner asked to be bettered and has not yet seen. A curve of one piece goes into the
+    objective as a number does, with no variable.
+
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never
     worth nothing, so no start is counted that no worker makes and no worker stands idle, the last intervals'

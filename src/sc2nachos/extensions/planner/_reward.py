@@ -14,11 +14,12 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CurveSegment:
-    """One piece of a concave reward on a unit type's count: each unit up to `up_to` is worth `slope` a second."""
+    """One piece of a concave reward on a unit type's count: each unit up to `up_to_count` is worth `weight` a
+    second."""
 
-    slope: float
+    weight: float
     """What each unit of the piece is worth a second."""
-    up_to: float = math.inf
+    up_to_count: float = math.inf
     """The count the piece runs to; the last piece runs on, whatever it says."""
 
 
@@ -65,21 +66,20 @@ class Floor:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Reward:
     """What a plan is worth, summed over its horizon a second at a time: the units the plan expects alive, each second
-    worth what `weights` or `curves` give their count, the upgrades it expects done, the enemy units it covers, less
+    worth what `weights` gives their count, the upgrades it expects done, the enemy units it covers, less
     what it falls short of the floors, each second discounted by `half_life`. Only what is expected to survive counts,
     by the loss rates handed to `Planner.plan_now`.
 
     `terminal_time` counts the state at the horizon for that much longer, as if it lasted, discounted alike. The stock
     left at the horizon is worth `stock_weight` a mineral and a vespene besides.
 
-    Raises `ValueError` for a unit type both weighted and given a curve, a curve that is not concave, its slopes
-    falling and its counts rising, a `half_life` not longer than 0, or a negative `terminal_time` or `stock_weight`.
+    Raises `ValueError` for a curve that is not concave, its weights falling and its counts rising, a `half_life` not
+    longer than 0, or a negative `terminal_time` or `stock_weight`.
     """
 
-    weights: Mapping[UnitTypeId, float] = field(default_factory=dict)
-    """What each unit of a type is worth a second."""
-    curves: Mapping[UnitTypeId, Sequence[CurveSegment]] = field(default_factory=dict)
-    """What a type's units are worth a second, piece by piece of their count, the first piece from none."""
+    weights: Mapping[UnitTypeId, float | Sequence[CurveSegment]] = field(default_factory=dict)
+    """What the units of a type are worth a second: one number for each of them, or a concave curve where more of them
+    are worth less each, piece by piece of their count, the first piece from none."""
     upgrade_weights: Mapping[UpgradeId, float] = field(default_factory=dict)
     """What each upgrade done is worth a second."""
     coverages: Sequence[Coverage] = ()
@@ -99,10 +99,9 @@ class Reward:
     in."""
 
     def __post_init__(self) -> None:
-        if both := self.weights.keys() & self.curves.keys():
-            raise ValueError(f"a unit type is weighted or given a curve, not both: {sorted(t.name for t in both)}")
-        for unit_type, segments in self.curves.items():
-            _check_concave(unit_type, segments)
+        for unit_type, weight in self.weights.items():
+            if not isinstance(weight, (int, float)):
+                _check_concave(unit_type, weight)
         if self.half_life is not None and self.half_life <= GameTime.ZERO:
             raise ValueError(f"a half-life must be longer than 0, not {self.half_life}")
         if self.terminal_time < GameTime.ZERO:
@@ -112,10 +111,10 @@ class Reward:
 
     @property
     def unit_types(self) -> frozenset[UnitTypeId]:
-        """Every unit type it values: weighted, given a curve, covering an enemy or held to a floor."""
+        """Every unit type it values: weighted, covering an enemy or held to a floor."""
         covering = {unit_type for coverage in self.coverages for unit_type in coverage.effectiveness}
         floored = {floor.unit_type for floor in self.floors}
-        return frozenset(self.weights.keys() | self.curves.keys() | covering | floored)
+        return frozenset(self.weights.keys() | covering | floored)
 
 
 def count_at(counts: Sequence[tuple[GameTime, float]], time: GameTime) -> float:
@@ -136,13 +135,15 @@ def check_in_order_of_time(counts: Sequence[tuple[GameTime, float]], name: str) 
 
 
 def _check_concave(unit_type: UnitTypeId, segments: Sequence[CurveSegment]) -> None:
-    """Raise `ValueError` unless `segments` is concave: slopes not rising, and counts rising but the last's."""
+    """Raise `ValueError` unless `segments` is concave: weights not rising, and counts rising but the last's."""
     if not segments:
         raise ValueError(f"the curve of {unit_type.name} has no segments")
     for position, (earlier, later) in enumerate(zip(segments, segments[1:], strict=False), start=1):
-        if later.slope > earlier.slope:
+        if later.weight > earlier.weight:
             raise ValueError(
-                f"the curve of {unit_type.name} is not concave: a slope of {later.slope} after {earlier.slope}"
+                f"the curve of {unit_type.name} is not concave: a weight of {later.weight} after {earlier.weight}"
             )
-        if position < len(segments) - 1 and later.up_to <= earlier.up_to:
-            raise ValueError(f"the curve of {unit_type.name} must count up: {later.up_to} after {earlier.up_to}")
+        if position < len(segments) - 1 and later.up_to_count <= earlier.up_to_count:
+            raise ValueError(
+                f"the curve of {unit_type.name} must count up: {later.up_to_count} after {earlier.up_to_count}"
+            )

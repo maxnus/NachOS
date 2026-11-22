@@ -541,7 +541,7 @@ class TestKnownPlans:
         assert _start_seconds(without, UnitTypeId.MARINE) == []
         assert _start_seconds(held, UnitTypeId.MARINE) == [0.0, 18.0]
 
-    def test_a_concave_curve_buys_up_to_where_its_slope_falls_below_nothing(self) -> None:
+    def test_a_concave_curve_buys_up_to_where_its_weight_falls_below_nothing(self) -> None:
         state = _game_start(
             minerals=1000.0,
             supply_used=0.0,
@@ -549,9 +549,25 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
             mineral_fields=0,
         )
-        curve = [CurveSegment(slope=1.0, up_to=3), CurveSegment(slope=-0.1)]
-        plan = _best_plan(state, Reward(curves={UnitTypeId.MARINE: curve}), horizon_seconds=40)
+        curve = [CurveSegment(weight=1.0, up_to_count=3), CurveSegment(weight=-0.1)]
+        plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: curve}), horizon_seconds=40)
         assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 3
+
+    def test_a_curve_of_one_piece_is_a_weight_whatever_count_it_runs_to(self) -> None:
+        """The piece runs on past its count, so its plan is worth what the weight's is, more than three marines."""
+        state = _game_start(
+            minerals=1000.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
+            mineral_fields=0,
+        )
+        by_weight = Reward(weights={UnitTypeId.MARINE: 1.0})
+        by_curve = Reward(weights={UnitTypeId.MARINE: [CurveSegment(weight=1.0, up_to_count=3)]})
+        weighted, curved = (_best_plan(state, reward, horizon_seconds=40) for reward in (by_weight, by_curve))
+
+        assert curved.objective == pytest.approx(weighted.objective)
+        assert len(_start_seconds_of_units_done_in_time(curved, UnitTypeId.MARINE)) > 3
 
     def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
         """A barracks nothing else is worth gets built by when the previous plan had it, for a bonus above its cost in
@@ -1288,25 +1304,29 @@ class TestStartLimits:
 
 
 class TestReward:
-    def test_a_type_weighted_and_given_a_curve_raises(self) -> None:
-        with pytest.raises(ValueError, match="MARINE"):
-            Reward(weights={UnitTypeId.MARINE: 1.0}, curves={UnitTypeId.MARINE: [CurveSegment(slope=1.0)]})
-
     @pytest.mark.parametrize(
         "segments",
         [
             [],
-            [CurveSegment(slope=1.0, up_to=10), CurveSegment(slope=2.0)],
-            [CurveSegment(slope=1.0, up_to=10), CurveSegment(slope=0.5, up_to=5), CurveSegment(slope=0.0)],
+            [CurveSegment(weight=1.0, up_to_count=10), CurveSegment(weight=2.0)],
+            [
+                CurveSegment(weight=1.0, up_to_count=10),
+                CurveSegment(weight=0.5, up_to_count=5),
+                CurveSegment(weight=0.0),
+            ],
         ],
-        ids=["no segments", "a slope rising", "a count falling"],
+        ids=["no segments", "a weight rising", "a count falling"],
     )
     def test_a_curve_that_is_not_concave_raises(self, segments: list[CurveSegment]) -> None:
         with pytest.raises(ValueError, match="MARINE"):
-            Reward(curves={UnitTypeId.MARINE: segments})
+            Reward(weights={UnitTypeId.MARINE: segments})
 
     def test_the_last_segments_count_is_ignored(self) -> None:
-        Reward(curves={UnitTypeId.MARINE: [CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.0, up_to=0)]})
+        Reward(
+            weights={
+                UnitTypeId.MARINE: [CurveSegment(weight=1.0, up_to_count=30), CurveSegment(weight=0.0, up_to_count=0)]
+            }
+        )
 
     def test_counts_not_in_order_of_time_raise(self) -> None:
         later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]
@@ -1324,10 +1344,9 @@ class TestReward:
         with pytest.raises(ValueError):
             Reward(**arguments)
 
-    def test_the_unit_types_it_values_are_those_weighted_curved_covering_and_floored(self) -> None:
+    def test_the_unit_types_it_values_are_those_weighted_covering_and_floored(self) -> None:
         reward = Reward(
-            weights={UnitTypeId.MARINE: 1.0},
-            curves={UnitTypeId.MEDIVAC: [CurveSegment(slope=1.0)]},
+            weights={UnitTypeId.MARINE: 1.0, UnitTypeId.MEDIVAC: [CurveSegment(weight=1.0)]},
             coverages=[Coverage(enemy_counts=[], effectiveness={UnitTypeId.VIKING: 1.0}, value=1.0)],
             floors=[Floor(unit_type=UnitTypeId.BUNKER, counts=[], penalty=1.0)],
         )

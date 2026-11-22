@@ -74,27 +74,43 @@ _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
 _TOY_CURVES = {
-    UnitTypeId.MARINE: (CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.33, up_to=60), CurveSegment(slope=0.0)),
-    UnitTypeId.MARAUDER: (
-        CurveSegment(slope=2.2, up_to=12),
-        CurveSegment(slope=0.7, up_to=30),
-        CurveSegment(slope=0.0),
+    UnitTypeId.MARINE: (
+        CurveSegment(weight=1.0, up_to_count=30),
+        CurveSegment(weight=0.33, up_to_count=60),
+        CurveSegment(weight=0.0),
     ),
-    UnitTypeId.MEDIVAC: (CurveSegment(slope=2.5, up_to=4), CurveSegment(slope=0.8, up_to=8), CurveSegment(slope=0.0)),
+    UnitTypeId.MARAUDER: (
+        CurveSegment(weight=2.2, up_to_count=12),
+        CurveSegment(weight=0.7, up_to_count=30),
+        CurveSegment(weight=0.0),
+    ),
+    UnitTypeId.MEDIVAC: (
+        CurveSegment(weight=2.5, up_to_count=4),
+        CurveSegment(weight=0.8, up_to_count=8),
+        CurveSegment(weight=0.0),
+    ),
 }
 # Like the toy's curves, but no count is worth nothing, so that the reward never saturates.
 _GROWING_CURVES = {
-    UnitTypeId.MARINE: (CurveSegment(slope=1.0, up_to=30), CurveSegment(slope=0.5, up_to=80), CurveSegment(slope=0.25)),
-    UnitTypeId.MARAUDER: (
-        CurveSegment(slope=2.2, up_to=12),
-        CurveSegment(slope=1.1, up_to=40),
-        CurveSegment(slope=0.5),
+    UnitTypeId.MARINE: (
+        CurveSegment(weight=1.0, up_to_count=30),
+        CurveSegment(weight=0.5, up_to_count=80),
+        CurveSegment(weight=0.25),
     ),
-    UnitTypeId.MEDIVAC: (CurveSegment(slope=2.5, up_to=4), CurveSegment(slope=1.2, up_to=10), CurveSegment(slope=0.4)),
+    UnitTypeId.MARAUDER: (
+        CurveSegment(weight=2.2, up_to_count=12),
+        CurveSegment(weight=1.1, up_to_count=40),
+        CurveSegment(weight=0.5),
+    ),
+    UnitTypeId.MEDIVAC: (
+        CurveSegment(weight=2.5, up_to_count=4),
+        CurveSegment(weight=1.2, up_to_count=10),
+        CurveSegment(weight=0.4),
+    ),
 }
 # The wide reward: what each of the first six units of ten more army types is worth a second, each one after them a
 # third of it, and what each of eight upgrades is worth a second once done.
-_FIRST_SIX_SLOPES_OF_THE_WIDE_REWARD = {
+_FIRST_SIX_WEIGHTS_OF_THE_WIDE_REWARD = {
     UnitTypeId.SIEGE_TANK: 4.0,
     UnitTypeId.VIKING: 3.0,
     UnitTypeId.HELLION: 1.2,
@@ -385,7 +401,7 @@ def _run_reference(
 ) -> None:
     """The reference configuration at each half-life."""
     for half_life in half_lives:
-        reward = Reward(curves=_TOY_CURVES, half_life=half_life)
+        reward = Reward(weights=_TOY_CURVES, half_life=half_life)
         _solve_and_print(
             f"reference, {_half_life_label(half_life)}",
             model,
@@ -406,7 +422,7 @@ def _run_replans(
             _solve_and_print(
                 f"replan at {name}, {_half_life_label(half_life)}",
                 model,
-                Reward(curves=_GROWING_CURVES, half_life=half_life),
+                Reward(weights=_GROWING_CURVES, half_life=half_life),
                 grid=TimeGrid.doubling(),
                 time_limit=time_limit,
                 horizon=horizon,
@@ -418,14 +434,14 @@ def _run_replans(
 def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The wide reward from the game's start and from each mid-game state, at each half-life."""
     curves: dict[UnitTypeId, tuple[CurveSegment, ...]] = dict(_GROWING_CURVES)
-    for unit_type, slope in _FIRST_SIX_SLOPES_OF_THE_WIDE_REWARD.items():
-        curves[unit_type] = (CurveSegment(slope=slope, up_to=6), CurveSegment(slope=slope / 3))
+    for unit_type, weight in _FIRST_SIX_WEIGHTS_OF_THE_WIDE_REWARD.items():
+        curves[unit_type] = (CurveSegment(weight=weight, up_to_count=6), CurveSegment(weight=weight / 3))
     for name, state in ({"0:00": _game_start()} | _mid_game_states()).items():
         for half_life in half_lives:
             _solve_and_print(
                 f"wide reward at {name}, {_half_life_label(half_life)}",
                 model,
-                Reward(curves=curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
+                Reward(weights=curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
                 grid=TimeGrid.doubling(),
                 time_limit=time_limit,
                 horizon=horizon,
@@ -484,7 +500,7 @@ def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
     """The linear reward against the concave one."""
     for label, reward in (
         ("linear", Reward(weights=_TOY_WEIGHTS, stock_weight=0.0)),
-        ("concave", Reward(curves=_TOY_CURVES, stock_weight=0.0)),
+        ("concave", Reward(weights=_TOY_CURVES, stock_weight=0.0)),
     ):
         _solve_and_print(
             f"{label} reward", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
