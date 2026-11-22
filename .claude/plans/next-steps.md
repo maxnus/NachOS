@@ -365,7 +365,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   raising, a creep tumor's own burrow and the collapsible towers' buffs, beside which ten playbacks every step of five
   games, three of them Zerg against Zerg, found no id left out. Still to plan with the owner, one at a time: a quiet
   period on a 1.0.0rc1 with no breaking change, since five of the nine releases since 0.1.0 broke a bot's code;
-  whether an uncurated id should still end a game, and a wider sweep of the season's replays of every race for them;
+  whether an uncurated id should still end a game, and a wider sweep of the season's replays of every race for them,
+  which checks too whether a changeling's disguise or a locust's take-off, made by the game as a tumor's burrow is,
+  shows as the unit's order (review of #258);
   what 1.0 promises, `protocol`, `testing` and the extensions included or not, and how a rename goes after it; semita,
   alpha and required as `>=0.2.1` with no bound; `needs_power` and the self types for energy, cargo and detection
   (section 1), which would break a bot if they came after; and a bot of another race than Terran exercising the

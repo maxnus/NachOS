@@ -12,6 +12,7 @@ from s2clientprotocol import debug_pb2, query_pb2, sc2api_pb2
 from sc2nachos.gamedata import GameData, Tech, TechRequirements
 from sc2nachos.gamedata._techtree import (
     PRODUCERS_FALLBACK,
+    SELF_MORPHS,
     TECH_TREE,
     UNNAMED_CREATION_ABILITIES,
     TechTree,
@@ -475,6 +476,12 @@ class TestWhatTheTablesSay:
         sweep = _tech_tree_from_the_findings()
         for unit_type in PRODUCERS_FALLBACK:
             assert not sweep.unit_type(unit_type).producers, unit_type.name
+
+    def test_a_self_morph_is_only_for_an_ability_the_sweep_never_saw_offered(self) -> None:
+        """Once the sweep sees one offered, the entry can go."""
+        sweep = _tech_tree_from_the_findings()
+        for ability in SELF_MORPHS:
+            assert not sweep.ability(ability).performers, ability.name
 
     def test_a_warp_gate_warps_in_what_a_gateway_trains(self, first_corpus_tables: GameData) -> None:
         zealot = first_corpus_tables.abilities[AbilityId.WARP_GATE_WARP_IN_ZEALOT]

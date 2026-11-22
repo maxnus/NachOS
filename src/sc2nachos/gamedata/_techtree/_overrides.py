@@ -3,7 +3,8 @@
 `tools/generate_tech_tree.py` writes none of this, so a new sweep keeps every entry. Each entry is checked against the
 sweep: the generator refuses to write the tech tree unless the sweep saw each creation ability here make its unit
 type, so a patch that breaks one stops the regeneration. `tests/test_gamedata.py` fails once the game's table names an
-ability here for its type, so the entry can go.
+ability here for its type, and `tests/test_tech_tree.py` once the sweep sees a type offered an ability `SELF_MORPHS`
+names or make one `PRODUCERS_FALLBACK` names, so the entry can go.
 """
 
 from collections.abc import Mapping
