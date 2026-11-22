@@ -75,36 +75,36 @@ _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MED
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
 _TOY_CURVES = {
     UnitTypeId.MARINE: (
-        CurveSegment(weight=1.0, up_to_count=30),
-        CurveSegment(weight=0.33, up_to_count=60),
+        CurveSegment(weight=1.0, end=30),
+        CurveSegment(weight=0.33, end=60),
         CurveSegment(weight=0.0),
     ),
     UnitTypeId.MARAUDER: (
-        CurveSegment(weight=2.2, up_to_count=12),
-        CurveSegment(weight=0.7, up_to_count=30),
+        CurveSegment(weight=2.2, end=12),
+        CurveSegment(weight=0.7, end=30),
         CurveSegment(weight=0.0),
     ),
     UnitTypeId.MEDIVAC: (
-        CurveSegment(weight=2.5, up_to_count=4),
-        CurveSegment(weight=0.8, up_to_count=8),
+        CurveSegment(weight=2.5, end=4),
+        CurveSegment(weight=0.8, end=8),
         CurveSegment(weight=0.0),
     ),
 }
 # Like the toy's curves, but no count is worth nothing, so that the reward never saturates.
 _GROWING_CURVES = {
     UnitTypeId.MARINE: (
-        CurveSegment(weight=1.0, up_to_count=30),
-        CurveSegment(weight=0.5, up_to_count=80),
+        CurveSegment(weight=1.0, end=30),
+        CurveSegment(weight=0.5, end=80),
         CurveSegment(weight=0.25),
     ),
     UnitTypeId.MARAUDER: (
-        CurveSegment(weight=2.2, up_to_count=12),
-        CurveSegment(weight=1.1, up_to_count=40),
+        CurveSegment(weight=2.2, end=12),
+        CurveSegment(weight=1.1, end=40),
         CurveSegment(weight=0.5),
     ),
     UnitTypeId.MEDIVAC: (
-        CurveSegment(weight=2.5, up_to_count=4),
-        CurveSegment(weight=1.2, up_to_count=10),
+        CurveSegment(weight=2.5, end=4),
+        CurveSegment(weight=1.2, end=10),
         CurveSegment(weight=0.4),
     ),
 }
@@ -435,7 +435,7 @@ def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameT
     """The wide reward from the game's start and from each mid-game state, at each half-life."""
     curves: dict[UnitTypeId, tuple[CurveSegment, ...]] = dict(_GROWING_CURVES)
     for unit_type, weight in _FIRST_SIX_WEIGHTS_OF_THE_WIDE_REWARD.items():
-        curves[unit_type] = (CurveSegment(weight=weight, up_to_count=6), CurveSegment(weight=weight / 3))
+        curves[unit_type] = (CurveSegment(weight=weight, end=6), CurveSegment(weight=weight / 3))
     for name, state in ({"0:00": _game_start()} | _mid_game_states()).items():
         for half_life in half_lives:
             _solve_and_print(

@@ -549,7 +549,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
             mineral_fields=0,
         )
-        curve = [CurveSegment(weight=1.0, up_to_count=3), CurveSegment(weight=-0.1)]
+        curve = [CurveSegment(weight=1.0, end=3), CurveSegment(weight=-0.1)]
         plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: curve}), horizon_seconds=40)
         assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 3
 
@@ -563,7 +563,7 @@ class TestKnownPlans:
             mineral_fields=0,
         )
         by_weight = Reward(weights={UnitTypeId.MARINE: 1.0})
-        by_curve = Reward(weights={UnitTypeId.MARINE: [CurveSegment(weight=1.0, up_to_count=3)]})
+        by_curve = Reward(weights={UnitTypeId.MARINE: [CurveSegment(weight=1.0, end=3)]})
         weighted, curved = (_best_plan(state, reward, horizon_seconds=40) for reward in (by_weight, by_curve))
 
         assert curved.objective == pytest.approx(weighted.objective)
@@ -1308,10 +1308,10 @@ class TestReward:
         "segments",
         [
             [],
-            [CurveSegment(weight=1.0, up_to_count=10), CurveSegment(weight=2.0)],
+            [CurveSegment(weight=1.0, end=10), CurveSegment(weight=2.0)],
             [
-                CurveSegment(weight=1.0, up_to_count=10),
-                CurveSegment(weight=0.5, up_to_count=5),
+                CurveSegment(weight=1.0, end=10),
+                CurveSegment(weight=0.5, end=5),
                 CurveSegment(weight=0.0),
             ],
         ],
@@ -1322,11 +1322,7 @@ class TestReward:
             Reward(weights={UnitTypeId.MARINE: segments})
 
     def test_the_last_segments_count_is_ignored(self) -> None:
-        Reward(
-            weights={
-                UnitTypeId.MARINE: [CurveSegment(weight=1.0, up_to_count=30), CurveSegment(weight=0.0, up_to_count=0)]
-            }
-        )
+        Reward(weights={UnitTypeId.MARINE: [CurveSegment(weight=1.0, end=30), CurveSegment(weight=0.0, end=0)]})
 
     def test_counts_not_in_order_of_time_raise(self) -> None:
         later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]

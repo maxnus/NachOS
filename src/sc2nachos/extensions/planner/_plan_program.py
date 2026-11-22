@@ -775,9 +775,9 @@ class PlanProgram:
             under_line = RowExpression(self._interval_count).add(values, np.eye(self._interval_count))
             under_line.add_expression(count, -segment.weight)
             self._program.constrain(under_line, upper=worth_before - segment.weight * count_before)
-            if math.isfinite(segment.up_to_count):
-                worth_before += segment.weight * (segment.up_to_count - count_before)
-                count_before = segment.up_to_count
+            if math.isfinite(segment.end):
+                worth_before += segment.weight * (segment.end - count_before)
+                count_before = segment.end
         return values
 
     def _enemy_units_covered(self, coverage: Coverage) -> VariableBlock:

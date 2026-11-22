@@ -14,13 +14,13 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CurveSegment:
-    """One piece of a concave reward on a unit type's count: each unit up to `up_to_count` is worth `weight` a
+    """One piece of a concave reward on a unit type's count: each unit up to the count it ends at is worth `weight` a
     second."""
 
     weight: float
     """What each unit of the piece is worth a second."""
-    up_to_count: float = math.inf
-    """The count the piece runs to; the last piece runs on, whatever it says."""
+    end: float = math.inf
+    """The count the piece ends at, where the next begins; the last piece runs on, whatever it says."""
 
 
 @final
@@ -143,7 +143,5 @@ def _check_concave(unit_type: UnitTypeId, segments: Sequence[CurveSegment]) -> N
             raise ValueError(
                 f"the curve of {unit_type.name} is not concave: a weight of {later.weight} after {earlier.weight}"
             )
-        if position < len(segments) - 1 and later.up_to_count <= earlier.up_to_count:
-            raise ValueError(
-                f"the curve of {unit_type.name} must count up: {later.up_to_count} after {earlier.up_to_count}"
-            )
+        if position < len(segments) - 1 and later.end <= earlier.end:
+            raise ValueError(f"the curve of {unit_type.name} must count up: {later.end} after {earlier.end}")

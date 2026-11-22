@@ -215,7 +215,7 @@ class ThreatMap:
   @api.on(TurnEvent)
   def replan(event: TurnEvent) -> None:
       if api.step % 448 == 0:
-          marines = [CurveSegment(weight=1.0, up_to_count=30), CurveSegment(weight=0.3)]
+          marines = [CurveSegment(weight=1.0, end=30), CurveSegment(weight=0.3)]
           reward = Reward(weights={UnitTypeId.MARINE: marines}, half_life=GameTime(seconds=240))
           plan = api.extensions.planner.plan_now(reward)
   ```

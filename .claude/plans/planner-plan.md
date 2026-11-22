@@ -487,7 +487,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     **A reward's weights hold its curves** (the owner, the same day, of the two: "Isn't the latter just a more general
     form of the former?"). `Reward.curves` is gone: `Reward.weights` holds for each unit type one number or a list of
     `CurveSegment`, so no type can be given both. A segment's `slope` is its `weight` and its `up_to` its
-    `up_to_count`, names the owner asked to be bettered and has not yet seen. A curve of one piece goes into the
+    `end`, the count it ends at (the owner, the same day, both). A curve of one piece goes into the
     objective as a number does, with no variable.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
