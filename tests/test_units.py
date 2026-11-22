@@ -791,6 +791,24 @@ class TestWhatAUnitReads:
         drained = make_unit(1, RawUnitTypeId.Hive, alliance=_ENEMY, buff_ids=[RawBuffId.ViperConsumeStructure])
         assert _one(drained).buffs == {BuffId.VIPER_CONSUMED}
 
+    def test_a_collapsible_tower_reads_no_buff(self) -> None:
+        """Each wears its kind's buff in the game's first observation, which only the fog off lists (in game)."""
+        tower = make_unit(
+            1,
+            RawUnitTypeId.CollapsibleRockTowerDiagonal,
+            alliance=Alliance.NEUTRAL,
+            buff_ids=[RawBuffId.CollapsibleRockTowerRampDiagonalConjoinedSearch],
+        )
+        assert _one(tower).buffs == frozenset()
+
+    def test_a_creep_tumor_burrowing_itself_reads_its_burrow(self) -> None:
+        """Every creep tumor shows the burrow as its order for 16 to 21 steps once it finishes (in game)."""
+        burrowing = raw_pb2.UnitOrder(ability_id=RawAbilityId.BurrowCreepTumorDown_BurrowDown)
+        tumor = _one(make_unit(1, RawUnitTypeId.CreepTumorBurrowed, orders=[burrowing]))
+        assert isinstance(tumor, OwnUnit)
+        assert [order.ability for order in tumor.orders] == [AbilityId.CREEP_TUMOR_BURROW]
+        assert tumor.is_doing(AbilityId.CREEP_TUMOR_BURROW)
+
     def test_an_uncurated_buff_raises_when_read(self) -> None:
         with pytest.raises(UncuratedIdError, match="DutchMarauderSlow"):
             _ = _one(make_unit(1, buff_ids=[RawBuffId.DutchMarauderSlow])).buffs

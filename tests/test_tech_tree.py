@@ -604,7 +604,8 @@ class TestWhatTheTablesSay:
 
     def test_only_the_known_makers_have_nothing_to_perform_them(self, first_corpus_tables: GameData) -> None:
         """The game orders every gateway to become a warp gate once the research is done, so the sweep saw none
-        offered it. Every research ability has a performer."""
+        offered it, and every creep tumor burrows by itself, which the sweep never saw. Every research ability has a
+        performer."""
         makers = [row.creation_ability for row in first_corpus_tables.units.values()]
         makers += [row.research_ability for row in first_corpus_tables.upgrades.values()]
         unperformed = {
@@ -612,7 +613,7 @@ class TestWhatTheTablesSay:
             for ability in makers
             if ability is not None and not first_corpus_tables.abilities[ability].performers
         }
-        assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE}
+        assert unperformed == {AbilityId.GATEWAY_MORPH_WARP_GATE, AbilityId.CREEP_TUMOR_BURROW}
 
     def test_only_the_abilities_the_sweep_never_saw_offered_have_no_performers(
         self, first_corpus_tables: GameData
@@ -622,6 +623,7 @@ class TestWhatTheTablesSay:
         assert unoffered == {
             AbilityId.NULL,
             AbilityId.GATEWAY_MORPH_WARP_GATE,
+            AbilityId.CREEP_TUMOR_BURROW,
             AbilityId.MORPH_ARCHON,
             AbilityId.CARRIER_BUILD_INTERCEPTORS,
         }
@@ -641,6 +643,19 @@ class TestWhatTheTablesSay:
         overseer = first_corpus_tables.abilities[AbilityId.OVERLORD_MORPH_OVERSEER]
         assert overseer.performers == {UnitTypeId.OVERLORD, UnitTypeId.OVERLORD_TRANSPORT}
         assert first_corpus_tables.units[UnitTypeId.OVERSEER].morphed_from is UnitTypeId.OVERLORD
+
+    def test_every_creep_tumor_burrows_itself_and_neither_kind_is_the_burrowed_ones_source(
+        self, first_corpus_tables: GameData
+    ) -> None:
+        """A queen's tumor and a tumor's both burrow by themselves once finished (in game), and neither comes from the
+        other."""
+        burrow = first_corpus_tables.abilities[AbilityId.CREEP_TUMOR_BURROW]
+        assert burrow.products == {
+            UnitTypeId.CREEP_TUMOR: UnitTypeId.CREEP_TUMOR_BURROWED,
+            UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR_BURROWED,
+        }
+        burrowed = first_corpus_tables.units[UnitTypeId.CREEP_TUMOR_BURROWED]
+        assert (burrowed.creation_ability, burrowed.morphed_from) == (AbilityId.CREEP_TUMOR_BURROW, None)
 
     def test_only_creep_tumors_the_game_will_not_create_are_left_unswept(self, first_corpus_tables: GameData) -> None:
         """A debug command cannot create a creep tumor, so what one is offered is unknown rather than nothing."""

@@ -34,7 +34,11 @@ tank what it is offered. Asking gives only half of it, since a unit is offered o
 state: an uncloaked ghost is offered `Behavior_CloakOn_Ghost` and a cloaked one `Behavior_CloakOff_Ghost`, never
 both. `GameData` keeps only the rows the curated ids name, so an id left out empties a field. The exception is an
 id nobody can order, because the game no longer honors it or does it by itself. Two tests in
-`tests/test_gamedata.py` list the rows left without a maker, and fail when a new one turns up.
+`tests/test_gamedata.py` list the rows left without a maker, and fail when a new one turns up. **But an id a unit
+shows as its order is curated, whoever gave it**, or reading the unit's orders raises: every creep tumor burrows by
+itself, showing `CREEP_TUMOR_BURROW` as it does, and `SELF_MORPHS` in `sc2nachos/gamedata/_techtree/_overrides.py`
+names the types that carry such an order out, since the tech tree's sweep never sees one offered
+([game behavior](../reference/game-behavior/units.md#units-coming-changing-and-going)).
 
 **A buff is curated when the game puts it on a unit.** `tools/sweep_buffs.py` finds those by making it happen: it
 researches everything a race has, orders every ability each unit type is offered at a set of targets, and records each
@@ -48,11 +52,14 @@ Stasis Ward, so it missed `STASIS_WARD_TRAPPED`, which each unit a ward traps we
 viper at full energy drops a Consume, so it missed `VIPER_CONSUMED`, which the structure a viper drains wears. Playing
 AI Arena replays back found all four.
 
-**A buff every unit of one type wears for as long as it is listed is left out, not curated**: it says nothing the type
-does not. It goes in `BuffId._SKIPPED_IDS`, which `IdEnum._read_each` passes over for a unit's buffs and the buff
-events, so reading a unit that wears one raises nothing. A parasitic bomb left behind always wears `ParasiticBombUnitKU`
-and `ParasiticBombSecondaryUnitSearch`, and reads no buff ([game behavior](../reference/game-behavior/units.md)). Check
-every listing of every unit of the type, in a replay played back every step, before adding one.
+**A buff every unit of one type wears for as long as it is listed, or in the game's first observation alone, is left
+out, not curated**: it says nothing the type does not. It goes in `BuffId._SKIPPED_IDS`, which `IdEnum._read_each`
+passes over for a unit's buffs and the buff events, so reading a unit that wears one raises nothing. A parasitic bomb
+left behind always wears `ParasiticBombUnitKU` and `ParasiticBombSecondaryUnitSearch`, and reads no buff
+([game behavior](../reference/game-behavior/units.md)); each collapsible tower wears its kind's `…ConjoinedSearch` buff
+in the first observation of a replay played back with the fog off, and never after
+([game behavior](../reference/game-behavior/damage-and-buffs.md#buffs)). Check every listing of every unit of the type,
+in a replay played back every step, before adding one.
 
 **A buff or an effect is named after the one unit type that causes it, then what a player sees**, as an
 ability is named after its performer: `MARAUDER_CONCUSSIVE_SHELLS_SLOW`, `QUEEN_INJECTED`, `MARINE_STIMMED`,

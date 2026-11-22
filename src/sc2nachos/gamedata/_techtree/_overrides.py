@@ -61,16 +61,19 @@ UNNAMED_CREATION_ABILITIES: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxy
 """The unit type each ability makes, each seen in game. Where the table names no working ability for the type, this
 is its creation ability; otherwise the ability makes this type as well as the one the table names."""
 
-SELF_MORPHS: Final[Mapping[AbilityId, UnitTypeId]] = MappingProxyType(
+SELF_MORPHS: Final[Mapping[AbilityId, frozenset[UnitTypeId]]] = MappingProxyType(
     {
         # The game orders every gateway to turn into a warp gate once the research is done, so the tech tree's sweep,
         # which never turned one back, saw no gateway offered it. One turned back from a warp gate is offered it, and
         # takes it (in game, #159).
-        AbilityId.GATEWAY_MORPH_WARP_GATE: UnitTypeId.GATEWAY,
+        AbilityId.GATEWAY_MORPH_WARP_GATE: frozenset({UnitTypeId.GATEWAY}),
+        # Every creep tumor, a queen's or a tumor's, burrows by itself once it finishes, showing the burrow as its
+        # order (in game). The tech tree's sweep reads no tumor, so it saw nothing offered it.
+        AbilityId.CREEP_TUMOR_BURROW: frozenset({UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_QUEEN}),
     }
 )
-"""The unit type that carries out each ability the tech tree's sweep never saw it offered, turning itself into the
-ability's product, which takes it as its source."""
+"""The unit types that carry out each ability the tech tree's sweep never saw offered, each turning itself into the
+ability's product, which takes it as its source where it is the only one."""
 
 PRODUCERS_FALLBACK: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingProxyType(
     {

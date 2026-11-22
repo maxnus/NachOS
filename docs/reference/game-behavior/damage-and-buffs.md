@@ -226,6 +226,14 @@ up to a target, stutter-stepping, holding as a target walked by and chasing one,
   a viper was refused with the generic `Error`, and about 2,260 steps after, accepted (in game, scratch checks on
   PylonAIE, 2026-11-18, build 75689). A hive a viper drained wore it in AI Arena replays played back with the fog off
   (2026-11-04), and an enemy unit wore it to AvocaDOS in AI Arena match 5118204 (its log, 2026-11-12).
+- Every collapsible tower wears its kind's buff in the game's first observation, at step 0, and never again:
+  `CollapsibleRockTowerConjoinedSearch` (39) a `CollapsibleRockTower`, `CollapsibleRockTowerRampDiagonalConjoinedSearch`
+  (40) a `CollapsibleRockTowerDiagonal`, `CollapsibleTerranTowerConjoinedSearch` (41) a `CollapsibleTerranTower` and
+  `CollapsibleTerranTowerRampDiagonalConjoinedSearch` (42) a `CollapsibleTerranTowerDiagonal`. Each of MagannathaAIE's
+  19 towers wore it in the first observation of a replay played back with the fog off, as either player, and none
+  after it, over 14,045 to 20,815 observations a playback (AI Arena matches 4686890, 4750796 and 4900021, every step,
+  2026-11-22, build 75689). In 40 more of the season's games, played back with the fog off 4 steps a turn, no tower
+  wore one after the first observation, and neither player's own view ever showed one (2026-11-04).
 - A unit warping in wears raw buff 8, `PowerUserWarpable`, from its first step until the step after it finishes; a
   structure a probe warps in wears none (#37).
 - An oracle is never offered Stasis Ward, a nexus never Battery Overcharge, and a shield battery puts no buff on what

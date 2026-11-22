@@ -74,6 +74,9 @@ class AbilityId(IdEnum):
     COMMAND_CENTER_TRAIN_SCV = RawAbilityId.CommandCenterTrain_SCV
     CORRUPTOR_CAUSTIC_SPRAY = RawAbilityId.CausticSpray_CausticSpray
     CORRUPTOR_MORPH_BROOD_LORD = RawAbilityId.MorphToBroodLord_BroodLord
+    # A creep tumor's own order as it burrows by itself once finished (in game). The table remaps it to BURROW, but
+    # read as BURROW it would have every unit that burrows make a burrowed tumor, so it is an id of its own.
+    CREEP_TUMOR_BURROW = RawAbilityId.BurrowCreepTumorDown_BurrowDown
     CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1 = RawAbilityId.CyberneticsCoreResearch_ProtossAirArmorLevel1
     CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_2 = RawAbilityId.CyberneticsCoreResearch_ProtossAirArmorLevel2
     CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_3 = RawAbilityId.CyberneticsCoreResearch_ProtossAirArmorLevel3

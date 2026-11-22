@@ -289,6 +289,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   finished. A queen's creep tumor is first seen at 0%, finishes 240 steps later, then becomes
   `CREEP_TUMOR_BURROWED` (#37). A plain creep tumor made finished by debug becomes one within 8 steps, under its tag
   (local game, build 75689, #248).
+- Every creep tumor, a queen's or a tumor's, burrows by itself once finished, showing raw ability 1662,
+  `BurrowCreepTumorDown_BurrowDown`, as its one order, at progress 0 throughout: for 0 to 5 steps still listed as the
+  tumor it was, then for 16 as `CreepTumorBurrowed`, under its tag. 443 of the 447 tumors that showed it did so for
+  16 to 21 steps, and 4 for fewer; each of the 120 tumors one player made in one of the games showed it (AI Arena
+  matches 4893871, 4900021 and 4928867, Zerg against Zerg, played back every step as each player, 2026-11-22, build
+  75689). The table names it the burrowed tumor's creation ability, with a build time of 19 steps, and remaps it to the
+  general burrow, `BurrowDown`.
 - A structure cancelled while going up is reported dead, and so is a MULE when it expires (#37; tested), and a mineral
   field killed by debug command (tested; local game, build 75689).
 - A neural parasite keeps the tag and hands the unit to the caster's player within 24 steps, alliance and upgrades
