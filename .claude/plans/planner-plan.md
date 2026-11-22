@@ -488,7 +488,11 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     form of the former?"). `Reward.curves` is gone: `Reward.weights` holds for each unit type one number or a list of
     `CurveSegment`, so no type can be given both. A segment's `slope` is its `weight` and its `up_to` its
     `end`, the count it ends at (the owner, the same day, both). A curve of one piece goes into the
-    objective as a number does, with no variable.
+    objective as a number does, with no variable. The reward's parts stay mappings rather than callables (the owner,
+    the same day): the types a reward names are the items a plan weighs, 14 of them solved in 2 seconds where 38
+    take up to 22, which a mapping shows and a function with a default hides; a mapping is checked where it is
+    built; and a rule is one comprehension. `fluid_after` and `walk_time` are callables because each answers for
+    every item without changing which items there are.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never
