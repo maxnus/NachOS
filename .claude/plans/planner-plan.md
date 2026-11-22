@@ -21,27 +21,27 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
 
 ## Decisions
 
-1. **A time-bucketed MILP, solved by HiGHS through scipy.** Starts of each item per bucket are integer or fluid
+1. **A time-indexed MILP, solved by HiGHS through scipy.** Starts of each item per interval are integer or fluid
    variables; minerals, vespene and supply are linear flows; producers, workers and prerequisites are linear
    constraints. Scipy is already a dependency and HiGHS is among the best open-source solvers; a solver of our own
    would not beat it, and the Python side of a solve costs under 0.2 s. The lever is the formulation, below. No
    compiled code of our own: the ladder zip takes compiled packages from locked manylinux wheels, and an extension
    of ours would need a wheel built in CI.
-2. **A grid that widens with time, cut to a worker's build time: buckets of 34 game steps doubling from 544** (the
-   owner, 2026-11-19, over 2-second buckets doubling every 45 seconds, 63 in all), 68 until 1,088, 136 until 2,176,
-   272 until 4,352 and 544 after, 1.5 seconds to 24.3, 57 buckets by ten minutes. Ten-second buckets undertrained
+2. **A grid that widens with time, cut to a worker's build time: intervals of 34 game steps doubling from 544** (the
+   owner, 2026-11-19, over 2-second intervals doubling every 45 seconds, 63 in all), 68 until 1,088, 136 until 2,176,
+   272 until 4,352 and 544 after, 1.5 seconds to 24.3, 57 intervals by ten minutes. Ten-second intervals undertrained
    workers, an SCV every 20 to 30 seconds instead of every 12, and undervalued the plan by 5%; 2 seconds was within
    0.01% of 1 second at half the solve time, but still trained an SCV every 14 seconds for the game's 12.14, a start
-   sitting on a bucket's first second (Open 9). Every build time is a whole number of game steps, and of 16: a
-   worker's 272, of every race, are eight buckets of 34, and stay a whole number of buckets while the buckets double
-   to 272, so SCVs chain as in the game; 2 seconds are 44.8 steps and divide nothing. A doubling grid keeps the
-   relative timing error constant along the plan. Durations are never rounded: a build enters the producer
-   constraints in exact seconds split across the buckets it overlaps; only a start sits on a bucket's first second
-   and a completion on the next edge. A bot hands `Planner` any other `TimeGrid`. `TimeGrid.doubling` takes
-   `initial_bucket_length`, `initial_bucket_count`, an even number, and `max_bucket_doublings` (the owner,
-   2026-11-19, the names too), counts where it took the time of the first doubling and the longest bucket: a time
-   need not be a whole number of buckets, and the grid then doubled at the last edge before it, at 0:44 for the 0:45
-   it was asked, which a grid cut to a worker cannot afford.
+   sitting on an interval's first second (Open 9). Every build time is a whole number of game steps, and of 16: a
+   worker's 272, of every race, are eight intervals of 34, and stay a whole number of intervals while the intervals
+   double to 272, so SCVs chain as in the game; 2 seconds are 44.8 steps and divide nothing. A doubling grid keeps the
+   relative timing error constant along the plan. Durations are never rounded: a build enters the producer constraints
+   in exact seconds split across the intervals it overlaps; only a start sits on an interval's first second and a
+   completion on the next edge. A bot hands `Planner` any other `TimeGrid`. `TimeGrid.doubling` takes
+   `initial_interval_length`, `initial_interval_count`, an even number, and `max_interval_doublings` (the owner,
+   2026-11-19, the names too), counts where it took the time of the first doubling and the longest interval: a time need
+   not be a whole number of intervals, and the grid then doubled at the last edge before it, at 0:44 for the 0:45 it was
+   asked, which a grid cut to a worker cannot afford.
 3. **Whole numbers where an item is lumpy, fluid flows where it is not**, for longer the more it costs (the owner,
    phase 1) and the less comes in (the owner, 2026-11-19): an item's starts are integer from the plan's start for 60
    seconds for each 100 minerals and vespene at the income a game starts with, at least 30, and fluid after: a
@@ -53,8 +53,8 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    horizon. A bot sets its own for any unit type or upgrade, `Planner(fluid_after=...)` taking a function of either
    that returns `None` for the default, named so by the owner (2026-11-19) over `whole_until` and
    `whole_starts_until`. A plan's item says whether it is fluid, `PlannedItem.is_fluid` (the owner, 2026-11-19), since
-   a fluid one stands for fractions summed and rounded. The rule: an item stays whole where its cost exceeds a
-   bucket's income and it is made once a bucket at most. The owner's question behind the income was whether a type
+   a fluid one stands for fractions summed and rounded. The rule: an item stays whole where its cost exceeds an
+   interval's income and it is made once an interval at most. The owner's question behind the income was whether a type
    the state holds many of could be fluid sooner, 60 workers against 12: a time divided by the count of the type
    gained little alone and nothing beside the income's, which already brings most items to the 30 seconds, and was
    not built (Open 3 holds the measurements).
@@ -71,12 +71,12 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
    piecewise-linear terms, the integral of a utility curve, buy a mix. Allowed: linear terms, concave piecewise
    terms, minima of linear things (complementarity, coverage), shortfall penalties, linear timing constraints. Not
    allowed without binaries: convex bonuses, thresholds, products of counts, capped penalties.
-5. **The enemy enters as per-bucket constants.** Coverage, each enemy type worth covering up to its count by what
+5. **The enemy enters as per-interval constants.** Coverage, each enemy type worth covering up to its count by what
    the own army is worth against it from the unit profiles' effectiveness matrix, is a minimum and so concave; it
    flipped the toy from 50 marauders against armored to 168 marines against air, and ramped marines ahead of air
    forecast for 4:00. Scenarios combine by expectation or by worst case, both concave. A bad matchup is a linear
    penalty or a loss rate, never a capped one.
-6. **Expected losses are survival factors on completions**, per type and bucket, from recent deaths, the matchup and
+6. **Expected losses are survival factors on completions**, per type and interval, from recent deaths, the matchup and
    planned engagements, at no cost in variables. Only survivors count for income, supply, reward and coverage. They
    turn the plan from reaching an army into sustaining one: economy and production capacity first, continuous
    production after, lost workers replaced.
@@ -117,20 +117,20 @@ from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core ma
 
 | what | result |
 |---|---|
-| 7 min, 10 s buckets, 588 integers, integrated reward | usable plan in 1 s, proven within 5% in 4 s, 4% gap left at 60 s |
+| 7 min, 10 s intervals, 588 integers, integrated reward | usable plan in 1 s, proven within 5% in 4 s, 4% gap left at 60 s |
 | same, terminal reward | 10 to 30 s for a sensible plan |
 | 10 min, uniform 10 s, 840 integers | 24% gap after 10 s |
 | 10 min, widening grid, integer to 1:30, 126 integers | proven optimal in 1.2 s |
-| 10 min, 2 s near term, integer to 1:30, 630 integers | optimal in 4.2 s; 1 s buckets, 1260 integers, in 7.9 s |
+| 10 min, 2 s near term, integer to 1:30, 630 integers | optimal in 4.2 s; 1 s intervals, 1260 integers, in 7.9 s |
 | 10 min, doubling grid, 476 integers | optimal in 5.8 s |
 | big structures whole to 10:00, +112 integers | 0.5% gap at 10 s, optimal at 25 s, same near-term plan |
 | concave reward | a mix of types; 9% gap at 10 s instead of 0.5% |
-| all-fluid LP | 10 ms, 3% above optimal, fractions of a command center over three buckets, no rounding feasible |
+| all-fluid LP | 10 ms, 3% above optimal, fractions of a command center over three intervals, no rounding feasible |
 | Python matrix build | 18 to 150 ms |
 | the planner's reference, starts held as running totals | optimal in 2.5 to 4.3 s, from 8.4 to 10.4 |
 | replans from 3:00 and 6:00, times by the state's income, 245 to 265 integers from 419 | optimal in 2.1 to 5.2 s, from 4.2 to 18.2 |
 | a wide reward, 38 items, upgrades' times by cost, 1,291 integers from 1,494 | optimal in 14 to 30 s, from 36 to 38 and a 2.1% gap at 40 s |
-| the planner's reference on buckets of 34 steps doubling from 544, 57 buckets, 401 integers | optimal in 1.5 to 2.2 s, from 2.5 to 4.3 |
+| the planner's reference on intervals of 34 steps doubling from 544, 57 intervals, 401 integers | optimal in 1.5 to 2.2 s, from 2.5 to 4.3 |
 | replans and the wide reward on that grid | optimal in 1.8 to 3.6 s, from 2.1 to 5.2, and in 5.1 to 13.1 s, from 7 to 30 |
 
 The gap is the solver's bound on how far the incumbent may be from optimal, relative to the whole objective; a
@@ -159,14 +159,14 @@ class Extensions:
   refineries. Each unit type counts as one of its `equivalent_types` (#248): the one an order makes rather than one
   morphed from another, and of two, the one needing fewer techs, so a hellbat counts as a hellion (the owner: one unit
   to a planner); a rich refinery counts as the refinery its order makes.
-- `_grid.py`: bucket edges from segments. Each item's integrality window comes from its cost, or from the bot.
+- `_grid.py`: interval edges from segments. Each item's integrality window comes from its cost, or from the bot.
 - `_game_state.py`: the state as plain values, `GameState`, read from the api when `plan_now` asks: resources, supply,
   the alive count of each type, each item in production with its time left, each structure an SCV builds and whether
   one walks there first, upgrades done and researching, and the fields, refineries and free geysers at the bot's
   bases. A bot may change it and hand it back.
 - `_economy.py`: `Economy`, what the bot assumes of its economy (decision 11), with defaults measured in game.
 - `_reward.py`: the reward as data the matrix builder reads, and the extension's public interface: per-type weights
-  or concave segments, coverage (effectiveness, enemy counts per bucket, values), floors, the discount half-life and
+  or concave segments, coverage (effectiveness, enemy counts per interval, values), floors, the discount half-life and
   the terminal value. The bot builds it; the planner never guesses it. The hysteresis bonus and the plan it favours
   are `plan_now`'s (decision 11).
 - `_milp.py`: the matrix from model, grid, snapshot and reward; the solve with a time or node limit; the plan from
@@ -278,15 +278,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    to 4.0% less for what they go without; from 3:00 and 6:00 in 2.8 to 3.6 s from 2.7 to 5.2 and in 6.5 to 10.4 s
    from 8.2 to 15.5, worth at most 0.2% less.
 
-   On the grid of decision 2 since 2026-11-19, 57 buckets: the replans have 292 and 274 whole variables, a plan
+   On the grid of decision 2 since 2026-11-19, 57 intervals: the replans have 292 and 274 whole variables, a plan
    within 0.15% of the best after 1 s and within 0.08% after 3, and are proven optimal in 1.8 to 3.6 s. The wide
    reward has 1,202 from the game's start, 860 from 3:00 and 787 from 6:00, and a plan after 1 s in eleven cases of
    twelve: from the start 2.9 to 6.4% short after 1 s and at most 1.1% after 3, proven optimal in 5.1 to 13.1 s; from
    3:00 and 6:00 at most 0.8% short after 1 s and 0.16% after 3, proven in 5.5 to 11.2 s. When the grid first doubles
    was chosen by a script outside the package, each plan's first 30 seconds, or 24, fixed in a grid of 34-step
-   buckets to 2,176 steps: doubling from 544 steps, 816, 1,088 and 1,632 gave 57, 73, 89 and 121 buckets and proofs
+   intervals to 2,176 steps: doubling from 544 steps, 816, 1,088 and 1,632 gave 57, 73, 89 and 121 intervals and proofs
    of the reward of `replans` from a game's start in 1.8 to 2.1 s, 2.7 to 3.6, 7.1 to 7.2 and 18.6 to 22.9, where
-   2-second buckets took 4.1 to 5.3, and none lost more than 0.07% so, where the plans on 2-second buckets lost 0.5
+   2-second intervals took 4.1 to 5.3, and none lost more than 0.07% so, where the plans on 2-second intervals lost 0.5
    to 1.5% from a game's start; from mid-game all were within 0.5%, doubling from 544 within 0.11%. The wide reward
    from a game's start at a half-life of 240 s was proven in 14.0 s doubling from 544, and not in 40 from 816 on.
 
@@ -301,61 +301,61 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 6. **The discount against the solver.** A discount made a 7-minute solve faster and a 10-minute one slower; settle
    it on the real model.
 7. **Phase 1's exit, the reference configuration solved within 3 seconds, is met since the grid of 34 steps: proven
-   optimal in 1.5 to 2.2 s** (measured in phase 1's pull request). First, with each item's starts a bucket at a time and
-   decision 3's windows by cost, the concave reward was proven optimal in 8 to 10 s at every half-life, and the plan
+   optimal in 1.5 to 2.2 s** (measured in phase 1's pull request). First, with each item's starts an interval at a time
+   and decision 3's windows by cost, the concave reward was proven optimal in 8 to 10 s at every half-life, and the plan
    found after 3 s was worth 0.5 to 0.8% less than the optimal one, the solver's bound still 2.0 to 2.5% above it; the
-   toy's linear reward was optimal in 8 s, but 6.5% short after 3. With phase 1's first windows,
-   townhalls, production and tech structures whole over the horizon, the concave reward was 7.6% from its bound after
-   3 s at a half-life of 240 s and 12% undiscounted, still 7 to 11% after 10 s: the root relaxation of the whole
-   structures is what stayed loose, and a tighter big-M did not help. Left for the owner: the incumbent at 3 s, or
-   phase 3's warm start. With no limit on new command centers, a bucket's are bounded by 100, and the prerequisite
-   rows' big-M of a morph and a refinery with them, to about 101 and 202 at a game's start, where a limit of three
-   gave 4 and 8; the reference was no slower, optimal in 7.0 to 11.0 s. A valid tighter bound, if the 3 seconds call
-   for one: the command centers the horizon's resources can pay for.
+   toy's linear reward was optimal in 8 s, but 6.5% short after 3. With phase 1's first windows, townhalls, production
+   and tech structures whole over the horizon, the concave reward was 7.6% from its bound after 3 s at a half-life of
+   240 s and 12% undiscounted, still 7 to 11% after 10 s: the root relaxation of the whole structures is what stayed
+   loose, and a tighter big-M did not help. Left for the owner: the incumbent at 3 s, or phase 3's warm start. With no
+   limit on new command centers, an interval's are bounded by 100, and the prerequisite rows' big-M of a morph and a
+   refinery with them, to about 101 and 202 at a game's start, where a limit of three gave 4 and 8; the reference was no
+   slower, optimal in 7.0 to 11.0 s. A valid tighter bound, if the 3 seconds call for one: the command centers the
+   horizon's resources can pay for.
 
-   Since 2026-11-18 the program's variables are each item's starts so far by each bucket's end, a bucket's starts
-   being those less the bucket's before: the same program in other variables, in #239 (the owner, over a pull request
+   Since 2026-11-18 the program's variables are each item's starts so far by each interval's end, an interval's starts
+   being those less the interval's before: the same program in other variables, in #239 (the owner, over a pull request
    of its own). A row that counts what has started or is done by a time then takes one variable an item, where it took
-   every bucket's before: the reference program's 87,024 coefficients are 14,417, in 3,019 rows from 2,137, and it is
+   every interval's before: the reference program's 87,024 coefficients are 14,417, in 3,019 rows from 2,137, and it is
    proven optimal in 3.9 s undiscounted, 2.9 at a half-life of 120 s, 4.2 at 240 and 2.5 at 480, where it took 9.2,
    10.4, 8.4 and 8.5. After 3 s the plan is the optimal one at 120 and 480 s, 0.05% short undiscounted and 0.7% at
    240. The best plan's worth is unchanged at each; of plans worth the same the solver now returns another, and three
    tests that counted on which were made to count only the units done by the horizon.
 
-   Since 2026-11-19 the exit is met: on the grid cut to a worker's build time (decision 2), 57 buckets and 401 whole
+   Since 2026-11-19 the exit is met: on the grid cut to a worker's build time (decision 2), 57 intervals and 401 whole
    variables where it had 63 and 419, the reference is proven optimal in 1.6 s undiscounted, 1.8 at a half-life of
    120 s, 1.5 at 240 and 2.2 at 480, the same to 0.02 s in three runs. Its objectives are 2.5 to 6.2% above those on
-   2-second buckets, of another grid and so no measure, but in the direction of an SCV every 12.14 seconds for every
+   2-second intervals, of another grid and so no measure, but in the direction of an SCV every 12.14 seconds for every
    14. The owner's question of the proof or the plan found by 3 seconds no longer decides the exit.
-8. **The count-form cut holds only where a bucket's starts are whole** (phase 1, for the owner to confirm). The toy
-   applied it in every bucket shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
-   buckets a barracks made a marine every 32 seconds, not every 17.86. Held to whole buckets, the toy's linear case
+8. **The count-form cut holds only where an interval's starts are whole** (phase 1, for the owner to confirm). The toy
+   applied it in every interval shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
+   intervals a barracks made a marine every 32 seconds, not every 17.86. Held to whole intervals, the toy's linear case
    was worth 6.4% more, with 7 barracks instead of 13.
-9. **Production chained on one producer starts a whole number of buckets apart while its starts are whole**, since a
-   start sits on a bucket's first second. For workers the grid answers it since 2026-11-19 (decision 2): on 2-second
-   buckets an SCV started every 14 seconds, and every 16 on 4-second ones, against 12.14 in game, which the toy's
-   12-second SCV hid; on buckets of 34 steps it starts every 272 steps. What is left is every build no bucket
-   divides, up to a bucket longer each: a marine's 400 steps planned as 408, 2%, where 2-second buckets had 0.8%, and
-   a marauder's or a supply depot's 480 as 510, 6%, where they had 2.7%. Only buckets of 16 steps divide every build,
-   at 2.5 times the whole variables. Starts queued behind the build ahead would answer the rest, and are not to be
-   built (the owner, 2026-11-19): what exact chains could add was measured by a script outside the package, a grid of
-   16-step buckets until 4,352 steps, on which every chain is exact while its starts are whole, against one of
-   34-step buckets of the same shape. The reward of `replans` was worth 0.07% more on it from 6:00 at a half-life of
-   240 s and 0.05% undiscounted, both proven, and at least 0.03% more from a game's start, unproven after two
-   minutes, the finer buckets' every other gain included. Against that, a queued start is done by its place in the
-   queue and not by its bucket, so each item a producer makes would need a count done by each bucket, whole and so
-   more integers, or fluid and so 1.9 marines done; and a barracks queues marines and marauders together, which sums
-   cannot order. Per-item bucket lengths were weighed too: grids of other lengths merge to nearly 16-step buckets,
-   and each item starting only on a doubling of 34 steps of its own, a share of its build time, left 18 to 66% fewer
-   whole variables free, proved the reward of `replans` no sooner, and halved the wide reward's proof for plans worth
-   0.7 to 1.4% less, the one grid's plan the better after 3 s in all eight cases. What is built instead rounds either
-   way (the owner, 2026-11-20, to whom a marauder's 480 steps planned as 544 on 68-step buckets, where 476 is seven
-   of them, was plainly wrong): a whole start, or a build under way, that runs into a bucket by less than a share of
-   it leaves the bucket free, `Planner(max_ignored_overrun=...)`, by default a quarter, 0 for none and a half for the
-   nearest bucket; the owner chose a parameter and the quarter over the nearest, so that a plan runs ahead of the
-   game by a quarter of a bucket at most, 0.4 s on the default grid. On it a marauder is planned every 476 steps, a
-   siege tank every 714 for its 720 and a thor every 952 for its 960, a marine every 408 as before; fluid starts keep
-   their build time, and a build counts as done from the first edge at or after its end as before.
+9. **Production chained on one producer starts a whole number of intervals apart while its starts are whole**, since a
+   start sits on an interval's first second. For workers the grid answers it since 2026-11-19 (decision 2): on 2-second
+   intervals an SCV started every 14 seconds, and every 16 on 4-second ones, against 12.14 in game, which the toy's
+   12-second SCV hid; on intervals of 34 steps it starts every 272 steps. What is left is every build no interval
+   divides, up to an interval longer each: a marine's 400 steps planned as 408, 2%, where 2-second intervals had 0.8%,
+   and a marauder's or a supply depot's 480 as 510, 6%, where they had 2.7%. Only intervals of 16 steps divide every
+   build, at 2.5 times the whole variables. Starts queued behind the build ahead would answer the rest, and are not to
+   be built (the owner, 2026-11-19): what exact chains could add was measured by a script outside the package, a grid of
+   16-step intervals until 4,352 steps, on which every chain is exact while its starts are whole, against one of 34-step
+   intervals of the same shape. The reward of `replans` was worth 0.07% more on it from 6:00 at a half-life of 240 s and
+   0.05% undiscounted, both proven, and at least 0.03% more from a game's start, unproven after two minutes, the finer
+   intervals' every other gain included. Against that, a queued start is done by its place in the queue and not by its
+   interval, so each item a producer makes would need a count done by each interval, whole and so more integers, or
+   fluid and so 1.9 marines done; and a barracks queues marines and marauders together, which sums cannot order.
+   Per-item interval lengths were weighed too: grids of other lengths merge to nearly 16-step intervals, and each item
+   starting only on a doubling of 34 steps of its own, a share of its build time, left 18 to 66% fewer whole variables
+   free, proved the reward of `replans` no sooner, and halved the wide reward's proof for plans worth 0.7 to 1.4% less,
+   the one grid's plan the better after 3 s in all eight cases. What is built instead rounds either way (the owner,
+   2026-11-20, to whom a marauder's 480 steps planned as 544 on 68-step intervals, where 476 is seven of them, was
+   plainly wrong): a whole start, or a build under way, that runs into an interval by less than a share of it leaves the
+   interval free, `Planner(max_ignored_overrun=...)`, by default a quarter, 0 for none and a half for the nearest
+   interval; the owner chose a parameter and the quarter over the nearest, so that a plan runs ahead of the game by a
+   quarter of an interval at most, 0.4 s on the default grid. On it a marauder is planned every 476 steps, a siege tank
+   every 714 for its 720 and a thor every 952 for its 960, a marine every 408 as before; fluid starts keep their build
+   time, and a build counts as done from the first edge at or after its end as before.
 10. **Workers per base** (the owner, review of #239: to come back to). The planner pools workers over every field
     and refinery, so a new SCV mines from when it is done, even one that has to walk to another base, about 10
     minerals too many each, and a new base's fields count from when its command center is done. Separate workers per
@@ -363,7 +363,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     419, whether each future base stands yet, with the solver already short of optimal at 3 seconds; unmeasured. A
     cheaper middle way, a delay the `Economy` sets before each new SCV mines, was left for this discussion.
 11. **What an item needs first is whole** (the owner, 2026-11-20: built, and the bot's to set). The prerequisite rows
-    hold an item's starts in a bucket at most the bucket's most times the count granting its tech, a switch while
+    hold an item's starts in an interval at most the interval's most times the count granting its tech, a switch while
     that count is whole and a dial once it is fluid: a hundredth of a factory unlocked a starport. The reference plan
     from a game's start listed a starport at 4:03 and five medivacs and never a factory, 0.00 of one alive at its
     end; a wide reward's plans made six ghosts on 0.02 of a ghost academy and thors on half an armory. It changes
@@ -371,7 +371,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     first starport at 1:49, its first medivac at 2:50 and no factory, where needing a whole factory it starts one at
     0:11, the starport at 0:55 and the first medivac at 1:31; each replan choosing alike, the factory is never built.
     `Planner(unlock_fraction=1.0)`, the default, adds for each tech no structure of the state grants, and each
-    upgrade another needs, a 0 or 1 in each bucket, 1 only where that fraction of one is done, which holds the item's
+    upgrade another needs, a 0 or 1 in each interval, 1 only where that fraction of one is done, which holds the item's
     starts instead; it is whole only from the edge at which a fluid start of what it counts can be done, the count
     being whole before. It was first an on or off, `whole_prerequisites`; the owner (2026-11-21) made it a fraction
     and named it, the planner to offer many arguments since nobody knows yet how it works best: under 1 a plan pays
@@ -391,7 +391,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     anew: an item fluid no later than its producer, or every product of a producer fluid together, changed what those
     30 seconds were worth by 0.3% at most and the solve little; a producer whole as long as its products made the
     solve slower and the plan no better; a horizon of 5 or 6 minutes lost 0.3% at most of those 30 seconds; first
-    buckets of 68 steps about halved the solve of the reward of `replans` for 0.2% at most; and whole times twice as
+    intervals of 68 steps about halved the solve of the reward of `replans` for 0.2% at most; and whole times twice as
     long bought nothing. Open: a wide reward from mid-game, which an unlock fraction above 0 leaves unproven in 3 s
     over any horizon tried.
 12. **`plan_now` plans over 5 minutes by default** (the owner, 2026-11-21, who first asked whether 5 or 6 would do,
@@ -415,25 +415,24 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 13. **A plan says how its workers split, and moving one costs time** (the owner, 2026-11-22: "we definitely want to
     report this in the plan and we definitely want to have an interruption when reassigning a worker, before the new
     income kicks in. Something like 2 or 3s would be enough"). The split between minerals and vespene was the plan's
-    choice in each bucket all along, moved for nothing, and a `Plan` did not hold it. It holds `miners` and
-    `collectors` now, one number a bucket, and `Economy.reassignment_time`, 3 seconds by default (assumed, the
-    higher of the owner's two), is how long a worker moved to a refinery collects nothing and one moved from a
-    refinery neither mines nor builds; 0 moves them for nothing as before, and adds no variable. Every rise of the
-    collectors in a tier of rates, and every fall of them in all, is a move, from `GameState.vespene_collectors` on,
-    which `Planner.game_state` reads as the workers the game counts as assigned to the refineries; a new SCV's first
-    walk to a refinery is one too, a new SCV's to a field is not, and the fall of those lost is not. A move made at
-    a bucket's start runs through the buckets its time spans, so it costs its seconds on any grid. A fall that what is
-    now forces, fewer SCVs left beside the builders under way than collect, costs nothing, so that a plan starting
-    nothing more stays possible. Measured on the planner's defaults, `--time-limit 30`, side by side with the
-    reference economy's time set to 0 by a script outside the package: `reference` proven in 1.8 to 2.1 s, with 0 in
-    1.4 to 2.5, worth 0.26 to 0.34% less; `replans` in 1.6 to 3.7 s, 21.2 in all, with 0 in 1.5 to 4.7, 23.3 in all,
-    worth 0.00 to 0.13% less; `items` all twelve in 2.8 to 18.0 s, 114.0 in all, with 0 in 1.9 to 20.4, 112.2 in
-    all, worth 1.08 to 1.24% less from a game's start and 0.14 to 0.37% less from mid-game. So the solve is no slower
-    beyond the noise, and a plan is worth less by about what 3 seconds later vespene delays. The reference plan and the
-    wide one from 3:00 split their workers as before: each refinery takes three from when it is done and keeps them.
-    Open: the 3 seconds are assumed, not measured in game; where what a worker would bring buys nothing before the
-    horizon a plan leaves it idle, as in its last one or two buckets, so a bot reads the first bucket's `collectors`
-    and has the rest mine.
+    choice in each interval all along, moved for nothing, and a `Plan` did not hold it. It holds `miners` and
+    `collectors` now, one number an interval, and `Economy.reassignment_time`, 3 seconds by default (assumed, the higher
+    of the owner's two), is how long a worker moved to a refinery collects nothing and one moved from a refinery neither
+    mines nor builds; 0 moves them for nothing as before, and adds no variable. Every rise of the collectors in a tier
+    of rates, and every fall of them in all, is a move, from `GameState.vespene_collectors` on, which
+    `Planner.game_state` reads as the workers the game counts as assigned to the refineries; a new SCV's first walk to a
+    refinery is one too, a new SCV's to a field is not, and the fall of those lost is not. A move made at an interval's
+    start runs through the intervals its time spans, so it costs its seconds on any grid. A fall that what is now
+    forces, fewer SCVs left beside the builders under way than collect, costs nothing, so that a plan starting nothing
+    more stays possible. Measured on the planner's defaults, `--time-limit 30`, side by side with the reference
+    economy's time set to 0 by a script outside the package: `reference` proven in 1.8 to 2.1 s, with 0 in 1.4 to 2.5,
+    worth 0.26 to 0.34% less; `replans` in 1.6 to 3.7 s, 21.2 in all, with 0 in 1.5 to 4.7, 23.3 in all, worth 0.00 to
+    0.13% less; `items` all twelve in 2.8 to 18.0 s, 114.0 in all, with 0 in 1.9 to 20.4, 112.2 in all, worth 1.08 to
+    1.24% less from a game's start and 0.14 to 0.37% less from mid-game. So the solve is no slower beyond the noise, and
+    a plan is worth less by about what 3 seconds later vespene delays. The reference plan and the wide one from 3:00
+    split their workers as before: each refinery takes three from when it is done and keeps them. Open: the 3 seconds
+    are assumed, not measured in game; where what a worker would bring buys nothing before the horizon a plan leaves it
+    idle, as in its last one or two intervals, so a bot reads the first interval's `collectors` and has the rest mine.
 
     **Every start of mining pays too** (the owner, the same day: "I think workers immediately assigned to mining
     should pay too"), which is the cheaper middle way of Open 10. A worker that starts to mine or to collect brings in
@@ -441,9 +440,9 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     SCV's first walk to a field too. A worker from a refinery pays as it starts to mine, where it idled before, and one
     that leaves for nothing pays nothing, so no fall is forced to cost and the room kept for forced falls is gone. A
     builder back from its structure starts for nothing, its walk back being the builder's already: of the miners that
-    start in a bucket, as many as builders' shares of it fall by. The plan starts from the state's collectors and
+    start in an interval, as many as builders' shares of it fall by. The plan starts from the state's collectors and
     takes every other SCV that builds nothing to be mining, so the state gained no field for it. The time is lost of
-    the bucket a worker starts in and those after it, never a whole bucket: in a 24-second bucket, 3 of its 24
+    the interval a worker starts in and those after it, never a whole interval: in a 24-second interval, 3 of its 24
     seconds. Measured as above, against 0: `reference` proven in 1.9 to 3.0 s, 9.3 in all, with 0 in 1.4 to 2.5, 7.2
     in all, worth 0.64 to 0.82% less; `replans` in 2.0 to 5.8 s, 28.3 in all, with 0 in 1.5 to 4.8, 23.1 in all,
     worth 0.00 to 0.27% less; `items` all twelve in 2.5 to 22.6 s, 120.2 in all, with 0 in 1.8 to 20.0, 109.5 in
@@ -452,27 +451,32 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     took 2.96 s of phase 1's 3. A command center after uninterrupted SCVs is paid for one SCV later, the sixth's start
     where it was the fifth's.
 
-    **A plan holds its buckets, not a tuple for each value** (the owner, the same day: "Would it not be better to
+    **A plan holds its intervals, not a tuple for each value** (the owner, the same day: "Would it not be better to
     have a new class that represents all these values for a single bucket and then have a single tuple over objects
     of this class?"). The stocks and counts had a value for each edge of the grid and the workers one for each
-    bucket, one fewer. `Plan.buckets` is a tuple of `PlanBucket`: `start`, `end`, the `miners` and `collectors` in
-    it, and the `minerals`, `vespene` and `counts` expected at its end, the last bucket's being the horizon's. The
+    interval, one fewer. `Plan.intervals` is a tuple of `PlanInterval`: `start`, `end`, the `miners` and `collectors` in
+    it, and the `minerals`, `vespene` and `counts` expected at its end, the last interval's being the horizon's. The
     first edge is gone and held nothing: on the reference reward from 0:00, 3:00 and 6:00 its stocks and counts were
-    the state's to the last digit, and each bucket's end the next one's start to 1e-14. Buckets stay, with a start
+    the state's to the last digit, and each interval's end the next one's start to 1e-14. Intervals stay, with a start
     and an end, rather than points in time, whose last, the horizon, would have no workers (the owner, the same
-    day), and `Plan.bucket_at(time)` finds the one a time is in; what the stock or a count is between two edges is
-    the bot's to estimate. Seen while moving the tests
-    over: where minerals buy nothing more, a plan may count more starts of mining than its miners rise by, which
+    day), and `Plan.interval_at(time)` finds the one a time is in; what the stock or a count is between two edges is
+    the bot's to estimate. **An interval was a bucket** until the owner renamed it the same day ("I don't really like
+    the name"), everywhere in the planner, its tests, its benchmark and the docs: `PlanInterval`, `Plan.intervals`,
+    `Plan.interval_at`, and `TimeGrid.doubling`'s `initial_interval_length`, `initial_interval_count` and
+    `max_interval_doublings`. Bucket is lot-sizing's word and interval optimal control's. The toy in
+    `tools/planner_toy/` keeps its own word, and the replanning interval of decision 9 is another thing. Seen while
+    moving the tests over: where minerals buy nothing more, a plan may count more starts of mining than its miners
+    rise by, which
     costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and one more to train over
-    14 seconds read 8 miners in the first bucket and no minerals at its end: 16 starts counted in the tier at half
+    14 seconds read 8 miners in the first interval and no minerals at its end: 16 starts counted in the tier at half
     rate, where no worker mined, took the 17 minerals the 8 brought in.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never
-    worth nothing, so no start is counted that no worker makes and no worker stands idle, the last buckets'
+    worth nothing, so no start is counted that no worker makes and no worker stands idle, the last intervals'
     included, which closes that half of Open 13. A weight of 0.00001, 0.0001 or 0.001 did the same on the growing and
     the wide reward from 0:00, 3:00 and 6:00: no phantom start, where the growing reward from 6:00 counted 12.1 with
-    0, and no SCV idle in the last bucket, where all 18 to 36 were. Measured with `--time-limit 30` against 0, every
+    0, and no SCV idle in the last interval, where all 18 to 36 were. Measured with `--time-limit 30` against 0, every
     solve proven: `reference` in 1.6 to 2.0 s, 6.9 in all, with 0 in 1.8 to 2.8, 8.7; `replans` in 2.1 to 4.4 s, 22.0
     in all, with 0 in 1.8 to 5.4, 26.7; `items` in 2.4 to 22.0 s, 112.7 in all, with 0 in 2.4 to 21.4, 114.1. The
     reward less the stock's worth is the same to the cent on `reference` and within 0.01% on the others, 0.009% less

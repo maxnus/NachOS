@@ -19,7 +19,7 @@ class PlannedItem:
     item: UnitTypeId | UpgradeId
     """The unit type to make, or the upgrade to research."""
     start: GameTime
-    """When the planner expects it to start, the game time of the first second of a bucket of its grid."""
+    """When the planner expects it to start, the game time of the first second of an interval of its grid."""
     is_fluid: bool
     """Whether it starts where its item's starts are fluid, planned in fractions: it then stands for the fractions
     whose sum reached a whole number at `start`, rounded, and the plan pays for and counts the fractions, not it."""
@@ -27,18 +27,18 @@ class PlannedItem:
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PlanBucket:
-    """One bucket of a plan's grid: the workers the plan has mining and collecting in it, and what the planner expects
-    at its end. What it expects at the first bucket's start is the state it planned from."""
+class PlanInterval:
+    """One interval of a plan's grid: the workers the plan has mining and collecting in it, and what the planner expects
+    at its end. What it expects at the first interval's start is the state it planned from."""
 
     start: GameTime
     """The game time of its first second."""
     end: GameTime
-    """The game time it ends at, the next bucket's `start` or the plan's horizon."""
+    """The game time it ends at, the next interval's `start` or the plan's horizon."""
     miners: float
     """The workers the plan has at mineral fields in it."""
     collectors: float
-    """The workers the plan has at refineries in it: what a bot holds its own at, the first bucket's now."""
+    """The workers the plan has at refineries in it: what a bot holds its own at, the first interval's now."""
     minerals: float
     """The minerals expected in stock at `end`, before what starts there is paid."""
     vespene: float
@@ -50,12 +50,12 @@ class PlanBucket:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Plan:
-    """What to make, in order, with when each is expected to start, and each bucket of the planner's grid with what it
+    """What to make, in order, with when each is expected to start, and each interval of the planner's grid with what it
     expects of it: the workers mining and collecting, the minerals and vespene in stock, and how many of each unit type
     are alive.
 
     A bot carries it out in order, each item as soon as it can be afforded, rather than to the second: the times are the
-    model's, which rounds each start to a bucket's first second and plans far starts in fractions, each item of those
+    model's, which rounds each start to an interval's first second and plans far starts in fractions, each item of those
     starting once their sum reaches it, rounded, and marked `is_fluid`.
 
     Of plans worth the same to within the solver's gap, which one it is is the solver's choice. So it may start an item
@@ -68,8 +68,8 @@ class Plan:
     items: tuple[PlannedItem, ...]
     """What to make, in the order the planner expects each to start; of those expected at one time, in the order the
     game's data lists their types, then the upgrades."""
-    buckets: tuple[PlanBucket, ...]
-    """The buckets of its grid in order, the first from `made_at` and the last to the horizon."""
+    intervals: tuple[PlanInterval, ...]
+    """The intervals of its grid in order, the first from `made_at` and the last to the horizon."""
     objective: float
     """What the reward makes of the plan."""
     gap: float
@@ -79,16 +79,16 @@ class Plan:
     solve_seconds: float
     """The wall-clock seconds the solve took."""
 
-    def bucket_at(self, time: GameTime) -> PlanBucket | None:
-        """The bucket `time` is in, from its `start` to before its `end`, or `None` for a time before `made_at` or not
+    def interval_at(self, time: GameTime) -> PlanInterval | None:
+        """The interval `time` is in, from its `start` to before its `end`, or `None` for a time before `made_at` or not
         before the horizon. It holds the workers the plan has at `time`; the stock and the counts it holds are those at
-        its end, and those at its start the bucket before it holds, the first one's being the state's."""
-        position = bisect_right(self.buckets, time, key=_start_of) - 1
-        if position < 0 or time >= self.buckets[position].end:
+        its end, and those at its start the interval before it holds, the first one's being the state's."""
+        position = bisect_right(self.intervals, time, key=_start_of) - 1
+        if position < 0 or time >= self.intervals[position].end:
             return None
-        return self.buckets[position]
+        return self.intervals[position]
 
 
-def _start_of(bucket: PlanBucket) -> GameTime:
-    """When `bucket` starts."""
-    return bucket.start
+def _start_of(interval: PlanInterval) -> GameTime:
+    """When `interval` starts."""
+    return interval.start

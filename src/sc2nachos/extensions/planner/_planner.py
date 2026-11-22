@@ -37,7 +37,7 @@ _MINERAL_FIELDS_AS_A_GAME_STARTS: Final = 8
 class Planner:
     """The build planner, for Terran: given a reward, a horizon and the state of the game, what to make and when.
 
-    `plan_now` solves a mixed-integer linear program over a grid of time buckets for the plan worth the most by the
+    `plan_now` solves a mixed-integer linear program over a grid of time intervals for the plan worth the most by the
     reward, and returns it as a `Plan`: the items to make in order, each with the time it is expected to start. A bot
     carries it out in order, each item as soon as it can be afforded, and asks for a new plan as the game goes on.
     The planner orders nothing and holds no unit; where structures go and which SCV builds each stay the bot's.
@@ -70,10 +70,10 @@ class Planner:
     - What workers mine and collect, what each orbital command's MULEs add, what a new command center brings, and how
       far an SCV walks to build: the `Economy` handed to `plan_now`. The workers are pooled over every field and
       refinery, as if each could work anywhere at once.
-    - How many workers mine and how many collect vespene is the plan's choice in each bucket, which the bucket holds
+    - How many workers mine and how many collect vespene is the plan's choice in each interval, which the interval holds
       as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
       `reassignment_time`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
-      bucket by bucket, is such a start, from the state's collectors and every other SCV that builds nothing mining.
+      interval by interval, is such a start, from the state's collectors and every other SCV that builds nothing mining.
       Nothing but the reward's `stock_weight` keeps a worker at work where what it brings in buys nothing more.
     - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
       each way.
@@ -84,13 +84,13 @@ class Planner:
       lower one unlocks on that share of one; under a half, on less of a structure than a plan lists as an item. With
       0 the fractions done count as they are, a hundredth of a factory unlocking a starport: the solve is faster, and
       a plan then makes its far units on a structure it never lists.
-    - Starts sit on the first second of a bucket of `grid`, by default `TimeGrid.doubling()`, and builds count as done
-      from the first edge at or after their end. So production chained on one producer starts a whole number of
-      buckets apart while its starts are whole. A build that runs into a bucket by less than `max_ignored_overrun` of
-      it, by default a quarter, leaves the bucket free, and one that runs further into it takes all of it: on the
-      default grid SCVs start every 272 game steps, as in the game, marauders every 476 for their 480, and marines
-      every 408 for their 400. With 0 no overrun is ignored; with 1 every one is. Fluid starts keep their producer
-      busy for their build time alone.
+    - Starts sit on the first second of an interval of `grid`, by default `TimeGrid.doubling()`, and builds count as
+      done from the first edge at or after their end. So production chained on one producer starts a whole number of
+      intervals apart while its starts are whole. A build that runs into an interval by less than `max_ignored_overrun`
+      of it, by default a quarter, leaves the interval free, and one that runs further into it takes all of it: on the
+      default grid SCVs start every 272 game steps, as in the game, marauders every 476 for their 480, and marines every
+      408 for their 400. With 0 no overrun is ignored; with 1 every one is. Fluid starts keep their producer busy for
+      their build time alone.
     - An item starts in whole numbers until a time from the plan's start and is fluid after it, starting in fractions,
       so that the solver weighs the far term without branching over it; the bot carries out the near term and plans
       again before the rest. The time is what `fluid_after` returns for the unit type the item makes or the upgrade it
@@ -140,7 +140,7 @@ class Planner:
         if node_limit is not None and node_limit <= 0:
             raise ValueError(f"a node limit must be above 0, not {node_limit}")
         if not 0 <= max_ignored_overrun <= 1:
-            raise ValueError(f"the overrun ignored must be a share of a bucket, 0 to 1, not {max_ignored_overrun}")
+            raise ValueError(f"the overrun ignored must be a share of an interval, 0 to 1, not {max_ignored_overrun}")
         if not 0 <= unlock_fraction <= 1:
             raise ValueError(f"the unlock fraction must be 0 to 1, not {unlock_fraction}")
         self._api = api
@@ -155,7 +155,7 @@ class Planner:
 
     @property
     def grid(self) -> TimeGrid:
-        """The grid of time buckets plans start on."""
+        """The grid of time intervals plans start on."""
         return self._grid
 
     @property

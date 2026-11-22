@@ -31,7 +31,7 @@ class Economy:
     """What the bot assumes of its economy, which the planner plans with: what each worker mines or collects, what each
     orbital command's MULEs mine, what a new command center brings, and how far an SCV walks to build.
 
-    The workers are pooled: in each bucket the planner splits them anew among every mineral field and refinery there
+    The workers are pooled: in each interval the planner splits them anew among every mineral field and refinery there
     is, as if each could work anywhere at once. So a new SCV mines from when it is done, even one that has to walk to
     another base first, and a new base's fields count from when its command center is done.
 

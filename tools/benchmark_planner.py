@@ -1,7 +1,7 @@
 """Benchmark the build planner on the cases of its toy, `tools/planner_toy/`, from the game's data rather than the toy's
 14 hand-written items: each solve's time, objective, gap and counts, and the first part of its plan.
 
-The toy's cases keep its grid, 2-second buckets doubling from 45 seconds, and its 10 minutes, and `reference`,
+The toy's cases keep its grid, 2-second intervals doubling from 45 seconds, and its 10 minutes, and `reference`,
 `replans` and `items` plan on the planner's defaults, its grid and its 5 minutes; `--horizon` sets another time for
 any case, in seconds. Every case but `replans` and `items` plans from the start of a game, twelve SCVs on a main's
 eight fields beside its command center, 50 minerals and 12 of 15 supply, and every case with at most three new command
@@ -66,7 +66,7 @@ _TOY_HORIZON = GameTime(seconds=600)
 _PLANNER_HORIZON = GameTime(seconds=300)
 _CASES_ON_THE_PLANNERS_DEFAULTS = frozenset({"reference", "replans", "items"})
 _START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER: 3}
-# The planner's default: a whole build running into a bucket by less than a quarter of it leaves the bucket free.
+# The planner's default: a whole build running into an interval by less than a quarter of it leaves the interval free.
 _MAX_IGNORED_OVERRUN = 0.25
 # The planner's default: nothing starts before a whole structure granting each tech it needs is done.
 _UNLOCK_FRACTION = 1.0
@@ -168,7 +168,7 @@ _TOY_GRIDS = {
         ]
     ),
     "double60": TimeGrid.doubling(
-        initial_bucket_length=GameTime(seconds=2), initial_bucket_count=30, max_bucket_doublings=4
+        initial_interval_length=GameTime(seconds=2), initial_interval_count=30, max_interval_doublings=4
     ),
     "double90": TimeGrid(
         segments=[
@@ -179,7 +179,7 @@ _TOY_GRIDS = {
         ]
     ),
     "double45": TimeGrid.doubling(
-        initial_bucket_length=GameTime(seconds=2), initial_bucket_count=22, max_bucket_doublings=4
+        initial_interval_length=GameTime(seconds=2), initial_interval_count=22, max_interval_doublings=4
     ),
 }
 # The grid of the toy's later runs, which the planner's default was before it was cut to a worker's build time.
@@ -363,9 +363,9 @@ def _solve_and_print(
     )
     built = time.perf_counter() - started
     plan = program.solve(time_limit=time_limit, node_limit=None)
-    buckets = len(grid.edges(horizon)) - 1
+    intervals = len(grid.edges(horizon)) - 1
     size = (
-        f"{len(items)} items, {buckets} buckets, {program.linear_program.integral_count} integers, "
+        f"{len(items)} items, {intervals} intervals, {program.linear_program.integral_count} integers, "
         f"built in {built * 1000:.0f} ms"
     )
     if plan is None:

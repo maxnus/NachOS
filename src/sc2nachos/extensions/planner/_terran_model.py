@@ -43,7 +43,7 @@ class Item:
     vespene: float
     """Its cost in vespene, paid as it starts."""
     build_seconds: float
-    """How long it takes, never rounded to the plan's buckets."""
+    """How long it takes, never rounded to the plan's intervals."""
     supply_used: float
     """The supply it takes from its start."""
     supply_provided: float

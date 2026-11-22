@@ -2,7 +2,7 @@
 
 from sc2nachos.extensions.planner._economy import Economy
 from sc2nachos.extensions.planner._game_state import GameState, Occupation, UnitCompletion, WorkerBuild
-from sc2nachos.extensions.planner._plan import Plan, PlanBucket, PlannedItem
+from sc2nachos.extensions.planner._plan import Plan, PlanInterval, PlannedItem
 from sc2nachos.extensions.planner._planner import Planner
 from sc2nachos.extensions.planner._reward import Coverage, CurveSegment, Floor, Reward
 from sc2nachos.extensions.planner._time_grid import TimeGrid
@@ -15,7 +15,7 @@ __all__ = [
     "GameState",
     "Occupation",
     "Plan",
-    "PlanBucket",
+    "PlanInterval",
     "PlannedItem",
     "Planner",
     "Reward",

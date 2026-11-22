@@ -199,7 +199,7 @@ class ThreatMap:
   `Unit.buffs` does.
 - **The build planner**, `sc2nachos.extensions.planner.Planner`, for Terran: given a reward, a horizon and the state of
   the game, what to make and when, as a list of items in order, each with the time it is expected to start. It solves a
-  mixed-integer linear program over a grid of time buckets, which scipy's HiGHS solves, so whether to expand or make
+  mixed-integer linear program over a grid of time intervals, which scipy's HiGHS solves, so whether to expand or make
   marines now follows from the economy it models, not from a rule. The objective stays the bot's: it hands the planner a
   `Reward` and never the other way round.
 
@@ -273,38 +273,38 @@ class ThreatMap:
 
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
   to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and its
-  `buckets`, each a `PlanBucket` from its `start` to its `end` with what the planner expects at that end: the
-  `minerals` and `vespene` in stock, and the `counts` of each unit type alive. The last bucket's are those at the
-  horizon, and what the first starts from is the state. `plan.bucket_at(time)` is the bucket a game time is in, or
-  `None` outside the plan: its workers are those the plan has at that time, and between a bucket's start and its end
+  `intervals`, each a `PlanInterval` from its `start` to its `end` with what the planner expects at that end: the
+  `minerals` and `vespene` in stock, and the `counts` of each unit type alive. The last interval's are those at the
+  horizon, and what the first starts from is the state. `plan.interval_at(time)` is the interval a game time is in, or
+  `None` outside the plan: its workers are those the plan has at that time, and between an interval's start and its end
   the plan says nothing of the stock or the counts. `plan_now` returns `None` if the solver finds no plan within
   its limits, and `planner.plan` holds the last one it found. The planner orders nothing and holds no unit: where a
   structure goes, which SCV builds it, and what to drop once the game moves on stay the bot's.
 
-  How many workers mine and how many collect vespene is the plan's to choose, bucket by bucket, and each bucket holds
-  them as its `miners` and `collectors`. A bot holds its collectors at the first bucket's, `plan.buckets[0].collectors`,
-  moving a worker when the next plan says another number, and has every worker it needs nowhere else mine. Where a
-  plan needs no more vespene, its workers mine rather than collect it while a field brings in more than a refinery. With
-  a `stock_weight` of 0 a plan may leave workers idle where what they would bring in buys nothing before its horizon, as
-  in its last buckets, and its stocks may read less than its workers would bring in.
-  A plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
-  `reassignment_time`, 3 seconds by default, whatever the bucket's length: a worker moved between minerals and vespene,
-  and a new SCV on its first walk. A builder back from its structure pays its walk back instead. The plan starts from
-  the state's `vespene_collectors`, the workers the game counts at its refineries, with every other SCV that builds
-  nothing mining, so a plan that keeps them pays nothing.
+  How many workers mine and how many collect vespene is the plan's to choose, interval by interval, and each interval
+  holds them as its `miners` and `collectors`. A bot holds its collectors at the first interval's,
+  `plan.intervals[0].collectors`, moving a worker when the next plan says another number, and has every worker it needs
+  nowhere else mine. Where a plan needs no more vespene, its workers mine rather than collect it while a field brings in
+  more than a refinery. With a `stock_weight` of 0 a plan may leave workers idle where what they would bring in buys
+  nothing before its horizon, as in its last intervals, and its stocks may read less than its workers would bring in. A
+  plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
+  `reassignment_time`, 3 seconds by default, whatever the interval's length: a worker moved between minerals and
+  vespene, and a new SCV on its first walk. A builder back from its structure pays its walk back instead. The plan
+  starts from the state's `vespene_collectors`, the workers the game counts at its refineries, with every other SCV that
+  builds nothing mining, so a plan that keeps them pays nothing.
 
   `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that much
   longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan
   the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the items
   from the game's data, pruned to what the reward needs, the workers pooled over every field and refinery, the SCV away
-  from the walk to a structure through the build to the walk back, and starts on the first second of a bucket of its
+  from the walk to a structure through the build to the walk back, and starts on the first second of an interval of its
   `TimeGrid`, by default 34 game steps long at first, 1.5 seconds, and doubling every time the time from the plan's
-  start doubles from 544 steps, 24 seconds. A worker's 272 steps are eight of the first buckets, so workers trained one
-  after another start as far apart as in the game. A build no bucket divides is planned to the bucket where one follows
-  another: one that runs into a bucket by less than a quarter of it leaves the bucket free, so marauders follow each
-  other every 476 steps for their 480, and one that runs further takes all of it, marines every 408 for their 400.
-  `Planner(api, max_ignored_overrun=...)` takes another share of a bucket, 0 for none: a higher one lets a plan start
-  the next build up to that much of a bucket before the game could.
+  start doubles from 544 steps, 24 seconds. A worker's 272 steps are eight of the first intervals, so workers trained
+  one after another start as far apart as in the game. A build no interval divides is planned to the interval where one
+  follows another: one that runs into an interval by less than a quarter of it leaves the interval free, so marauders
+  follow each other every 476 steps for their 480, and one that runs further takes all of it, marines every 408 for
+  their 400. `Planner(api, max_ignored_overrun=...)` takes another share of an interval, 0 for none: a higher one lets a
+  plan start the next build up to that much of an interval before the game could.
 
   An item starts in whole numbers for a time from the plan's start and is fluid after it, starting in fractions: the
   solver weighs fractions far faster, and the bot carries out only the near term before it plans again. By default that
