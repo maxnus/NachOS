@@ -548,7 +548,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     and not how many: a count that grows over time is still several terms. The factors are coefficients, no variable
     more, and an interval of a factor of 0 has none. On the growing reward from 0:00, 3:00 and 6:00, each proven within
     30 s: 2.2, 4.6 and 2.2 s as it is and with a factor of 1 alike, 1.9, 4.0 and 2.0 s with every curve times `1 +
-    seconds / 600`.
+    seconds / 600`. And a term may hold a `count_factor` beside it (the owner, the same day: "let's add count_factor
+    too"): the counts its curve's pieces end at times what the function gives, each unit's weight staying what it is, so
+    that more units are wanted over time where `time_factor` makes the same units worth more. It changes nothing in a
+    curve of one piece, which ends at no count. Never negative either, 0 allowed, and `count_factor_at` raises beside
+    `time_factor_at`, which `factor_at` now is. Coefficients again, no variable more. Of a term's parts its groups and
+    `requires` alone have no function of time: a step in either is two terms, and a function giving a group would hide
+    the unit types a reward values. On the growing reward from 0:00, 3:00 and 6:00, each proven within 30 s: 2.3, 4.7
+    and 2.2 s as it is and with a factor of 1 alike, 2.2, 3.7 and 2.7 s with every curve's counts times `0.5 + seconds /
+    600`.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never

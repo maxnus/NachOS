@@ -765,25 +765,28 @@ class PlanProgram:
         return objective
 
     def _worth_of(self, term: RewardTerm) -> RowExpression:
-        """What `term`'s units are worth a second at each interval's end, its curve times the term's factor then,
-        nothing where that is 0: their count times the weight where it has one group and one piece, which runs on, and
-        else a variable an interval of a factor above 0 under each piece's line of each group's count, which the reward
-        raises to the lowest. That is the curve of the smallest count, since no piece of a term of several groups
-        falls."""
+        """What `term`'s units are worth a second at each interval's end, its curve times the term's time factor
+        then, its pieces ending at their counts times its count factor then, nothing where the time factor is 0: their
+        count times the weight where it has one group and one piece, which runs on, and else a variable an interval of
+        a time factor above 0 under each piece's line of each group's count, which the reward raises to the lowest.
+        That is the curve of the smallest count, since no piece of a term of several groups falls."""
         intervals = self._interval_count
         ends = [self._state.time + GameTime(seconds=edge) for edge in self._edges[1:].tolist()]
-        factors = np.array([term.factor_at(time) for time in ends])
+        factors = np.array([term.time_factor_at(time) for time in ends])
         counted = factors > 0
         worth = RowExpression(intervals)
         if not counted.any():
             return worth
+        count_factors = np.array(
+            [term.count_factor_at(time) if is_counted else 1.0 for time, is_counted in zip(ends, counted, strict=True)]
+        )
         counts = [self._count_of(group) for group in term.groups]
         if len(counts) == 1 and len(term.segments) == 1 and not term.requires:
             return worth.add_expression(counts[0], factors * term.segments[0].weight)
         values = self._program.add_variables(int(counted.sum()), lower=-math.inf)
         worth.add(values, np.eye(intervals)[:, counted])
-        worth_before = 0.0
-        count_before = 0.0
+        worth_before = np.zeros(intervals)
+        count_before = np.zeros(intervals)
         for segment in term.segments:
             for count in counts:
                 under_line = RowExpression(intervals).add_expression(worth)
@@ -791,10 +794,14 @@ class PlanProgram:
                 at_most = (worth_before - segment.weight * count_before) * factors
                 self._program.constrain(under_line.selected(counted), upper=at_most[counted])
             if math.isfinite(segment.end_count):
-                worth_before += segment.weight * (segment.end_count - count_before)
-                count_before = segment.end_count
+                ends_at = segment.end_count * count_factors
+                worth_before = worth_before + segment.weight * (ends_at - count_before)
+                count_before = ends_at
         if term.requires:
-            most_worth = _worth_at(term.segments, self._most_counted_by(term))
+            most_counted = self._most_counted_by(term)
+            most_worth = np.array(
+                [_worth_at(term.segments, most_counted, count_factor=factor) for factor in count_factors.tolist()]
+            )
             for upgrade in term.requires:
                 not_done = RowExpression(intervals).add_expression(worth)
                 not_done.add_expression(self._upgrade_done(upgrade, at_end=True), -most_worth * factors)
@@ -939,13 +946,14 @@ def _limits_by_counted_type(
     return limits
 
 
-def _worth_at(segments: Sequence[CurveSegment], count: float) -> float:
-    """What `segments` give `count` a second, nothing with no segments."""
+def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:
+    """What `segments` give `count` a second, each piece ending at its count times `count_factor`."""
     worth = 0.0
     count_before = 0.0
     for position, segment in enumerate(segments):
         is_last = position == len(segments) - 1
-        count_within = count if is_last else min(count, segment.end_count)
+        ends_at = segment.end_count * count_factor if math.isfinite(segment.end_count) else math.inf
+        count_within = count if is_last else min(count, ends_at)
         worth += segment.weight * max(count_within - count_before, 0.0)
         count_before = max(count_before, count_within)
     return worth
