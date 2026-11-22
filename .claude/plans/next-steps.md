@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-18:
+As of 2026-11-22:
 
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
@@ -55,9 +55,12 @@ As of 2026-11-18:
   reads over an area, which read at points 0.1 apart by default, and a unit's `speed` is gone, `speed_with(buffs=False,
   on_creep=False)` now, beside the new `current_speed`, which counts creep and buffs where the unit stands. AvocaDOS #99
   takes it.
-- **Since 0.8.0**, on main: the buff a viper's Consume puts on the structure it drains, `VIPER_CONSUMED`. It had ended
-  AvocaDOS's AI Arena match 5118204 (AvocaDOS #98): upgrade inference read an enemy unit's buffs, and `Unit.buffs`
-  raised `UncuratedIdError`. Proposed: 0.8.1, a fix alone, which a bot takes with no change.
+- **0.8.1 is out** (2026-11-18, from 8c42dbb), with #257: the buff a viper's Consume puts on the structure it drains,
+  `VIPER_CONSUMED`, which had ended AvocaDOS's AI Arena match 5118204 (AvocaDOS #98) when upgrade inference read an
+  enemy unit's buffs and `Unit.buffs` raised `UncuratedIdError`. AvocaDOS #104 takes it.
+- **Since 0.8.1**, in #258: `py.typed`, Python 3.14 in CI, a creep tumor's own burrow as `CREEP_TUMOR_BURROW`,
+  and the collapsible towers' buffs skipped, the first of "Toward 1.0" (Next). Proposed: 0.8.2, which a bot takes with
+  no change.
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -357,6 +360,16 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **Toward 1.0** (proposed 2026-11-22, when the owner asked whether NachOS was ready; not decided): first, in #258,
+  `py.typed` (mypy read none of NachOS's annotations), Python 3.14 in CI, and the ids AI Arena's replays had shown
+  raising, a creep tumor's own burrow and the collapsible towers' buffs, beside which ten playbacks every step of five
+  games, three of them Zerg against Zerg, found no id left out. Still to plan with the owner, one at a time: a quiet
+  period on a 1.0.0rc1 with no breaking change, since five of the nine releases since 0.1.0 broke a bot's code;
+  whether an uncurated id should still end a game, and a wider sweep of the season's replays of every race for them;
+  what 1.0 promises, `protocol`, `testing` and the extensions included or not, and how a rename goes after it; semita,
+  alpha and required as `>=0.2.1` with no bound; `needs_power` and the self types for energy, cargo and detection
+  (section 1), which would break a bot if they came after; and a bot of another race than Terran exercising the
+  race-specific reads.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
      `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
@@ -652,18 +665,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   fog-off view makes copies of its own. Probably settled by #192, since `State.actions` reads tags through
   `get_by_tag`, a tag never reported reading as not reported: confirm with one `run_replay(..., disable_fog=True)` and
   an `OwnActionEvent` handler, which raised `UnknownTagError` before, then drop this item.
-- **Ids AI Arena's replays report that the curated ids leave out**, found playing back matches 4805282 and 4846375
-  raw while curating the parasitic bomb's dummy, and 40 more of the season with the fog off, 4 steps a turn
-  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: ability 1662,
-  `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by itself, which `OwnUnit.orders` raises on
-  for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42 (17 of the 42), each worn by every collapsible
-  tower of one kind, in the fog, in the first observation of a playback with the fog off, and never again, nor ever
-  in either player's own view: `CollapsibleRockTowerConjoinedSearch` by `CollapsibleRockTower`,
-  `CollapsibleRockTowerRampDiagonalConjoinedSearch` by `CollapsibleRockTowerDiagonal`,
-  `CollapsibleTerranTowerConjoinedSearch` by `CollapsibleTerranTower` and
-  `CollapsibleTerranTowerRampDiagonalConjoinedSearch` by `CollapsibleTerranTowerDiagonal` (4686890 and 4750796, on
-  MagannathaAIE, every 2 steps). `Api.all_units` shows that first report visible, so its towers' `buffs` raise in the
-  first turn. The 40 reported no unit type the curated ids leave out.
 
 ## 1. Waiting until something needs them
 
