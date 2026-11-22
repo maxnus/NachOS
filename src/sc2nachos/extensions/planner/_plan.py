@@ -51,6 +51,11 @@ class Plan:
     """The vespene expected in stock at each of `times`, before what starts there is paid."""
     counts: Mapping[UnitTypeId, tuple[float, ...]]
     """The number of each unit type the planner considered expected alive at each of `times`, done and survived."""
+    miners: tuple[float, ...]
+    """The workers the plan has at mineral fields in each bucket, the one from each of `times` but the last."""
+    collectors: tuple[float, ...]
+    """The workers the plan has at refineries in each bucket, the one from each of `times` but the last: what a bot
+    holds its own at, the first bucket's now."""
     objective: float
     """What the reward makes of the plan."""
     gap: float

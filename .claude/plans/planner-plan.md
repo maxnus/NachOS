@@ -412,6 +412,29 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     Phase 1's exit (Open 7) with it: the reference is proven in 1.4 to 2.5 s over 5 minutes, and with an unlock
     fraction of 1 in 2.2 to 4.4 s over 10.
 
+13. **A plan says how its workers split, and moving one costs time** (the owner, 2026-11-22: "we definitely want to
+    report this in the plan and we definitely want to have an interruption when reassigning a worker, before the new
+    income kicks in. Something like 2 or 3s would be enough"). The split between minerals and vespene was the plan's
+    choice in each bucket all along, moved for nothing, and a `Plan` did not hold it. It holds `miners` and
+    `collectors` now, one number a bucket, and `Economy.reassignment_time`, 3 seconds by default (assumed, the
+    higher of the owner's two), is how long a worker moved to a refinery collects nothing and one moved from a
+    refinery neither mines nor builds; 0 moves them for nothing as before, and adds no variable. Every rise of the
+    collectors in a tier of rates, and every fall of them in all, is a move, from `GameState.vespene_collectors` on,
+    which `Planner.game_state` reads as the workers the game counts as assigned to the refineries; a new SCV's first
+    walk to a refinery is one too, a new SCV's to a field is not, and the fall of those lost is not. A move made at
+    a bucket's start runs through the buckets its time spans, so it costs its seconds on any grid. A fall that what is
+    now forces, fewer SCVs left beside the builders under way than collect, costs nothing, so that a plan starting
+    nothing more stays possible. Measured on the planner's defaults, `--time-limit 30`, side by side with the
+    reference economy's time set to 0 by a script outside the package: `reference` proven in 1.8 to 2.1 s, with 0 in
+    1.4 to 2.5, worth 0.26 to 0.34% less; `replans` in 1.6 to 3.7 s, 21.2 in all, with 0 in 1.5 to 4.7, 23.3 in all,
+    worth 0.00 to 0.13% less; `items` all twelve in 2.8 to 18.0 s, 114.0 in all, with 0 in 1.9 to 20.4, 112.2 in
+    all, worth 1.08 to 1.24% less from a game's start and 0.14 to 0.37% less from mid-game. So the solve is no slower
+    beyond the noise, and a plan is worth less by about what 3 seconds later vespene delays. The reference plan and the
+    wide one from 3:00 split their workers as before: each refinery takes three from when it is done and keeps them.
+    Open: the 3 seconds are assumed, not measured in game; where what a worker would bring buys nothing before the
+    horizon a plan leaves it idle, as in its last one or two buckets, so a bot reads the first bucket's `collectors`
+    and has the rest mine; and whether a new SCV's walk to a field should cost time too is Open 10's.
+
 ## Risks
 
 - **Solve time on the full model.** A time limit with the incumbent, the old plan kept when nothing feasible comes

@@ -57,6 +57,11 @@ class Economy:
     has (corpus)."""
     geysers_per_new_base: int = 2
     """The geysers a new command center brings."""
+    reassignment_time: GameTime = GameTime(seconds=3)
+    """How long a worker moved to a refinery collects nothing, and one moved from a refinery neither mines nor builds,
+    by default 3 seconds (assumed). The planner takes every rise and fall in the number of workers collecting vespene
+    for such a move, a new SCV's first walk to a refinery too, but not the fall of those lost; with 0 a move costs
+    nothing."""
     walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
     """How long an SCV walks to build a structure of a unit type, and walks back after: what it returns, or where it
     returns `None`, or is `None`, 10 seconds to a command center and 6 to any other. A build an SCV has not begun, or
@@ -76,6 +81,8 @@ class Economy:
             raise ValueError(
                 f"mule_minerals_per_orbital_second must not be negative, not {self.mule_minerals_per_orbital_second}"
             )
+        if self.reassignment_time < GameTime.ZERO:
+            raise ValueError(f"reassignment_time must not be negative, not {self.reassignment_time}")
         if self.mineral_fields_per_new_base < 0 or self.geysers_per_new_base < 0:
             raise ValueError(
                 f"a new base's fields and geysers must not be negative, not {self.mineral_fields_per_new_base} and "

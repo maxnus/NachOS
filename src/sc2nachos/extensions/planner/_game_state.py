@@ -93,6 +93,8 @@ class GameState:
     """The mineral fields left at bases with a finished townhall of this player's."""
     refineries_with_vespene: int = 0
     """This player's finished refineries with vespene left."""
+    vespene_collectors: int = 0
+    """The workers collecting vespene now: those the game counts as assigned to those refineries."""
     free_geysers: int = 0
     """The geysers without a gas building at bases with a finished townhall of this player's, less one for each refinery
     an SCV is on its way to build."""
@@ -100,7 +102,7 @@ class GameState:
 
 def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
     """The state of the game `api` plays now, its unit types read by `model`."""
-    counts, refineries_with_vespene = _counts_of_own_units(api, model)
+    counts, refineries_with_vespene, vespene_collectors = _counts_of_own_units(api, model)
     fields, free_geysers = _bases_of(api)
     unit_completions, occupations, worker_builds = _production_of(api, model)
     refineries_not_begun = sum(
@@ -121,16 +123,18 @@ def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
         worker_builds=tuple(build for build, _ in worker_builds),
         mineral_fields=fields,
         refineries_with_vespene=refineries_with_vespene,
+        vespene_collectors=vespene_collectors,
         free_geysers=max(free_geysers - refineries_not_begun, 0),
     )
 
 
-def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[UnitTypeId, int], int]:
-    """The number of this player's finished units counted as each type, and of its finished refineries with vespene
-    left. Those known alive count, an SCV inside a refinery and a marine in a bunker among them, which the last
-    observation leaves out (in game)."""
+def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[UnitTypeId, int], int, int]:
+    """The number of this player's finished units counted as each type, of its finished refineries with vespene left,
+    and of the workers assigned to those. Those known alive count, an SCV inside a refinery and a marine in a bunker
+    among them, which the last observation leaves out (in game)."""
     counts: dict[UnitTypeId, int] = {}
     refineries_with_vespene = 0
+    vespene_collectors = 0
     for unit in api.known_units.own:
         if not unit.is_complete:
             continue
@@ -138,7 +142,8 @@ def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[Uni
         counts[counted] = counts.get(counted, 0) + 1
         if UnitType.GasBuilding.includes(unit) and unit.vespene_contents > 0:
             refineries_with_vespene += 1
-    return counts, refineries_with_vespene
+            vespene_collectors += unit.assigned_harvesters
+    return counts, refineries_with_vespene, vespene_collectors
 
 
 def _bases_of(api: Api[object]) -> tuple[int, int]:

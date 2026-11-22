@@ -20,8 +20,9 @@ so:
 - `losses`: its run12, losing army units at 0.002 a second, or workers at 0.001.
 - `discount`: its run2's discount, the linear reward at each half-life given by `--half-lives`.
 - `replans`: a plan made in the middle of a game, as a bot asks for most of its plans: from two made-up states, two
-  bases at 3:00 and at 6:00 with units in production, with the reference's grid, windows and walks, at each half-life,
-  for a reward on marines, marauders and medivacs that never saturates, each count still worth something.
+  bases at 3:00 and at 6:00 with units in production and three SCVs at each refinery, with the reference's grid,
+  windows and walks, at each half-life, for a reward on marines, marauders and medivacs that never saturates, each
+  count still worth something.
 - `items`: the item set a wide reward brings, 38 items where the toy's has 14: the reward of `replans` and ten more
   army types, and eight upgrades, from the game's start and from the states of `replans`, with the reference's grid,
   windows and walks, at each half-life.
@@ -281,6 +282,7 @@ def _mid_game_states() -> dict[str, GameState]:
             ),
             mineral_fields=16,
             refineries_with_vespene=1,
+            vespene_collectors=3,
             free_geysers=3,
         ),
         "6:00": GameState(
@@ -306,14 +308,19 @@ def _mid_game_states() -> dict[str, GameState]:
             occupations=tuple(occupation for _, occupation in at_6_minutes),
             mineral_fields=16,
             refineries_with_vespene=2,
+            vespene_collectors=6,
             free_geysers=2,
         ),
     }
 
 
-def _walking(walks: Mapping[UnitTypeId, float]) -> Economy:
-    """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others."""
-    return Economy(walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)))
+def _walking(walks: Mapping[UnitTypeId, float], *, reassignment_time: GameTime = GameTime.ZERO) -> Economy:
+    """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others, and with
+    `reassignment_time`, by default none as in the toy, which moves a worker to or from a refinery for nothing."""
+    return Economy(
+        reassignment_time=reassignment_time,
+        walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)),
+    )
 
 
 def _solve_and_print(
@@ -430,10 +437,10 @@ def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameT
 
 
 def _reference_economy(model: TerranModel) -> Economy:
-    """The reference configuration's economy: the default, but with a walk of 25 seconds to a command center, and of 6
-    to any other structure."""
+    """The reference configuration's economy: the default, its reassignment time too, but with a walk of 25 seconds to
+    a command center, and of 6 to any other structure."""
     walks = {unit_type: _REFERENCE_WALK_SECONDS for unit_type in model.unit_items} | {UnitTypeId.COMMAND_CENTER: 25.0}
-    return _walking(walks)
+    return _walking(walks, reassignment_time=Economy().reassignment_time)
 
 
 def _half_life_label(half_life: GameTime | None) -> str:

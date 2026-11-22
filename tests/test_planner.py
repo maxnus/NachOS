@@ -117,6 +117,8 @@ _A_PLAN_OF_ONE_BARRACKS = Plan(
     minerals=(),
     vespene=(),
     counts={},
+    miners=(),
+    collectors=(),
     objective=0.0,
     gap=0.0,
     is_optimal=True,
@@ -808,6 +810,7 @@ class TestEconomy:
             {"mule_minerals_per_orbital_second": -1.0},
             {"mineral_fields_per_new_base": -1},
             {"geysers_per_new_base": -1},
+            {"reassignment_time": GameTime(seconds=-1)},
         ],
         ids=[
             "a rate above the one before",
@@ -815,6 +818,7 @@ class TestEconomy:
             "a negative MULE rate",
             "negative fields",
             "negative geysers",
+            "a negative reassignment time",
         ],
     )
     def test_a_rate_above_the_one_before_or_a_negative_number_raises(self, arguments: dict[str, Any]) -> None:
@@ -873,8 +877,38 @@ class TestEconomy:
     def test_a_worker_past_the_collecting_rates_collects_nothing(
         self, rates: tuple[float, ...], marauder_start: float
     ) -> None:
-        """No vespene and one refinery, on 1-second buckets: the marauder's 25 vespene come at 9 and 14 seconds,
-        collected at 2.7 and 1.8 a second."""
+        """No vespene and one refinery with three SCVs at it, on 1-second buckets: the marauder's 25 vespene come at 9
+        and 14 seconds, collected at 2.7 and 1.8 a second."""
+        state = _game_start(
+            minerals=500.0,
+            counts={
+                UnitTypeId.SCV: 12,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.BARRACKS: 1,
+                UnitTypeId.TECH_LAB_BARRACKS: 1,
+                UnitTypeId.REFINERY: 1,
+            },
+            refineries_with_vespene=1,
+            vespene_collectors=3,
+            free_geysers=1,
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARAUDER: 1.0}),
+            horizon_seconds=40,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=Economy(vespene_per_collector_second=rates),
+        )
+        assert _start_seconds(plan, UnitTypeId.MARAUDER) == [marauder_start]
+
+    @pytest.mark.parametrize(
+        ("reassignment_seconds", "marauder_start"), [(3.0, 12.0), (2.0, 11.0), (0.0, 9.0)], ids=["3 s", "2 s", "none"]
+    )
+    def test_a_worker_moved_to_a_refinery_collects_nothing_for_the_reassignment_time(
+        self, reassignment_seconds: float, marauder_start: float
+    ) -> None:
+        """No vespene and one refinery with no SCV at it, on 1-second buckets: the marauder's 25 vespene, 9 seconds'
+        collecting of three SCVs, come that long after they got there."""
         state = _game_start(
             minerals=500.0,
             counts={
@@ -892,9 +926,91 @@ class TestEconomy:
             Reward(weights={UnitTypeId.MARAUDER: 1.0}),
             horizon_seconds=40,
             grid=TimeGrid.uniform(GameTime(seconds=1)),
-            economy=Economy(vespene_per_collector_second=rates),
+            economy=Economy(reassignment_time=GameTime(seconds=reassignment_seconds)),
         )
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == [marauder_start]
+
+    @pytest.mark.parametrize(("reassignment_seconds", "marine_start"), [(3.0, 19.0), (0.0, 16.0)], ids=["3 s", "none"])
+    def test_a_worker_moved_from_a_refinery_mines_nothing_for_the_reassignment_time(
+        self, reassignment_seconds: float, marine_start: float
+    ) -> None:
+        """No minerals and the only three SCVs at a refinery, on 1-second buckets: the marine's 50 minerals, 16
+        seconds' mining of the three, come that long after they left it."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=3.0,
+            counts={
+                UnitTypeId.SCV: 3,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.BARRACKS: 1,
+                UnitTypeId.REFINERY: 1,
+            },
+            refineries_with_vespene=1,
+            vespene_collectors=3,
+            free_geysers=1,
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=40,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=Economy(reassignment_time=GameTime(seconds=reassignment_seconds)),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
+
+    def test_a_plan_holds_how_many_workers_mine_and_collect_in_each_bucket(self) -> None:
+        """One refinery and nothing to start but marauders, on 1-second buckets, with no reassignment time: until the
+        first marauder starts, each stock rises by what the plan's miners and collectors bring in."""
+        economy = Economy(reassignment_time=GameTime.ZERO)
+        state = _game_start(
+            minerals=0.0,
+            counts={
+                UnitTypeId.SCV: 12,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.BARRACKS: 1,
+                UnitTypeId.TECH_LAB_BARRACKS: 1,
+                UnitTypeId.REFINERY: 1,
+            },
+            refineries_with_vespene=1,
+            free_geysers=1,
+        )
+        plan = _best_plan(
+            state,
+            Reward(weights={UnitTypeId.MARAUDER: 1.0}),
+            horizon_seconds=40,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=economy,
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0, UnitTypeId.BARRACKS: 0},
+        )
+        first_start = int(_start_seconds(plan, UnitTypeId.MARAUDER)[0])
+        assert first_start > 0
+        assert len(plan.miners) == len(plan.collectors) == len(plan.times) - 1
+        for bucket in range(first_start):
+            mined = plan.miners[bucket] * economy.minerals_per_miner_second[0]
+            collected = plan.collectors[bucket] * economy.vespene_per_collector_second[0]
+            assert plan.minerals[bucket + 1] - plan.minerals[bucket] == pytest.approx(mined)
+            assert plan.vespene[bucket + 1] - plan.vespene[bucket] == pytest.approx(collected)
+            assert plan.miners[bucket] + plan.collectors[bucket] <= 12 + 1e-6
+
+    def test_a_plan_is_found_where_fewer_scvs_are_left_than_the_state_has_collecting(self) -> None:
+        """Six collecting by the state, of three SCVs that are being lost, one of them to build a supply depot: the
+        collectors fall as they must, for no reassignment that nothing could pay."""
+        state = _game_start(
+            counts={UnitTypeId.SCV: 3, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1, UnitTypeId.REFINERY: 1},
+            worker_builds=(
+                WorkerBuild(
+                    unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=20), builder_walks_there=False
+                ),
+            ),
+            mineral_fields=0,
+            refineries_with_vespene=1,
+            vespene_collectors=6,
+        )
+        plan = _best_plan(
+            state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=40, loss_rates={UnitTypeId.SCV: 0.05}
+        )
+        assert plan.collectors[0] <= 2.0 + 1e-6
 
     @pytest.mark.parametrize(
         ("mule_rate", "marine_starts"), [(225 / (50 / 0.7875), [14.0]), (0.0, [])], ids=["MULEs", "no MULEs"]
@@ -1134,6 +1250,7 @@ def _main_base_at(step: int, *, morphing: bool = False) -> sc2api_pb2.ResponseOb
             at=(main_x + geyser_x, main_y + geyser_y),
             build_progress=1.0,
             vespene_contents=2250,
+            assigned_harvesters=3,
         ),
         make_unit(
             _BUILDING_SCV_TAG,
@@ -1252,6 +1369,11 @@ class TestGameState:
         (state,) = _states_of(_main_base_at(0))
 
         assert (state.mineral_fields, state.free_geysers, state.refineries_with_vespene) == (8, 1, 1)
+
+    def test_it_reads_the_workers_assigned_to_its_refineries_as_those_collecting(self) -> None:
+        (state,) = _states_of(_main_base_at(0))
+
+        assert state.vespene_collectors == 3
 
     def test_a_refinery_an_scv_walks_to_build_takes_its_geyser(self) -> None:
         observation = _main_base_at(0)
