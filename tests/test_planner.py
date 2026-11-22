@@ -529,11 +529,11 @@ class TestKnownPlans:
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0, 0.0, 18.0, 18.0]
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == []
 
-    def test_a_floor_buys_what_it_wants_by_its_time(self) -> None:
+    def test_a_weight_up_to_a_count_since_a_time_buys_the_count_by_that_time(self) -> None:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        floor = RewardTerm.at_least(UnitTypeId.MARINE, [(GameTime(seconds=36), 2.0)], weight=10.0)
+        floor = RewardTerm.weight(UnitTypeId.MARINE, 10.0, end_count=2.0, since=GameTime(seconds=36))
 
         without = _best_plan(state, Reward.weighted({UnitTypeId.SUPPLY_DEPOT: 1.0}), horizon_seconds=40)
         held = _best_plan(state, Reward.weighted({UnitTypeId.SUPPLY_DEPOT: 1.0}, terms=[floor]), horizon_seconds=40)
@@ -549,7 +549,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
             mineral_fields=0,
         )
-        curve = [CurveSegment(weight=1.0, end=3), CurveSegment(weight=-0.1)]
+        curve = [CurveSegment(weight=1.0, end_count=3), CurveSegment(weight=-0.1)]
         plan = _best_plan(state, Reward.weighted({UnitTypeId.MARINE: curve}), horizon_seconds=40)
         assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 3
 
@@ -563,7 +563,7 @@ class TestKnownPlans:
             mineral_fields=0,
         )
         by_weight = Reward.weighted({UnitTypeId.MARINE: 1.0})
-        by_curve = Reward.weighted({UnitTypeId.MARINE: [CurveSegment(weight=1.0, end=3)]})
+        by_curve = Reward.weighted({UnitTypeId.MARINE: [CurveSegment(weight=1.0, end_count=3)]})
         weighted, curved = (_best_plan(state, reward, horizon_seconds=40) for reward in (by_weight, by_curve))
 
         assert curved.objective == pytest.approx(weighted.objective)
@@ -1341,10 +1341,10 @@ class TestReward:
         "segments",
         [
             [],
-            [CurveSegment(weight=1.0, end=10), CurveSegment(weight=2.0)],
+            [CurveSegment(weight=1.0, end_count=10), CurveSegment(weight=2.0)],
             [
-                CurveSegment(weight=1.0, end=10),
-                CurveSegment(weight=0.5, end=5),
+                CurveSegment(weight=1.0, end_count=10),
+                CurveSegment(weight=0.5, end_count=5),
                 CurveSegment(weight=0.0),
             ],
         ],
@@ -1355,14 +1355,14 @@ class TestReward:
             Reward.weighted({UnitTypeId.MARINE: segments})
 
     def test_the_last_segments_count_is_ignored(self) -> None:
-        Reward.weighted({UnitTypeId.MARINE: [CurveSegment(weight=1.0, end=30), CurveSegment(weight=0.0, end=0)]})
+        Reward.weighted(
+            {UnitTypeId.MARINE: [CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.0, end_count=0)]}
+        )
 
     def test_counts_not_in_order_of_time_raise(self) -> None:
         later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]
         with pytest.raises(ValueError, match="order of time"):
             RewardTerm.covering({}, later_first, value=1.0)
-        with pytest.raises(ValueError, match="order of time"):
-            RewardTerm.at_least(UnitTypeId.MARINE, later_first, weight=1.0)
         with pytest.raises(ValueError, match="order of time"):
             RewardTerm(
                 units={UnitTypeId.MARINE: 1.0},
@@ -1383,7 +1383,7 @@ class TestReward:
             {UnitTypeId.MARINE: 1.0, UnitTypeId.MEDIVAC: [CurveSegment(weight=1.0)]},
             terms=[
                 RewardTerm.covering({UnitTypeId.VIKING: 1.0}, [], value=1.0),
-                RewardTerm.at_least(UnitTypeId.BUNKER, [], weight=1.0),
+                RewardTerm.weight(UnitTypeId.BUNKER, 1.0, end_count=2.0),
             ],
         )
         assert reward.unit_types == {UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.VIKING, UnitTypeId.BUNKER}

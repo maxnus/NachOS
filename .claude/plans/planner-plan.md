@@ -494,17 +494,20 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     built; and a rule is one comprehension. `fluid_after` and `walk_time` are callables because each answers for
     every item without changing which items there are.
 
-    **A reward on units is a list of terms** (the owner, the same day: "ideally we only have one generic way to
-    specify unit weights and provide helpers for simpler cases"). A `RewardTerm` holds `units`, how much one unit
-    of each type counts, and `curves`, the concave curve their count is worth by from each game time on. A plain
-    weight, a curve, a floor and a coverage were four spellings of it, and a weight that changes at a game time
-    the one it lacked. `Reward.weights`, `Floor` and `Coverage` are gone: `Reward.terms` holds the terms, and
-    `RewardTerm.weight`, `.curve`, `.at_least` and `.covering` build the four, with `Reward.weighted` for a
-    mapping of weights and curves. Terms add up, so a type may count in several, and one reward has many
-    spellings; a term whose curves never have more than one piece costs the program nothing, and any other a
-    variable an interval. A weight may be negative, and a curve's weights must fall. A floor now pays for the
-    units it has, where it charged for those it lacked, which moves a plan's `objective` by a constant and no
-    plan. `upgrade_weights` stay a mapping, an upgrade being done or not.
+    **A reward on units is a list of terms** (the owner, the same day: "ideally we only have one generic way to specify
+    unit weights and provide helpers for simpler cases"). A `RewardTerm` holds `units`, how much one unit of each type
+    counts, and `curves`, the concave curve their count is worth by from each game time on. A plain weight, a curve, a
+    floor and a coverage were four spellings of it, and a weight that changes at a game time the one it lacked.
+    `Reward.weights`, `Floor` and `Coverage` are gone: `Reward.terms` holds the terms, and `RewardTerm.weight`, `.curve`
+    and `.covering` build the usual ones, with `Reward.weighted` for a mapping of weights and curves. A floor is
+    `RewardTerm.weight` with an `end_count` and a `since`, no helper of its own (the owner, the same day), one step of
+    it: a count that changes more than once is a `RewardTerm` written out. The count a segment ends at is its
+    `end_count`, `end` reading as a time (the owner, the same day). Terms add up, so a type may count in several, and
+    one reward has many spellings; a term whose curves never have more than one piece costs the program nothing, and any
+    other a variable an interval. A weight may be negative, and a curve's weights must fall. A floor now pays for the
+    units it has, where it charged for those it lacked, which moves a plan's `objective` by a constant and no plan.
+    `upgrade_weights` stay a mapping, an upgrade being done or not. The `enemy` case of the benchmark, the same twice
+    over: 3.4, 2.9 and 7.0 s as terms, where a coverage's capped variable took 3.9, 3.5 and 5.0.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never

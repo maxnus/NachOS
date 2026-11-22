@@ -18,7 +18,7 @@ class CurveSegment:
 
     weight: float
     """What each unit of the piece is worth a second."""
-    end: float = math.inf
+    end_count: float = math.inf
     """The count the piece ends at, where the next begins; the last piece runs on, whatever it says."""
 
 
@@ -48,21 +48,23 @@ class RewardTerm:
             _check_concave(self.units, segments)
 
     @classmethod
-    def weight(cls, unit_type: UnitTypeId, weight: float) -> Self:
-        """Each unit of `unit_type` is worth `weight` a second, however many there are and whenever."""
-        return cls.curve(unit_type, [CurveSegment(weight=weight)])
+    def weight(
+        cls, unit_type: UnitTypeId, weight: float, *, end_count: float = math.inf, since: GameTime = GameTime.ZERO
+    ) -> Self:
+        """Each unit of `unit_type` is worth `weight` a second, however many there are. With an `end_count`, each unit
+        up to that count is, and none past it anything: a count the bot wants, which a plan may fall short of. From
+        the game time `since` on, the game's start by default, and nothing before it."""
+        if math.isinf(end_count):
+            return cls.curve(unit_type, [CurveSegment(weight=weight)], since=since)
+        return cls.curve(
+            unit_type, [CurveSegment(weight=weight, end_count=end_count), CurveSegment(weight=0.0)], since=since
+        )
 
     @classmethod
-    def curve(cls, unit_type: UnitTypeId, segments: Sequence[CurveSegment]) -> Self:
-        """The units of `unit_type` are worth what `segments` give their count a second, more of them less each,
-        whenever."""
-        return cls(units={unit_type: 1.0}, curves=[(GameTime.ZERO, segments)])
-
-    @classmethod
-    def at_least(cls, unit_type: UnitTypeId, counts: Sequence[tuple[GameTime, float]], *, weight: float) -> Self:
-        """A count of `unit_type` wanted at least, from each game time of `counts` on: each unit up to it is worth
-        `weight` a second, and none past it anything."""
-        return cls(units={unit_type: 1.0}, curves=_capped_at(counts, weight=weight))
+    def curve(cls, unit_type: UnitTypeId, segments: Sequence[CurveSegment], *, since: GameTime = GameTime.ZERO) -> Self:
+        """The units of `unit_type` are worth what `segments` give their count a second, more of them less each, from
+        the game time `since` on, the game's start by default, and nothing before it."""
+        return cls(units={unit_type: 1.0}, curves=[(since, segments)])
 
     @classmethod
     def covering(
@@ -165,7 +167,7 @@ def _capped_at(
 ) -> list[tuple[GameTime, Sequence[CurveSegment]]]:
     """From each game time of `counts` on, a curve worth `weight` for each unit up to the count, and nothing past it."""
     check_in_order_of_time(counts, "counts")
-    return [(time, (CurveSegment(weight=weight, end=count), CurveSegment(weight=0.0))) for time, count in counts]
+    return [(time, (CurveSegment(weight=weight, end_count=count), CurveSegment(weight=0.0))) for time, count in counts]
 
 
 def _check_concave(units: Mapping[UnitTypeId, float], segments: Sequence[CurveSegment]) -> None:
@@ -176,5 +178,5 @@ def _check_concave(units: Mapping[UnitTypeId, float], segments: Sequence[CurveSe
     for position, (earlier, later) in enumerate(zip(segments, segments[1:], strict=False), start=1):
         if later.weight > earlier.weight:
             raise ValueError(f"a curve of {names} is not concave: a weight of {later.weight} after {earlier.weight}")
-        if position < len(segments) - 1 and later.end <= earlier.end:
-            raise ValueError(f"a curve of {names} must count up: {later.end} after {earlier.end}")
+        if position < len(segments) - 1 and later.end_count <= earlier.end_count:
+            raise ValueError(f"a curve of {names} must count up: {later.end_count} after {earlier.end_count}")

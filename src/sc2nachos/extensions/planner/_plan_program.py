@@ -771,7 +771,7 @@ class PlanProgram:
         for piece in range(most_pieces):
             has_piece = np.array([len(curve) > piece for curve in curves])
             weights = np.array([curve[piece].weight if len(curve) > piece else 0.0 for curve in curves])
-            ends = np.array([curve[piece].end if len(curve) > piece else math.inf for curve in curves])
+            ends = np.array([curve[piece].end_count if len(curve) > piece else math.inf for curve in curves])
             under_line = RowExpression(intervals).add_expression(worth).add_expression(count, -weights)
             at_most = worth_before - weights * count_before
             self._program.constrain(under_line.selected(has_piece), upper=at_most[has_piece])

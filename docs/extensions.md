@@ -215,7 +215,7 @@ class ThreatMap:
   @api.on(TurnEvent)
   def replan(event: TurnEvent) -> None:
       if api.step % 448 == 0:
-          marines = [CurveSegment(weight=1.0, end=30), CurveSegment(weight=0.3)]
+          marines = [CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.3)]
           reward = Reward.weighted({UnitTypeId.MARINE: marines}, half_life=GameTime(seconds=240))
           plan = api.extensions.planner.plan_now(reward)
   ```
@@ -223,14 +223,14 @@ class ThreatMap:
   What the bot supplies is the reward, summed a second at a time over the horizon and discounted by its `half_life`.
   What units are worth is a list of `terms`, which add up. A `RewardTerm` counts some unit types together, each unit for
   what its `units` says, and gives their count a concave curve: a list of `CurveSegment`, each a `weight` for every unit
-  up to the count it ends at, so that more of them are worth less each and a plan buys a mix rather than only the best
-  type for its cost. Which curve holds may change at game times, so a term says what is worth having from when. Its
-  classmethods build the usual terms: `RewardTerm.weight(unit_type, weight)` for one worth of every unit of a type,
-  `RewardTerm.curve(unit_type, segments)`, `RewardTerm.at_least(unit_type, counts, weight=...)` for a count wanted from
-  each game time on, each unit up to it worth the weight, and `RewardTerm.covering(effectiveness, enemy_counts,
-  value=...)` for the enemy units the bot expects from when, how much of one each own type covers and what one covered
-  is worth. `Reward.weighted({unit_type: weight})` is a reward of a term for each type, a number or a curve, and takes
-  more `terms` beside. A weight may be negative, for a unit a plan should make only where something else needs it, and a
+  up to its `end_count`, so that more of them are worth less each and a plan buys a mix rather than only the best type
+  for its cost. Which curve holds may change at game times, so a term says what is worth having from when. Its
+  classmethods build the usual terms: `RewardTerm.weight(unit_type, weight)` for one worth of every unit of a type, with
+  `end_count=...` for each unit up to a count the bot wants and none past it, and `since=...` for a game time it counts
+  from; `RewardTerm.curve(unit_type, segments)`; and `RewardTerm.covering(effectiveness, enemy_counts, value=...)` for
+  the enemy units the bot expects from when, how much of one each own type covers and what one covered is worth.
+  `Reward.weighted({unit_type: weight})` is a reward of a term for each type, a number or a curve, and takes more
+  `terms` beside. A weight may be negative, for a unit a plan should make only where something else needs it, and a
   curve's weights may not rise from piece to piece. Beside its terms a reward holds what each upgrade done is worth, and
   how long the state at the horizon counts for after it. Each mineral and each vespene left in stock at the horizon is
   worth the reward's `stock_weight` besides, 0.0001 by default: far less than what it could have bought under weights
