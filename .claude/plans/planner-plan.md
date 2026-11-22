@@ -498,8 +498,8 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     unit weights and provide helpers for simpler cases"). A `RewardTerm` holds `units`, how much one unit of each type
     counts, and `curves`, the concave curve their count is worth by from each game time on. A plain weight, a curve, a
     floor and a coverage were four spellings of it, and a weight that changes at a game time the one it lacked.
-    `Reward.weights`, `Floor` and `Coverage` are gone: `Reward.terms` holds the terms, and `RewardTerm.weight`, `.curve`
-    and `.covering` build the usual ones, with `Reward.weighted` for a mapping of weights and curves. A floor is
+    `Reward.weights`, `Floor` and `Coverage` are gone: `Reward.terms` holds the terms, and `RewardTerm.weight` and
+    `.curve` build the usual ones, with `Reward.weighted` for a mapping of weights and curves. A floor is
     `RewardTerm.weight` with an `end_count` and a `since`, no helper of its own (the owner, the same day), one step of
     it: a count that changes more than once is a `RewardTerm` written out. The count a segment ends at is its
     `end_count`, `end` reading as a time (the owner, the same day). Terms add up, so a type may count in several, and
@@ -507,7 +507,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     other a variable an interval. A weight may be negative, and a curve's weights must fall. A floor now pays for the
     units it has, where it charged for those it lacked, which moves a plan's `objective` by a constant and no plan.
     `upgrade_weights` stay a mapping, an upgrade being done or not. The `enemy` case of the benchmark, the same twice
-    over: 3.4, 2.9 and 7.0 s as terms, where a coverage's capped variable took 3.9, 3.5 and 5.0.
+    over: 3.4, 2.9 and 7.0 s as terms, where a coverage's capped variable took 3.9, 3.5 and 5.0. A coverage has no
+    helper either (the owner, the same day): it was never about enemies alone, so `weight` and `curve` take one unit
+    type or a mapping of several counted together. And a term may require upgrades (the owner, the same day),
+    `requires`, to be worth anything: marines worth 0.3 more with combat shield is a second term on marines that
+    requires it. It is a row an upgrade and interval, the term's worth at most what it could ever be worth times how
+    much of the upgrade is done, so a required upgrade starts whole throughout a plan: left fluid, a share of a combat
+    shield unlocked that share of what 200 marines would be worth, and from 0:00 the plan was worth 3365 where it is
+    3150 and never listed the upgrade. On the growing reward from 0:00, 3:00 and 6:00, each proven: 2.1, 4.2 and 2.4 s
+    with the term, 2.1, 4.4 and 2.1 without, 11 to 25 integers more. Such a term may hold no negative weight.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never

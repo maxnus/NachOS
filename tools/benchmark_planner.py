@@ -353,7 +353,7 @@ def _solve_and_print(
     """Plan for `reward` from `state`, the game's start if `None`, over `horizon` on `grid` within `time_limit` seconds,
     with the windows of whole starts `fluid_after` gives, as `Planner` takes it, by `economy`, with no walks if `None`,
     and `loss_rates`, and print what came of it."""
-    items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+    items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
     planned_from = _game_start() if state is None else state
     planned_by = _walking(_NO_WALKS) if economy is None else economy
     started = time.perf_counter()
@@ -511,7 +511,9 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
     """Covering each of the toy's enemies."""
     for name, scenario in _ENEMY_SCENARIOS.items():
         coverages = [
-            RewardTerm.covering(_EFFECTIVENESS_AGAINST[kind], counts, value=1.0) for kind, counts in scenario.items()
+            RewardTerm.weight(_EFFECTIVENESS_AGAINST[kind], 1.0, end_count=count, since=since)
+            for kind, counts in scenario.items()
+            for since, count in counts
         ]
         reward = Reward.weighted(_STANDING_WEIGHTS, terms=coverages, stock_weight=0.0)
         plan = _solve_and_print(

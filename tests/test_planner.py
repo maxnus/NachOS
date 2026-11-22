@@ -85,7 +85,7 @@ def _best_plan(
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
     `economy`, with `loss_rates`, `start_limits`, `max_ignored_overrun` and `unlock_fraction`, keeping to
     `previous_plan` for `hysteresis_bonus`, proven best."""
-    items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+    items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
     program = PlanProgram(
         items=items,
         model=_TERRAN_MODEL,
@@ -511,9 +511,9 @@ class TestKnownPlans:
         marines = [interval.end.units[UnitTypeId.MARINE] for interval in plan.intervals]
         assert marines == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
 
-    def test_covering_air_buys_marines_not_marauders(self) -> None:
-        """Marauders, which cannot shoot up, cover none of it. Two barracks with tech labs make two at a time, and over
-        40 seconds those started at 36 would not be done."""
+    def test_a_weight_on_types_counted_together_buys_those_that_count(self) -> None:
+        """Ten wanted against air, where a marine counts for one and a marauder, which cannot shoot up, for none. Two
+        barracks with tech labs make two at a time, and over 40 seconds those started at 36 would not be done."""
         state = _game_start(
             minerals=2000.0,
             vespene=1000.0,
@@ -522,9 +522,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 2, UnitTypeId.TECH_LAB_BARRACKS: 2},
             mineral_fields=0,
         )
-        air = RewardTerm.covering(
-            {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 0.0}, [(GameTime.ZERO, 10.0)], value=1.0
-        )
+        air = RewardTerm.weight({UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 0.0}, 1.0, end_count=10.0)
         plan = _best_plan(state, Reward.weighted({UnitTypeId.MARAUDER: 0.01}, terms=[air]), horizon_seconds=40)
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0, 0.0, 18.0, 18.0]
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == []
@@ -601,6 +599,61 @@ class TestKnownPlans:
 
         assert in_two.objective == pytest.approx(in_one.objective)
         assert _start_seconds(in_two, UnitTypeId.MARINE) == _start_seconds(in_one, UnitTypeId.MARINE)
+
+    def test_a_term_that_requires_an_upgrade_is_worth_nothing_until_it_is_done(self) -> None:
+        """Marines worth something with combat shield alone, 300 minerals and 100 vespene with nothing coming in: the
+        plan researches it at once, done 78.6 seconds on, and its four marines count from the edge at 80 to the horizon
+        at 120, 21 intervals of 2 seconds."""
+        state = _game_start(
+            minerals=300.0,
+            vespene=100.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.TECH_LAB_BARRACKS: 1},
+            mineral_fields=0,
+        )
+        with_the_shield = Reward(terms=[RewardTerm.weight(UnitTypeId.MARINE, 1.0, requires=[UpgradeId.COMBAT_SHIELD])])
+        plan = _best_plan(state, with_the_shield, horizon_seconds=120, fluid_after=_whole_over_any_horizon)
+
+        assert _start_seconds(plan, UpgradeId.COMBAT_SHIELD) == [0.0]
+        assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 4
+        assert plan.objective == pytest.approx(4 * 21 * 2)
+
+    def test_an_upgrade_a_term_requires_starts_whole_where_every_start_is_fluid(self) -> None:
+        """A share of the upgrade would unlock that share of all the term could be worth, far more than of its
+        marines."""
+        state = _game_start(
+            minerals=300.0,
+            vespene=100.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.TECH_LAB_BARRACKS: 1},
+            mineral_fields=0,
+        )
+        with_the_shield = Reward(terms=[RewardTerm.weight(UnitTypeId.MARINE, 1.0, requires=[UpgradeId.COMBAT_SHIELD])])
+        plan = _best_plan(state, with_the_shield, horizon_seconds=120, fluid_after=lambda _: GameTime.ZERO)
+
+        shield = PlannedItem(item=UpgradeId.COMBAT_SHIELD, start=GameTime.ZERO, is_fluid=False)
+        assert [planned for planned in plan.items if planned.item == UpgradeId.COMBAT_SHIELD] == [shield]
+        assert all(planned.is_fluid for planned in plan.items if planned.item == UnitTypeId.MARINE)
+
+    def test_a_term_that_requires_an_upgrade_the_state_has_is_worth_what_its_weight_is(self) -> None:
+        state = _game_start(
+            minerals=300.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1},
+            mineral_fields=0,
+            upgrades=frozenset({UpgradeId.COMBAT_SHIELD}),
+        )
+        with_the_shield = Reward(terms=[RewardTerm.weight(UnitTypeId.MARINE, 1.0, requires=[UpgradeId.COMBAT_SHIELD])])
+        required, weighted = (
+            _best_plan(state, reward, horizon_seconds=60)
+            for reward in (with_the_shield, Reward.weighted({UnitTypeId.MARINE: 1.0}))
+        )
+
+        assert required.objective == pytest.approx(weighted.objective)
+        assert _start_seconds(required, UnitTypeId.MARINE) == _start_seconds(weighted, UnitTypeId.MARINE)
 
     def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
         """A barracks nothing else is worth gets built by when the previous plan had it, for a bonus above its cost in
@@ -786,7 +839,7 @@ class TestFluidAfter:
 
     def test_starts_are_whole_in_the_intervals_that_start_before_their_items_time(self) -> None:
         reward = Reward.weighted({UnitTypeId.MARINE: 1.0})
-        items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+        items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
 
         def whole_numbers(fluid_after: GameTime) -> int:
             program = PlanProgram(
@@ -905,7 +958,7 @@ class TestUnlockFraction:
         """A starport needs a factory: whether one is done is a whole number in each interval a fluid factory can be
         done by, and none where every factory starts whole."""
         reward = Reward.weighted({UnitTypeId.MEDIVAC: 1.0})
-        items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+        items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
         state = _game_start(units={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1})
 
         def whole_numbers(factory_fluid_after: GameTime, *, unlock_fraction: float) -> int:
@@ -1359,10 +1412,8 @@ class TestReward:
             {UnitTypeId.MARINE: [CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.0, end_count=0)]}
         )
 
-    def test_counts_not_in_order_of_time_raise(self) -> None:
+    def test_curves_not_in_order_of_time_raise(self) -> None:
         later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]
-        with pytest.raises(ValueError, match="order of time"):
-            RewardTerm.covering({}, later_first, value=1.0)
         with pytest.raises(ValueError, match="order of time"):
             RewardTerm(
                 units={UnitTypeId.MARINE: 1.0},
@@ -1382,11 +1433,28 @@ class TestReward:
         reward = Reward.weighted(
             {UnitTypeId.MARINE: 1.0, UnitTypeId.MEDIVAC: [CurveSegment(weight=1.0)]},
             terms=[
-                RewardTerm.covering({UnitTypeId.VIKING: 1.0}, [], value=1.0),
+                RewardTerm.weight({UnitTypeId.VIKING: 1.0, UnitTypeId.THOR: 2.0}, 1.0, end_count=8.0),
                 RewardTerm.weight(UnitTypeId.BUNKER, 1.0, end_count=2.0),
             ],
         )
-        assert reward.unit_types == {UnitTypeId.MARINE, UnitTypeId.MEDIVAC, UnitTypeId.VIKING, UnitTypeId.BUNKER}
+        assert reward.unit_types == {
+            UnitTypeId.MARINE,
+            UnitTypeId.MEDIVAC,
+            UnitTypeId.VIKING,
+            UnitTypeId.THOR,
+            UnitTypeId.BUNKER,
+        }
+
+    def test_the_upgrades_it_values_are_those_weighted_and_those_its_terms_require(self) -> None:
+        reward = Reward(
+            terms=[RewardTerm.weight(UnitTypeId.MARINE, 0.3, requires=[UpgradeId.COMBAT_SHIELD])],
+            upgrade_weights={UpgradeId.STIMPACK: 1.0},
+        )
+        assert reward.upgrades == {UpgradeId.COMBAT_SHIELD, UpgradeId.STIMPACK}
+
+    def test_a_negative_weight_in_a_term_that_requires_an_upgrade_raises(self) -> None:
+        with pytest.raises(ValueError, match="negative"):
+            RewardTerm.weight(UnitTypeId.MARINE, -1.0, requires=[UpgradeId.COMBAT_SHIELD])
 
 
 # A main laid out around a command center at (24.5, 24.5) as Pylon's main is, by each resource's offset (corpus), and

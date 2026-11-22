@@ -207,7 +207,7 @@ class Planner:
         if hysteresis_bonus and previous_plan is None:
             raise ValueError("a hysteresis bonus needs the previous plan it favors")
         edges = self._grid.edges(horizon)
-        items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrade_weights)
+        items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
         planned_from = self.game_state() if state is None else state
         program = PlanProgram(
             items=items,

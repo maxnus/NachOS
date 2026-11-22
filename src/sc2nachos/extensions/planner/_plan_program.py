@@ -22,7 +22,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 if TYPE_CHECKING:
     from sc2nachos.extensions.planner._economy import Economy
     from sc2nachos.extensions.planner._game_state import GameState
-    from sc2nachos.extensions.planner._reward import Reward, RewardTerm
+    from sc2nachos.extensions.planner._reward import CurveSegment, Reward, RewardTerm
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
 
 # The most an item without a tighter bound starts in one interval.
@@ -50,19 +50,20 @@ class PlanProgram:
 
     Each item's starts so far by each interval's end are a variable, and an interval's starts those so far less those of
     the interval before; both are whole where the interval starts before the item's time in `fluid_after_seconds`, one
-    for each item in the order of `items`. A start pays from the stock at its interval's start plus half the interval's
-    income, keeps its producer busy for its build time over the intervals it spans, its SCV from the walk there through
-    the build to the walk back, takes its supply at once, and counts as done from the first edge at or after its end. A
-    whole start, or a build under way, that runs into an interval by less than `max_ignored_overrun` of it leaves the
-    interval free. Nothing starts before `unlock_fraction` of a structure granting each tech it needs, and of each
-    upgrade, is done; with 0, in the share that the fractions done of them allow. Workers mine, collect or build, pooled
-    over every field and refinery, in the tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A
-    worker more mining or collecting in a tier than the interval before, or than `state` has, brings in nothing for
-    `economy`'s `reassignment_time` from the interval's start, but a builder back from its walk. A unit counts as it
-    survives its loss rate in `loss_rates`, for income, supply and the reward. Of an item in `start_limits` at
-    most that many start over the plan: a unit type's limit is that of the type it counts as, the lowest of those of one
-    type, and a limit on no item here does nothing. Each item of `previous_plan` that the plan starts no later than that
-    one expected, counting those of its kind before it, is worth `hysteresis_bonus` once, beside the reward.
+    for each item in the order of `items`, and throughout for an upgrade a term of the reward requires. A start pays
+    from the stock at its interval's start plus half the interval's income, keeps its producer busy for its build time
+    over the intervals it spans, its SCV from the walk there through the build to the walk back, takes its supply at
+    once, and counts as done from the first edge at or after its end. A whole start, or a build under way, that runs
+    into an interval by less than `max_ignored_overrun` of it leaves the interval free. Nothing starts before
+    `unlock_fraction` of a structure granting each tech it needs, and of each upgrade, is done; with 0, in the share
+    that the fractions done of them allow. Workers mine, collect or build, pooled over every field and refinery, in the
+    tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a
+    tier than the interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the
+    interval's start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for
+    income, supply and the reward. Of an item in `start_limits` at most that many start over the plan: a unit type's
+    limit is that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing.
+    Each item of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before
+    it, is worth `hysteresis_bonus` once, beside the reward.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, and for a negative walk from
     `economy`'s `walk_time`.
@@ -142,7 +143,7 @@ class PlanProgram:
         self._index_of_upgrade = {item.upgrade: i for i, item in enumerate(self._items) if item.upgrade is not None}
         self._program = LinearProgram()
         self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
-        self._whole = [self._edges[:-1] < fluid_after - SECONDS_TOLERANCE for fluid_after in fluid_after_seconds]
+        self._whole = self._whole_intervals_of(fluid_after_seconds)
         self._starts_so_far: list[VariableBlock] = []
         for item, whole in zip(self._items, self._whole, strict=True):
             self._add_starts_so_far(item, whole)
@@ -177,6 +178,18 @@ class PlanProgram:
             is_optimal=solution.is_optimal,
             solve_seconds=solution.seconds,
         )
+
+    def _whole_intervals_of(self, fluid_after_seconds: Sequence[float]) -> list[NDArray[np.bool_]]:
+        """For each item, the intervals its starts are whole in: those that start before its time in
+        `fluid_after_seconds`, and every one for an upgrade a term of the reward requires, a share of which would
+        unlock that share of all the term could ever be worth, far more than of what its units are."""
+        required = frozenset[UpgradeId]().union(*(term.requires for term in self._reward.terms))
+        return [
+            np.ones(len(self._edges) - 1, dtype=bool)
+            if item.upgrade in required
+            else self._edges[:-1] < fluid_after - SECONDS_TOLERANCE
+            for item, fluid_after in zip(self._items, fluid_after_seconds, strict=True)
+        ]
 
     @property
     def _interval_count(self) -> int:
@@ -761,7 +774,7 @@ class PlanProgram:
             count.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), counts_for)
         curves = [term.segments_at(self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:].tolist()]
         most_pieces = max(len(curve) for curve in curves)
-        if most_pieces <= 1:
+        if most_pieces <= 1 and not term.requires:
             first_weights = np.array([curve[0].weight if curve else 0.0 for curve in curves])
             return RowExpression(intervals).add_expression(count, first_weights)
         values = self._program.add_variables(intervals, lower=-math.inf)
@@ -781,7 +794,22 @@ class PlanProgram:
         has_no_curve = np.array([not curve for curve in curves])
         if has_no_curve.any():
             self._program.constrain(worth.selected(has_no_curve), upper=0.0)
+        if term.requires:
+            most_worth = np.array([_worth_at(curve, self._most_counted_by(term)) for curve in curves])
+            for upgrade in term.requires:
+                not_done = RowExpression(intervals).add_expression(worth)
+                not_done.add_expression(self._upgrade_done(upgrade, at_end=True), -most_worth)
+                self._program.constrain(not_done, upper=0.0)
         return worth
+
+    def _most_counted_by(self, term: RewardTerm) -> float:
+        """The highest count `term` can come to: of each type it counts for more than nothing, as many as the supply
+        limit, or as the state has if those are more."""
+        return sum(
+            counts_for * max(SUPPLY_LIMIT, self._state.units.get(self._model.counted_as(unit_type), 0))
+            for unit_type, counts_for in term.units.items()
+            if counts_for > 0
+        )
 
     def _previous_items_kept(self, previous: Plan) -> VariableBlock:
         """Whether each of `previous`'s items still ahead is kept to: as many of its kind started by its interval as it
@@ -900,6 +928,18 @@ def _limits_by_counted_type(
         counted = model.counted_as(made) if isinstance(made, UnitTypeId) else made
         limits[counted] = min(float(limit), limits.get(counted, math.inf))
     return limits
+
+
+def _worth_at(segments: Sequence[CurveSegment], count: float) -> float:
+    """What `segments` give `count` a second, nothing with no segments."""
+    worth = 0.0
+    count_before = 0.0
+    for position, segment in enumerate(segments):
+        is_last = position == len(segments) - 1
+        count_within = count if is_last else min(count, segment.end_count)
+        worth += segment.weight * max(count_within - count_before, 0.0)
+        count_before = max(count_before, count_within)
+    return worth
 
 
 def _falls_of(shares: FloatArray, *, from_share: float) -> FloatArray:
