@@ -452,6 +452,17 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     took 2.96 s of phase 1's 3. A command center after uninterrupted SCVs is paid for one SCV later, the sixth's start
     where it was the fifth's.
 
+    **A plan holds its buckets, not a tuple for each value** (the owner, the same day: "Would it not be better to
+    have a new class that represents all these values for a single bucket and then have a single tuple over objects
+    of this class?"). The stocks and counts had a value for each edge of the grid and the workers one for each
+    bucket, one fewer. `Plan.buckets` is a tuple of `PlanBucket`: `start`, `end`, the `miners` and `collectors` in
+    it, and the `minerals`, `vespene` and `counts` expected at its end, the last bucket's being the horizon's. The
+    first edge is gone and held nothing: on the reference reward from 0:00, 3:00 and 6:00 its stocks and counts were
+    the state's to the last digit, and each bucket's end the next one's start to 1e-14. Seen while moving the tests
+    over, and open with the ties: where minerals buy nothing more, a plan may count more starts of mining than its
+    miners rise by, which costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and
+    one more to train over 14 seconds read 8 miners in the first bucket and no minerals at its end.
+
 ## Risks
 
 - **Solve time on the full model.** A time limit with the incumbent, the old plan kept when nothing feasible comes

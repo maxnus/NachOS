@@ -26,9 +26,32 @@ class PlannedItem:
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
+class PlanBucket:
+    """One bucket of a plan's grid: the workers the plan has mining and collecting in it, and what the planner expects
+    at its end. What it expects at the first bucket's start is the state it planned from."""
+
+    start: GameTime
+    """The game time of its first second."""
+    end: GameTime
+    """The game time it ends at, the next bucket's `start` or the plan's horizon."""
+    miners: float
+    """The workers the plan has at mineral fields in it."""
+    collectors: float
+    """The workers the plan has at refineries in it: what a bot holds its own at, the first bucket's now."""
+    minerals: float
+    """The minerals expected in stock at `end`, before what starts there is paid."""
+    vespene: float
+    """The vespene expected in stock at `end`, before what starts there is paid."""
+    counts: Mapping[UnitTypeId, float]
+    """The number of each unit type the planner considered expected alive at `end`, done and survived."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Plan:
-    """What to make, in order, with when each is expected to start, and what the planner expects at each edge of its
-    grid: the minerals and vespene in stock, and how many of each unit type are alive.
+    """What to make, in order, with when each is expected to start, and each bucket of the planner's grid with what it
+    expects of it: the workers mining and collecting, the minerals and vespene in stock, and how many of each unit type
+    are alive.
 
     A bot carries it out in order, each item as soon as it can be afforded, rather than to the second: the times are the
     model's, which rounds each start to a bucket's first second and plans far starts in fractions, each item of those
@@ -43,19 +66,8 @@ class Plan:
     items: tuple[PlannedItem, ...]
     """What to make, in the order the planner expects each to start; of those expected at one time, in the order the
     game's data lists their types, then the upgrades."""
-    times: tuple[GameTime, ...]
-    """The edges of its grid, `made_at` first and the horizon last."""
-    minerals: tuple[float, ...]
-    """The minerals expected in stock at each of `times`, before what starts there is paid."""
-    vespene: tuple[float, ...]
-    """The vespene expected in stock at each of `times`, before what starts there is paid."""
-    counts: Mapping[UnitTypeId, tuple[float, ...]]
-    """The number of each unit type the planner considered expected alive at each of `times`, done and survived."""
-    miners: tuple[float, ...]
-    """The workers the plan has at mineral fields in each bucket, the one from each of `times` but the last."""
-    collectors: tuple[float, ...]
-    """The workers the plan has at refineries in each bucket, the one from each of `times` but the last: what a bot
-    holds its own at, the first bucket's now."""
+    buckets: tuple[PlanBucket, ...]
+    """The buckets of its grid in order, the first from `made_at` and the last to the horizon."""
     objective: float
     """What the reward makes of the plan."""
     gap: float

@@ -269,16 +269,17 @@ class ThreatMap:
   ```
 
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
-  to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and what
-  the planner expects at each of its `times`: the `minerals` and `vespene` in stock, and the `counts` of each unit type
-  alive. `plan_now` returns `None` if the solver finds no plan within its limits, and `planner.plan` holds the last one
-  it found. The planner orders nothing and holds no unit: where a structure goes, which SCV builds it, and what to drop
-  once the game moves on stay the bot's.
+  to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and its
+  `buckets`, each a `PlanBucket` from its `start` to its `end` with what the planner expects at that end: the
+  `minerals` and `vespene` in stock, and the `counts` of each unit type alive. The last bucket's are those at the
+  horizon, and what the first starts from is the state. `plan_now` returns `None` if the solver finds no plan within
+  its limits, and `planner.plan` holds the last one it found. The planner orders nothing and holds no unit: where a
+  structure goes, which SCV builds it, and what to drop once the game moves on stay the bot's.
 
-  How many workers mine and how many collect vespene is the plan's to choose, bucket by bucket, and it reads back as
-  `miners` and `collectors`, one number for each bucket between its `times`. A bot holds its collectors at the first
-  bucket's, moving a worker when the next plan says another number, and has every worker it needs nowhere else mine:
-  a plan may leave workers idle where what they would bring in buys nothing before its horizon, as in its last buckets.
+  How many workers mine and how many collect vespene is the plan's to choose, bucket by bucket, and each bucket holds
+  them as its `miners` and `collectors`. A bot holds its collectors at the first bucket's, `plan.buckets[0].collectors`,
+  moving a worker when the next plan says another number, and has every worker it needs nowhere else mine: a plan may
+  leave workers idle where what they would bring in buys nothing before its horizon, as in its last buckets.
   A plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
   `reassignment_time`, 3 seconds by default, whatever the bucket's length: a worker moved between minerals and vespene,
   and a new SCV on its first walk. A builder back from its structure pays its walk back instead. The plan starts from

@@ -113,12 +113,7 @@ def _best_plan(
 _A_PLAN_OF_ONE_BARRACKS = Plan(
     made_at=GameTime.ZERO,
     items=(PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30), is_fluid=False),),
-    times=(),
-    minerals=(),
-    vespene=(),
-    counts={},
-    miners=(),
-    collectors=(),
+    buckets=(),
     objective=0.0,
     gap=0.0,
     is_optimal=True,
@@ -155,7 +150,7 @@ def _start_seconds_of_units_done_in_time(plan: Plan, unit_type: UnitTypeId) -> l
     """The seconds after the plan's start at which it starts each unit of `unit_type` that is done by its horizon. One
     started later is worth nothing to the plan and costs it nothing, so whether it starts is the solver's choice."""
     build_seconds = _TERRAN_MODEL.unit_items[unit_type].build_seconds
-    horizon_seconds = (plan.times[-1] - plan.made_at).seconds
+    horizon_seconds = (plan.buckets[-1].end - plan.made_at).seconds
     return [start for start in _start_seconds(plan, unit_type) if start + build_seconds <= horizon_seconds]
 
 
@@ -408,7 +403,8 @@ class TestKnownPlans:
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == marine_starts
 
     def test_a_unit_in_production_counts_from_the_first_edge_after_it_is_done(self) -> None:
-        """With nothing to spend, a marine 9 seconds from done is the plan's only one, alive from the edge at 10."""
+        """With nothing to spend, a marine 9 seconds from done is the plan's only one, alive from the edge at 10, the
+        fifth bucket's end."""
         marine = UnitCompletion(unit_type=UnitTypeId.MARINE, time_left=GameTime(seconds=9))
         state = _game_start(
             minerals=0.0,
@@ -420,7 +416,7 @@ class TestKnownPlans:
         )
         plan = _best_plan(state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=16)
         assert plan.items == ()
-        assert plan.counts[UnitTypeId.MARINE] == (0, 0, 0, 0, 0, 1, 1, 1, 1)
+        assert [bucket.counts[UnitTypeId.MARINE] for bucket in plan.buckets] == [0, 0, 0, 0, 1, 1, 1, 1]
 
     def test_a_reward_on_hellbats_plans_hellions(self) -> None:
         """A factory with no vespene for a reactor, over a minute: a hellion started at 44 seconds would not be done by
@@ -434,7 +430,7 @@ class TestKnownPlans:
         )
         plan = _best_plan(state, Reward(weights={UnitTypeId.HELLBAT: 1.0}), horizon_seconds=60)
         assert _start_seconds(plan, UnitTypeId.HELLION) == [0.0, 22.0]
-        assert UnitTypeId.HELLBAT not in plan.counts
+        assert UnitTypeId.HELLBAT not in plan.buckets[0].counts
 
     def test_a_command_center_starts_with_the_fifth_scv_after_uninterrupted_scv_production(self) -> None:
         """SCVs worth more than a command center, which is built as soon as it does not hold one up, on the doubling
@@ -479,20 +475,23 @@ class TestKnownPlans:
             state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=100, fluid_after=_whole_over_any_horizon
         )
 
-        depot_counts = zip(plan.times, plan.counts[UnitTypeId.SUPPLY_DEPOT], strict=False)
-        assert next(time for time, count in depot_counts if count >= 1) == GameTime(seconds=depot_done)
+        first_with_the_depot = next(bucket for bucket in plan.buckets if bucket.counts[UnitTypeId.SUPPLY_DEPOT] >= 1)
+        assert first_with_the_depot.end == GameTime(seconds=depot_done)
         assert _start_seconds(plan, UnitTypeId.SCV) == [scv_start]
 
-    def test_the_plans_curves_start_from_the_state_and_its_times_at_the_grids_edges(self) -> None:
-        state = _game_start(time=GameTime(seconds=30))
+    def test_the_plans_buckets_are_its_grids_from_the_state_on(self) -> None:
+        """With no field to mine, the state's 50 minerals pay the SCV that starts at once, done 12.1 seconds on: nothing
+        is in stock at the first bucket's end, and the SCV is alive at the last one's."""
+        state = _game_start(time=GameTime(seconds=30), mineral_fields=0)
         plan = _best_plan(state, Reward(weights={UnitTypeId.SCV: 1.0}), horizon_seconds=14)
 
         assert plan.made_at == GameTime(seconds=30)
-        assert plan.times == tuple(GameTime(seconds=seconds) for seconds in range(30, 45, 2))
-        assert plan.minerals[0] == 50.0
-        assert plan.vespene[0] == 0.0
-        assert plan.counts[UnitTypeId.SCV][0] == 12.0
-        assert plan.items[0] == PlannedItem(item=UnitTypeId.SCV, start=GameTime(seconds=30), is_fluid=False)
+        assert [bucket.start for bucket in plan.buckets] == [GameTime(seconds=seconds) for seconds in range(30, 44, 2)]
+        assert [bucket.end for bucket in plan.buckets] == [GameTime(seconds=seconds) for seconds in range(32, 46, 2)]
+        assert plan.items == (PlannedItem(item=UnitTypeId.SCV, start=GameTime(seconds=30), is_fluid=False),)
+        assert [bucket.minerals for bucket in plan.buckets] == pytest.approx([0.0] * 7, abs=1e-9)
+        assert [bucket.miners for bucket in plan.buckets] == pytest.approx([0.0] * 7, abs=1e-9)
+        assert [bucket.counts[UnitTypeId.SCV] for bucket in plan.buckets] == [12, 12, 12, 12, 12, 12, 13]
 
     def test_a_unit_counts_as_it_survives_its_loss_rate(self) -> None:
         """No barracks, so no marine is made."""
@@ -500,7 +499,8 @@ class TestKnownPlans:
         plan = _best_plan(
             state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=10, loss_rates={UnitTypeId.MARINE: 0.01}
         )
-        assert plan.counts[UnitTypeId.MARINE] == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(6)])
+        marines = [bucket.counts[UnitTypeId.MARINE] for bucket in plan.buckets]
+        assert marines == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
 
     def test_covering_air_buys_marines_not_marauders(self) -> None:
         """Marauders, which cannot shoot up, cover none of it. Two barracks with tech labs make two at a time, and over
@@ -1040,7 +1040,7 @@ class TestEconomy:
             economy=Economy(reassignment_time=GameTime(seconds=3)),
         )
         assert _start_seconds(plan, UnitTypeId.MARAUDER)[0] == 10.0
-        assert plan.vespene[1] == pytest.approx(3 * 7 * Economy().vespene_per_collector_second[0])
+        assert plan.buckets[0].vespene == pytest.approx(3 * 7 * Economy().vespene_per_collector_second[0])
 
     def test_a_plan_holds_how_many_workers_mine_and_collect_in_each_bucket(self) -> None:
         """One refinery and nothing to start but marauders, on 1-second buckets, with no reassignment time: until the
@@ -1068,13 +1068,14 @@ class TestEconomy:
         )
         first_start = int(_start_seconds(plan, UnitTypeId.MARAUDER)[0])
         assert first_start > 0
-        assert len(plan.miners) == len(plan.collectors) == len(plan.times) - 1
-        for bucket in range(first_start):
-            mined = plan.miners[bucket] * economy.minerals_per_miner_second[0]
-            collected = plan.collectors[bucket] * economy.vespene_per_collector_second[0]
-            assert plan.minerals[bucket + 1] - plan.minerals[bucket] == pytest.approx(mined)
-            assert plan.vespene[bucket + 1] - plan.vespene[bucket] == pytest.approx(collected)
-            assert plan.miners[bucket] + plan.collectors[bucket] <= 12 + 1e-6
+        minerals, vespene = state.minerals, state.vespene
+        for bucket in plan.buckets[:first_start]:
+            mined = bucket.miners * economy.minerals_per_miner_second[0]
+            collected = bucket.collectors * economy.vespene_per_collector_second[0]
+            assert bucket.minerals - minerals == pytest.approx(mined)
+            assert bucket.vespene - vespene == pytest.approx(collected)
+            assert bucket.miners + bucket.collectors <= 12 + 1e-6
+            minerals, vespene = bucket.minerals, bucket.vespene
 
     def test_a_plan_is_found_where_fewer_scvs_are_left_than_the_state_has_collecting(self) -> None:
         """Six collecting by the state, of three SCVs that are being lost, one of them building a supply depot, and no
@@ -1093,7 +1094,7 @@ class TestEconomy:
         plan = _best_plan(
             state, Reward(weights={UnitTypeId.MARINE: 1.0}), horizon_seconds=40, loss_rates={UnitTypeId.SCV: 0.05}
         )
-        assert plan.collectors[0] <= 2.0 + 1e-6
+        assert plan.buckets[0].collectors <= 2.0 + 1e-6
 
     @pytest.mark.parametrize(
         ("mule_rate", "marine_starts"), [(225 / (50 / 0.7875), [14.0]), (0.0, [])], ids=["MULEs", "no MULEs"]
@@ -1532,7 +1533,7 @@ class TestPlanner:
         assert before is None
         assert api.extensions.plan is plan
         assert plan.made_at == GameTime.ZERO
-        assert plan.minerals[0] == 200.0
+        assert plan.buckets[0].counts[UnitTypeId.BARRACKS] == 1.0
         assert UnitTypeId.MARINE in {planned.item for planned in plan.items}
 
     def test_it_returns_none_and_holds_no_plan_if_the_solver_finds_none_within_its_limits(self) -> None:
@@ -1593,8 +1594,8 @@ class TestPlanner:
         api.play(game.joined())
 
         by_default, over_a_minute = plans
-        assert by_default.times[-1] - by_default.made_at == GameTime(seconds=300)
-        assert over_a_minute.times[-1] - over_a_minute.made_at == GameTime(seconds=60)
+        assert by_default.buckets[-1].end - by_default.made_at == GameTime(seconds=300)
+        assert over_a_minute.buckets[-1].end - over_a_minute.made_at == GameTime(seconds=60)
 
     def test_it_plans_for_terran_alone(self) -> None:
         zerg = (
@@ -1666,15 +1667,15 @@ class TestPlanner:
         plans: list[Plan] = []
 
         @api.on(TurnEvent)
-        def plan_with_nothing_in_stock(_: TurnEvent) -> None:
-            state = dataclasses.replace(api.extensions.game_state(), minerals=0.0)
+        def plan_from_a_later_time(_: TurnEvent) -> None:
+            state = dataclasses.replace(api.extensions.game_state(), time=GameTime(seconds=90))
             reward = Reward(weights={UnitTypeId.MARINE: 1.0})
             plans.append(_plan_found(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), state=state)))
 
         api.play(game.joined())
 
         ((plan),) = plans
-        assert plan.minerals[0] == 0.0
+        assert plan.made_at == plan.buckets[0].start == GameTime(seconds=90)
 
     def test_it_keeps_to_a_previous_plan_it_is_handed_for_a_bonus(self) -> None:
         """With 150 minerals and none mined, a barracks costs the plan its SCVs, which the reward is for: it starts

@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 
 from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
-from sc2nachos.extensions.planner._plan import Plan, PlannedItem
+from sc2nachos.extensions.planner._plan import Plan, PlanBucket, PlannedItem
 from sc2nachos.extensions.planner._reward import count_at
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
@@ -163,21 +163,10 @@ class PlanProgram:
         solution = self._program.maximize(self._objective, time_limit=time_limit, node_limit=node_limit)
         if solution.values is None:
             return None
-        values = solution.values
-        counts: dict[UnitTypeId, tuple[float, ...]] = {}
-        for unit_type in self._index_of_unit_type:
-            at_starts = self._count_alive(unit_type, at_end=False).value_of(values)
-            at_end = self._count_alive(unit_type, at_end=True).value_of(values)[-1]
-            counts[unit_type] = (*(float(count) for count in at_starts), float(at_end))
         return Plan(
             made_at=self._state.time,
-            items=self._planned_items(values),
-            times=tuple(self._state.time + GameTime(seconds=edge) for edge in self._edges),
-            minerals=tuple(float(stock) for stock in _values_of(self._minerals, values)),
-            vespene=tuple(float(stock) for stock in _values_of(self._vespene, values)),
-            counts=counts,
-            miners=tuple(float(working) for working in self._working_in(self._mining).value_of(values)),
-            collectors=tuple(float(working) for working in self._working_in(self._collecting).value_of(values)),
+            items=self._planned_items(solution.values),
+            buckets=self._planned_buckets(solution.values),
             objective=solution.objective,
             gap=solution.gap,
             is_optimal=solution.is_optimal,
@@ -828,6 +817,29 @@ class PlanProgram:
                 is_fluid = not self._whole[index][bucket]
                 planned += [(bucket, index, PlannedItem(item=made, start=start, is_fluid=is_fluid))] * int(count)
         return tuple(entry for _, _, entry in sorted(planned, key=lambda entry: (entry[0], entry[1])))
+
+    def _planned_buckets(self, values: FloatArray) -> tuple[PlanBucket, ...]:
+        """Each bucket of the grid with the workers the plan has in it and what it comes to at its end."""
+        times = [self._state.time + GameTime(seconds=edge) for edge in self._edges.tolist()]
+        minerals, vespene = _values_of(self._minerals, values), _values_of(self._vespene, values)
+        miners = self._working_in(self._mining).value_of(values)
+        collectors = self._working_in(self._collecting).value_of(values)
+        counts_at_ends = {
+            unit_type: self._count_alive(unit_type, at_end=True).value_of(values)
+            for unit_type in self._index_of_unit_type
+        }
+        return tuple(
+            PlanBucket(
+                start=times[bucket],
+                end=times[bucket + 1],
+                miners=float(miners[bucket]),
+                collectors=float(collectors[bucket]),
+                minerals=float(minerals[bucket + 1]),
+                vespene=float(vespene[bucket + 1]),
+                counts={unit_type: float(counts[bucket]) for unit_type, counts in counts_at_ends.items()},
+            )
+            for bucket in range(self._bucket_count)
+        )
 
     def _index_of(self, planned: PlannedItem) -> int | None:
         """The index of the item `planned` makes, or `None` if this plan has none."""

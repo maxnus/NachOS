@@ -70,8 +70,8 @@ class Planner:
     - What workers mine and collect, what each orbital command's MULEs add, what a new command center brings, and how
       far an SCV walks to build: the `Economy` handed to `plan_now`. The workers are pooled over every field and
       refinery, as if each could work anywhere at once.
-    - How many workers mine and how many collect vespene is the plan's choice in each bucket, which it holds as its
-      `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
+    - How many workers mine and how many collect vespene is the plan's choice in each bucket, which the bucket holds
+      as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
       `reassignment_time`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
       bucket by bucket, is such a start, from the state's collectors and every other SCV that builds nothing mining.
     - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
