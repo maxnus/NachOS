@@ -766,17 +766,16 @@ class PlanProgram:
 
     def _worth_of(self, term: RewardTerm) -> RowExpression:
         """What `term`'s units are worth a second at each interval's end, by the curve it has then: their count times
-        the weight where no interval's curve has more than one piece, which runs on, and else a variable under each
-        piece's line, which the reward raises to the lowest."""
+        the weight where it has one group and no interval's curve more than one piece, which runs on, and else a
+        variable under each piece's line of each group's count, which the reward raises to the lowest. That is the
+        curve of the smallest count, since no piece of a term of several groups falls."""
         intervals = self._interval_count
-        count = RowExpression(intervals)
-        for unit_type, counts_for in term.units.items():
-            count.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), counts_for)
+        counts = [self._count_of(group) for group in term.groups]
         curves = [term.segments_at(self._state.time + GameTime(seconds=edge)) for edge in self._edges[1:].tolist()]
         most_pieces = max(len(curve) for curve in curves)
-        if most_pieces <= 1 and not term.requires:
+        if len(counts) == 1 and most_pieces <= 1 and not term.requires:
             first_weights = np.array([curve[0].weight if curve else 0.0 for curve in curves])
-            return RowExpression(intervals).add_expression(count, first_weights)
+            return RowExpression(intervals).add_expression(counts[0], first_weights)
         values = self._program.add_variables(intervals, lower=-math.inf)
         worth = RowExpression(intervals).add(values, np.eye(intervals))
         worth_before = np.zeros(intervals)
@@ -785,9 +784,10 @@ class PlanProgram:
             has_piece = np.array([len(curve) > piece for curve in curves])
             weights = np.array([curve[piece].weight if len(curve) > piece else 0.0 for curve in curves])
             ends = np.array([curve[piece].end_count if len(curve) > piece else math.inf for curve in curves])
-            under_line = RowExpression(intervals).add_expression(worth).add_expression(count, -weights)
             at_most = worth_before - weights * count_before
-            self._program.constrain(under_line.selected(has_piece), upper=at_most[has_piece])
+            for count in counts:
+                under_line = RowExpression(intervals).add_expression(worth).add_expression(count, -weights)
+                self._program.constrain(under_line.selected(has_piece), upper=at_most[has_piece])
             ends_at = np.where(np.isfinite(ends), ends, count_before)
             worth_before = worth_before + weights * (ends_at - count_before)
             count_before = ends_at
@@ -802,13 +802,23 @@ class PlanProgram:
                 self._program.constrain(not_done, upper=0.0)
         return worth
 
+    def _count_of(self, group: Mapping[UnitTypeId, float]) -> RowExpression:
+        """How many units `group` counts alive at each interval's end, each for what the group says."""
+        count = RowExpression(self._interval_count)
+        for unit_type, counts_for in group.items():
+            count.add_expression(self._count_alive(self._model.counted_as(unit_type), at_end=True), counts_for)
+        return count
+
     def _most_counted_by(self, term: RewardTerm) -> float:
-        """The highest count `term` can come to: of each type it counts for more than nothing, as many as the supply
-        limit, or as the state has if those are more."""
-        return sum(
-            counts_for * max(SUPPLY_LIMIT, self._state.units.get(self._model.counted_as(unit_type), 0))
-            for unit_type, counts_for in term.units.items()
-            if counts_for > 0
+        """The highest count `term` can come to, the smallest of its groups': of each type a group counts for more
+        than nothing, as many as the supply limit, or as the state has if those are more."""
+        return min(
+            sum(
+                counts_for * max(SUPPLY_LIMIT, self._state.units.get(self._model.counted_as(unit_type), 0))
+                for unit_type, counts_for in group.items()
+                if counts_for > 0
+            )
+            for group in term.groups
         )
 
     def _previous_items_kept(self, previous: Plan) -> VariableBlock:

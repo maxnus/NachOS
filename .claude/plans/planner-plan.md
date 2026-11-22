@@ -515,7 +515,22 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     much of the upgrade is done, so a required upgrade starts whole throughout a plan: left fluid, a share of a combat
     shield unlocked that share of what 200 marines would be worth, and from 0:00 the plan was worth 3365 where it is
     3150 and never listed the upgrade. On the growing reward from 0:00, 3:00 and 6:00, each proven: 2.1, 4.2 and 2.4 s
-    with the term, 2.1, 4.4 and 2.1 without, 11 to 25 integers more. Such a term may hold no negative weight.
+    with the term, 2.1, 4.4 and 2.1 without, 11 to 25 integers more. Such a term may hold no negative weight. And a term
+    may count several groups (the owner, the same day, asking for synergies "such as between Medivac and bio units"):
+    `groups` in place of `units`, a list of such mappings, and the curve is given the smallest of their counts, so that
+    the scarcest group limits what the others are worth. `RewardTerm.combination(groups, weight)` builds one, the name
+    the owner's, and the groups in one list since neither comes first ("if they are symmetric, it's generally weird that
+    one comes first and the other second"), where a `limited_by` argument of `weight` was proposed first. A number in a
+    group says how much one unit counts, as everywhere in a term, not how many go into a set (the owner, the same day):
+    `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER: 2}]` with 0.3 is 0.3 for each marine a medivac heals. It is the upper half of
+    the McCormick envelope of a product, exact as "a medivac heals 8" and generous as a product, which it is not offered
+    as; a product proper, or a count worth nothing below a critical mass, needs whole numbers and is not built. It is a
+    row a group, piece and interval and no integer: a term of several groups may hold no negative weight, so that its
+    curve of the smallest count is the lowest of each piece's line over each group's count. `RewardTerm` stays one class
+    with helpers, no subtype for each (the owner, the same day, to the recommendation), since `end_count`, `since` and
+    `requires` combine with every one. On the growing reward from 0:00, 3:00 and 6:00, each proven within 30 s: 2.1, 2.9
+    and 1.9 s with that term, 2.2, 4.7 and 2.2 without, the same integers; the plan from 6:00 ends with 16.6 medivacs
+    for 80 marines and 26.4 marauders, eight marines' worth each, where it had 5.4 without.
 
     **The stock left at the horizon is worth a little** (the owner, the same day, to the fix proposed for it):
     `Reward.stock_weight`, by default 0.0001 a mineral and a vespene, once and not discounted. Income is then never

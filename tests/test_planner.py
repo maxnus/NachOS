@@ -574,7 +574,7 @@ class TestKnownPlans:
             minerals=50.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
         from_20_seconds = RewardTerm(
-            units={UnitTypeId.MARINE: 1.0},
+            groups=[{UnitTypeId.MARINE: 1.0}],
             curves=[
                 (GameTime.ZERO, [CurveSegment(weight=-1.0)]),
                 (GameTime(seconds=20), [CurveSegment(weight=1.0)]),
@@ -654,6 +654,75 @@ class TestKnownPlans:
 
         assert required.objective == pytest.approx(weighted.objective)
         assert _start_seconds(required, UnitTypeId.MARINE) == _start_seconds(weighted, UnitTypeId.MARINE)
+
+    def test_a_combination_buys_no_more_of_a_group_than_its_scarcest_group_allows(self) -> None:
+        """Two medivacs and no starport for more, each healing two marines: four marines are worth something and a
+        fifth nothing, so one barracks makes four, done at 18, 36, 54 and 72. Counted at the ends of the intervals of 2
+        seconds from then to the horizon at 80, that is 32, 23, 14 and 5 intervals, 74 of 2 seconds, and the 800
+        minerals left are worth 0.0001 each."""
+        state = _game_start(
+            minerals=1000.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.MEDIVAC: 2},
+            mineral_fields=0,
+        )
+        healed = RewardTerm.combination([{UnitTypeId.MEDIVAC: 2.0}, {UnitTypeId.MARINE: 1.0}], 1.0)
+        plan = _best_plan(state, Reward(terms=[healed]), horizon_seconds=80, fluid_after=_whole_over_any_horizon)
+
+        assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0, 18.0, 36.0, 54.0]
+        assert plan.objective == pytest.approx(74 * 2 + 800 * 1e-4)
+
+    def test_a_combination_buys_the_group_it_is_short_of(self) -> None:
+        """Sixteen marines, no barracks for more, and a medivac heals eight: the starport makes two and no third."""
+        state = _game_start(
+            minerals=1000.0,
+            vespene=1000.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.STARPORT: 1, UnitTypeId.MARINE: 16},
+            mineral_fields=0,
+        )
+        healed = RewardTerm.combination([{UnitTypeId.MEDIVAC: 8.0}, {UnitTypeId.MARINE: 1.0}], 1.0)
+        plan = _best_plan(state, Reward(terms=[healed]), horizon_seconds=80)
+
+        assert _start_seconds(plan, UnitTypeId.MEDIVAC) == [0.0, 30.0]
+
+    def test_a_combination_up_to_a_count_buys_no_more_than_the_count(self) -> None:
+        """Marines enough for three medivacs, of which the first two are worth something."""
+        state = _game_start(
+            minerals=1000.0,
+            vespene=1000.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.STARPORT: 1, UnitTypeId.MARINE: 24},
+            mineral_fields=0,
+        )
+        healed = RewardTerm.combination([{UnitTypeId.MEDIVAC: 8.0}, {UnitTypeId.MARINE: 1.0}], 1.0, end_count=16.0)
+        plan = _best_plan(state, Reward(terms=[healed]), horizon_seconds=100)
+
+        assert _start_seconds(plan, UnitTypeId.MEDIVAC) == [0.0, 30.0]
+
+    def test_a_combination_that_requires_an_upgrade_the_state_has_is_worth_what_it_is_without(self) -> None:
+        state = _game_start(
+            minerals=1000.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.MEDIVAC: 2},
+            mineral_fields=0,
+            upgrades=frozenset({UpgradeId.COMBAT_SHIELD}),
+        )
+        groups = [{UnitTypeId.MEDIVAC: 2.0}, {UnitTypeId.MARINE: 1.0}]
+        required, without = (
+            _best_plan(state, Reward(terms=[healed]), horizon_seconds=80)
+            for healed in (
+                RewardTerm.combination(groups, 1.0, requires=[UpgradeId.COMBAT_SHIELD]),
+                RewardTerm.combination(groups, 1.0),
+            )
+        )
+
+        assert required.objective == pytest.approx(without.objective)
+        assert _start_seconds(required, UnitTypeId.MARINE) == _start_seconds(without, UnitTypeId.MARINE)
 
     def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
         """A barracks nothing else is worth gets built by when the previous plan had it, for a bonus above its cost in
@@ -1416,7 +1485,7 @@ class TestReward:
         later_first = [(GameTime(seconds=60), 2.0), (GameTime(seconds=30), 1.0)]
         with pytest.raises(ValueError, match="order of time"):
             RewardTerm(
-                units={UnitTypeId.MARINE: 1.0},
+                groups=[{UnitTypeId.MARINE: 1.0}],
                 curves=[(time, [CurveSegment(weight=weight)]) for time, weight in later_first],
             )
 
@@ -1455,6 +1524,21 @@ class TestReward:
     def test_a_negative_weight_in_a_term_that_requires_an_upgrade_raises(self) -> None:
         with pytest.raises(ValueError, match="negative"):
             RewardTerm.weight(UnitTypeId.MARINE, -1.0, requires=[UpgradeId.COMBAT_SHIELD])
+
+    def test_the_unit_types_a_combination_counts_are_those_of_all_its_groups(self) -> None:
+        healed = RewardTerm.combination(
+            [{UnitTypeId.MEDIVAC: 8.0}, {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.0}], 0.3
+        )
+        assert healed.unit_types == {UnitTypeId.MEDIVAC, UnitTypeId.MARINE, UnitTypeId.MARAUDER}
+        assert Reward(terms=[healed]).unit_types == healed.unit_types
+
+    def test_a_negative_weight_on_a_combination_raises(self) -> None:
+        with pytest.raises(ValueError, match="negative"):
+            RewardTerm.combination([{UnitTypeId.MEDIVAC: 8.0}, {UnitTypeId.MARINE: 1.0}], -0.3)
+
+    def test_a_term_of_no_group_raises(self) -> None:
+        with pytest.raises(ValueError, match="group"):
+            RewardTerm.combination([], 0.3)
 
 
 # A main laid out around a command center at (24.5, 24.5) as Pylon's main is, by each resource's offset (corpus), and

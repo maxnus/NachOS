@@ -25,24 +25,26 @@ class CurveSegment:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RewardTerm:
-    """One part of what a plan is worth: its units counted together, each for what `units` says, are worth what a
-    concave curve gives their count a second, and which curve may change at game times.
+    """One part of what a plan is worth: the units of a group counted together, each for what the group says, are
+    worth what a concave curve gives their count a second, and which curve may change at game times. Of several
+    `groups` the curve is given the smallest count, so that the term is worth only what its scarcest group allows:
+    units worth something in combination, as medivacs and the infantry they heal.
 
-    Every part of a reward on units is one of these, and `weight` and `curve` build the usual ones. The terms of a
-    reward add up, each with its own curve, so a unit type may count in several: for what it is worth by itself, and
-    with others towards a count the bot wants of them together.
+    Every part of a reward on units is one of these, and `weight`, `curve` and `combination` build the usual ones.
+    The terms of a reward add up, each with its own curve, so a unit type may count in several: for what it is worth
+    by itself, and with others towards a count the bot wants of them together.
 
     A term that `requires` upgrades is worth nothing until each is done: what marines are worth more with combat
     shield than without is such a term, beside the one for what they are worth anyway. A plan starts such an upgrade
     whole over all its horizon, whatever the planner's `fluid_after` says, since a share of one would count for far
     more than that share of the term's units.
 
-    Raises `ValueError` for `curves` not in order of time, a curve that is not concave, its weights falling and its
-    counts rising, or a negative weight in a term that requires an upgrade.
+    Raises `ValueError` for no group, `curves` not in order of time, a curve that is not concave, its weights falling
+    and its counts rising, or a negative weight in a term of several groups or that requires an upgrade.
     """
 
-    units: Mapping[UnitTypeId, float]
-    """How much one unit of each type counts."""
+    groups: Sequence[Mapping[UnitTypeId, float]]
+    """The units counted, a group to a count: how much one unit of each type counts in it. Most terms have one."""
     curves: Sequence[tuple[GameTime, Sequence[CurveSegment]]]
     """What the count is worth a second from each game time on, in order of time, piece by piece of the count, the
     first piece from none; nothing before the first time."""
@@ -50,11 +52,16 @@ class RewardTerm:
     """The upgrades that must be done for the term to be worth anything."""
 
     def __post_init__(self) -> None:
+        if not self.groups:
+            raise ValueError("a term must count a group of units at least")
         check_in_order_of_time(self.curves, "curves")
         for _, segments in self.curves:
-            _check_concave(self.units, segments)
-            if self.requires and any(segment.weight < 0 for segment in segments):
-                raise ValueError(f"a term that requires an upgrade may not hold a negative weight: {segments}")
+            _check_concave(self.unit_types, segments)
+            if any(segment.weight < 0 for segment in segments):
+                if len(self.groups) > 1:
+                    raise ValueError(f"a term of several groups may not hold a negative weight: {segments}")
+                if self.requires:
+                    raise ValueError(f"a term that requires an upgrade may not hold a negative weight: {segments}")
 
     @classmethod
     def weight(
@@ -71,11 +78,7 @@ class RewardTerm:
         is, and none past it anything: a count the bot wants, which a plan may fall short of. From the game time
         `since` on, the game's start by default, and nothing before it; and only once every upgrade of `requires` is
         done."""
-        if math.isinf(end_count):
-            segments = [CurveSegment(weight=weight)]
-        else:
-            segments = [CurveSegment(weight=weight, end_count=end_count), CurveSegment(weight=0.0)]
-        return cls.curve(units, segments, since=since, requires=requires)
+        return cls.curve(units, _segments_of(weight, end_count), since=since, requires=requires)
 
     @classmethod
     def curve(
@@ -91,7 +94,34 @@ class RewardTerm:
         `since` on, the game's start by default, and nothing before it; and only once every upgrade of `requires` is
         done."""
         counted = {units: 1.0} if isinstance(units, UnitTypeId) else units
-        return cls(units=counted, curves=[(since, segments)], requires=frozenset(requires))
+        return cls(groups=[counted], curves=[(since, segments)], requires=frozenset(requires))
+
+    @classmethod
+    def combination(
+        cls,
+        groups: Sequence[Mapping[UnitTypeId, float]],
+        weight: float,
+        *,
+        end_count: float = math.inf,
+        since: GameTime = GameTime.ZERO,
+        requires: Iterable[UpgradeId] = (),
+    ) -> Self:
+        """Units worth something in combination: each group of `groups` is counted, one unit of each type for what
+        the group says, and each unit of the smallest of those counts is worth `weight` a second, so that the
+        scarcest group limits what the others are worth. `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER: 2}]` with 0.3 is 0.3
+        for each marine a medivac heals, of which it heals 8, a marauder for two: 24 marines with 2 medivacs are
+        worth 0.3 times 16, and a third medivac makes it 24. What each unit is worth without the others is another
+        term's.
+
+        With an `end_count`, no unit past that count is worth anything. From the game time `since` on, the game's
+        start by default, and nothing before it; and only once every upgrade of `requires` is done. Raises
+        `ValueError` for a negative `weight`."""
+        return cls(groups=groups, curves=[(since, _segments_of(weight, end_count))], requires=frozenset(requires))
+
+    @property
+    def unit_types(self) -> frozenset[UnitTypeId]:
+        """Every unit type its groups count."""
+        return frozenset(unit_type for group in self.groups for unit_type in group)
 
     def segments_at(self, time: GameTime) -> Sequence[CurveSegment]:
         """The curve at `time`: the one from the latest time not after it, none before the first."""
@@ -171,7 +201,7 @@ class Reward:
     @property
     def unit_types(self) -> frozenset[UnitTypeId]:
         """Every unit type it values: those its terms count."""
-        return frozenset(unit_type for term in self.terms for unit_type in term.units)
+        return frozenset[UnitTypeId]().union(*(term.unit_types for term in self.terms))
 
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
@@ -186,9 +216,16 @@ def check_in_order_of_time(by_time: Sequence[tuple[GameTime, object]], name: str
         raise ValueError(f"{name} must be in order of time, each later than the one before: {times}")
 
 
-def _check_concave(units: Mapping[UnitTypeId, float], segments: Sequence[CurveSegment]) -> None:
+def _segments_of(weight: float, end_count: float) -> Sequence[CurveSegment]:
+    """The curve of `weight` for each unit up to `end_count`, and nothing for any past it."""
+    if math.isinf(end_count):
+        return [CurveSegment(weight=weight)]
+    return [CurveSegment(weight=weight, end_count=end_count), CurveSegment(weight=0.0)]
+
+
+def _check_concave(unit_types: Iterable[UnitTypeId], segments: Sequence[CurveSegment]) -> None:
     """Raise `ValueError` unless `segments` is concave: weights not rising, and counts rising but the last's."""
-    names = ", ".join(sorted(unit_type.name for unit_type in units))
+    names = ", ".join(sorted(unit_type.name for unit_type in unit_types))
     if not segments:
         raise ValueError(f"a curve of {names} has no segments")
     for position, (earlier, later) in enumerate(zip(segments, segments[1:], strict=False), start=1):
