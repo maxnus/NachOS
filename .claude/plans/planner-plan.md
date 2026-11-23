@@ -279,8 +279,9 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    from outside and plans handed over as they are found, which scipy has not, more than for its start.
 3. **The item set: a wide reward is not proven in 3 seconds, and is left so** (the owner, 2026-11-23: "Leave it as
    is"; measured in phase 1's pull request since 2026-11-18, `tools/benchmark_planner.py items`). The real model has
-   more types than the toy's 14, and integers scale with them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
-   them, where the reference has 14 and 419. From the game's start it finds no plan within 1 s at any half-life; after
+   more types than the toy's 14, and integers scale with them: a reward on 13 army types and 8 upgrades brings 38
+   items and 1,494 whole variables, the upgrades' 504 of them, where the reference has 14 and 419. From the game's
+   start it finds no plan within 1 s at any half-life; after
    3 s none at a half-life of 120 s, and plans 5% short of the best undiscounted, 28% at 240 s and 24% at 480; after
    10 s plans 0.8 to 1.6% short; and it is proven optimal in 36 to 38 s at three half-lives, 2.1% from its bound after
    40 at 240 s. A replan in the middle of a game with the toy's 14 items is no such trouble (`replans`, from two
