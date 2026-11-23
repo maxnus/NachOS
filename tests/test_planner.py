@@ -79,6 +79,7 @@ def _best_plan(
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
     max_ignored_overrun: float = 0.25,
     unlock_fraction: float = 1.0,
+    spendable_income_fraction: float = 0.5,
     previous_plan: Plan | None = None,
     hysteresis_bonus: float = 0.0,
 ) -> Plan:
@@ -98,6 +99,7 @@ def _best_plan(
         fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
         max_ignored_overrun=max_ignored_overrun,
         unlock_fraction=unlock_fraction,
+        spendable_income_fraction=spendable_income_fraction,
         previous_plan=previous_plan,
         hysteresis_bonus=hysteresis_bonus,
     )
@@ -314,6 +316,33 @@ class TestKnownPlans:
 
         assert _start_seconds(plan, UnitTypeId.SCV)[:2] == [0.0, 12.0]
         assert _start_seconds(plan, UnitTypeId.SUPPLY_DEPOT)[0] == 8.0
+
+    @pytest.mark.parametrize(
+        ("spendable_income_fraction", "first_marine_start"),
+        [(0.0, 2.0), (0.25, 2.0), (0.5, 0.0), (1.0, 0.0)],
+        ids=["none of the income", "a quarter, short of it", "a half", "all of it"],
+    )
+    def test_a_start_is_paid_from_the_stock_and_the_spendable_fraction_of_its_intervals_income(
+        self, spendable_income_fraction: float, first_marine_start: float
+    ) -> None:
+        """A marine 10 minerals short at the plan's start, and twelve SCVs that bring in 25.7 in the first interval of
+        2 seconds: it starts at once where a fraction of that covers the 10, and waits for the stock at 2 seconds
+        where it does not."""
+        state = _game_start(
+            minerals=40.0,
+            supply_cap=100.0,
+            units={UnitTypeId.SCV: 12, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=40,
+            spendable_income_fraction=spendable_income_fraction,
+        )
+
+        first = plan.intervals[0]
+        assert first.end.collected.minerals - first.start.collected.minerals == pytest.approx(25.7, abs=0.05)
+        assert _start_seconds(plan, UnitTypeId.MARINE)[0] == first_marine_start
 
     @pytest.mark.parametrize(
         ("max_ignored_overrun", "scv_starts"),
@@ -1189,6 +1218,7 @@ class TestFluidAfter:
                 fluid_after_seconds=[fluid_after.seconds] * len(items),
                 max_ignored_overrun=0.25,
                 unlock_fraction=0.0,
+                spendable_income_fraction=0.5,
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
@@ -1311,6 +1341,7 @@ class TestUnlockFraction:
                 ],
                 max_ignored_overrun=0.25,
                 unlock_fraction=unlock_fraction,
+                spendable_income_fraction=0.5,
                 previous_plan=None,
                 hysteresis_bonus=0.0,
             )
@@ -2227,6 +2258,8 @@ class TestPlanner:
             {"max_ignored_overrun": 1.1},
             {"unlock_fraction": -0.1},
             {"unlock_fraction": 1.1},
+            {"spendable_income_fraction": -0.1},
+            {"spendable_income_fraction": 1.1},
         ],
         ids=[
             "a time limit of 0",
@@ -2235,6 +2268,8 @@ class TestPlanner:
             "an overrun ignored above 1",
             "an unlock fraction below 0",
             "an unlock fraction above 1",
+            "a spendable income fraction below 0",
+            "a spendable income fraction above 1",
         ],
     )
     def test_a_limit_of_0_or_a_share_outside_0_to_1_raises(self, arguments: dict[str, Any]) -> None:

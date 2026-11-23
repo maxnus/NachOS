@@ -27,8 +27,6 @@ if TYPE_CHECKING:
 
 # The most an item without a tighter bound starts in one interval.
 _MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
-# A start pays from the stock at its interval's start and this share of the interval's income.
-_SHARE_OF_INCOME_SPENT: Final = 0.5
 # An upgrade reads as done from this share of it, as a fluid start is listed from half of one.
 _SHARE_OF_AN_UPGRADE_READ_AS_DONE: Final = 0.5
 
@@ -51,7 +49,8 @@ class PlanProgram:
     Each item's starts so far by each interval's end are a variable, and an interval's starts those so far less those of
     the interval before; both are whole where the interval starts before the item's time in `fluid_after_seconds`, one
     for each item in the order of `items`, and throughout for an upgrade a term of the reward requires. A start pays
-    from the stock at its interval's start plus half the interval's income, keeps its producer busy for its build time
+    from the stock at its interval's start plus `spendable_income_fraction` of the interval's income, which rounds it
+    to the nearer edge of the grid at a half, keeps its producer busy for its build time
     over the intervals it spans, its SCV from the walk there through the build to the walk back, takes its supply at
     once, and counts as done from the first edge at or after its end. A whole start, or a build under way, that runs
     into an interval by less than `max_ignored_overrun` of it leaves the interval free. Nothing starts before
@@ -92,6 +91,7 @@ class PlanProgram:
         "_reward",
         "_start_limits",
         "_started_collecting",
+        "_spendable_income_fraction",
         "_started_mining",
         "_starts_so_far",
         "_state",
@@ -116,6 +116,7 @@ class PlanProgram:
         fluid_after_seconds: Sequence[float],
         max_ignored_overrun: float,
         unlock_fraction: float,
+        spendable_income_fraction: float,
         previous_plan: Plan | None,
         hysteresis_bonus: float,
     ) -> None:
@@ -129,7 +130,7 @@ class PlanProgram:
         self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
         self._start_limits = _limits_by_counted_type(start_limits, model)
         self._max_ignored_overrun = max_ignored_overrun
-        self._unlock_fraction = unlock_fraction
+        self._unlock_fraction, self._spendable_income_fraction = unlock_fraction, spendable_income_fraction
         self._previous_plan, self._hysteresis_bonus = previous_plan, hysteresis_bonus
         self._walk_seconds = walk_seconds_of(
             economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
@@ -443,7 +444,7 @@ class PlanProgram:
 
     def _constrain_resources(self) -> None:
         """Each interval's stock of minerals and vespene: the stock before, plus what was mined, less what started; and
-        what starts paid from the stock at the interval's start and half its income."""
+        what starts paid from the stock at the interval's start and the spendable fraction of its income."""
         intervals = self._interval_count
         mineral_income, vespene_income = self._incomes()
         for stock, income, is_minerals in (
@@ -460,7 +461,7 @@ class PlanProgram:
             flow.add_expression(income, -self._widths).add_expression(spent)
             self._program.constrain(flow, lower=0.0, upper=0.0)
             paid = RowExpression(intervals).add(stock, np.eye(intervals, intervals + 1))
-            paid.add_expression(income, _SHARE_OF_INCOME_SPENT * self._widths).add_expression(spent, -1.0)
+            paid.add_expression(income, self._spendable_income_fraction * self._widths).add_expression(spent, -1.0)
             self._program.constrain(paid, lower=0.0)
 
     def _incomes(self) -> tuple[RowExpression, RowExpression]:

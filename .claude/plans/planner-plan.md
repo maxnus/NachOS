@@ -663,7 +663,9 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     interval's income, every start there early. So seconds do not scale better: a share is the same rounding at every
     length, the money a steady plan spends at an interval's start having come in, on average, just then. 6 s is the most
     even of those tried, 2.1% at worst for a half's 4.7%, on three states and one reward, which is too little to change
-    a default by. Not built: the share as an argument of `Planner`, and `Plan.moment_at` reading no stock below nothing.
+    a default by. The share is an argument of `Planner` since (the owner, the same day: "Agreed to the Planner
+    argument"), `spendable_income_fraction`, a half by default, 0 to 1, for a bot whose plans prove optimistic by
+    `Plan.deviation_of` to lower. Not built: `Plan.moment_at` reading no stock below nothing.
 
 ## Risks
 

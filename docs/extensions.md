@@ -362,3 +362,11 @@ class ThreatMap:
   unlocks, 1 by default. Under a half it is less of a structure than a plan lists as an item. With 0 the fractions done
   count as they are, for a faster solve: a plan then makes its far units on a hundredth of a factory, which it never
   lists, so a bot that follows it never builds one.
+
+  What starts in an interval is paid from the stock at the interval's start and a fraction of what comes in during it,
+  `Planner(api, spendable_income_fraction=...)`, a half by default: an item that can be afforded in an interval's first
+  half counts as started at its start, and one that can only later waits for the next, so a start is rounded to the
+  nearer edge of the grid. With 0 every start waits for the stock and is up to an interval late; with 1 every one is as
+  early. It counts for most in the long far intervals, where a half of an interval's income is much: against a finer
+  grid, the army a plan of the default grid ends with was within 0.3% from a game's start and from 6:00, and 4.7% too
+  large from 3:00. A bot whose plans prove optimistic, by `plan.deviation_of`, lowers it.

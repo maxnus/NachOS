@@ -84,6 +84,12 @@ class Planner:
       lower one unlocks on that share of one; under a half, on less of a structure than a plan lists as an item. With
       0 the fractions done count as they are, a hundredth of a factory unlocking a starport: the solve is faster, and
       a plan then makes its far units on a structure it never lists.
+    - What starts in an interval is paid from the stock at the interval's start and `spendable_income_fraction` of
+      what comes in during it, by default a half. An item that can be afforded in an interval's first half then counts
+      as started at its start, and one that can only later waits for the next: a start is rounded to the nearer edge
+      of the grid, at most half an interval early or late. With 0 every start waits for the stock, up to an interval
+      late; with 1 every one is as early. It counts for most where intervals are long: a lower fraction makes a
+      plan's far end more cautious, by several percent of its army over the default grid.
     - Starts sit on the first second of an interval of `grid`, by default `TimeGrid.doubling()`, and builds count as
       done from the first edge at or after their end. So production chained on one producer starts a whole number of
       intervals apart while its starts are whole. A build that runs into an interval by less than `max_ignored_overrun`
@@ -107,7 +113,8 @@ class Planner:
     unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
 
     Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, or a
-    `max_ignored_overrun` or an `unlock_fraction` outside 0 to 1; and `NotPlayingError` if built before the game starts.
+    `max_ignored_overrun`, an `unlock_fraction` or a `spendable_income_fraction` outside 0 to 1; and `NotPlayingError`
+    if built before the game starts.
     """
 
     __slots__ = (
@@ -119,6 +126,7 @@ class Planner:
         "_plan",
         "_time_limit",
         "_fluid_after",
+        "_spendable_income_fraction",
         "_unlock_fraction",
     )
 
@@ -132,6 +140,7 @@ class Planner:
         fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
         max_ignored_overrun: float = 0.25,
         unlock_fraction: float = 1.0,
+        spendable_income_fraction: float = 0.5,
     ) -> None:
         if api.player.race != Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -143,6 +152,8 @@ class Planner:
             raise ValueError(f"the overrun ignored must be a share of an interval, 0 to 1, not {max_ignored_overrun}")
         if not 0 <= unlock_fraction <= 1:
             raise ValueError(f"the unlock fraction must be 0 to 1, not {unlock_fraction}")
+        if not 0 <= spendable_income_fraction <= 1:
+            raise ValueError(f"the spendable income fraction must be 0 to 1, not {spendable_income_fraction}")
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._time_limit = time_limit
@@ -150,6 +161,7 @@ class Planner:
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
+        self._spendable_income_fraction = spendable_income_fraction
         self._model = TerranModel(api.data)
         self._plan: Plan | None = None
 
@@ -224,6 +236,7 @@ class Planner:
             ),
             max_ignored_overrun=self._max_ignored_overrun,
             unlock_fraction=self._unlock_fraction,
+            spendable_income_fraction=self._spendable_income_fraction,
             previous_plan=previous_plan,
             hysteresis_bonus=hysteresis_bonus,
         )

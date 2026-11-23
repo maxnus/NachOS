@@ -70,6 +70,8 @@ _START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER
 _MAX_IGNORED_OVERRUN = 0.25
 # The planner's default: nothing starts before a whole structure granting each tech it needs is done.
 _UNLOCK_FRACTION = 1.0
+# The planner's default: what starts in an interval is paid from its start's stock and half of its income.
+_SPENDABLE_INCOME_FRACTION = 0.5
 _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
@@ -371,6 +373,7 @@ def _solve_and_print(
         ),
         max_ignored_overrun=_MAX_IGNORED_OVERRUN,
         unlock_fraction=_UNLOCK_FRACTION,
+        spendable_income_fraction=_SPENDABLE_INCOME_FRACTION,
         previous_plan=None,
         hysteresis_bonus=0.0,
     )
