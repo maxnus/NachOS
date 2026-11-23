@@ -670,7 +670,11 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     spendable fraction of the interval's income, a number no game has. The reading at an interval's centre for all of
     its first half, the owner's alternative, would have changed readings that are right too, where nothing is paid from
     income to come. From the spendable fraction of an interval on the reading is what a bot holds that starts each item
-    as soon as it can pay; before it, such a bot may still be saving up, and no reading can say.
+    as soon as it can pay; before it, such a bot may still be saving up, and no reading can say. The floor was taken out
+    again the same day (the owner: "Wouldn't it be more truthful however to just report the negative stock?"): nothing
+    is no nearer to what a game holds there than the number below it, it hides how much a start leans on the spendable
+    fraction, which that number is, and with it a moment's stock was no longer what was collected less what was spent.
+    `moment_at` reads the stock below nothing as the model has it, and its docstring says what that means.
 
 ## Risks
 

@@ -133,10 +133,11 @@ class Plan:
         the grid it is that interval's `start` or `end`. Within an interval it is what the planner's model has there,
         which jumps at the edges: the units and the upgrades of the interval's start, a unit counting as done at an
         edge; what is collected by then at the interval's income, which is even over it; and the stock with all that
-        starts in the interval paid at its start, the end's stock less the income still to come, and nothing where that
-        is less than nothing. It is less just after an interval's start where what starts is paid from the interval's
-        income, the planner's `spendable_income_fraction` of it: a bot that starts each item as soon as it can pay
-        still saves up then, and holds what this reads from that fraction of the interval on."""
+        starts in the interval paid at its start, the end's stock less the income still to come. That stock is less
+        than nothing just after an interval's start where what starts is paid from the interval's income, the
+        planner's `spendable_income_fraction` of it: by as much as the plan has spent of what is yet to come in. A bot
+        that starts each item as soon as it can pay still saves up then, and holds what this reads from that fraction
+        of the interval on."""
         if not self.intervals or time > self.intervals[-1].end.time:
             return None
         interval = self.interval_at(time)
@@ -147,10 +148,9 @@ class Plan:
             return start
         share_to_come = (end.time - time).seconds / (end.time - start.time).seconds
         income_to_come = (end.collected - start.collected) * share_to_come
-        paid_at_the_start = end.resources - income_to_come
         return PlanMoment(
             time=time,
-            resources=Resources(max(paid_at_the_start.minerals, 0.0), max(paid_at_the_start.vespene, 0.0)),
+            resources=end.resources - income_to_come,
             collected=end.collected - income_to_come,
             units=start.units,
             upgrades=start.upgrades,

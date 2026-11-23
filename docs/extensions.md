@@ -301,10 +301,11 @@ class ThreatMap:
   a game time is in, or `None` outside the plan: its workers are those the plan has at that time, and between its start
   and its end the plan says nothing of the stock, the units or the upgrades. `plan.moment_at(time)` is what the
   planner's model has there, which jumps at the edges: the units and upgrades of the interval's start, what its income
-  has brought in by then, and the stock with all that starts in the interval paid at its start, nothing where that would
-  be less than nothing. `plan_now` returns `None` if the solver finds no plan within its limits, and `planner.plan`
-  holds the last one it found. The planner orders nothing and holds no unit: where a structure goes, which SCV builds
-  it, and what to drop once the game moves on stay the bot's.
+  has brought in by then, and the stock with all that starts in the interval paid at its start, which is less than
+  nothing just after an interval's start by what the plan has spent of income yet to come. `plan_now` returns `None` if
+  the solver finds no plan within its limits, and `planner.plan` holds the last one it found. The planner orders nothing
+  and holds no unit: where a structure goes, which SCV builds it, and what to drop once the game moves on stay the
+  bot's.
 
   How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `GameState`, such as
   `planner.game_state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what

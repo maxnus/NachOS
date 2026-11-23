@@ -1029,10 +1029,11 @@ class TestPlan:
         assert moment.units == start.units
         assert moment.upgrades == start.upgrades
 
-    def test_the_stock_of_a_moment_is_never_less_than_nothing(self) -> None:
+    def test_the_stock_of_a_moment_is_less_than_nothing_by_what_is_spent_of_income_to_come(self) -> None:
         """A marine 10 minerals short starts in the first interval of 2 seconds, paid from the 25.7 that come in over
-        it. Paid at the interval's start the stock would be 3.6 short a quarter in, which reads as nothing, and it is
-        9.3 three quarters in, the 15.7 it ends with less a quarter of the income."""
+        it. Paid at the interval's start, the stock is 3.6 short a quarter in, the 40 less the marine's 50 and a
+        quarter of the income, and 9.3 three quarters in, the 15.7 it ends with less a quarter of the income. What is
+        collected less what is spent is the change in stock at both."""
         state = _game_start(
             minerals=40.0,
             supply_cap=100.0,
@@ -1041,16 +1042,16 @@ class TestPlan:
         plan = _best_plan(state, Reward.weighted({UnitTypeId.MARINE: 1.0}), horizon_seconds=40)
 
         first = plan.intervals[0]
-        income = first.end.collected.minerals - first.start.collected.minerals
         early, late = plan.moment_at(GameTime(seconds=0.5)), plan.moment_at(GameTime(seconds=1.5))
         assert early is not None
         assert late is not None
         assert _start_seconds(plan, UnitTypeId.MARINE)[0] == 0.0
-        assert first.end.resources.minerals - 0.75 * income == pytest.approx(-3.6, abs=0.05)
-        assert early.resources == Resources(0.0, 0.0)
-        assert early.collected.minerals == pytest.approx(0.25 * income)
-        assert late.resources.minerals == pytest.approx(first.end.resources.minerals - 0.25 * income)
+        assert early.resources.minerals == pytest.approx(-3.6, abs=0.05)
         assert late.resources.minerals == pytest.approx(9.3, abs=0.05)
+        for moment in (early, late):
+            collected_since = moment.collected.minerals - first.start.collected.minerals
+            assert moment.resources.minerals == pytest.approx(40.0 + collected_since - 50.0)
+            assert moment.resources.vespene == 0.0
 
     @pytest.mark.parametrize("seconds", [29.9, 44.1], ids=["before it was made", "after the horizon"])
     def test_no_moment_is_at_a_time_outside_the_plan(self, seconds: float) -> None:
