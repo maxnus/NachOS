@@ -211,10 +211,12 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    build `BuildOrderName.PLANNER` in `enabled_builds` with a static reward. Games against the built-in AI through
    `scripts/run.py`. Exit: it wins against VeryHard on the pool's maps as the current builds do, and plays a
    recorded game to the end without an error logged. Then a NachOS release and the pin bump, and `/sc2-match`.
-3. **Replanning**, in NachOS. The background process, the interval and continuous mode, the triggers, the
-   hysteresis, and the warm start through highspy as an optional dependency if its wheel is accepted into
-   AvocaDOS's ladder zip (`LOCKED_WHEELS` in `scripts/release_helper.py`). Exit: AvocaDOS's step time unchanged
-   with planning on, and a release on the ladder.
+3. **Replanning**, in NachOS. The background process, the interval and continuous mode, the triggers, the hysteresis,
+   and the old plan kept as a candidate by re-scoring: its starts delayed until the new state can afford them, by the
+   planner's own program through scipy, and the better of it and the new solve's plan kept. No highspy to start with
+   (the owner, 2026-11-23, Open 2), which was to bring a warm start as an optional dependency, its wheel in AvocaDOS's
+   ladder zip (`LOCKED_WHEELS` in `scripts/release_helper.py`). Exit: AvocaDOS's step time unchanged with planning on,
+   and a release on the ladder.
 4. **The reward from intel**, in AvocaDOS. Coverage from the unit profiles and the enemy's counts, a forecast from
    scouted tech, loss rates from the memory's deaths and the matchup, floors from the threat. The composition
    optimizer's target as a progress term, or its objective as segments. Exit: the composition responds in scripted
@@ -235,38 +237,41 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    alternative the extensions guide names, a package of its own as `sc2nachos-planner`, was weighed and set aside:
    NachOS releases often, the model's coupling to the game data is tested in-tree, the test corpus is there, and the
    public-api test keeps a later split a day's work.
-2. **highspy.** Its warm start is what makes continuous replanning strictly better and the budget sub-second, at the
-   price of a second solver wheel beside scipy's, in NachOS as an optional dependency and in AvocaDOS's zip. Phase 3
-   decides it with a measurement. Measured early (the owner, 2026-11-23: "should we really wait that long?"), by a
-   scratch script outside the package with highspy 1.16.0 beside the HiGHS 1.12.0 of scipy 1.18.1, on the reference, the
-   growing reward and the wide reward from 0:00, 3:00 and 6:00 at a half-life of 240 s, 300 s ahead, a 30-second limit,
-   one run each. The direct call is no faster by itself: proven in 1.9, 1.8, 2.9, 1.8, 3.0, 9.9 and 8.3 s through
-   highspy where scipy took 1.6, 2.1, 4.4, 2.1, 3.4, 9.1 and 7.2, 29.4 s against 29.8 in all; 1 thread was slower by 0.1
-   to 3.5 s and 4 or 16 no faster than the default; a heuristic effort of 0 or 0.2 for the default 0.05 changed nothing
-   or cost time. A start from the problem's own best plan, the most a warm start can give, proved it in 0.7, 0.8, 3.8,
-   1.9, 2.3, 7.3 and 6.5 s: the proof is most of a solve, and a start does little for it. What a start buys is the plan
-   held under a short limit, on the wide reward: after 1 s a cold solve was 0.4, 1.6 and 2.3% short of the best there,
-   the growing reward's at most 0.06%. From the plan of the same state with 40 minerals fewer, handed over as its whole
-   starts, the wide reward after 1 s was 0.19, 0.06 and 0.003% short where cold it was 1.3, 2.9 and 3.0%, and proven in
-   2.4, 7.2 and 6.9 s for 2.8, 11.5 and 8.8. From the plan of a state with 40 minerals more, which the state cannot
-   afford, HiGHS dropped the start and nothing was gained, in six cases of seven. So the solver's interface is no reason
-   to change the model, and phase 3's warm start has to hand over a plan the new state can afford, the old one shifted
-   and repaired, or it is worth nothing where a game went worse than planned. The drift in minerals is a stand-in: a
-   real replan also moves the grid. The repair, tried the same day on the same cases (the owner: "Ok go on"): every
-   whole start of the old plan delayed by the least of 0, 1, 2, 3, 4, 6 and more intervals of the first's length that
-   the new state's program has a solution for, each try that program with those starts fixed and solved for the rest
-   within 0.5 s, and the solution handed over as the start. With 40 or 100 minerals fewer, a delay of at most 6.1 s
-   fitted in each of eleven cases, after one to five tries: 0.03 to 0.27 s of tries on the reference and the growing
-   reward, 0.2 to 0.7 s on the wide one. The delayed plan was 0.4 to 2.1% short of the best, and 0.002% in the one case
-   that needed no delay. On the reference and the growing reward a cold solve was within 0.07% of the best after 1 s,
-   and from the delayed plan it was further off in four cases of six, 1.8% twice: no gain. On the wide reward, 1 s with
-   the tries in it gave 0.8 to 1.9% short where a cold second gave 2.6 to 3.0%, and 26% from a game's start with 10
-   minerals; but in all five that was the delayed plan itself, the solver bettering it by nothing in the time left, and
-   the proofs took as long as cold or longer, 3.6 to 11.7 s. So where the old plan has to be repaired, the warm start
-   gave nothing that re-scoring does not: the delayed plan's worth, from the same program with its starts fixed, through
-   scipy, and the better of it and the cold solve's plan kept, which is the other way decision 9 names. highspy's start
-   bettered that only where the old plan fitted as it was. The uniform delay and the half-second tries are crude; a
-   repair that delays only what must wait is not tried.
+2. **highspy: not to start with** (the owner, 2026-11-23). Its warm start was held to be what makes continuous
+   replanning strictly better and the budget sub-second, at the price of a second solver wheel beside scipy's, in NachOS
+   as an optional dependency and in AvocaDOS's zip. Phase 3 decides it with a measurement. Measured early (the owner,
+   2026-11-23: "should we really wait that long?"), by a scratch script outside the package with highspy 1.16.0 beside
+   the HiGHS 1.12.0 of scipy 1.18.1, on the reference, the growing reward and the wide reward from 0:00, 3:00 and 6:00
+   at a half-life of 240 s, 300 s ahead, a 30-second limit, one run each. The direct call is no faster by itself: proven
+   in 1.9, 1.8, 2.9, 1.8, 3.0, 9.9 and 8.3 s through highspy where scipy took 1.6, 2.1, 4.4, 2.1, 3.4, 9.1 and 7.2, 29.4
+   s against 29.8 in all; 1 thread was slower by 0.1 to 3.5 s and 4 or 16 no faster than the default; a heuristic effort
+   of 0 or 0.2 for the default 0.05 changed nothing or cost time. A start from the problem's own best plan, the most a
+   warm start can give, proved it in 0.7, 0.8, 3.8, 1.9, 2.3, 7.3 and 6.5 s: the proof is most of a solve, and a start
+   does little for it. What a start buys is the plan held under a short limit, on the wide reward: after 1 s a cold
+   solve was 0.4, 1.6 and 2.3% short of the best there, the growing reward's at most 0.06%. From the plan of the same
+   state with 40 minerals fewer, handed over as its whole starts, the wide reward after 1 s was 0.19, 0.06 and 0.003%
+   short where cold it was 1.3, 2.9 and 3.0%, and proven in 2.4, 7.2 and 6.9 s for 2.8, 11.5 and 8.8. From the plan of a
+   state with 40 minerals more, which the state cannot afford, HiGHS dropped the start and nothing was gained, in six
+   cases of seven. So the solver's interface is no reason to change the model, and phase 3's warm start has to hand over
+   a plan the new state can afford, the old one shifted and repaired, or it is worth nothing where a game went worse
+   than planned. The drift in minerals is a stand-in: a real replan also moves the grid. The repair, tried the same day
+   on the same cases (the owner: "Ok go on"): every whole start of the old plan delayed by the least of 0, 1, 2, 3, 4, 6
+   and more intervals of the first's length that the new state's program has a solution for, each try that program with
+   those starts fixed and solved for the rest within 0.5 s, and the solution handed over as the start. With 40 or 100
+   minerals fewer, a delay of at most 6.1 s fitted in each of eleven cases, after one to five tries: 0.03 to 0.27 s of
+   tries on the reference and the growing reward, 0.2 to 0.7 s on the wide one. The delayed plan was 0.4 to 2.1% short
+   of the best, and 0.002% in the one case that needed no delay. On the reference and the growing reward a cold solve
+   was within 0.07% of the best after 1 s, and from the delayed plan it was further off in four cases of six, 1.8%
+   twice: no gain. On the wide reward, 1 s with the tries in it gave 0.8 to 1.9% short where a cold second gave 2.6 to
+   3.0%, and 26% from a game's start with 10 minerals; but in all five that was the delayed plan itself, the solver
+   bettering it by nothing in the time left, and the proofs took as long as cold or longer, 3.6 to 11.7 s. So where the
+   old plan has to be repaired, the warm start gave nothing that re-scoring does not: the delayed plan's worth, from the
+   same program with its starts fixed, through scipy, and the better of it and the cold solve's plan kept, which is the
+   other way decision 9 names. highspy's start bettered that only where the old plan fitted as it was. The uniform delay
+   and the half-second tries are crude; a repair that delays only what must wait is not tried. Decided on that (the
+   owner, the same day, to the recommendation: "Ok agreed"): phase 3 starts on scipy alone, with the delay repair and
+   the better of the two plans kept. highspy is looked at again only if games show a need, and then for a solve stopped
+   from outside and plans handed over as they are found, which scipy has not, more than for its start.
 3. **The item set: a wide reward is not solved in 3 seconds** (measured in phase 1's pull request, 2026-11-18,
    `tools/benchmark_planner.py items`). The real model has more types than the toy's 14, and integers scale with
    them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
@@ -608,7 +613,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 - **Model error.** The income model, walks and rounding drift from the game; replanning absorbs drift, the
   collection-rate score calibrates the income, and the simulator of phase 6 measures the rest.
 - **Churn.** Plans flipping between near-equal alternatives cost workers walking and money saved for nothing; the
-  hysteresis bonus and a warm start are not optional.
+  hysteresis bonus and the old plan kept as a candidate, re-scored (Open 2), are not optional.
 - **Execution.** The plan names a barracks, the construction manager must place it; an unplaceable item is a trigger
   and a dropped item, not a stall.
 - **Determinism.** Background planning depends on wall-clock speed; the synchronous node-limited mode keeps tests
