@@ -252,7 +252,21 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    afford, HiGHS dropped the start and nothing was gained, in six cases of seven. So the solver's interface is no reason
    to change the model, and phase 3's warm start has to hand over a plan the new state can afford, the old one shifted
    and repaired, or it is worth nothing where a game went worse than planned. The drift in minerals is a stand-in: a
-   real replan also moves the grid.
+   real replan also moves the grid. The repair, tried the same day on the same cases (the owner: "Ok go on"): every
+   whole start of the old plan delayed by the least of 0, 1, 2, 3, 4, 6 and more intervals of the first's length that
+   the new state's program has a solution for, each try that program with those starts fixed and solved for the rest
+   within 0.5 s, and the solution handed over as the start. With 40 or 100 minerals fewer, a delay of at most 6.1 s
+   fitted in each of eleven cases, after one to five tries: 0.03 to 0.27 s of tries on the reference and the growing
+   reward, 0.2 to 0.7 s on the wide one. The delayed plan was 0.4 to 2.1% short of the best, and 0.002% in the one case
+   that needed no delay. On the reference and the growing reward a cold solve was within 0.07% of the best after 1 s,
+   and from the delayed plan it was further off in four cases of six, 1.8% twice: no gain. On the wide reward, 1 s with
+   the tries in it gave 0.8 to 1.9% short where a cold second gave 2.6 to 3.0%, and 26% from a game's start with 10
+   minerals; but in all five that was the delayed plan itself, the solver bettering it by nothing in the time left, and
+   the proofs took as long as cold or longer, 3.6 to 11.7 s. So where the old plan has to be repaired, the warm start
+   gave nothing that re-scoring does not: the delayed plan's worth, from the same program with its starts fixed, through
+   scipy, and the better of it and the cold solve's plan kept, which is the other way decision 9 names. highspy's start
+   bettered that only where the old plan fitted as it was. The uniform delay and the half-second tries are crude; a
+   repair that delays only what must wait is not tried.
 3. **The item set: a wide reward is not solved in 3 seconds** (measured in phase 1's pull request, 2026-11-18,
    `tools/benchmark_planner.py items`). The real model has more types than the toy's 14, and integers scale with
    them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
