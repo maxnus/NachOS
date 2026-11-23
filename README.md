@@ -29,12 +29,14 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 2. **Add the maps.** NachOS finds a map by its name anywhere under the game's `Maps` folder, so a folder of maps can
    go in as it is. [`sc2maps/AIE`](https://github.com/maxnus/NachOS/tree/main/sc2maps/AIE) holds the AI Arena
    ladder's maps that NachOS is tested on.
-3. **Play a game.** [`examples/demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/demo_bot.py) is a
-   whole bot in one file: a Terran that trains SCVs, expands and attacks with marines, and beats the built-in computer
-   at medium difficulty. Save it and run:
+3. **Play a game.** Each demo bot is a whole bot in one file, and beats the built-in computer at medium difficulty:
+   [`examples/terran_demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/terran_demo_bot.py) trains
+   SCVs, expands and attacks with marines, and
+   [`examples/zerg_demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/zerg_demo_bot.py) morphs drones,
+   expands, injects and spreads creep with its queens, and attacks with zerglings and roaches. Save one and run:
 
    ```bash
-   python demo_bot.py --Map PylonAIE_v4 --ComputerRace ZERG --ComputerDifficulty MEDIUM
+   python terran_demo_bot.py --Map PylonAIE_v4 --ComputerRace ZERG --ComputerDifficulty MEDIUM
    ```
 
 ## What NachOS has

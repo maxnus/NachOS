@@ -1,7 +1,7 @@
 """A Terran bot written with NachOS alone: it trains SCVs, which speed mine, builds supply depots, barracks and command
 centers, and attacks with marines.
 
-    uv run python examples/demo_bot.py --ComputerRace ZERG --ComputerDifficulty MEDIUM --Map PylonAIE_v4
+    uv run python examples/terran_demo_bot.py --ComputerRace ZERG --ComputerDifficulty MEDIUM --Map PylonAIE_v4
 
 It takes the options of `run_from_command_line`, so the match workflow can play it as it plays `run_game.py`.
 """
@@ -63,12 +63,12 @@ class Budget:
 
 
 @api.on(TurnEvent)
-def macro(_: TurnEvent) -> None:
+def spend_money(_: TurnEvent) -> None:
     """Spend the turn's money, most important first."""
     budget = Budget()
     train_workers(budget)
     build_supply(budget)
-    expand(budget)
+    take_next_expansion(budget)
     build_barracks(budget)
     train_marines(budget)
 
@@ -91,7 +91,7 @@ def train_workers(budget: Budget) -> None:
             count += 1
 
 
-# At a low priority, so it runs after `macro`, whose builders `_free_scvs` then leaves out.
+# At a low priority, so it runs after `spend_money`, whose builders `_free_scvs` then leaves out.
 @api.on(TurnEvent, min_interval=GameTime(steps=8), priority=EventPriority.LOW)
 def hand_scvs_to_speed_mining(_: TurnEvent) -> None:
     """Hand each free SCV that speed mining does not hold over to it, which picks the SCV's field: at the base nearest
@@ -114,7 +114,7 @@ def _free_scvs() -> Units[OwnUnit[Any]]:
     )
 
 
-def _build(ability: AbilityId, site: Point) -> bool:
+def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
     """Order the free SCV nearest `site` to build there. The game charges the build at once, while the SCV walks."""
     scvs = _free_scvs()
     if not scvs:
@@ -146,7 +146,7 @@ def build_supply(budget: Budget) -> None:
         return
     site = api.placement.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=_depot_anchor(), max_distance=25)
     if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
-        _build(AbilityId.SCV_BUILD_SUPPLY_DEPOT, site)
+        _order_scv_to_build(AbilityId.SCV_BUILD_SUPPLY_DEPOT, site)
 
 
 def _depot_anchor() -> Point:
@@ -161,7 +161,7 @@ def lower_depot(event: OwnConstructionFinishedEvent) -> None:
     event.unit.issue(AbilityId.SUPPLY_DEPOT_LOWER)
 
 
-def expand(budget: Budget) -> None:
+def take_next_expansion(budget: Budget) -> None:
     """Build a command center at the next free expansion once the bases have nearly all the SCVs they can use, or the
     bank is full, saving for it first."""
     townhalls = api.units.own.townhalls
@@ -177,7 +177,7 @@ def expand(budget: Budget) -> None:
         return
     expansion = _next_expansion()
     if expansion is not None and budget.try_pay_for(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
-        _build(AbilityId.SCV_BUILD_COMMAND_CENTER, expansion.center)
+        _order_scv_to_build(AbilityId.SCV_BUILD_COMMAND_CENTER, expansion.center)
 
 
 def _next_expansion() -> Expansion | None:
@@ -207,7 +207,7 @@ def build_barracks(budget: Budget) -> None:
     anchor = start.center.towards(start.natural.center, 9)
     site = api.placement.nearest_free(UnitTypeId.BARRACKS, near=anchor, max_distance=math.inf, margin=1)
     if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_BARRACKS):
-        _build(AbilityId.SCV_BUILD_BARRACKS, site)
+        _order_scv_to_build(AbilityId.SCV_BUILD_BARRACKS, site)
 
 
 def train_marines(budget: Budget) -> None:
@@ -230,11 +230,12 @@ class Army:
         api.subscribe(self)
 
     @api.on(TurnEvent, min_interval=GameTime(steps=4))
-    def command(self, _: TurnEvent) -> None:
+    def order_army(self, _: TurnEvent) -> None:
         """Defend against what comes near the bases, attack once there are enough marines, and fall back once too few
         are left."""
         marines = api.units.own.of_type(UnitType.Marine)
         threats = api.units.enemy.non_structures.within(DEFEND_WITHIN, of=api.units.own.townhalls)
+        was_attacking = self.attacking
         if len(marines) >= ATTACK_WITH:
             self.attacking = True
         elif len(marines) < RETREAT_BELOW:
@@ -244,6 +245,8 @@ class Army:
                 marine.issue(AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
         elif self.attacking:
             api.orders.issue(marines, AbilityId.ATTACK, target=self._attack_target(marines))
+        elif was_attacking:
+            api.orders.issue(marines, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = marines.idle.beyond(4, of=defense_location)
