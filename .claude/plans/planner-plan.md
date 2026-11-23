@@ -235,9 +235,24 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    alternative the extensions guide names, a package of its own as `sc2nachos-planner`, was weighed and set aside:
    NachOS releases often, the model's coupling to the game data is tested in-tree, the test corpus is there, and the
    public-api test keeps a later split a day's work.
-2. **highspy.** Its warm start is what makes continuous replanning strictly better and the budget sub-second, at
-   the price of a second solver wheel beside scipy's, in NachOS as an optional dependency and in AvocaDOS's zip.
-   Phase 3 decides it with a measurement.
+2. **highspy.** Its warm start is what makes continuous replanning strictly better and the budget sub-second, at the
+   price of a second solver wheel beside scipy's, in NachOS as an optional dependency and in AvocaDOS's zip. Phase 3
+   decides it with a measurement. Measured early (the owner, 2026-11-23: "should we really wait that long?"), by a
+   scratch script outside the package with highspy 1.16.0 beside the HiGHS 1.12.0 of scipy 1.18.1, on the reference, the
+   growing reward and the wide reward from 0:00, 3:00 and 6:00 at a half-life of 240 s, 300 s ahead, a 30-second limit,
+   one run each. The direct call is no faster by itself: proven in 1.9, 1.8, 2.9, 1.8, 3.0, 9.9 and 8.3 s through
+   highspy where scipy took 1.6, 2.1, 4.4, 2.1, 3.4, 9.1 and 7.2, 29.4 s against 29.8 in all; 1 thread was slower by 0.1
+   to 3.5 s and 4 or 16 no faster than the default; a heuristic effort of 0 or 0.2 for the default 0.05 changed nothing
+   or cost time. A start from the problem's own best plan, the most a warm start can give, proved it in 0.7, 0.8, 3.8,
+   1.9, 2.3, 7.3 and 6.5 s: the proof is most of a solve, and a start does little for it. What a start buys is the plan
+   held under a short limit, on the wide reward: after 1 s a cold solve was 0.4, 1.6 and 2.3% short of the best there,
+   the growing reward's at most 0.06%. From the plan of the same state with 40 minerals fewer, handed over as its whole
+   starts, the wide reward after 1 s was 0.19, 0.06 and 0.003% short where cold it was 1.3, 2.9 and 3.0%, and proven in
+   2.4, 7.2 and 6.9 s for 2.8, 11.5 and 8.8. From the plan of a state with 40 minerals more, which the state cannot
+   afford, HiGHS dropped the start and nothing was gained, in six cases of seven. So the solver's interface is no reason
+   to change the model, and phase 3's warm start has to hand over a plan the new state can afford, the old one shifted
+   and repaired, or it is worth nothing where a game went worse than planned. The drift in minerals is a stand-in: a
+   real replan also moves the grid.
 3. **The item set: a wide reward is not solved in 3 seconds** (measured in phase 1's pull request, 2026-11-18,
    `tools/benchmark_planner.py items`). The real model has more types than the toy's 14, and integers scale with
    them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
