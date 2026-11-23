@@ -60,7 +60,7 @@ class WorkerBuild:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlannerState:
-    """The state of the game a plan starts from, as plain values: what `Planner.game_state` reads, which a bot may
+    """The state of the game a plan starts from, as plain values: what `Planner.state` reads, which a bot may
     change with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The
     planner pools what it holds: it never knows which base a field, a refinery or a worker is at.
 

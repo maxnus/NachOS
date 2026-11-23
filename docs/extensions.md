@@ -258,7 +258,7 @@ class ThreatMap:
   counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat
   as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
-  Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `PlannerState`
+  Everything else a plan rests on is the bot's to read and change. `planner.state()` returns the `PlannerState`
   `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and
   when it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries,
   workers collecting vespene and free geysers at its bases, pooled, since the planner never knows which base a worker
@@ -280,7 +280,7 @@ class ThreatMap:
   from sc2nachos.extensions.planner import EconomyModel
 
   planner = api.extensions.planner
-  state = planner.game_state()
+  state = planner.state()
   state = dataclasses.replace(
       state,
       mineral_fields=state.mineral_fields - len(falling_base.mineral_fields.alive),
@@ -308,7 +308,7 @@ class ThreatMap:
   bot's.
 
   How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `PlannerState`, such as
-  `planner.game_state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what
+  `planner.state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what
   the plan expected at that time, so that the plan was optimistic where one is negative. Its three parts say what to
   change. Less `collected` than expected is the economy's: the workers brought in less than `EconomyModel` has them
   bring, so lower its rates or raise its `reassignment_time`. As much collected and more `resources` in stock is the

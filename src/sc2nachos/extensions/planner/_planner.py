@@ -57,7 +57,7 @@ class Planner:
     api = Api(extensions=Extensions)
     ```
 
-    It plans from the `PlannerState` that `game_state()` reads as `plan_now` is called, unless handed another. The model
+    It plans from the `PlannerState` that `state()` reads as `plan_now` is called, unless handed another. The model
     of the game:
 
     - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
@@ -175,7 +175,7 @@ class Planner:
         """The plan `plan_now` found last, or `None` before it found one."""
         return self._plan
 
-    def game_state(self) -> PlannerState:
+    def state(self) -> PlannerState:
         """The state of the game now, as the planner reads it: what `plan_now` plans from unless handed another."""
         return read_planner_state(self._api, model=self._model)
 
@@ -192,7 +192,7 @@ class Planner:
         hysteresis_bonus: float = 0.0,
     ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
-        `game_state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing
+        `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing
         that pays back only later is planned unless the reward values it itself, an expansion for one, and a longer
         horizon is a slower solve. The plan's workers mine, collect and walk as `economy` says. A unit of a type in
         `loss_rates` is expected lost at that share a second, those alive now and those the plan makes, so that only the
@@ -221,7 +221,7 @@ class Planner:
             raise ValueError("a hysteresis bonus needs the previous plan it favors")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
-        planned_from = self.game_state() if state is None else state
+        planned_from = self.state() if state is None else state
         program = PlanProgram(
             items=items,
             model=self._model,

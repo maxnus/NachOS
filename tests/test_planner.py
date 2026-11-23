@@ -2013,7 +2013,7 @@ def _states_of(*observations: sc2api_pb2.ResponseObservation) -> list[PlannerSta
 
     @api.on(TurnEvent)
     def read_state(_: TurnEvent) -> None:
-        states.append(api.extensions.game_state())
+        states.append(api.extensions.state())
 
     api.play(game.joined())
     return states[: len(observations)]
@@ -2332,7 +2332,7 @@ class TestPlanner:
 
         @api.on(TurnEvent)
         def plan_from_a_later_time(_: TurnEvent) -> None:
-            state = dataclasses.replace(api.extensions.game_state(), time=GameTime(seconds=90))
+            state = dataclasses.replace(api.extensions.state(), time=GameTime(seconds=90))
             reward = Reward.weighted({UnitTypeId.MARINE: 1.0})
             plans.append(_plan_found(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), state=state)))
 
@@ -2355,7 +2355,7 @@ class TestPlanner:
 
         @api.on(TurnEvent)
         def plan_scvs_twice(_: TurnEvent) -> None:
-            state = dataclasses.replace(api.extensions.game_state(), resources=Resources(150.0, 0.0), mineral_fields=0)
+            state = dataclasses.replace(api.extensions.state(), resources=Resources(150.0, 0.0), mineral_fields=0)
             reward = Reward.weighted({UnitTypeId.SCV: 1.0})
             horizon = GameTime(seconds=40)
             plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon, state=state)))

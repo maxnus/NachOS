@@ -105,7 +105,7 @@ rows of the table below and a few sentences of the decisions, can be run again f
     refineries a base, one add-on a barracks, one of each upgrade, supply 200, and room to build near a base once the
     map supplies it.
 11. **Every input is visible and the bot's to change** (the owner, review of #239). What the game shows is a public
-    `PlannerState`, which `Planner.game_state` reads and `plan_now(state=...)` takes back changed, a base about to fall
+    `PlannerState`, which `Planner.state` reads and `plan_now(state=...)` takes back changed, a base about to fall
     left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `EconomyModel`
     handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
     worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and `start_limits`
@@ -480,7 +480,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     higher of the owner's two), is how long a worker moved to a refinery collects nothing and one moved from a refinery
     neither mines nor builds; 0 moves them for nothing as before, and adds no variable. Every rise of the collectors in
     a tier of rates, and every fall of them in all, is a move, from `PlannerState.vespene_collectors` on, which
-    `Planner.game_state` reads as the workers the game counts as assigned to the refineries; a new SCV's first walk to a
+    `Planner.state` reads as the workers the game counts as assigned to the refineries; a new SCV's first walk to a
     refinery is one too, a new SCV's to a field is not, and the fall of those lost is not. A move made at an interval's
     start runs through the intervals its time spans, so it costs its seconds on any grid. A fall that what is now
     forces, fewer SCVs left beside the builders under way than collect, costs nothing, so that a plan starting nothing
@@ -551,7 +551,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     change: `collected`, the minerals and vespene brought in, for `EconomyModel`'s rates and times; `resources`, the
     stock, for whether the bot starts what the plan has it start; and `units`, for losses. One number would not say
     which. For it a `PlanMoment` holds `collected`, the state's and each interval's income over its length since, MULEs
-    included; `PlannerState.collected` is what the game's score counts, read by `Planner.game_state`, nothing in a state
+    included; `PlannerState.collected` is what the game's score counts, read by `Planner.state`, nothing in a state
     made by hand; and `BuildPlan.moment_at(time)` is what a plan expects at any time. Within an interval that is what
     the model has there, which jumps at the edges: the units and upgrades of the interval's start, what its income has
     brought in by then, and the stock with all that starts in the interval paid at its start, the end's less the income
@@ -697,15 +697,16 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 15. **Three exported names say what they are of** (the owner, 2026-11-23: "I agree with the three renames, I will review
     the other names with the rest of the pr"). `BuildPlan` was `Plan`, `PlannerState` was `GameState` and `EconomyModel`
     was `Economy`, and this page names them so throughout; their files are named for them, and `read_planner_state` with
-    them. `Planner.game_state()` and `plan_now`'s `state` and `economy` keep their names. A bot imports the classes
-    bare, where the three plain words said nothing of the planner, and a bot may well have a game state or an economy of
-    its own, as the example in `docs/events.md` has; and `test_nachos_names_no_extension` keeps every extension's
-    exported name out of the core's source, docstrings included, so the core could write none of the three words.
-    Renamed before phase 2, while no bot uses the planner. The other names are the owner's to review with the pull
-    request: `Planner`, `Reward`, `RewardTerm` and its `weight`, `curve` and `combination`, `Reward.weighted`,
-    `CurveSegment`, `TimeGrid`, `PlanInterval`, `PlanMoment`, `PlannedItem`, `PlanDeviation`, `UnitCompletion`,
-    `WorkerBuild`, `Occupation`, `moment_at`, `deviation_of`, `interval_at`, `spendable_income_fraction`,
-    `time_factor_at` and `count_factor_at`.
+    them. `Planner.game_state()` is `Planner.state()` (the owner, the same day: "Maybe it should be called
+    `Planner.state()`?", and then: "Rename it"), the word `plan_now` takes its `PlannerState` back by; `plan_now`'s
+    `state` and `economy` keep their names. A bot imports the classes bare, where the three plain words said nothing of
+    the planner, and a bot may well have a game state or an economy of its own, as the example in `docs/events.md` has;
+    and `test_nachos_names_no_extension` keeps every extension's exported name out of the core's source, docstrings
+    included, so the core could write none of the three words. Renamed before phase 2, while no bot uses the planner.
+    The other names are the owner's to review with the pull request: `Planner`, `Reward`, `RewardTerm` and its `weight`,
+    `curve` and `combination`, `Reward.weighted`, `CurveSegment`, `TimeGrid`, `PlanInterval`, `PlanMoment`,
+    `PlannedItem`, `PlanDeviation`, `UnitCompletion`, `WorkerBuild`, `Occupation`, `moment_at`, `deviation_of`,
+    `interval_at`, `spendable_income_fraction`, `time_factor_at` and `count_factor_at`.
 
 ## Risks
 
