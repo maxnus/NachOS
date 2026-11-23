@@ -73,11 +73,15 @@ class BuffId(IdEnum):
             }
         )
     )
-    # Every unit of one type wears each of these for as long as it is listed, so it says nothing the type does not
-    # (in game).
+    # Every unit of one type wears each of these for as long as it is listed, or, a collapsible tower's, in the game's
+    # first observation alone, where the fog off lists it, so it says nothing the type does not (in game).
     _SKIPPED_IDS = nonmember(
         frozenset(
             {
+                RawBuffId.CollapsibleRockTowerConjoinedSearch,  # by `UnitTypeId.COLLAPSIBLE_TOWER_ROCK`
+                RawBuffId.CollapsibleRockTowerRampDiagonalConjoinedSearch,  # by `COLLAPSIBLE_TOWER_DIAGONAL_ROCK`
+                RawBuffId.CollapsibleTerranTowerConjoinedSearch,  # by `UnitTypeId.COLLAPSIBLE_TOWER_TERRAN`
+                RawBuffId.CollapsibleTerranTowerRampDiagonalConjoinedSearch,  # by `COLLAPSIBLE_TOWER_DIAGONAL_TERRAN`
                 RawBuffId.ParasiticBombUnitKU,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
                 RawBuffId.ParasiticBombSecondaryUnitSearch,  # by `UnitTypeId.PARASITIC_BOMB_LEFT_BEHIND`
             }

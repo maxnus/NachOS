@@ -716,8 +716,9 @@ class Unit[K: UnitType.AnyType]:
 
     @property
     def buffs(self) -> frozenset[BuffId]:
-        """The buffs on the unit, but those every unit of its type wears for as long as it is listed, which say nothing
-        its type does not: a parasitic bomb left behind reads none."""
+        """The buffs on the unit, but those every unit of its type wears for as long as it is listed, or in the game's
+        first observation alone, which say nothing its type does not: a parasitic bomb left behind reads none, and
+        nor does a collapsible tower."""
         if (report := self._latest_visible_report) is None:
             raise self._never_seen_error("buffs")
         return frozenset(BuffId._read_each(report.buff_ids))

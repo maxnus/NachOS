@@ -104,7 +104,6 @@ _NO_MAKER = {
     UnitTypeId.CHANGELING_ZERGLING: RawAbilityId.DisguiseAsZerglingWithoutWings_Zergling,
     UnitTypeId.CHANGELING_ZERGLING_WINGS: RawAbilityId.DisguiseAsZerglingWithWings_Zergling,
     UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_PURIFIER: RawAbilityId.MorphToCollapsiblePurifierTowerDebris,
-    UnitTypeId.CREEP_TUMOR_BURROWED: RawAbilityId.BurrowCreepTumorDown_BurrowDown,
     UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK: RawAbilityId.MorphToCollapsibleRockTowerDebrisRampLeft,
     UnitTypeId.COLLAPSIBLE_TOWER_DEBRIS_RAMP_LEFT_ROCK_GREEN: (
         RawAbilityId.MorphToCollapsibleRockTowerDebrisRampLeftGreen
