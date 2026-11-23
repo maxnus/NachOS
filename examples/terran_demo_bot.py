@@ -1,7 +1,7 @@
 """A Terran bot written with NachOS alone: it trains SCVs, which speed mine, builds supply depots, barracks and command
 centers, and attacks with marines.
 
-    uv run python examples/demo_bot.py --ComputerRace ZERG --ComputerDifficulty MEDIUM --Map PylonAIE_v4
+    uv run python examples/terran_demo_bot.py --ComputerRace ZERG --ComputerDifficulty MEDIUM --Map PylonAIE_v4
 
 It takes the options of `run_from_command_line`, so the match workflow can play it as it plays `run_game.py`.
 """

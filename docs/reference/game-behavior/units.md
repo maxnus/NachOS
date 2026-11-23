@@ -299,6 +299,11 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   fewer (AI Arena, Zerg against Zerg, played back every step as each player, 2026-11-22, build 75689). The table
   names it the burrowed tumor's creation ability, with a build time of 19 steps, and remaps it to the general burrow,
   `BurrowDown`.
+- A burrowed creep tumor is refused a plant of its own, `BUILD_CREEP_TUMOR`, with the generic `Error` up to 287 steps
+  after its burrow ends, its first listing with no order, and takes one from 289. Over four of the Zerg demo bot's
+  games against the computer at Medium, ordering each tumor every 32 steps from then on, 101 tumors' plants were taken
+  289 to 332 steps after but one, at 514, and every `Error` came 287 steps after or sooner (in game, 2026-11-23, build
+  75689).
 - A structure cancelled while going up is reported dead, and so is a MULE when it expires (#37; tested), and a mineral
   field killed by debug command (tested; local game, build 75689).
 - A neural parasite keeps the tag and hands the unit to the caster's player within 24 steps, alliance and upgrades
