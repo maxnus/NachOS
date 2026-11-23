@@ -653,8 +653,17 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     of 6 s at most is within 0.8% of the finer one's army from every state with a half. So a half is the best single
     share of the three, right in the near term and from two states of three in the far part, and what is off from 3:00
     is the long intervals more than the share. A reference of 1.5 s intervals throughout was not solved in 60 s in five
-    solves of nine. Not built: the share as an argument of `Planner`, and `Plan.moment_at` reading no stock below
-    nothing.
+    solves of nine. Some seconds of income in place of a share of the interval (the owner, the same day: "Maybe that
+    would scale better across different interval lengths, or is the percentage the better approach?"), measured the same
+    way, the army at the horizon against the finer grid's from 0:00, 3:00 and 6:00: 0.76 s of income, a half of the
+    first intervals', is 7.7% less, 3.4% less and 1.0% more; 1.5 s is 6.9, 2.3 and 0.6% less; 3 s is 5.2, 0.5 and 0.7%
+    less; 6 s is 2.1% less, 1.9% more and 0.2% less; a half of the interval but 6 s at most is 3.2% less, 1.3% more and
+    0.2% less, where a half alone is 0.3% more, 4.7% more and 0.1% less. Few seconds leave most of a long interval's
+    income unspent until the next, and a plan from a game's start short by 5 to 8%; many seconds are all of a short
+    interval's income, every start there early. So seconds do not scale better: a share is the same rounding at every
+    length, the money a steady plan spends at an interval's start having come in, on average, just then. 6 s is the most
+    even of those tried, 2.1% at worst for a half's 4.7%, on three states and one reward, which is too little to change
+    a default by. Not built: the share as an argument of `Planner`, and `Plan.moment_at` reading no stock below nothing.
 
 ## Risks
 
