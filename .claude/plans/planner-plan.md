@@ -534,11 +534,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     what the plan has it start; and `units`, for losses. One number would not say which. For it a `PlanMoment` holds
     `collected`, the state's and each interval's income over its length since, MULEs included; `GameState.collected` is
     what the game's score counts, read by `Planner.game_state`, nothing in a state made by hand; and
-    `Plan.moment_at(time)` is what a plan expects at any time, a straight line between an interval's two moments, which
-    the plan does not itself say holds and which is rough where intervals are long. It keeps no history and costs
-    nothing uncalled: a bot calls it before it replaces a plan and averages as it likes. Left for phase 2, when a bot
-    carries plans out: when each item started against when it was planned, which needs the bot to say what it started;
-    and whether the planner should keep a history itself.
+    `Plan.moment_at(time)` is what a plan expects at any time. Within an interval that is what the model has there,
+    which jumps at the edges: the units and upgrades of the interval's start, what its income has brought in by then,
+    and the stock with all that starts in the interval paid at its start, the end's less the income to come. It was a
+    straight line between the interval's two moments at first, against what had been said of `interval_at`, that the
+    model's curves jump and do not slope (the owner, the same day: "Didn't you say before that straight line
+    interpolation is wrong for the plan?"): a line put half of what an interval spends into the stock at its middle and
+    counted fractions of units. It keeps no history and costs nothing uncalled: a bot calls it before it replaces a plan
+    and averages as it likes. Left for phase 2, when a bot carries plans out: when each item started against when it was
+    planned, which needs the bot to say what it started; and whether the planner should keep a history itself.
 
     **A reward's weights hold its curves** (the owner, the same day, of the two: "Isn't the latter just a more general
     form of the former?"). `Reward.curves` is gone: `Reward.weights` holds for each unit type one number or a list of

@@ -977,26 +977,27 @@ class TestPlan:
         assert plan.moment_at(GameTime(seconds=32)) is plan.intervals[1].start
         assert plan.moment_at(GameTime(seconds=44)) is plan.intervals[-1].end
 
-    def test_the_moment_between_two_edges_is_as_far_between_theirs_as_its_time(self) -> None:
-        """A quarter into the interval from 40 to 42 seconds, with the upgrades of its start."""
+    def test_the_moment_within_an_interval_is_what_the_model_has_there(self) -> None:
+        """A quarter into the interval the first SCV starts in: the SCV paid at the interval's start, a quarter of
+        the interval's income collected since, and the units and upgrades of its start, the SCV not yet one."""
         state = _game_start(
             time=GameTime(seconds=30), collected=Resources(600.0, 50.0), upgrades=frozenset({UpgradeId.STIMPACK})
         )
         plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
 
-        start, end = plan.intervals[5].start, plan.intervals[5].end
-        moment = plan.moment_at(GameTime(seconds=40.5))
+        interval = plan.interval_at(plan.items[0].start)
+        assert interval is not None
+        start, end = interval.start, interval.end
+        started_in_it = sum(planned.start == start.time for planned in plan.items)
+        a_quarter_in = start.time + GameTime(seconds=(end.time - start.time).seconds / 4)
+        moment = plan.moment_at(a_quarter_in)
         assert moment is not None
-        assert moment.time == GameTime(seconds=40.5)
-        assert moment.resources.minerals == pytest.approx(
-            0.75 * start.resources.minerals + 0.25 * end.resources.minerals
-        )
-        assert moment.collected.minerals == pytest.approx(
-            0.75 * start.collected.minerals + 0.25 * end.collected.minerals
-        )
-        assert moment.units[UnitTypeId.SCV] == pytest.approx(
-            0.75 * start.units[UnitTypeId.SCV] + 0.25 * end.units[UnitTypeId.SCV]
-        )
+        income = end.collected.minerals - start.collected.minerals
+        assert (started_in_it, income > 0) == (1, True)
+        assert moment.time == a_quarter_in
+        assert moment.collected.minerals == pytest.approx(start.collected.minerals + 0.25 * income)
+        assert moment.resources.minerals == pytest.approx(start.resources.minerals - 50.0 + 0.25 * income)
+        assert moment.units == start.units
         assert moment.upgrades == start.upgrades
 
     @pytest.mark.parametrize("seconds", [29.9, 44.1], ids=["before it was made", "after the horizon"])

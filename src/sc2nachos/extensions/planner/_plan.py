@@ -130,9 +130,12 @@ class Plan:
 
     def moment_at(self, time: GameTime) -> PlanMoment | None:
         """What the plan expects at `time`, or `None` for a time before `made_at` or after the horizon. At an edge of
-        the grid it is that interval's `start` or `end`. Between two it is an estimate the plan does not make itself:
-        each number as far from the start's towards the end's as `time` is between them, a straight line, and the
-        upgrades done at the start."""
+        the grid it is that interval's `start` or `end`. Within an interval it is what the planner's model has there,
+        which jumps at the edges: the units and the upgrades of the interval's start, a unit counting as done at an
+        edge; what is collected by then at the interval's income, which is even over it; and the stock with all that
+        starts in the interval paid at its start, the end's stock less the income still to come. That stock can read
+        below nothing just after an interval's start, where the model lets what starts be paid from the interval's
+        income."""
         if not self.intervals or time > self.intervals[-1].end.time:
             return None
         interval = self.interval_at(time)
@@ -141,15 +144,13 @@ class Plan:
         start, end = interval.start, interval.end
         if time == start.time:
             return start
-        share = (time - start.time).seconds / (end.time - start.time).seconds
+        share_to_come = (end.time - time).seconds / (end.time - start.time).seconds
+        income_to_come = (end.collected - start.collected) * share_to_come
         return PlanMoment(
             time=time,
-            resources=start.resources + (end.resources - start.resources) * share,
-            collected=start.collected + (end.collected - start.collected) * share,
-            units={
-                unit_type: count + (end.units.get(unit_type, count) - count) * share
-                for unit_type, count in start.units.items()
-            },
+            resources=end.resources - income_to_come,
+            collected=end.collected - income_to_come,
+            units=start.units,
             upgrades=start.upgrades,
         )
 
