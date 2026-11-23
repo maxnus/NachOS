@@ -19,7 +19,7 @@ from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
 from sc2nachos.orders import OrderBook
-from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
+from sc2nachos.placement import PlacementGrids, PowerSource, ProtossWall, TerranWall
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state._state import _State
@@ -27,6 +27,7 @@ from sc2nachos.units import Alliance, OwnUnit, UnitType, Visibility
 from sc2nachos.units._tracking import _Tracker
 from support import (
     make_bits,
+    make_bytes,
     make_client,
     make_game_info,
     make_observation,
@@ -63,6 +64,11 @@ _TABLES = make_tables(
     _row(UnitTypeId.BARRACKS_FLYING, minerals=150, speed=0.9375),
     _row(UnitTypeId.REACTOR_BARRACKS, minerals=50, alias=(UnitTypeId.REACTOR,)),
     _row(UnitTypeId.SPAWNING_POOL, minerals=200),
+    _row(UnitTypeId.PYLON, minerals=100),
+    _row(UnitTypeId.GATEWAY, minerals=150),
+    _row(UnitTypeId.FORGE, minerals=150),
+    _row(UnitTypeId.PHOTON_CANNON, minerals=150),
+    _row(UnitTypeId.WARP_PRISM_PHASING, minerals=250),
     _row(UnitTypeId.HATCHERY, minerals=300),
     _row(UnitTypeId.COMMAND_CENTER, minerals=400),
     _row(UnitTypeId.MINERAL_FIELD),
@@ -91,19 +97,26 @@ _MAP = tuple(".." + "#" * 14 for _ in range(16))
 class _Game:
     """A tracker and an order book on a drawn map, fed one observation at a time as `Api.play` feeds them."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, heights: common_pb2.ImageData | None = None) -> None:
+        """A game on `_MAP`, flat unless `heights` gives the height at each tile's lower left corner."""
         self.tracker = make_tracker(_TABLES)
-        self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
+        self.map = GameMap(make_game_info(*_MAP, heights=heights), start_location=Point((0.5, 0.5)))
         self.book = OrderBook(_TABLES)
         self.grids: PlacementGrids | None = None
 
     def observe(
-        self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = (), creep: tuple[str, ...] = ()
+        self,
+        step: int,
+        *units: raw_pb2.Unit,
+        dead: tuple[int, ...] = (),
+        creep: tuple[str, ...] = (),
+        power_sources: tuple[raw_pb2.PowerSource, ...] = (),
     ) -> PlacementGrids:
-        """Take in an observation of `units` at `step`, in which the units under the tags `dead` died and creep lies
-        where `creep` draws it, top row first, and return its grids, as `_Game` keeps them."""
+        """Take in an observation of `units` at `step`, in which the units under the tags `dead` died, creep lies
+        where `creep` draws it, top row first, and `power_sources` power this player's structures, and return its
+        grids, as `_Game` keeps them."""
         creep_image = make_bits(*(creep or ("." * 16,) * 16))
-        observation = make_observation(step, units=units, dead=dead, creep=creep_image)
+        observation = make_observation(step, units=units, dead=dead, creep=creep_image, power_sources=power_sources)
         self.tracker.update(observation.observation.raw_data, step)
         changes = self.tracker.last_changes
         present = self.tracker.unit_tracker.present
@@ -655,6 +668,180 @@ class TestPlacingOneStructure:
         assert grids.free_for(UnitTypeId.COMMAND_CENTER)[Point((4.5, 7.5))]
         assert grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 10.5)))
         assert not grids.is_free(UnitTypeId.COMMAND_CENTER, at=Point((8.5, 9.5)))
+
+
+_PYLON_RADIUS = 6.5
+_PRISM_RADIUS = 3.75
+# Tiles from x 8 on stand 2 higher than those left of them: the height at each tile's lower left corner, from x 9 on.
+_CLIFF_AT_X_8 = make_bytes(*([191] * 9 + [207] * 7 for _ in range(16)))
+
+
+def _pylon(tag: int, at: tuple[float, float]) -> tuple[raw_pb2.Unit, raw_pb2.PowerSource]:
+    """A finished pylon of this player's and the power source the game lists for it."""
+    return make_unit(tag, UnitTypeId.PYLON, at=at), _power_source(tag, at, _PYLON_RADIUS)
+
+
+def _phasing_prism(tag: int, at: tuple[float, float]) -> tuple[raw_pb2.Unit, raw_pb2.PowerSource]:
+    """A warp prism of this player's in phasing mode and the power source the game lists for it."""
+    return make_unit(tag, UnitTypeId.WARP_PRISM_PHASING, at=at), _power_source(tag, at, _PRISM_RADIUS)
+
+
+def _power_source(tag: int, at: tuple[float, float], radius: float) -> raw_pb2.PowerSource:
+    return raw_pb2.PowerSource(tag=tag, pos=common_pb2.Point(x=at[0], y=at[1]), radius=radius)
+
+
+def _observe_sources(game: _Game, *sources: tuple[raw_pb2.Unit, raw_pb2.PowerSource]) -> PlacementGrids:
+    """The grids of an observation of the units of `sources`, each listed as a power source."""
+    return game.observe(
+        0, *(unit for unit, _ in sources), power_sources=tuple(power_source for _, power_source in sources)
+    )
+
+
+class TestPower:
+    def test_the_power_sources_are_those_the_game_lists_with_their_units(self) -> None:
+        game = _Game()
+        grids = _observe_sources(game, _pylon(1, (8.0, 8.0)), _phasing_prism(2, (12.25, 3.5)))
+        assert grids.power_sources == (
+            PowerSource(unit=game.own(1), position=Point((8.0, 8.0)), radius=_PYLON_RADIUS),
+            PowerSource(unit=game.own(2), position=Point((12.25, 3.5)), radius=_PRISM_RADIUS),
+        )
+        assert grids.power_sources[0].unit is game.own(1)
+
+    def test_with_no_source_nothing_is_powered(self) -> None:
+        grids = _Game().observe(0, make_unit(1, UnitTypeId.PYLON, at=(8.0, 8.0)))
+        assert grids.power_sources == ()
+        assert not grids.powered_for(UnitTypeId.GATEWAY).values.any()
+        assert not grids.powered_for(UnitTypeId.PHOTON_CANNON).values.any()
+
+    def test_a_center_is_read_by_the_tile_holding_it_so_the_same_tile_may_differ_by_footprint(self) -> None:
+        """A gateway in tile (14, 8) centers at (14.5, 8.5), 6.52 from the pylon, and a cannon at (14, 8), 6.0 from
+        it."""
+        grids = _observe_sources(_Game(), _pylon(1, (8.0, 8.0)))
+        assert not grids.powered_for(UnitTypeId.GATEWAY)[Tile(14, 8)]
+        assert grids.powered_for(UnitTypeId.PHOTON_CANNON)[Tile(14, 8)]
+        assert grids.powered_for(UnitTypeId.GATEWAY)[Tile(13, 8)]
+
+    @pytest.mark.parametrize(
+        ("unit_type", "prism_at", "inside", "on_the_edge"),
+        [
+            (UnitTypeId.GATEWAY, (7.75, 8.5), Point((10.5, 8.5)), Point((11.5, 8.5))),
+            (UnitTypeId.PHOTON_CANNON, (7.25, 8.0), Point((10.0, 8.0)), Point((11.0, 8.0))),
+        ],
+        ids=lambda value: value.name if isinstance(value, UnitTypeId) else None,
+    )
+    def test_a_center_on_the_edge_of_the_radius_is_not_powered(
+        self, unit_type: UnitTypeId, prism_at: tuple[float, float], inside: Point, on_the_edge: Point
+    ) -> None:
+        """A center exactly 3.75 from a phasing warp prism (tool `sweep_power`)."""
+        grids = _observe_sources(_Game(), _phasing_prism(1, prism_at))
+        assert on_the_edge.distance_to(Point(prism_at)) == _PRISM_RADIUS
+        assert grids.powered_for(unit_type)[inside]
+        assert not grids.powered_for(unit_type)[on_the_edge]
+
+    def test_the_grid_is_every_center_within_a_radius_of_a_source(self) -> None:
+        grids = _observe_sources(_Game(), _pylon(1, (5.0, 6.0)), _phasing_prism(2, (12.25, 11.5)))
+        for unit_type in (UnitTypeId.GATEWAY, UnitTypeId.PHOTON_CANNON):
+            footprint = _TABLES.units[unit_type].footprint
+            assert footprint is not None
+            powered = grids.powered_for(unit_type)
+            for x in range(16):
+                for y in range(16):
+                    center = footprint.center_in_tile(Tile(x, y))
+                    in_reach = (
+                        center.distance_to(Point((5.0, 6.0))) < _PYLON_RADIUS
+                        or center.distance_to(Point((12.25, 11.5))) < _PRISM_RADIUS
+                    )
+                    assert powered[Tile(x, y)] is in_reach, (unit_type.name, center)
+
+    def test_a_pylon_powers_no_center_on_higher_ground_and_any_on_lower(self) -> None:
+        """Tiles from x 8 on stand 2 higher (tool `sweep_power`)."""
+        below = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (4.0, 8.0)))
+        assert below.powered_for(UnitTypeId.GATEWAY)[Point((6.5, 8.5))]
+        assert not below.powered_for(UnitTypeId.GATEWAY)[Point((8.5, 8.5))]
+        above = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (12.0, 8.0)))
+        assert above.powered_for(UnitTypeId.GATEWAY)[Point((6.5, 8.5))]
+        assert above.powered_for(UnitTypeId.GATEWAY)[Point((8.5, 8.5))]
+
+    def test_a_center_on_a_tile_corner_takes_the_highest_tile_it_touches(self) -> None:
+        """A cannon centered at (8, 8) touches tiles 7, low, and 8, high."""
+        grids = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (4.0, 8.0)))
+        assert grids.powered_for(UnitTypeId.PHOTON_CANNON)[Point((7.0, 8.0))]
+        assert not grids.powered_for(UnitTypeId.PHOTON_CANNON)[Point((8.0, 8.0))]
+
+    def test_a_warp_prism_powers_every_level(self) -> None:
+        grids = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _phasing_prism(1, (5.5, 8.0)))
+        assert grids.powered_for(UnitTypeId.GATEWAY)[Point((8.5, 8.5))]
+        assert grids.powered_for(UnitTypeId.PHOTON_CANNON)[Point((8.0, 8.0))]
+
+    @pytest.mark.parametrize("unit_type", [UnitTypeId.SUPPLY_DEPOT, UnitTypeId.PYLON, UnitTypeId.MARINE], ids=str)
+    def test_a_type_that_needs_no_power_is_powered_everywhere(self, unit_type: UnitTypeId) -> None:
+        grids = _Game().observe(0)
+        assert grids.powered_for(unit_type).values.all()
+        assert not grids.powered_for(unit_type)[Point((-1.0, -1.0))]
+
+    def test_it_is_built_once_an_observation_for_the_footprints_odd_or_even(self) -> None:
+        game = _Game()
+        grids = _observe_sources(game, _pylon(1, (8.0, 8.0)))
+        gateway = grids.powered_for(UnitTypeId.GATEWAY)
+        assert grids.powered_for(UnitTypeId.FORGE) is gateway
+        assert grids.powered_for(UnitTypeId.PHOTON_CANNON) is not gateway
+        game.observe(1, make_unit(1, UnitTypeId.PYLON, at=(8.0, 8.0)))
+        assert not grids.powered_for(UnitTypeId.GATEWAY).values.any()
+
+    def test_it_refuses_writes(self) -> None:
+        grids = _observe_sources(_Game(), _pylon(1, (8.0, 8.0)))
+        with pytest.raises(TypeError, match="read-only"):
+            grids.powered_for(UnitTypeId.GATEWAY)[Tile(8, 8)] = False
+        with pytest.raises(TypeError, match="read-only"):
+            grids.powered_for(UnitTypeId.SUPPLY_DEPOT)[Tile(8, 8)] = False
+
+    def test_is_free_needs_power_unless_told_not_to(self) -> None:
+        grids = _observe_sources(_Game(), _pylon(1, (4.0, 8.0)))
+        assert grids.is_free(UnitTypeId.GATEWAY, at=Point((6.5, 8.5)))
+        assert not grids.is_free(UnitTypeId.GATEWAY, at=Point((12.5, 8.5)))
+        assert grids.is_free(UnitTypeId.GATEWAY, at=Point((12.5, 8.5)), power=False)
+        assert grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((12.0, 8.0)))
+
+    def test_nearest_free_needs_power_unless_told_not_to(self) -> None:
+        """A gateway centered at (10.5, 8.5) lies 6.52 from the pylon."""
+        grids = _observe_sources(_Game(), _pylon(1, (4.0, 8.0)))
+        near = Point((14.5, 8.5))
+        site = grids.nearest_free(UnitTypeId.GATEWAY, near=near, max_distance=math.inf)
+        assert site == Point((9.5, 8.5))
+        assert grids.nearest_free(UnitTypeId.GATEWAY, near=near, max_distance=3.0) is None
+        assert grids.nearest_free(UnitTypeId.GATEWAY, near=near, max_distance=3.0, power=False) == near
+        unpowered = _Game().observe(0)
+        assert unpowered.nearest_free(UnitTypeId.GATEWAY, near=near, max_distance=math.inf) is None
+
+    @pytest.mark.parametrize("unit_type", [UnitTypeId.GATEWAY, UnitTypeId.PHOTON_CANNON], ids=lambda t: t.name)
+    @pytest.mark.parametrize("near", [Point((6.3, 9.8)), Point((13.0, 3.0)), Point((14.6, 14.4))], ids=str)
+    @pytest.mark.parametrize("power", [True, False], ids=str)
+    def test_nearest_free_is_the_nearest_center_is_free_takes(
+        self, unit_type: UnitTypeId, near: Point, power: bool
+    ) -> None:
+        grids = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (9.0, 6.0)), _phasing_prism(2, (4.25, 12.5)))
+        footprint = _TABLES.units[unit_type].footprint
+        assert footprint is not None
+        centers = [footprint.center_in_tile(Tile(x, y)) for x in range(16) for y in range(16)]
+        taken = [c for c in centers if c.distance_to(near) <= 6.0 and grids.is_free(unit_type, at=c, power=power)]
+        expected = min(taken, key=lambda c: c.distance_to(near), default=None)
+        found = grids.nearest_free(unit_type, near=near, max_distance=6.0, power=power)
+        assert (found is None) == (expected is None)
+        if found is not None and expected is not None:
+            assert found.distance_to(near) == pytest.approx(expected.distance_to(near))
+            assert grids.is_free(unit_type, at=found, power=power)
+
+    def test_free_for_the_sites_where_a_footprint_fits_and_power_are_every_center_is_free_takes(self) -> None:
+        grids = _observe_sources(_Game(), _pylon(1, (6.0, 8.0)))
+        footprint = _TABLES.units[UnitTypeId.GATEWAY].footprint
+        assert footprint is not None
+        sites = grids.free_for(UnitTypeId.GATEWAY).where_footprint_fits(footprint) & grids.powered_for(
+            UnitTypeId.GATEWAY
+        )
+        for x in range(16):
+            for y in range(16):
+                center = footprint.center_in_tile(Tile(x, y))
+                assert sites[Tile(x, y)] is grids.is_free(UnitTypeId.GATEWAY, at=center), center
 
 
 def _first_observation(path: Path) -> tuple[GameMap, _Tracker, GameData, sc2api_pb2.ResponseObservation]:

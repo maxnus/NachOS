@@ -101,6 +101,26 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   (93, 150) to (90.5, 147.5), and a pylon ordered onto unbuildable ground was never made (#25, #32).
 - Power comes from a pylon or a warp prism (stated); a warp-in needs a pylon with open ground beside it (tool
   `sweep_alerts`).
+- Each observation lists this player's power sources, `player.power_sources`: a finished pylon, of radius 6.5 around
+  its center, and a warp prism in phasing mode, of 3.75, from the observation 2 steps after the order to phase. A pylon
+  being built is not listed and powers nothing: a gateway beside one was refused at 99.5% built, and taken from the
+  observation that first read it finished, the one that listed it. A warp prism in transport mode, the enemy's pylon and
+  a pylon once it dies are not listed either, and power nothing of this player's: a gateway was refused for power at
+  every center around each, the enemy pylon's own tiles included, so the game asks about power before the ground (tool
+  `sweep_power`, build 75689).
+- A structure is powered where its center lies strictly within a source's radius, whatever its footprint covers.
+  Around a pylon on open ground, a gateway and a forge were taken out to 6.36 and refused for power from 6.52, and a
+  photon cannon and a shield battery taken out to 6.40 and refused from 6.71; a probe's order to build a gateway agreed
+  with the query on both sides of the edge. Around a phasing warp prism, a gateway and a cannon centered exactly 3.75
+  off were refused. A pylon needs no power (tool `sweep_power`, build 75689).
+- A pylon powers no structure whose center touches a tile higher than the highest it stands on, and a phasing warp
+  prism powers every level. Beside cliffs on 5 maps of the pool (the sweep found no site on IncorporealAIE_v4 or
+  PersephoneAIE_v4), 20 pylons on level ground, above a cliff or below one, gave a gateway and a cannon 1,585
+  centers on their level or below, and refused for power all 890 above, as little as 0.19 above on a ramp, and a
+  cannon centered on a corner where one of its four tiles stood higher. 20 phasing prisms at the same sites powered 26
+  centers above them, 31 below and 599 on their level (tool `sweep_power`, build 75689).
+- `api.placement.powered_for` gave the game's answer at all 5,616 centers of those sweeps that the game took or
+  refused for power (tool `sweep_power`, build 75689).
 - Every main of the pool, both starts of the 7 maps, leaves by one ramp of the same shape: 16 tiles, two across its top
   and its bottom, climbing diagonally (corpus). At each of the 14, the game accepts every site of `api.placement`'s
   Terran and Protoss walls on empty ground, and a zergling made below the ramp and ordered to the start stays out while

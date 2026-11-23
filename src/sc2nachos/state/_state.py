@@ -10,6 +10,7 @@ from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UpgradeId
+from sc2nachos.placement._power_source import PowerSource
 from sc2nachos.state._actions import Action, ActionFailure, read_action
 from sc2nachos.state._effect import Effect
 from sc2nachos.state._production import _Production
@@ -114,6 +115,13 @@ class _State:
     @cached_property
     def effects(self) -> tuple[Effect, ...]:
         return tuple(Effect._from_proto(effect) for effect in self._observation.raw_data.effects)
+
+    @cached_property
+    def power_sources(self) -> tuple[PowerSource, ...]:
+        unit_by_tag = self._tracker.unit_tracker.by_tag
+        return tuple(
+            PowerSource._from_proto(source, unit_by_tag) for source in self._observation.raw_data.player.power_sources
+        )
 
     # What this player did since the previous observation. The game reports each action once, in the next
     # observation, however many steps that spans and in a realtime game too (in game), as it does chat and alerts.

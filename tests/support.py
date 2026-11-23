@@ -262,6 +262,7 @@ def make_observation(
     visibility: common_pb2.ImageData | None = None,
     creep: common_pb2.ImageData | None = None,
     effects: Iterable[raw_pb2.Effect] = (),
+    power_sources: Iterable[raw_pb2.PowerSource] = (),
     chat: Iterable[tuple[int, str]] = (),
     actions: Iterable[sc2api_pb2.Action] = (),
     action_errors: Iterable[sc2api_pb2.ActionError] = (),
@@ -271,7 +272,9 @@ def make_observation(
     """An observation at `game_loop` with `units`, the tags of the `dead`, the `results` if the game is over, and the
     rest of what an observation reports. `chat` holds each message as the sender's player id and the text."""
     raw = raw_pb2.ObservationRaw(
-        player=raw_pb2.PlayerRaw(upgrade_ids=upgrades, camera=common_pb2.Point(x=camera[0], y=camera[1])),
+        player=raw_pb2.PlayerRaw(
+            power_sources=power_sources, upgrade_ids=upgrades, camera=common_pb2.Point(x=camera[0], y=camera[1])
+        ),
         units=units,
         map_state=raw_pb2.MapState(visibility=visibility, creep=creep),
         event=raw_pb2.Event(dead_units=dead),
