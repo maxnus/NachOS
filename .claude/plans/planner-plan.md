@@ -277,9 +277,9 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    owner, the same day, to the recommendation: "Ok agreed"): phase 3 starts on scipy alone, with the delay repair and
    the better of the two plans kept. highspy is looked at again only if games show a need, and then for a solve stopped
    from outside and plans handed over as they are found, which scipy has not, more than for its start.
-3. **The item set: a wide reward is not solved in 3 seconds** (measured in phase 1's pull request, 2026-11-18,
-   `tools/benchmark_planner.py items`). The real model has more types than the toy's 14, and integers scale with
-   them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
+3. **The item set: a wide reward is not proven in 3 seconds, and is left so** (the owner, 2026-11-23: "Leave it as
+   is"; measured in phase 1's pull request since 2026-11-18, `tools/benchmark_planner.py items`). The real model has
+   more types than the toy's 14, and integers scale with them: a reward on 13 army types and 8 upgrades brings 38 items and 1,494 whole variables, the upgrades' 504 of
    them, where the reference has 14 and 419. From the game's start it finds no plan within 1 s at any half-life; after
    3 s none at a half-life of 120 s, and plans 5% short of the best undiscounted, 28% at 240 s and 24% at 480; after
    10 s plans 0.8 to 1.6% short; and it is proven optimal in 36 to 38 s at three half-lives, 2.1% from its bound after
@@ -329,10 +329,21 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    to 1.5% from a game's start; from mid-game all were within 0.5%, doubling from 544 within 0.11%. The wide reward
    from a game's start at a half-life of 240 s was proven in 14.0 s doubling from 544, and not in 40 from 816 on.
 
-   Open: prune to what the reward reaches, or phase 3's start from the previous plan. Where no plan is found in
-   time, as for a wide reward's replan at 1 s in one case of twelve, `plan_now` returns `None` and `plan` stays the
-   one before (the owner, 2026-11-19), where it raised a `NoPlanFoundError`: a bot keeps the plan it has, and the
-   type makes it check.
+   On today's planner, 2026-11-23, over the default 5 minutes on the default grid, 45 intervals, with 1,251 whole
+   variables from the game's start, 915 from 3:00 and 850 from 6:00 (`items`, twelve cases, the three states
+   undiscounted and at half-lives of 120, 240 and 480 s, one run under each limit, each plan against the proven best):
+   after 1 s a plan in ten cases, none from 3:00 undiscounted and at 480 s, at most 2.2% short; after 3 s a plan in all
+   twelve, two of them proven, both from the game's start, and the others 0.1 to 1.5% short; after 10 s six proven and
+   the others at most 0.7% short; proven from the game's start in 2.4 to 3.7 s, from 3:00 in 7.5 to 21.9 and from 6:00
+   in 7.1 to 11.3.
+
+   Left as it is, nothing pruned (the owner, 2026-11-23: "Leave it as is"): the time limit is the bot's, `Plan.gap` says
+   how far a plan may be from the best, a reward on fewer types is proven sooner, and a plan about 1% short is one to
+   play from, most of what it lacks being in the far term (above). The other choice was to prune to what a plan can
+   reach within its horizon, unbuilt and its gain unmeasured; phase 2's games say whether a wide reward calls for it,
+   and phase 3 scores the previous plan again beside each new one (Open 2). Where no plan is found in time, as for a
+   wide reward's replan at 1 s in two cases of twelve, `plan_now` returns `None` and `plan` stays the one before (the
+   owner, 2026-11-19), where it raised a `NoPlanFoundError`: a bot keeps the plan it has, and the type makes it check.
 4. **Build space.** A bound on structures per base from the map, as the one physical limit the model lacks;
    `api.placement` may answer it.
 5. **Replanning defaults.** The interval, the budget and the hysteresis bonus are parameters; their defaults come
