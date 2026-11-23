@@ -192,17 +192,19 @@ class Planner:
         hysteresis_bonus: float = 0.0,
     ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
-        `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing
-        that pays back only later is planned unless the reward values it itself, an expansion for one, and a longer
-        horizon is a slower solve. The plan's workers mine, collect and walk as `economy` says. A unit of a type in
-        `loss_rates` is expected lost at that share a second, those alive now and those the plan makes, so that only the
-        share expected alive counts. Of a unit type or an upgrade in `start_limits` the plan starts at most that many,
-        none for 0, beside what the state holds in production: a reactor the bot does not build, an orbital command it
-        does not morph, or the expansions it means to take less those an SCV is already on its way to build on. A unit
-        type's limit is that of the type it counts as, the lowest of those of one type, and one on what the plan would
-        not make anyway does nothing. With a `previous_plan`, such as `plan`, each of its items the new plan starts no
-        later than that one expected, counting those of its kind before it, is worth `hysteresis_bonus` once, beside the
-        reward, so that the new plan differs from it only for more than that. It solves within the planner's limits,
+        `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing that
+        pays back only later is planned unless the reward values it itself, an expansion for one, and a longer horizon
+        is a slower solve. The plan's workers mine, collect and walk as `economy` says. A unit of a type in `loss_rates`
+        is expected lost at that share a second, those alive now and those the plan makes, so that only the share
+        expected alive counts. Of a unit type or an upgrade in `start_limits` the plan starts at most that many, none
+        for 0, beside what the state holds in production: a reactor the bot does not build, an orbital command it does
+        not morph, or the expansions it means to take less those an SCV is already on its way to build on. A unit type's
+        limit is that of the type it counts as, the lowest of those of one type, and one on what the plan would not make
+        anyway does nothing. With a `previous_plan`, such as `plan`, each of its items still ahead is worth up to
+        `hysteresis_bonus`, beside the reward, so that the new plan differs from it only for more than that: the whole
+        bonus where the new plan has started as many of its kind by that item's start as the previous plan would have
+        from now, and that share of it where fewer. One marine started of three expected is worth the bonus, a half of
+        it and a third, which spares the solve a whole variable for each item. It solves within the planner's limits,
         before it returns, and returns `None` if the solver finds no plan within them, which leaves `plan` the one
         before.
 

@@ -251,10 +251,11 @@ class ThreatMap:
   it buys nothing more. A reward of much smaller weights wants it smaller in proportion. `plan_now` takes the horizon, 5
   minutes by default, and the share of each unit type the bot expects lost a second, so that only what is expected to
   survive counts. It also takes a `previous_plan`, such as `planner.plan`, and a `hysteresis_bonus` for each of its
-  items the new plan keeps to, so that a new plan differs from the last only for more than that. A plan makes nothing
-  that pays back only past its horizon: over 5 minutes from a game's start, a reward on army units alone takes no
-  expansion, and one that also values SCVs, or command centers, takes it. A longer horizon weighs such things itself and
-  solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit
+  items the new plan keeps to, so that a new plan differs from the last only for more than that. An item the new plan is
+  behind on is worth its share of the bonus: the third marine expected a third, with one started by then. A plan makes
+  nothing that pays back only past its horizon: over 5 minutes from a game's start, a reward on army units alone takes
+  no expansion, and one that also values SCVs, or command centers, takes it. A longer horizon weighs such things itself
+  and solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit
   counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat
   as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 

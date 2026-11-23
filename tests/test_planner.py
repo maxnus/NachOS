@@ -1000,6 +1000,28 @@ class TestKnownPlans:
         assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
         assert _start_seconds(kept, UnitTypeId.BARRACKS)[0] <= 30.0
 
+    def test_an_item_the_plan_is_behind_on_is_worth_its_share_of_the_hysteresis_bonus(self) -> None:
+        """Of three marines the previous plan expected, at 0, 20 and 40 seconds, the one the plan may start keeps to
+        the first, to half of the second, one started of two expected by then, and to a third of the third."""
+        marines = tuple(
+            PlannedItem(item=UnitTypeId.MARINE, start=GameTime(seconds=seconds), is_fluid=False)
+            for seconds in (0, 20, 40)
+        )
+        previous = dataclasses.replace(_A_PLAN_OF_ONE_BARRACKS, items=marines)
+        state = _game_start(minerals=500.0, units={UnitTypeId.SCV: 12, UnitTypeId.BARRACKS: 1})
+        worth_nothing = Reward(terms=[RewardTerm.weight(UnitTypeId.MARINE, 0.0)], stock_weight=0.0)
+
+        plan = _best_plan(
+            state,
+            worth_nothing,
+            horizon_seconds=60,
+            start_limits={UnitTypeId.MARINE: 1},
+            previous_plan=previous,
+            hysteresis_bonus=1.0,
+        )
+
+        assert plan.objective == pytest.approx(1 + 1 / 2 + 1 / 3)
+
 
 class TestPlan:
     def test_the_interval_at_a_time_is_the_one_from_its_start_to_before_its_end(self) -> None:

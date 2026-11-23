@@ -62,8 +62,9 @@ class PlanProgram:
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
     supply and the reward. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is
     that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item
-    of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
-    worth `hysteresis_bonus` once, beside the reward.
+    of `previous_plan` still ahead is worth up to `hysteresis_bonus`, beside the reward: the share of it that the plan
+    has started of its kind by that item's interval, of what the previous plan would have from the state's time, at most
+    all of it.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
     `walk_time`, and for a unit in production in `state` of a type that is no item of `model`'s.
@@ -872,8 +873,10 @@ class PlanProgram:
         )
 
     def _previous_items_kept(self, previous: BuildPlan) -> VariableBlock:
-        """Whether each of `previous`'s items still ahead is kept to: as many of its kind started by its interval as it
-        and the previous plan's items of its kind before it, still ahead."""
+        """How far each of `previous`'s items still ahead is kept to, from 0 to 1: at most the starts of its kind by its
+        interval over it and the previous plan's items of its kind before it, still ahead. It is a share and no whole
+        variable, of which a plan kept to would need one for each item: the third marine expected is kept to by a third
+        for one started."""
         kept_to: list[tuple[int, int, int]] = []
         ranks: dict[tuple[bool, int], int] = {}
         for planned in previous.items:

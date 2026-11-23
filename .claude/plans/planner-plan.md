@@ -707,15 +707,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     `curve` and `combination`, `Reward.weighted`, `CurveSegment`, `TimeGrid`, `PlanInterval`, `PlanMoment`,
     `PlannedItem`, `PlanDeviation`, `UnitCompletion`, `WorkerBuild`, `Occupation`, `moment_at`, `deviation_of`,
     `interval_at`, `spendable_income_fraction`, `time_factor_at` and `count_factor_at`.
-16. **The code review of 2026-11-23 left three points, two still open** (the owner: "OK do the code review and
+16. **The code review of 2026-11-23 left three points, one still open** (the owner: "OK do the code review and
     afterwards I will do my review"; the whole pull request at high effort, each point confirmed by a script outside the
     package). Fixed with it: a host's add-on of a type the plan does not make left the host free, so two barracks with a
     tech lab each took two reactors under a reward on marines alone; a curve's piece but the last with no count to end
     at was taken, and valued at the next piece's weight; `reassignment_time` charged no miner where the economy has no
     rate for a collector; `Reward.weighted` took a numpy `float32` or integer for a curve; a state made by hand with a
     unit in production that is no item raised a `KeyError`. A grid whose last segment ends before the horizon runs one
-    interval on to it, however long, which a test holds and the docstring now says. The three, the first settled since
-    and two open:
+    interval on to it, however long, which a test holds and the docstring now says. The three, two settled since
+    and the last open:
     - **A supply deficit was forgiven for the whole plan, and is held now** (the owner, 2026-11-23: "Yes, build it", to
       "Shall I build the exact fix for the deficit and measure it?"). `_constrain_at_most` holds a row at none where
       what is now uses more than there is, so that starting nothing stays possible, and so dropped the shortfall for
@@ -732,11 +732,14 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       as of 102. The other rows keep forgiving, those of workers, producers, add-ons and morphs: I know no state the
       game hands over in deficit there but one with more structures left by their SCV than SCVs alive, and none has a
       bound as near as the supply limit.
-    - **The hysteresis bonus is paid in part for an item not kept to.** Whether an item of the previous plan is kept is
-      a fluid variable held at the starts of its kind by its interval over its rank, so the third marine expected earns
-      a third of the bonus for one started: of marines expected at 0, 20 and 40 seconds with one start allowed, a plan
-      counts 1.83 bonuses for 1, and the k-th item of a kind kept on time adds about 1/k of one. Exact is a whole
-      variable for each item of the previous plan still ahead.
+    - **The hysteresis bonus is paid in shares, and stays so** (the owner, 2026-11-23: "I don't think we can afford to
+      make the planning more expensive just for the hysteresis bonus"). How far an item of the previous plan is kept to
+      is a fluid variable held at the starts of its kind by its interval over its rank, so the third marine expected
+      earns a third of the bonus for one started: of marines expected at 0, 20 and 40 seconds with one start allowed, a
+      plan counts 1.83 bonuses, and the k-th item of a kind kept on time adds about 1/k of one. Exact would be a whole
+      variable for each item of the previous plan still ahead, some sixty for a full plan, in every replan, and was not
+      built or measured. `plan_now`, the program's docstrings and `docs/extensions.md` now say it is a share, where they
+      said each item kept was worth the bonus once, and a test holds the 1.83.
     - **Of the loss rates of two types that count as one, the later replaces the earlier**, a hellion's and a hellbat's,
       where `start_limits` takes the lowest and says so.
 
