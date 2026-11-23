@@ -237,7 +237,7 @@ class TestTimeGrid:
 
 
 class TestTerranModel:
-    def test_a_reward_on_marines_marauders_and_medivacs_needs_the_toys_items(self) -> None:
+    def test_a_reward_on_marines_marauders_and_medivacs_needs_fourteen_items(self) -> None:
         items = _TERRAN_MODEL.items_for(
             unit_types=[UnitTypeId.MARINE, UnitTypeId.MARAUDER, UnitTypeId.MEDIVAC], upgrades=[]
         )

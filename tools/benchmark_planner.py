@@ -1,5 +1,8 @@
-"""Benchmark the build planner on the cases of its toy, `tools/planner_toy/`, from the game's data rather than the toy's
-14 hand-written items: each solve's time, objective, gap and counts, and the first part of its plan.
+"""Benchmark the build planner on the cases of its toy, from the game's data rather than the toy's 14 hand-written
+items: each solve's time, objective, gap and counts, and the first part of its plan.
+
+The toy is the model the planner's design was measured on before the planner was built, and is not in the repository:
+it was `tools/planner_toy/`, a `run*.py` for each experiment, in the first commit of pull request #239, f1da1b6.
 
 The toy's cases keep its grid, 2-second intervals doubling from 45 seconds, and its 10 minutes, and `reference`,
 `replans` and `items` plan on the planner's defaults, its grid and its 5 minutes; `--horizon` sets another time for

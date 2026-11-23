@@ -16,8 +16,13 @@ bot its design is tested on, and nothing in it may exist for AvocaDOS alone.
 This page holds the decisions, with the measurements behind them, the design, the phases and what is still open.
 It lives in NachOS as `.claude/plans/planner-plan.md`, beside `next-steps.md`, which points to it as the work in
 progress; AvocaDOS's `docs/plans/` keeps a pointer here, since phases 2 and 4 are AvocaDOS's. The measurements are
-from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core machine; the toy is NachOS's
-`tools/planner_toy/`, and both were drafted in AvocaDOS and moved with phase 1's pull request.
+from a toy Terran model of 14 item types solved by scipy's HiGHS on a 32-core machine. The toy and this page were
+drafted in AvocaDOS and moved with phase 1's pull request, the toy as `tools/planner_toy/` in its first commit,
+f1da1b6, and the toy was taken out again before the merge (the owner, 2026-11-23, asked "Should we really commit the
+toy to the repo btw?", and then: "Remove it"). It was prototype code on made-up numbers, the one folder left out of
+ruff and pyright, with the count-form cut of Open 8 in its fluid intervals, so its counts and objectives are
+somewhat off; `tools/benchmark_planner.py` runs its cases on the planner. What only the toy measured, the first ten
+rows of the table below and a few sentences of the decisions, can be run again from that commit alone.
 
 ## Decisions
 
@@ -204,8 +209,8 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    plan, `plan_now()`. Tests on tiny instances with known optimal plans (the first depot at 8 seconds from 50
    minerals and twelve SCVs; one marine at a time from one barracks; the command center with the fifth SCV after
    uninterrupted SCVs), on the toy's cases as `tools/benchmark_planner.py`, and on made-up games through
-   `sc2nachos.testing` for the snapshot. A section under "NachOS's own" in `docs/extensions.md`, this plan and the
-   toy moved in, and `next-steps.md` pointing here. Exit: the toy's results reproduced from the game's data, and the
+   `sc2nachos.testing` for the snapshot. A section under "NachOS's own" in `docs/extensions.md`, this plan moved
+   in, and `next-steps.md` pointing here. Exit: the toy's results reproduced from the game's data, and the
    reference configuration, doubling grid with the windows above, solved within 3 seconds on a developer machine.
 2. **Playing it**, in AvocaDOS against the checkout. `PlanManager` driving objective priorities, the overlay, and a
    build `BuildOrderName.PLANNER` in `enabled_builds` with a static reward. Games against the built-in AI through
@@ -505,8 +510,8 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     the bot's to estimate. **An interval was a bucket** until the owner renamed it the same day ("I don't really like
     the name"), everywhere in the planner, its tests, its benchmark and the docs: `PlanInterval`, `Plan.intervals`,
     `Plan.interval_at`, and `TimeGrid.doubling`'s `initial_interval_length`, `initial_interval_count` and
-    `max_interval_doublings`. Bucket is lot-sizing's word and interval optimal control's. The toy in
-    `tools/planner_toy/` keeps its own word, and the replanning interval of decision 9 is another thing. Seen while
+    `max_interval_doublings`. Bucket is lot-sizing's word and interval optimal control's. The toy kept
+    its own word, and the replanning interval of decision 9 is another thing. Seen while
     moving the tests over: where minerals buy nothing more, a plan may count more starts of mining than its miners
     rise by, which
     costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and one more to train over
