@@ -665,7 +665,12 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     even of those tried, 2.1% at worst for a half's 4.7%, on three states and one reward, which is too little to change
     a default by. The share is an argument of `Planner` since (the owner, the same day: "Agreed to the Planner
     argument"), `spendable_income_fraction`, a half by default, 0 to 1, for a bot whose plans prove optimistic by
-    `Plan.deviation_of` to lower. Not built: `Plan.moment_at` reading no stock below nothing.
+    `Plan.deviation_of` to lower. And `Plan.moment_at` reads no stock below nothing (the owner, the same day: "let's go
+    with never below zero"): with what starts paid at an interval's start it read short just after one, by up to the
+    spendable fraction of the interval's income, a number no game has. The reading at an interval's centre for all of
+    its first half, the owner's alternative, would have changed readings that are right too, where nothing is paid from
+    income to come. From the spendable fraction of an interval on the reading is what a bot holds that starts each item
+    as soon as it can pay; before it, such a bot may still be saving up, and no reading can say.
 
 ## Risks
 

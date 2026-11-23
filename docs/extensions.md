@@ -301,10 +301,10 @@ class ThreatMap:
   a game time is in, or `None` outside the plan: its workers are those the plan has at that time, and between its start
   and its end the plan says nothing of the stock, the units or the upgrades. `plan.moment_at(time)` is what the
   planner's model has there, which jumps at the edges: the units and upgrades of the interval's start, what its income
-  has brought in by then, and the stock with all that starts in the interval paid at its start. `plan_now` returns
-  `None` if the solver finds no plan within its limits, and `planner.plan` holds the last one it found. The planner
-  orders nothing and holds no unit: where a structure goes, which SCV builds it, and what to drop once the game moves on
-  stay the bot's.
+  has brought in by then, and the stock with all that starts in the interval paid at its start, nothing where that would
+  be less than nothing. `plan_now` returns `None` if the solver finds no plan within its limits, and `planner.plan`
+  holds the last one it found. The planner orders nothing and holds no unit: where a structure goes, which SCV builds
+  it, and what to drop once the game moves on stay the bot's.
 
   How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `GameState`, such as
   `planner.game_state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what
@@ -313,9 +313,11 @@ class ThreatMap:
   lower its rates or raise its `reassignment_time`. As much collected and more `resources` in stock is the bot's, which
   started less than the plan had it start. As much of both and fewer `units` of a type is units lost, which `loss_rates`
   are for. It is `None` for a state from before the plan or after its horizon. Within an interval the plan's stock is
-  the model's, everything that starts in it paid at its start, where a bot pays for each item as it can: so the stock
-  and the units are best compared soon after a plan is made, where intervals are short, and what is collected at any
-  time.
+  the model's, everything that starts in it paid at its start, where a bot pays for each item as it can. From the
+  planner's `spendable_income_fraction` of an interval on, a half by default, that is what a bot holds that starts each
+  item as soon as it can pay; before it the bot may still be saving up, and hold up to what starts in the interval more.
+  So the stock and the units are best compared soon after a plan is made, where intervals are short, and what is
+  collected at any time.
 
   How many workers mine and how many collect vespene is the plan's to choose, interval by interval, and each interval
   holds them as its `miners` and `collectors`. A bot holds its collectors at the first interval's,
