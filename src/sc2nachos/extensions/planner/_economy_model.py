@@ -27,7 +27,7 @@ _DEFAULT_WALK: Final = GameTime(seconds=6)
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Economy:
+class EconomyModel:
     """What the bot assumes of its economy, which the planner plans with: what each worker mines or collects, what each
     orbital command's MULEs mine, what a new command center brings, and how far an SCV walks to build.
 
@@ -96,7 +96,9 @@ def rate_tiers(rates: Sequence[float]) -> tuple[tuple[int, float], ...]:
     return tuple((len(list(run)), rate) for rate, run in itertools.groupby(rates) if rate > 0)
 
 
-def minerals_mined_a_second(economy: Economy, *, workers: int, mineral_fields: int, orbital_commands: int) -> float:
+def minerals_mined_a_second(
+    economy: EconomyModel, *, workers: int, mineral_fields: int, orbital_commands: int
+) -> float:
     """The minerals `workers` mine a second by `economy` if every one mines, at `mineral_fields`, as many at each
     field's better rates as the fields take, with what the MULEs of `orbital_commands` mine."""
     mined = economy.mule_minerals_per_orbital_second * orbital_commands
@@ -108,7 +110,7 @@ def minerals_mined_a_second(economy: Economy, *, workers: int, mineral_fields: i
     return mined
 
 
-def walk_seconds_of(economy: Economy, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
+def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
     """The seconds an SCV walks to build each of `unit_types`, by `economy`.
 
     Raises `ValueError` for a negative time from its `walk_time`.

@@ -87,9 +87,9 @@ rows of the table below and a few sentences of the decisions, can be run again f
    production after, lost workers replaced.
 7. **The builder is an occupancy interval per race, and walks shift it.** Terran's SCV is away from the walk there
    through the build to the walk back; Protoss's probe for the two walks only; Zerg's drone walks there and is gone.
-   Walk times are per structure, and the bot's (decision 11): `Economy.walk_time`, by default 10 seconds to a command
-   center, about the walk from a main's mineral line to its natural on every map of the pool (corpus), and 6 to any
-   other structure; the planner reads no path for them. A structure cannot start before its walk unless a worker is
+   Walk times are per structure, and the bot's (decision 11): `EconomyModel.walk_time`, by default 10 seconds to a
+   command center, about the walk from a main's mineral line to its natural on every map of the pool (corpus), and 6 to
+   any other structure; the planner reads no path for them. A structure cannot start before its walk unless a worker is
    already on its way. Walks cost Terran 2% and two SCVs.
 8. **A plan is executed as an order, not a timetable.** The next item starts when affordable; the predicted times
    are for monitoring and the debug overlay. In AvocaDOS the order maps onto the priorities of the production,
@@ -105,8 +105,8 @@ rows of the table below and a few sentences of the decisions, can be run again f
     refineries a base, one add-on a barracks, one of each upgrade, supply 200, and room to build near a base once the
     map supplies it.
 11. **Every input is visible and the bot's to change** (the owner, review of #239). What the game shows is a public
-    `GameState`, which `Planner.game_state` reads and `plan_now(state=...)` takes back changed, a base about to fall
-    left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `Economy`
+    `PlannerState`, which `Planner.game_state` reads and `plan_now(state=...)` takes back changed, a base about to fall
+    left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `EconomyModel`
     handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
     worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and `start_limits`
     beside it, the most a plan may start of a unit type or an upgrade, none for 0 (the owner, 2026-11-19, over
@@ -165,19 +165,20 @@ class Extensions:
   morphed from another, and of two, the one needing fewer techs, so a hellbat counts as a hellion (the owner: one unit
   to a planner); a rich refinery counts as the refinery its order makes.
 - `_grid.py`: interval edges from segments. Each item's integrality window comes from its cost, or from the bot.
-- `_game_state.py`: the state as plain values, `GameState`, read from the api when `plan_now` asks: resources, supply,
-  the alive count of each type, each item in production with its time left, each structure an SCV builds and whether
-  one walks there first, upgrades done and researching, and the fields, refineries and free geysers at the bot's
+- `_planner_state.py`: the state as plain values, `PlannerState`, read from the api when `plan_now` asks: resources,
+  supply, the alive count of each type, each item in production with its time left, each structure an SCV builds and
+  whether one walks there first, upgrades done and researching, and the fields, refineries and free geysers at the bot's
   bases. A bot may change it and hand it back.
-- `_economy.py`: `Economy`, what the bot assumes of its economy (decision 11), with defaults measured in game.
+- `_economy_model.py`: `EconomyModel`, what the bot assumes of its economy (decision 11), with defaults measured in
+  game.
 - `_reward.py`: the reward as data the matrix builder reads, and the extension's public interface: per-type weights
   or concave segments, coverage (effectiveness, enemy counts per interval, values), floors, the discount half-life and
   the terminal value. The bot builds it; the planner never guesses it. The hysteresis bonus and the plan it favours
   are `plan_now`'s (decision 11).
 - `_milp.py`: the matrix from model, grid, snapshot and reward; the solve with a time or node limit; the plan from
   the solution.
-- `_plan.py`: the `Plan`: items in order with predicted start times and the predicted resource and count curves, read
-  as `planner.plan`.
+- `_build_plan.py`: the `BuildPlan`: items in order with predicted start times and the predicted resource and count
+  curves, read as `planner.plan`.
 - `_runner.py`: `plan_now()` synchronous, and the background mode: one process per `Planner`, since two apis in one
   process must coexist and NachOS keeps no module-level state; the interval, the triggers the bot raises, and
   re-anchoring a plan on arrival.
@@ -338,9 +339,9 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    the others at most 0.7% short; proven from the game's start in 2.4 to 3.7 s, from 3:00 in 7.5 to 21.9 and from 6:00
    in 7.1 to 11.3.
 
-   Left as it is, nothing pruned (the owner, 2026-11-23: "Leave it as is"): the time limit is the bot's, `Plan.gap` says
-   how far a plan may be from the best, a reward on fewer types is proven sooner, and a plan about 1% short is one to
-   play from, most of what it lacks being in the far term (above). The other choice was to prune to what a plan can
+   Left as it is, nothing pruned (the owner, 2026-11-23: "Leave it as is"): the time limit is the bot's, `BuildPlan.gap`
+   says how far a plan may be from the best, a reward on fewer types is proven sooner, and a plan about 1% short is one
+   to play from, most of what it lacks being in the far term (above). The other choice was to prune to what a plan can
    reach within its horizon, unbuilt and its gain unmeasured; phase 2's games say whether a wide reward calls for it,
    and phase 3 scores the previous plan again beside each new one (Open 2). Where no plan is found in time, as for a
    wide reward's replan at 1 s in two cases of twelve, `plan_now` returns `None` and `plan` stays the one before (the
@@ -410,7 +411,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 10. **Workers per base** (the owner, review of #239: to come back to; 2026-11-23: "I would really like to have workers
     per base, but I don't think we can afford it"). The planner pools workers over every field and refinery, and a new
     base's fields count from when its command center is done. What a pooled plan charges a move is
-    `Economy.reassignment_time` (Open 13, which built the cheaper middle way this point had left open): a new SCV's
+    `EconomyModel.reassignment_time` (Open 13, which built the cheaper middle way this point had left open): a new SCV's
     first walk to a field, and a worker that moves to a new base's fields, which is a rise of a better tier of rates,
     each bring in nothing for its 3 seconds, where a walk to another base is 10 to 25. That stays the only charge, with
     no parameter of its own for a new base (the owner, the same day: "SCVs should already be delayed by 3 seconds when
@@ -474,11 +475,11 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 13. **A plan says how its workers split, and moving one costs time** (the owner, 2026-11-22: "we definitely want to
     report this in the plan and we definitely want to have an interruption when reassigning a worker, before the new
     income kicks in. Something like 2 or 3s would be enough"). The split between minerals and vespene was the plan's
-    choice in each interval all along, moved for nothing, and a `Plan` did not hold it. It holds `miners` and
-    `collectors` now, one number an interval, and `Economy.reassignment_time`, 3 seconds by default (assumed, the higher
-    of the owner's two), is how long a worker moved to a refinery collects nothing and one moved from a refinery neither
-    mines nor builds; 0 moves them for nothing as before, and adds no variable. Every rise of the collectors in a tier
-    of rates, and every fall of them in all, is a move, from `GameState.vespene_collectors` on, which
+    choice in each interval all along, moved for nothing, and a `BuildPlan` did not hold it. It holds `miners` and
+    `collectors` now, one number an interval, and `EconomyModel.reassignment_time`, 3 seconds by default (assumed, the
+    higher of the owner's two), is how long a worker moved to a refinery collects nothing and one moved from a refinery
+    neither mines nor builds; 0 moves them for nothing as before, and adds no variable. Every rise of the collectors in
+    a tier of rates, and every fall of them in all, is a move, from `PlannerState.vespene_collectors` on, which
     `Planner.game_state` reads as the workers the game counts as assigned to the refineries; a new SCV's first walk to a
     refinery is one too, a new SCV's to a field is not, and the fall of those lost is not. A move made at an interval's
     start runs through the intervals its time spans, so it costs its seconds on any grid. A fall that what is now
@@ -513,17 +514,17 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     **A plan holds its intervals, not a tuple for each value** (the owner, the same day: "Would it not be better to
     have a new class that represents all these values for a single bucket and then have a single tuple over objects
     of this class?"). The stocks and counts had a value for each edge of the grid and the workers one for each
-    interval, one fewer. `Plan.intervals` is a tuple of `PlanInterval`: `start`, `end`, the `miners` and `collectors` in
-    it, and the `minerals`, `vespene` and `counts` expected at its end, the last interval's being the horizon's. The
-    first edge is gone and held nothing: on the reference reward from 0:00, 3:00 and 6:00 its stocks and counts were
-    the state's to the last digit, and each interval's end the next one's start to 1e-14. Intervals stay, with a start
-    and an end, rather than points in time, whose last, the horizon, would have no workers (the owner, the same
-    day), and `Plan.interval_at(time)` finds the one a time is in; what the stock or a count is between two edges is
-    the bot's to estimate. **An interval was a bucket** until the owner renamed it the same day ("I don't really like
-    the name"), everywhere in the planner, its tests, its benchmark and the docs: `PlanInterval`, `Plan.intervals`,
-    `Plan.interval_at`, and `TimeGrid.doubling`'s `initial_interval_length`, `initial_interval_count` and
-    `max_interval_doublings`. Bucket is lot-sizing's word and interval optimal control's. The toy kept
-    its own word, and the replanning interval of decision 9 is another thing. Seen while
+    interval, one fewer. `BuildPlan.intervals` is a tuple of `PlanInterval`: `start`, `end`, the `miners` and
+    `collectors` in it, and the `minerals`, `vespene` and `counts` expected at its end, the last interval's being the
+    horizon's. The first edge is gone and held nothing: on the reference reward from 0:00, 3:00 and 6:00 its stocks and
+    counts were the state's to the last digit, and each interval's end the next one's start to 1e-14. Intervals stay,
+    with a start and an end, rather than points in time, whose last, the horizon, would have no workers (the owner, the
+    same day), and `BuildPlan.interval_at(time)` finds the one a time is in; what the stock or a count is between two
+    edges is the bot's to estimate. **An interval was a bucket** until the owner renamed it the same day ("I don't
+    really like the name"), everywhere in the planner, its tests, its benchmark and the docs: `PlanInterval`,
+    `BuildPlan.intervals`, `BuildPlan.interval_at`, and `TimeGrid.doubling`'s `initial_interval_length`,
+    `initial_interval_count` and `max_interval_doublings`. Bucket is lot-sizing's word and interval optimal control's.
+    The toy kept its own word, and the replanning interval of decision 9 is another thing. Seen while
     moving the tests over: where minerals buy nothing more, a plan may count more starts of mining than its miners
     rise by, which
     costs it nothing, so its stock reads less than its miners would bring in. Twelve SCVs and one more to train over
@@ -535,7 +536,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     library's `Resources`, the `units` of each type alive, and the `upgrades` done, which a plan did not hold. A
     `PlanInterval` holds its `start` and its `end`, two moments, with its `miners` and `collectors`; one interval's
     end is the next one's start, the same object, so no edge is spelled twice, and the first interval's start is the
-    state again. `GameState` reads alike: `resources` for `minerals` and `vespene`, and `units` for `counts`. The
+    state again. `PlannerState` reads alike: `resources` for `minerals` and `vespene`, and `units` for `counts`. The
     units are every type the plan makes and those of the state and its production, where they were the plan's
     alone. An upgrade reads as done from half of it, where its start is fluid, as a fluid item is listed from half
     of one. Decided against, for now: an interval holding its items, since a bot carries a plan's items out in
@@ -545,21 +546,22 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
 
     **A plan can be held against the game later** (the owner, 2026-11-23: "I think we need some mechanism to evaluate
     where a plan was optimistic or pessimistic. And I mean not just for development, but even for the user, so they can
-    tweak their parameters"). `Plan.deviation_of(state)` takes a later `GameState` and returns a `PlanDeviation`, the
-    game's numbers less what the plan expected at that time, in three parts that say what to change: `collected`, the
-    minerals and vespene brought in, for `Economy`'s rates and times; `resources`, the stock, for whether the bot starts
-    what the plan has it start; and `units`, for losses. One number would not say which. For it a `PlanMoment` holds
-    `collected`, the state's and each interval's income over its length since, MULEs included; `GameState.collected` is
-    what the game's score counts, read by `Planner.game_state`, nothing in a state made by hand; and
-    `Plan.moment_at(time)` is what a plan expects at any time. Within an interval that is what the model has there,
-    which jumps at the edges: the units and upgrades of the interval's start, what its income has brought in by then,
-    and the stock with all that starts in the interval paid at its start, the end's less the income to come. It was a
-    straight line between the interval's two moments at first, against what had been said of `interval_at`, that the
-    model's curves jump and do not slope (the owner, the same day: "Didn't you say before that straight line
-    interpolation is wrong for the plan?"): a line put half of what an interval spends into the stock at its middle and
-    counted fractions of units. It keeps no history and costs nothing uncalled: a bot calls it before it replaces a plan
-    and averages as it likes. Left for phase 2, when a bot carries plans out: when each item started against when it was
-    planned, which needs the bot to say what it started; and whether the planner should keep a history itself.
+    tweak their parameters"). `BuildPlan.deviation_of(state)` takes a later `PlannerState` and returns a
+    `PlanDeviation`, the game's numbers less what the plan expected at that time, in three parts that say what to
+    change: `collected`, the minerals and vespene brought in, for `EconomyModel`'s rates and times; `resources`, the
+    stock, for whether the bot starts what the plan has it start; and `units`, for losses. One number would not say
+    which. For it a `PlanMoment` holds `collected`, the state's and each interval's income over its length since, MULEs
+    included; `PlannerState.collected` is what the game's score counts, read by `Planner.game_state`, nothing in a state
+    made by hand; and `BuildPlan.moment_at(time)` is what a plan expects at any time. Within an interval that is what
+    the model has there, which jumps at the edges: the units and upgrades of the interval's start, what its income has
+    brought in by then, and the stock with all that starts in the interval paid at its start, the end's less the income
+    to come. It was a straight line between the interval's two moments at first, against what had been said of
+    `interval_at`, that the model's curves jump and do not slope (the owner, the same day: "Didn't you say before that
+    straight line interpolation is wrong for the plan?"): a line put half of what an interval spends into the stock at
+    its middle and counted fractions of units. It keeps no history and costs nothing uncalled: a bot calls it before it
+    replaces a plan and averages as it likes. Left for phase 2, when a bot carries plans out: when each item started
+    against when it was planned, which needs the bot to say what it started; and whether the planner should keep a
+    history itself.
 
     **A reward's weights hold its curves** (the owner, the same day, of the two: "Isn't the latter just a more general
     form of the former?"). `Reward.curves` is gone: `Reward.weights` holds for each unit type one number or a list of
@@ -682,16 +684,28 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     even of those tried, 2.1% at worst for a half's 4.7%, on three states and one reward, which is too little to change
     a default by. The share is an argument of `Planner` since (the owner, the same day: "Agreed to the Planner
     argument"), `spendable_income_fraction`, a half by default, 0 to 1, for a bot whose plans prove optimistic by
-    `Plan.deviation_of` to lower. And `Plan.moment_at` reads no stock below nothing (the owner, the same day: "let's go
-    with never below zero"): with what starts paid at an interval's start it read short just after one, by up to the
-    spendable fraction of the interval's income, a number no game has. The reading at an interval's centre for all of
-    its first half, the owner's alternative, would have changed readings that are right too, where nothing is paid from
-    income to come. From the spendable fraction of an interval on the reading is what a bot holds that starts each item
-    as soon as it can pay; before it, such a bot may still be saving up, and no reading can say. The floor was taken out
-    again the same day (the owner: "Wouldn't it be more truthful however to just report the negative stock?"): nothing
-    is no nearer to what a game holds there than the number below it, it hides how much a start leans on the spendable
-    fraction, which that number is, and with it a moment's stock was no longer what was collected less what was spent.
-    `moment_at` reads the stock below nothing as the model has it, and its docstring says what that means.
+    `BuildPlan.deviation_of` to lower. And `BuildPlan.moment_at` reads no stock below nothing (the owner, the same day:
+    "let's go with never below zero"): with what starts paid at an interval's start it read short just after one, by up
+    to the spendable fraction of the interval's income, a number no game has. The reading at an interval's centre for
+    all of its first half, the owner's alternative, would have changed readings that are right too, where nothing is
+    paid from income to come. From the spendable fraction of an interval on the reading is what a bot holds that starts
+    each item as soon as it can pay; before it, such a bot may still be saving up, and no reading can say. The floor was
+    taken out again the same day (the owner: "Wouldn't it be more truthful however to just report the negative stock?"):
+    nothing is no nearer to what a game holds there than the number below it, it hides how much a start leans on the
+    spendable fraction, which that number is, and with it a moment's stock was no longer what was collected less what
+    was spent. `moment_at` reads the stock below nothing as the model has it, and its docstring says what that means.
+15. **Three exported names say what they are of** (the owner, 2026-11-23: "I agree with the three renames, I will review
+    the other names with the rest of the pr"). `BuildPlan` was `Plan`, `PlannerState` was `GameState` and `EconomyModel`
+    was `Economy`, and this page names them so throughout; their files are named for them, and `read_planner_state` with
+    them. `Planner.game_state()` and `plan_now`'s `state` and `economy` keep their names. A bot imports the classes
+    bare, where the three plain words said nothing of the planner, and a bot may well have a game state or an economy of
+    its own, as the example in `docs/events.md` has; and `test_nachos_names_no_extension` keeps every extension's
+    exported name out of the core's source, docstrings included, so the core could write none of the three words.
+    Renamed before phase 2, while no bot uses the planner. The other names are the owner's to review with the pull
+    request: `Planner`, `Reward`, `RewardTerm` and its `weight`, `curve` and `combination`, `Reward.weighted`,
+    `CurveSegment`, `TimeGrid`, `PlanInterval`, `PlanMoment`, `PlannedItem`, `PlanDeviation`, `UnitCompletion`,
+    `WorkerBuild`, `Occupation`, `moment_at`, `deviation_of`, `interval_at`, `spendable_income_fraction`,
+    `time_factor_at` and `count_factor_at`.
 
 ## Risks
 

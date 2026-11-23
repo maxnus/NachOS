@@ -6,9 +6,9 @@ from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
-from sc2nachos.extensions.planner._economy import Economy, minerals_mined_a_second
-from sc2nachos.extensions.planner._game_state import GameState, read_game_state
+from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
 from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._planner_state import PlannerState, read_planner_state
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import TimeGrid
 from sc2nachos.gametime import GameTime
@@ -17,7 +17,7 @@ from sc2nachos.match import Race
 
 if TYPE_CHECKING:
     from sc2nachos import Api
-    from sc2nachos.extensions.planner._plan import Plan
+    from sc2nachos.extensions.planner._build_plan import BuildPlan
     from sc2nachos.extensions.planner._reward import Reward
     from sc2nachos.extensions.planner._terran_model import Item
     from sc2nachos.ids import UpgradeId
@@ -38,8 +38,8 @@ class Planner:
     """The build planner, for Terran: given a reward, a horizon and the state of the game, what to make and when.
 
     `plan_now` solves a mixed-integer linear program over a grid of time intervals for the plan worth the most by the
-    reward, and returns it as a `Plan`: the items to make in order, each with the time it is expected to start. A bot
-    carries it out in order, each item as soon as it can be afforded, and asks for a new plan as the game goes on.
+    reward, and returns it as a `BuildPlan`: the items to make in order, each with the time it is expected to start. A
+    bot carries it out in order, each item as soon as it can be afforded, and asks for a new plan as the game goes on.
     The planner orders nothing and holds no unit; where structures go and which SCV builds each stay the bot's.
 
     Build it once the game has started, in the bot's own object an api is given as `extensions`:
@@ -57,8 +57,8 @@ class Planner:
     api = Api(extensions=Extensions)
     ```
 
-    It plans from the `GameState` that `game_state()` reads as `plan_now` is called, unless handed another. The model of
-    the game:
+    It plans from the `PlannerState` that `game_state()` reads as `plan_now` is called, unless handed another. The model
+    of the game:
 
     - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
       from the game's data; an item is pruned unless the reward values it or it is needed for one that does, or it is
@@ -68,7 +68,7 @@ class Planner:
       counts as a barracks, and a hellbat as a hellion, which needs no armory: a plan makes hellions, and an armory
       only if the reward values one. A rich refinery counts as a refinery, which its order makes.
     - What workers mine and collect, what each orbital command's MULEs add, what a new command center brings, and how
-      far an SCV walks to build: the `Economy` handed to `plan_now`. The workers are pooled over every field and
+      far an SCV walks to build: the `EconomyModel` handed to `plan_now`. The workers are pooled over every field and
       refinery, as if each could work anywhere at once.
     - How many workers mine and how many collect vespene is the plan's choice in each interval, which the interval holds
       as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
@@ -163,7 +163,7 @@ class Planner:
         self._unlock_fraction = unlock_fraction
         self._spendable_income_fraction = spendable_income_fraction
         self._model = TerranModel(api.data)
-        self._plan: Plan | None = None
+        self._plan: BuildPlan | None = None
 
     @property
     def grid(self) -> TimeGrid:
@@ -171,26 +171,26 @@ class Planner:
         return self._grid
 
     @property
-    def plan(self) -> Plan | None:
+    def plan(self) -> BuildPlan | None:
         """The plan `plan_now` found last, or `None` before it found one."""
         return self._plan
 
-    def game_state(self) -> GameState:
+    def game_state(self) -> PlannerState:
         """The state of the game now, as the planner reads it: what `plan_now` plans from unless handed another."""
-        return read_game_state(self._api, model=self._model)
+        return read_planner_state(self._api, model=self._model)
 
     def plan_now(
         self,
         reward: Reward,
         *,
         horizon: GameTime = GameTime(seconds=300),
-        state: GameState | None = None,
-        economy: Economy = Economy(),
+        state: PlannerState | None = None,
+        economy: EconomyModel = EconomyModel(),
         loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
         start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
-        previous_plan: Plan | None = None,
+        previous_plan: BuildPlan | None = None,
         hysteresis_bonus: float = 0.0,
-    ) -> Plan | None:
+    ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `game_state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing
         that pays back only later is planned unless the reward values it itself, an expansion for one, and a longer
@@ -250,8 +250,8 @@ def fluid_after_seconds_of(
     items: Sequence[Item],
     *,
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None,
-    state: GameState,
-    economy: Economy,
+    state: PlannerState,
+    economy: EconomyModel,
 ) -> tuple[float, ...]:
     """The seconds from the plan's start after which each of `items` is fluid, starting in whole numbers until then:
     what `fluid_after` returns for what it makes or researches, or where that is `None`, its default for a plan from
@@ -275,7 +275,7 @@ def fluid_after_seconds_of(
     return tuple(seconds)
 
 
-def _start_income_as_a_share_of_the_income(state: GameState, economy: Economy) -> float:
+def _start_income_as_a_share_of_the_income(state: PlannerState, economy: EconomyModel) -> float:
     """The income a game starts with as a share of that of `state`, at most 1, each by `economy`: what the SCVs mine if
     every one mines, with the orbital commands' MULEs. It is 1 where the state brings in nothing."""
     start_income = minerals_mined_a_second(

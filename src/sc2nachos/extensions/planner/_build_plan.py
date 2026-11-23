@@ -12,7 +12,7 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
-    from sc2nachos.extensions.planner._game_state import GameState
+    from sc2nachos.extensions.planner._planner_state import PlannerState
 
 
 @final
@@ -72,7 +72,7 @@ class PlanDeviation:
     that the plan was optimistic where one is negative and pessimistic where one is positive.
 
     Read together, the three say where a plan was off. Less `collected` than expected is the economy's: the workers
-    brought in less than `Economy` has them bring. As much collected and more in `resources` is the bot's, which
+    brought in less than `EconomyModel` has them bring. As much collected and more in `resources` is the bot's, which
     started less than the plan had it start. As much of both and fewer `units` is units lost, which `loss_rates` are
     for.
     """
@@ -89,7 +89,7 @@ class PlanDeviation:
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Plan:
+class BuildPlan:
     """What to make, in order, with when each is expected to start, and each interval of the planner's grid with what it
     expects of it: the workers mining and collecting in it, and at its start and its end the minerals and vespene in
     stock, how many of each unit type are alive, and the upgrades done.
@@ -156,7 +156,7 @@ class Plan:
             upgrades=start.upgrades,
         )
 
-    def deviation_of(self, state: GameState) -> PlanDeviation | None:
+    def deviation_of(self, state: PlannerState) -> PlanDeviation | None:
         """How `state`, a later state of the game the plan was made in, differs from what the plan expected at its
         time, by `moment_at`: the state's numbers less the plan's. `None` for a state from before `made_at` or after
         the horizon."""

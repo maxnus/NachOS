@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Final, final
 import numpy as np
 from numpy.typing import NDArray
 
-from sc2nachos.extensions.planner._economy import rate_tiers, walk_seconds_of
+from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanMoment, PlannedItem
+from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
-from sc2nachos.extensions.planner._plan import Plan, PlanInterval, PlanMoment, PlannedItem
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
 from sc2nachos.gamedata import Resources
@@ -20,8 +20,8 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
-    from sc2nachos.extensions.planner._economy import Economy
-    from sc2nachos.extensions.planner._game_state import GameState
+    from sc2nachos.extensions.planner._economy_model import EconomyModel
+    from sc2nachos.extensions.planner._planner_state import PlannerState
     from sc2nachos.extensions.planner._reward import CurveSegment, Reward, RewardTerm
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
 
@@ -108,16 +108,16 @@ class PlanProgram:
         items: Sequence[Item],
         model: TerranModel,
         edges: Sequence[float],
-        state: GameState,
+        state: PlannerState,
         reward: Reward,
-        economy: Economy,
+        economy: EconomyModel,
         loss_rates: Mapping[UnitTypeId, float],
         start_limits: Mapping[UnitTypeId | UpgradeId, int],
         fluid_after_seconds: Sequence[float],
         max_ignored_overrun: float,
         unlock_fraction: float,
         spendable_income_fraction: float,
-        previous_plan: Plan | None,
+        previous_plan: BuildPlan | None,
         hysteresis_bonus: float,
     ) -> None:
         if len(fluid_after_seconds) != len(items):
@@ -164,13 +164,13 @@ class PlanProgram:
         """The program, to count its variables and rows."""
         return self._program
 
-    def solve(self, *, time_limit: float | None, node_limit: int | None) -> Plan | None:
+    def solve(self, *, time_limit: float | None, node_limit: int | None) -> BuildPlan | None:
         """The best plan the solver finds within `time_limit` seconds and `node_limit` nodes, or `None` if it finds
         none."""
         solution = self._program.maximize(self._objective, time_limit=time_limit, node_limit=node_limit)
         if solution.values is None:
             return None
-        return Plan(
+        return BuildPlan(
             made_at=self._state.time,
             items=self._planned_items(solution.values),
             intervals=self._planned_intervals(solution.values),
@@ -833,7 +833,7 @@ class PlanProgram:
             for group in term.groups
         )
 
-    def _previous_items_kept(self, previous: Plan) -> VariableBlock:
+    def _previous_items_kept(self, previous: BuildPlan) -> VariableBlock:
         """Whether each of `previous`'s items still ahead is kept to: as many of its kind started by its interval as it
         and the previous plan's items of its kind before it, still ahead."""
         kept_to: list[tuple[int, int, int]] = []

@@ -46,11 +46,11 @@ from types import MappingProxyType
 
 from sc2nachos import GameTime, Resources
 from sc2nachos.extensions.planner import (
+    BuildPlan,
     CurveSegment,
-    Economy,
-    GameState,
+    EconomyModel,
     Occupation,
-    Plan,
+    PlannerState,
     Reward,
     RewardTerm,
     TimeGrid,
@@ -227,9 +227,9 @@ def main() -> None:
     _CASES[arguments.case](model, arguments.time_limit, half_lives, horizon)
 
 
-def _game_start() -> GameState:
+def _game_start() -> PlannerState:
     """The state a game starts in."""
-    return GameState(
+    return PlannerState(
         time=GameTime.ZERO,
         resources=Resources(50.0, 0.0),
         supply_used=12.0,
@@ -255,7 +255,7 @@ def _in_production(
     return UnitCompletion(unit_type=unit_type, time_left=time_left), occupation
 
 
-def _mid_game_states() -> dict[str, GameState]:
+def _mid_game_states() -> dict[str, PlannerState]:
     """Two made-up states in the middle of a game, after what the planner's best plan for the growing reward at a
     half-life of 480 s expects there, its fractions made whole: two bases at 3:00, four barracks making marines and a
     marauder, a reactor and a supply depot going up; and at 6:00, five barracks and a starport."""
@@ -277,7 +277,7 @@ def _mid_game_states() -> dict[str, GameState]:
         _in_production(UnitTypeId.MEDIVAC, UnitTypeId.STARPORT, 14.0),
     ]
     return {
-        "3:00": GameState(
+        "3:00": PlannerState(
             time=GameTime(seconds=180),
             resources=Resources(110.0, 10.0),
             supply_used=38.0,
@@ -305,7 +305,7 @@ def _mid_game_states() -> dict[str, GameState]:
             vespene_collectors=3,
             free_geysers=3,
         ),
-        "6:00": GameState(
+        "6:00": PlannerState(
             time=GameTime(seconds=360),
             resources=Resources(440.0, 60.0),
             supply_used=114.0,
@@ -333,10 +333,10 @@ def _mid_game_states() -> dict[str, GameState]:
     }
 
 
-def _walking(walks: Mapping[UnitTypeId, float], *, reassignment_time: GameTime = GameTime.ZERO) -> Economy:
+def _walking(walks: Mapping[UnitTypeId, float], *, reassignment_time: GameTime = GameTime.ZERO) -> EconomyModel:
     """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others, and with
     `reassignment_time`, by default none as in the toy, which moves a worker to or from a refinery for nothing."""
-    return Economy(
+    return EconomyModel(
         reassignment_time=reassignment_time,
         walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)),
     )
@@ -351,10 +351,10 @@ def _solve_and_print(
     time_limit: float,
     horizon: GameTime,
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
-    economy: Economy | None = None,
+    economy: EconomyModel | None = None,
     loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
-    state: GameState | None = None,
-) -> Plan | None:
+    state: PlannerState | None = None,
+) -> BuildPlan | None:
     """Plan for `reward` from `state`, the game's start if `None`, over `horizon` on `grid` within `time_limit` seconds,
     with the windows of whole starts `fluid_after` gives, as `Planner` takes it, by `economy`, with no walks if `None`,
     and `loss_rates`, and print what came of it."""
@@ -456,11 +456,11 @@ def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameT
             )
 
 
-def _reference_economy(model: TerranModel) -> Economy:
+def _reference_economy(model: TerranModel) -> EconomyModel:
     """The reference configuration's economy: the default, its reassignment time too, but with a walk of 25 seconds to
     a command center, and of 6 to any other structure."""
     walks = {unit_type: _REFERENCE_WALK_SECONDS for unit_type in model.unit_items} | {UnitTypeId.COMMAND_CENTER: 25.0}
-    return _walking(walks, reassignment_time=Economy().reassignment_time)
+    return _walking(walks, reassignment_time=EconomyModel().reassignment_time)
 
 
 def _half_life_label(half_life: GameTime | None) -> str:
@@ -582,7 +582,7 @@ def _whole_as_in_the_toy(item: UnitTypeId | UpgradeId) -> GameTime | None:
     return GameTime.INFINITE if item in _WHOLE_OVER_THE_HORIZON_IN_THE_TOY else GameTime(seconds=90)
 
 
-def _print_starts_by_minute(plan: Plan, unit_types: Sequence[UnitTypeId]) -> None:
+def _print_starts_by_minute(plan: BuildPlan, unit_types: Sequence[UnitTypeId]) -> None:
     """How many of each of `unit_types` the plan starts in each of its ten minutes."""
     for unit_type in unit_types:
         by_minute = Counter(

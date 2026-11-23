@@ -59,7 +59,7 @@ class WorkerBuild:
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
-class GameState:
+class PlannerState:
     """The state of the game a plan starts from, as plain values: what `Planner.game_state` reads, which a bot may
     change with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The
     planner pools what it holds: it never knows which base a field, a refinery or a worker is at.
@@ -73,8 +73,8 @@ class GameState:
     """The minerals and vespene in stock."""
     collected: Resources = Resources(0.0, 0.0)
     """The minerals and vespene collected in the game so far, as its score counts them. A plan adds what it expects to
-    collect to it, for `Plan.deviation_of` to hold a later state's against: nothing by default, which serves a state
-    made by hand as long as the later one's counts from there too."""
+    collect to it, for `BuildPlan.deviation_of` to hold a later state's against: nothing by default, which serves a
+    state made by hand as long as the later one's counts from there too."""
     supply_used: float
     """The supply taken, by units alive and in production."""
     supply_cap: float
@@ -104,7 +104,7 @@ class GameState:
     an SCV is on its way to build."""
 
 
-def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
+def read_planner_state(api: Api[object], *, model: TerranModel) -> PlannerState:
     """The state of the game `api` plays now, its unit types read by `model`."""
     counts, refineries_with_vespene, vespene_collectors = _counts_of_own_units(api, model)
     fields, free_geysers = _bases_of(api)
@@ -113,7 +113,7 @@ def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
         build.unit_type == UnitTypeId.REFINERY and in_production.unit is None for build, in_production in worker_builds
     )
     upgrade_completions, research_occupations = _researches_of(api, model)
-    return GameState(
+    return PlannerState(
         time=api.time,
         resources=api.resources,
         collected=api.score.collected,

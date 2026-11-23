@@ -258,15 +258,15 @@ class ThreatMap:
   counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat
   as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
-  Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `GameState`
+  Everything else a plan rests on is the bot's to read and change. `planner.game_state()` returns the `PlannerState`
   `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and
   when it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries,
   workers collecting vespene and free geysers at its bases, pooled, since the planner never knows which base a worker
-  is at. `plan_now(state=...)` plans from one the bot changed instead. `plan_now(economy=...)` takes an `Economy`: what
-  each worker at a field or a refinery brings in a second, a list from the first worker on, what each orbital command's
-  MULEs mine, what a new command center brings, how long an SCV walks to build each structure, and how long a worker
-  that starts to mine or to collect brings in nothing. Its defaults are the rates measured speed mining, a walk of 10
-  seconds to a command center and 6 to anything else, and 3 seconds before a worker's first income.
+  is at. `plan_now(state=...)` plans from one the bot changed instead. `plan_now(economy=...)` takes an `EconomyModel`:
+  what each worker at a field or a refinery brings in a second, a list from the first worker on, what each orbital
+  command's MULEs mine, what a new command center brings, how long an SCV walks to build each structure, and how long a
+  worker that starts to mine or to collect brings in nothing. Its defaults are the rates measured speed mining, a walk
+  of 10 seconds to a command center and 6 to anything else, and 3 seconds before a worker's first income.
   `plan_now(start_limits=...)` takes the most a plan may start of a unit type or an upgrade, none of it for 0. A plan
   makes only what the reward values and what that needs, with SCVs, supply depots, command centers, orbital commands,
   refineries and add-ons, so the limits are for those the bot will not make itself, a reactor or an orbital command, and
@@ -277,7 +277,7 @@ class ThreatMap:
   ```python
   import dataclasses
 
-  from sc2nachos.extensions.planner import Economy
+  from sc2nachos.extensions.planner import EconomyModel
 
   planner = api.extensions.planner
   state = planner.game_state()
@@ -286,15 +286,15 @@ class ThreatMap:
       mineral_fields=state.mineral_fields - len(falling_base.mineral_fields.alive),
       free_geysers=state.free_geysers - len(falling_base.geysers),
   )
-  economy = Economy(mule_minerals_per_orbital_second=0.0)
+  economy = EconomyModel(mule_minerals_per_orbital_second=0.0)
   start_limits = {UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.REACTOR_STARPORT: 0}
   plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy, start_limits=start_limits)
   ```
 
-  What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
-  to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and its
-  `intervals`, each a `PlanInterval` with the workers the plan has in it, from its `start` to its `end`. Each of the two
-  is a `PlanMoment`, what the planner expects at that `time`: the `resources` in stock, the minerals and vespene
+  What it reads back is a `BuildPlan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is
+  expected to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second;
+  and its `intervals`, each a `PlanInterval` with the workers the plan has in it, from its `start` to its `end`. Each of
+  the two is a `PlanMoment`, what the planner expects at that `time`: the `resources` in stock, the minerals and vespene
   `collected` in the game by then, the `units` of each type alive, and the `upgrades` done. One interval's end is the
   next one's start, the same object; the first interval's start is the state the plan was made from, and the last one's
   end its horizon, so `plan.intervals[-1].end.units` is what the plan comes to. `plan.interval_at(time)` is the interval
@@ -307,18 +307,18 @@ class ThreatMap:
   and holds no unit: where a structure goes, which SCV builds it, and what to drop once the game moves on stay the
   bot's.
 
-  How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `GameState`, such as
+  How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `PlannerState`, such as
   `planner.game_state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what
   the plan expected at that time, so that the plan was optimistic where one is negative. Its three parts say what to
-  change. Less `collected` than expected is the economy's: the workers brought in less than `Economy` has them bring, so
-  lower its rates or raise its `reassignment_time`. As much collected and more `resources` in stock is the bot's, which
-  started less than the plan had it start. As much of both and fewer `units` of a type is units lost, which `loss_rates`
-  are for. It is `None` for a state from before the plan or after its horizon. Within an interval the plan's stock is
-  the model's, everything that starts in it paid at its start, where a bot pays for each item as it can. From the
-  planner's `spendable_income_fraction` of an interval on, a half by default, that is what a bot holds that starts each
-  item as soon as it can pay; before it the bot may still be saving up, and hold up to what starts in the interval more.
-  So the stock and the units are best compared soon after a plan is made, where intervals are short, and what is
-  collected at any time.
+  change. Less `collected` than expected is the economy's: the workers brought in less than `EconomyModel` has them
+  bring, so lower its rates or raise its `reassignment_time`. As much collected and more `resources` in stock is the
+  bot's, which started less than the plan had it start. As much of both and fewer `units` of a type is units lost, which
+  `loss_rates` are for. It is `None` for a state from before the plan or after its horizon. Within an interval the
+  plan's stock is the model's, everything that starts in it paid at its start, where a bot pays for each item as it can.
+  From the planner's `spendable_income_fraction` of an interval on, a half by default, that is what a bot holds that
+  starts each item as soon as it can pay; before it the bot may still be saving up, and hold up to what starts in the
+  interval more. So the stock and the units are best compared soon after a plan is made, where intervals are short, and
+  what is collected at any time.
 
   How many workers mine and how many collect vespene is the plan's to choose, interval by interval, and each interval
   holds them as its `miners` and `collectors`. A bot holds its collectors at the first interval's,

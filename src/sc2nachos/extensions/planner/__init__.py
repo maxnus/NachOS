@@ -1,18 +1,18 @@
 """The build planner: given a reward, a horizon and the state of the game, what to make and when, for Terran."""
 
-from sc2nachos.extensions.planner._economy import Economy
-from sc2nachos.extensions.planner._game_state import GameState, Occupation, UnitCompletion, WorkerBuild
-from sc2nachos.extensions.planner._plan import Plan, PlanDeviation, PlanInterval, PlanMoment, PlannedItem
+from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanDeviation, PlanInterval, PlanMoment, PlannedItem
+from sc2nachos.extensions.planner._economy_model import EconomyModel
 from sc2nachos.extensions.planner._planner import Planner
+from sc2nachos.extensions.planner._planner_state import Occupation, PlannerState, UnitCompletion, WorkerBuild
 from sc2nachos.extensions.planner._reward import CurveSegment, Reward, RewardTerm
 from sc2nachos.extensions.planner._time_grid import TimeGrid
 
 __all__ = [
     "CurveSegment",
-    "Economy",
-    "GameState",
+    "EconomyModel",
+    "PlannerState",
     "Occupation",
-    "Plan",
+    "BuildPlan",
     "PlanDeviation",
     "PlanInterval",
     "PlanMoment",
