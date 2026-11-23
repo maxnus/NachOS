@@ -142,7 +142,7 @@ class Planner:
         unlock_fraction: float = 1.0,
         spendable_income_fraction: float = 0.5,
     ) -> None:
-        if api.player.race != Race.TERRAN:
+        if api.player.race is not Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
         if time_limit is not None and time_limit <= 0:
             raise ValueError(f"a time limit must be above 0 seconds, not {time_limit}")
@@ -208,8 +208,9 @@ class Planner:
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
         than 0, a negative loss rate, start limit or `hysteresis_bonus`, a `hysteresis_bonus` with no `previous_plan`,
-        a negative time from `fluid_after` or from `economy`'s `walk_time`, or a factor from a term's `time_factor`
-        or `count_factor` that is negative or not finite.
+        a negative time from `fluid_after` or from `economy`'s `walk_time`, a factor from a term's `time_factor`
+        or `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does
+        not make.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")

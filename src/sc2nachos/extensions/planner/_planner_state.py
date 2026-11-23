@@ -110,7 +110,7 @@ def read_planner_state(api: Api[object], *, model: TerranModel) -> PlannerState:
     fields, free_geysers = _bases_of(api)
     unit_completions, occupations, worker_builds = _production_of(api, model)
     refineries_not_begun = sum(
-        build.unit_type == UnitTypeId.REFINERY and in_production.unit is None for build, in_production in worker_builds
+        build.unit_type is UnitTypeId.REFINERY and in_production.unit is None for build, in_production in worker_builds
     )
     upgrade_completions, research_occupations = _researches_of(api, model)
     return PlannerState(

@@ -64,8 +64,8 @@ class PlanProgram:
     Each item of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before
     it, is worth `hysteresis_bonus` once, beside the reward.
 
-    Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, and for a negative walk from
-    `economy`'s `walk_time`.
+    Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
+    `walk_time`, and for a unit in production in `state` of a type that is no item of `model`'s.
     """
 
     __slots__ = (
@@ -130,8 +130,10 @@ class PlanProgram:
         self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
         self._start_limits = _limits_by_counted_type(start_limits, model)
         self._max_ignored_overrun = max_ignored_overrun
-        self._unlock_fraction, self._spendable_income_fraction = unlock_fraction, spendable_income_fraction
-        self._previous_plan, self._hysteresis_bonus = previous_plan, hysteresis_bonus
+        self._unlock_fraction = unlock_fraction
+        self._spendable_income_fraction = spendable_income_fraction
+        self._previous_plan = previous_plan
+        self._hysteresis_bonus = hysteresis_bonus
         self._walk_seconds = walk_seconds_of(
             economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         )
@@ -145,16 +147,7 @@ class PlanProgram:
         self._program = LinearProgram()
         self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
         self._whole = self._whole_intervals_of(fluid_after_seconds)
-        self._starts_so_far: list[VariableBlock] = []
-        for item, whole in zip(self._items, self._whole, strict=True):
-            self._add_starts_so_far(item, whole)
-        self._minerals, self._vespene = (
-            self._add_stock(state.resources.minerals),
-            self._add_stock(state.resources.vespene),
-        )
-        self._mining = self._add_worker_tiers(economy.minerals_per_miner_second)
-        self._collecting = self._add_worker_tiers(economy.vespene_per_collector_second)
-        self._started_mining, self._started_collecting = self._add_work_starts()
+        self._add_variables()
         self._discounts = self._discounts_of(reward)
         self._add_constraints()
         self._objective = self._reward_expression()
@@ -199,9 +192,29 @@ class PlanProgram:
 
     # The variables.
 
+    def _add_variables(self) -> None:
+        """Add the variables every plan has: each item's starts so far, the stock of minerals and of vespene at each
+        edge, the workers in each tier, and those that start to mine or to collect."""
+        self._starts_so_far: list[VariableBlock] = []
+        for item, whole in zip(self._items, self._whole, strict=True):
+            self._add_starts_so_far(item, whole)
+        self._minerals = self._add_stock(self._state.resources.minerals)
+        self._vespene = self._add_stock(self._state.resources.vespene)
+        self._mining = self._add_worker_tiers(self._economy.minerals_per_miner_second)
+        self._collecting = self._add_worker_tiers(self._economy.vespene_per_collector_second)
+        self._started_mining, self._started_collecting = self._add_work_starts()
+
     def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
         """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
-        and the seconds until each SCV building, or walking to build, is back at work after its walk back."""
+        and the seconds until each SCV building, or walking to build, is back at work after its walk back.
+
+        Raises `ValueError` for a unit in production of a type that is no item of the model's."""
+        for in_production in (*self._state.unit_completions, *self._state.worker_builds):
+            if in_production.unit_type not in self._model.unit_items:
+                raise ValueError(
+                    f"the state holds a {in_production.unit_type.name} in production, which the planner cannot make "
+                    "for Terran"
+                )
         completions = [
             (completion.unit_type, completion.time_left.seconds) for completion in self._state.unit_completions
         ]
@@ -269,7 +282,7 @@ class PlanProgram:
         townhalls_coming = new_townhalls + _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
         if item.upgrade is not None:
             most = 1.0
-        elif item.unit_type == UnitTypeId.REFINERY:
+        elif item.unit_type is UnitTypeId.REFINERY:
             most = float(state.free_geysers + self._economy.geysers_per_new_base * townhalls_coming)
         elif item.morphed_from is not None:
             most = float(state.units.get(item.morphed_from, 0) + townhalls_coming)
@@ -446,7 +459,7 @@ class PlanProgram:
         """Each interval's stock of minerals and vespene: the stock before, plus what was mined, less what started; and
         what starts paid from the stock at the interval's start and the spendable fraction of its income."""
         intervals = self._interval_count
-        mineral_income, vespene_income = self._incomes()
+        mineral_income, vespene_income = self._incomes_a_second()
         for stock, income, is_minerals in (
             (self._minerals, mineral_income, True),
             (self._vespene, vespene_income, False),
@@ -464,7 +477,7 @@ class PlanProgram:
             paid.add_expression(income, self._spendable_income_fraction * self._widths).add_expression(spent, -1.0)
             self._program.constrain(paid, lower=0.0)
 
-    def _incomes(self) -> tuple[RowExpression, RowExpression]:
+    def _incomes_a_second(self) -> tuple[RowExpression, RowExpression]:
         """The minerals and the vespene that come in a second in each interval: what the workers bring in, and for
         minerals the MULEs of the orbital commands alive at the interval's start."""
         mineral_income = self._income_of(self._mining, self._started_mining)
@@ -519,7 +532,7 @@ class PlanProgram:
         by: over what the interval before had left of them, as its SCVs survive, or over those of the state, where every
         SCV that neither collects nor builds mines. Of the miners, as many as are `back_from_builds` in the interval
         start for nothing: their walk back was the builder's."""
-        if not self._started_collecting:
+        if not self._started_mining and not self._started_collecting:
             return
         state = self._state
         collecting_now = float(state.vespene_collectors)
@@ -621,7 +634,7 @@ class PlanProgram:
         the builds under way at most how many make them."""
         intervals = self._interval_count
         lanes = RowExpression(intervals)
-        for producer in producers:
+        for producer in sorted(producers):
             add_on = self._model.tech_lab_of(producer) if on_tech_labs else self._model.reactor_of(producer)
             lane_types = [add_on] if on_tech_labs else [producer, add_on]
             for lane_type in lane_types:
@@ -678,25 +691,36 @@ class PlanProgram:
 
     def _constrain_add_ons_and_morphs(self) -> None:
         """At most one add-on a host, those standing and those in production counted, and at most one morph a
-        command center, those in production counted."""
+        command center, those in production counted: of every type that takes the host, the plan's items or not."""
         sources: dict[UnitTypeId, list[int]] = {}
         for index, item in enumerate(self._items):
             if item.unit_type is not None and self._model.is_add_on(item.unit_type):
-                for host in item.producers:
+                for host in sorted(item.producers):
                     sources.setdefault(host, []).append(index)
             elif item.morphed_from is not None:
                 sources.setdefault(item.morphed_from, []).append(index)
         for source, indices in sorted(sources.items()):
-            made_types = {self._items[index].unit_type for index in indices}
+            is_host = self._items[indices[0]].morphed_from is None
+            taking_it = self._add_ons_of(source) if is_host else self._types_morphed_from(source)
             started = RowExpression(self._interval_count)
             for index in indices:
                 started.add_expression(self._started_so_far(index))
-            started.constant += sum(unit_type in made_types for unit_type, _ in self._completions)
-            if self._items[indices[0]].morphed_from is None:
-                started.constant += sum(self._state.units.get(made, 0) for made in made_types if made is not None)
+            started.constant += sum(unit_type in taking_it for unit_type, _ in self._completions)
+            if is_host:
+                started.constant += sum(self._state.units.get(add_on, 0) for add_on in taking_it)
             available = self._made_since_start(source)
             available.constant += self._state.units.get(source, 0)
             self._constrain_at_most(started, available)
+
+    def _add_ons_of(self, host: UnitTypeId) -> frozenset[UnitTypeId]:
+        """The add-on types `host` builds: its tech lab and its reactor."""
+        add_ons = (self._model.tech_lab_of(host), self._model.reactor_of(host))
+        return frozenset(add_on for add_on in add_ons if add_on is not None)
+
+    def _types_morphed_from(self, unit_type: UnitTypeId) -> frozenset[UnitTypeId]:
+        """The types a unit of `unit_type` morphs into."""
+        unit_items = self._model.unit_items.items()
+        return frozenset(morphed for morphed, item in unit_items if item.morphed_from is unit_type)
 
     def _constrain_prerequisites(self) -> None:
         """No item starts in an interval before the techs and upgrades it needs are done by the interval's start: before
@@ -705,7 +729,7 @@ class PlanProgram:
         met: dict[frozenset[UnitTypeId] | UpgradeId, RowExpression] = {}
         for index, item in enumerate(self._items):
             needed: list[RowExpression] = []
-            for tech in item.techs:
+            for tech in sorted(item.techs, key=lambda tech: tech.name):
                 granting = self._model.types_granting(tech)
                 if any(self._state.units.get(unit_type, 0) for unit_type in granting):
                     continue
@@ -720,7 +744,7 @@ class PlanProgram:
                     ]
                     met[granting] = self._whether_unlocked(granted, counted)
                 needed.append(met[granting])
-            for upgrade in item.upgrades_needed:
+            for upgrade in sorted(item.upgrades_needed):
                 if upgrade in self._state.upgrades:
                     continue
                 if upgrade not in met:
@@ -808,7 +832,7 @@ class PlanProgram:
             most_worth = np.array(
                 [_worth_at(term.segments, most_counted, count_factor=factor) for factor in count_factors.tolist()]
             )
-            for upgrade in term.requires:
+            for upgrade in sorted(term.requires):
                 not_done = RowExpression(intervals).add_expression(worth)
                 not_done.add_expression(self._upgrade_done(upgrade, at_end=True), -most_worth * factors)
                 self._program.constrain(not_done.selected(counted), upper=0.0)
@@ -896,7 +920,8 @@ class PlanProgram:
         state = self._state
         # What is collected by each edge: nothing more at the first, then each interval's income over its length.
         minerals_collected, vespene_collected = (
-            np.concatenate([[0.0], np.cumsum(income.value_of(values) * self._widths)]) for income in self._incomes()
+            np.concatenate([[0.0], np.cumsum(income.value_of(values) * self._widths)])
+            for income in self._incomes_a_second()
         )
         in_production = {completion_type for completion_type, _ in self._completions}
         unit_types = sorted(self._index_of_unit_type.keys() | state.units.keys() | in_production)

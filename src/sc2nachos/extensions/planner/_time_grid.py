@@ -19,7 +19,8 @@ class TimeGrid:
 
     It is laid out in segments, each an interval length and the time from the plan's start it runs to: a segment's
     intervals follow one another while the next would still end by its time, and the next segment carries on from the
-    last edge. The grid ends at the horizon, its last interval cut short there.
+    last edge. The grid ends at the horizon, its last interval cut short there; past the last segment's time, one
+    interval runs to the horizon, however long.
 
     Raises `ValueError` for no segments, an interval not longer than 0, or a segment's time not after the one before.
     """

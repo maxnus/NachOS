@@ -7,6 +7,7 @@ import math
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import pytest
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
@@ -433,6 +434,28 @@ class TestKnownPlans:
         )
         plan = _best_plan(state, Reward.weighted({UnitTypeId.MARINE: 1.0}), horizon_seconds=60)
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == marine_starts
+
+    @pytest.mark.parametrize(("tech_labs", "reactors_started"), [(0, 1), (1, 0)], ids=["free", "with a tech lab"])
+    def test_a_barracks_with_a_tech_lab_takes_no_reactor_though_the_plan_makes_no_tech_lab(
+        self, tech_labs: int, reactors_started: int
+    ) -> None:
+        """With no SCV to build more, over three minutes, in which a reactor pays: a reward on marines brings a reactor
+        and no tech lab among the plan's items, and the tech lab standing takes the barracks all the same."""
+        state = _game_start(
+            minerals=2000.0,
+            vespene=100.0,
+            supply_used=0.0,
+            supply_cap=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.TECH_LAB_BARRACKS: tech_labs},
+            mineral_fields=0,
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=180,
+            fluid_after=_whole_over_any_horizon,
+        )
+        assert [planned.item for planned in plan.items].count(UnitTypeId.REACTOR_BARRACKS) == reactors_started
 
     def test_a_unit_in_production_counts_from_the_first_edge_after_it_is_done(self) -> None:
         """With nothing to spend, a marine 9 seconds from done is the plan's only one, alive from the edge at 10, the
@@ -1559,6 +1582,26 @@ class TestEconomy:
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
 
+    def test_a_new_scv_mines_nothing_for_the_reassignment_time_where_no_worker_collects(self) -> None:
+        """As above, by an economy with no rate for a worker at a refinery: the marine starts at 55 seconds all the
+        same."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=1.0,
+            units={UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+            unit_completions=(UnitCompletion(unit_type=UnitTypeId.SCV, time_left=GameTime(seconds=5)),),
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=80,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            fluid_after=_whole_over_any_horizon,
+            economy=EconomyModel(vespene_per_collector_second=()),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [55.0]
+
     @pytest.mark.parametrize("reassignment_seconds", [3.0, 0.0], ids=["3 s", "none"])
     def test_a_builder_back_from_its_structure_mines_from_the_end_of_its_walk_back(
         self, reassignment_seconds: float
@@ -1801,6 +1844,19 @@ class TestReward:
         Reward.weighted(
             {UnitTypeId.MARINE: [CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.0, end_count=0)]}
         )
+
+    @pytest.mark.parametrize("end_count", [math.inf, 0.0, -1.0], ids=["none", "0", "below 0"])
+    def test_a_piece_but_the_last_that_ends_at_no_count_above_0_raises(self, end_count: float) -> None:
+        segments = [CurveSegment(weight=1.0, end_count=end_count), CurveSegment(weight=0.5)]
+        with pytest.raises(ValueError, match="must end at a count above 0"):
+            RewardTerm.curve(UnitTypeId.MARINE, segments)
+
+    @pytest.mark.parametrize(
+        "weight", [np.float64(2.0), np.float32(2.0), np.int64(2)], ids=["float64", "float32", "int64"]
+    )
+    def test_a_weight_may_be_a_numpy_number(self, weight: float) -> None:
+        reward = Reward.weighted({UnitTypeId.MARINE: weight})
+        assert list(reward.terms[0].segments) == [CurveSegment(weight=2.0)]
 
     @pytest.mark.parametrize("end_seconds", [30, 60], ids=["before its start", "at its start"])
     def test_a_term_that_ends_no_later_than_it_starts_raises(self, end_seconds: int) -> None:
@@ -2165,6 +2221,14 @@ class TestGameState:
             in state.occupations
             for state, time in zip(states, left, strict=True)
         )
+
+    def test_a_state_with_a_unit_in_production_that_terran_does_not_make_raises(self) -> None:
+        """A state made by hand, since the planner reads no such unit off a game."""
+        state = _game_start(
+            unit_completions=(UnitCompletion(unit_type=UnitTypeId.MULE, time_left=GameTime(seconds=5)),)
+        )
+        with pytest.raises(ValueError, match="MULE in production"):
+            _best_plan(state, Reward.weighted({UnitTypeId.MARINE: 1.0}), horizon_seconds=10)
 
 
 class TestPlanner:

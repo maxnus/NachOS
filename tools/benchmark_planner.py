@@ -210,7 +210,7 @@ _TOY_DOUBLING_GRID = _TOY_GRIDS["double45"]
 def main() -> None:
     """Run the case the command line names."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("case", choices=sorted(_CASES))
+    parser.add_argument("case", choices=sorted(_CASE_RUNNERS))
     parser.add_argument("--time-limit", type=float, default=10.0, help="seconds of wall-clock time for each solve")
     parser.add_argument("--half-lives", default="none,120,240,480", help="the half-lives in seconds, or none")
     parser.add_argument(
@@ -224,7 +224,7 @@ def main() -> None:
     half_lives = [None if text == "none" else GameTime(seconds=float(text)) for text in arguments.half_lives.split(",")]
     default_horizon = _PLANNER_HORIZON if arguments.case in _CASES_ON_THE_PLANNERS_DEFAULTS else _TOY_HORIZON
     horizon = default_horizon if arguments.horizon is None else GameTime(seconds=arguments.horizon)
-    _CASES[arguments.case](model, arguments.time_limit, half_lives, horizon)
+    _CASE_RUNNERS[arguments.case](model, arguments.time_limit, half_lives, horizon)
 
 
 def _game_start() -> PlannerState:
@@ -333,7 +333,7 @@ def _mid_game_states() -> dict[str, PlannerState]:
     }
 
 
-def _walking(walks: Mapping[UnitTypeId, float], *, reassignment_time: GameTime = GameTime.ZERO) -> EconomyModel:
+def _economy_walking(walks: Mapping[UnitTypeId, float], *, reassignment_time: GameTime = GameTime.ZERO) -> EconomyModel:
     """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others, and with
     `reassignment_time`, by default none as in the toy, which moves a worker to or from a refinery for nothing."""
     return EconomyModel(
@@ -360,7 +360,7 @@ def _solve_and_print(
     and `loss_rates`, and print what came of it."""
     items = model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
     planned_from = _game_start() if state is None else state
-    planned_by = _walking(_NO_WALKS) if economy is None else economy
+    planned_by = _economy_walking(_NO_WALKS) if economy is None else economy
     started = time.perf_counter()
     program = PlanProgram(
         items=items,
@@ -460,7 +460,7 @@ def _reference_economy(model: TerranModel) -> EconomyModel:
     """The reference configuration's economy: the default, its reassignment time too, but with a walk of 25 seconds to
     a command center, and of 6 to any other structure."""
     walks = {unit_type: _REFERENCE_WALK_SECONDS for unit_type in model.unit_items} | {UnitTypeId.COMMAND_CENTER: 25.0}
-    return _walking(walks, reassignment_time=EconomyModel().reassignment_time)
+    return _economy_walking(walks, reassignment_time=EconomyModel().reassignment_time)
 
 
 def _half_life_label(half_life: GameTime | None) -> str:
@@ -540,7 +540,7 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             grid=_TOY_DOUBLING_GRID,
             time_limit=time_limit,
             horizon=horizon,
-            economy=_walking(walks),
+            economy=_economy_walking(walks),
         )
 
 
@@ -593,7 +593,7 @@ def _print_starts_by_minute(plan: BuildPlan, unit_types: Sequence[UnitTypeId]) -
         )
 
 
-_CASES: Mapping[str, Callable[[TerranModel, float, Sequence[GameTime | None], GameTime], None]] = {
+_CASE_RUNNERS: Mapping[str, Callable[[TerranModel, float, Sequence[GameTime | None], GameTime], None]] = {
     "reference": _run_reference,
     "grids": _run_grids,
     "windows": _run_windows,

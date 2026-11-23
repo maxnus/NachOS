@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import numbers
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Self, final
@@ -19,7 +20,8 @@ class CurveSegment:
     weight: float
     """What each unit of the piece is worth a second."""
     end_count: float = math.inf
-    """The count the piece ends at, where the next begins; the last piece runs on, whatever it says."""
+    """The count the piece ends at, where the next begins: above 0 and finite for every piece but the last, which
+    runs on, whatever it says."""
 
 
 @final
@@ -43,7 +45,8 @@ class RewardTerm:
     more than that share of the term's units.
 
     Raises `ValueError` for no group, an `end` not later than `start`, a curve that is not concave, its weights falling
-    and its counts rising, or a negative weight in a term of several groups or that requires an upgrade. What
+    and its counts rising, a piece but the last that ends at no count above 0, or a negative weight in a term of several
+    groups or that requires an upgrade. What
     `time_factor` and `count_factor` give is only seen where a plan is made: see `time_factor_at` and
     `count_factor_at`.
     """
@@ -158,7 +161,7 @@ class RewardTerm:
         With an `end_count`, no unit past that count is worth anything. From the game time `start`, the game's start
         by default, to `end`, and nothing before or from then, times what `time_factor` gives for a game time between
         them, and with `end_count` times what `count_factor` gives for it; and only once every upgrade of `requires`
-        is done. Raises `ValueError` for a negative `weight`."""
+        is done. Raises `ValueError` for a negative `weight` with several groups."""
         return cls(
             groups=groups,
             segments=_segments_of(weight, end_count),
@@ -243,8 +246,8 @@ class Reward:
         a second, or a curve where more of them are worth less each. `terms` come after them, and the rest is the
         reward's own."""
         of_weights = [
-            RewardTerm.weight(unit_type, weight)
-            if isinstance(weight, (int, float))
+            RewardTerm.weight(unit_type, float(weight))
+            if isinstance(weight, (int, float, numbers.Real))
             else RewardTerm.curve(unit_type, weight)
             for unit_type, weight in weights.items()
         ]
@@ -286,10 +289,16 @@ def _segments_of(weight: float, end_count: float) -> Sequence[CurveSegment]:
 
 
 def _check_concave(unit_types: Iterable[UnitTypeId], segments: Sequence[CurveSegment]) -> None:
-    """Raise `ValueError` unless `segments` is concave: weights not rising, and counts rising but the last's."""
+    """Raise `ValueError` unless `segments` is concave: weights not rising, and counts rising from above 0 but the
+    last's, each of them finite."""
     names = ", ".join(sorted(unit_type.name for unit_type in unit_types))
     if not segments:
         raise ValueError(f"a curve of {names} has no segments")
+    for segment in segments[:-1]:
+        if not 0 < segment.end_count < math.inf:
+            raise ValueError(
+                f"every piece of a curve of {names} but the last must end at a count above 0, not {segment.end_count}"
+            )
     for position, (earlier, later) in enumerate(zip(segments, segments[1:], strict=False), start=1):
         if later.weight > earlier.weight:
             raise ValueError(f"a curve of {names} is not concave: a weight of {later.weight} after {earlier.weight}")

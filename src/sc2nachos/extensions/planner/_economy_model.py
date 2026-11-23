@@ -120,6 +120,6 @@ def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> 
         chosen = None if economy.walk_time is None else economy.walk_time(unit_type)
         if chosen is not None and chosen < GameTime.ZERO:
             raise ValueError(f"walk_time must not return a negative time, but returned {chosen} for {unit_type.name}")
-        default = _DEFAULT_COMMAND_CENTER_WALK if unit_type == UnitTypeId.COMMAND_CENTER else _DEFAULT_WALK
+        default = _DEFAULT_COMMAND_CENTER_WALK if unit_type is UnitTypeId.COMMAND_CENTER else _DEFAULT_WALK
         seconds[unit_type] = (default if chosen is None else chosen).seconds
     return seconds

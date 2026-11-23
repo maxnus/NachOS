@@ -49,7 +49,7 @@ class Item:
     supply_provided: float
     """The supply it adds to the cap once done, less what the type it morphs from provided."""
     producers: frozenset[UnitTypeId]
-    """The types that make or research it, each as the type it counts as, a barracks rather than a flying one; empty
+    """The types that make or research it, each as the type it counts as, a barracks rather than a flying one: an SCV
     for a structure a worker builds."""
     needs_tech_lab: bool
     """Whether its producer must have a tech lab."""
@@ -66,11 +66,6 @@ class Item:
     def made(self) -> UnitTypeId | UpgradeId | None:
         """What it makes or researches."""
         return self.unit_type if self.unit_type is not None else self.upgrade
-
-    @property
-    def is_upgrade(self) -> bool:
-        """Whether it is an upgrade."""
-        return self.upgrade is not None
 
     @property
     def name(self) -> str:
@@ -178,8 +173,8 @@ class TerranModel:
             if upgrade not in self._items_by_upgrade:
                 raise ValueError(f"the planner cannot research {upgrade.name} for Terran")
             wanted_upgrades.add(upgrade)
-        to_visit = [self._items_by_type[unit_type] for unit_type in wanted_types]
-        to_visit += [self._items_by_upgrade[upgrade] for upgrade in wanted_upgrades]
+        to_visit = [self._items_by_type[unit_type] for unit_type in sorted(wanted_types)]
+        to_visit += [self._items_by_upgrade[upgrade] for upgrade in sorted(wanted_upgrades)]
         while to_visit:
             for needed in self._needs_of(to_visit.pop(), wanted_types):
                 if needed.unit_type is not None and needed.unit_type not in wanted_types:
@@ -204,7 +199,7 @@ class TerranModel:
         none is wanted; what it morphs from; the type each tech it needs is named after; its producers' tech lab if it
         needs one, or their reactor for a unit that needs none; and the upgrades it needs."""
         producers = item.producers & wanted_types or {
-            min(item.producers, key=lambda producer: self._game_data.units[producer].total_cost.minerals)
+            min(sorted(item.producers), key=lambda producer: self._game_data.units[producer].total_cost.minerals)
         }
         needed_types = set(producers)
         if item.morphed_from is not None:
@@ -214,9 +209,11 @@ class TerranModel:
         if item.unit_type is not None and not _is_structure(self._game_data.units[item.unit_type]):
             needed_types.update(add_on for producer in producers if (add_on := add_on_of(producer)) is not None)
         needed = [
-            self._items_by_type[needed_type] for needed_type in needed_types if needed_type in self._items_by_type
+            self._items_by_type[needed_type]
+            for needed_type in sorted(needed_types)
+            if needed_type in self._items_by_type
         ]
-        return needed + [self._items_by_upgrade[upgrade] for upgrade in item.upgrades_needed]
+        return needed + [self._items_by_upgrade[upgrade] for upgrade in sorted(item.upgrades_needed)]
 
     def _unit_item(self, row: UnitTypeData) -> Item:
         """The item making the unit type of `row`."""
@@ -253,7 +250,7 @@ def _is_made_by_an_order(row: UnitTypeData) -> bool:
 def _counted_types_of_terran_types(game_data: GameData) -> dict[UnitTypeId, UnitTypeId]:
     """The type each Terran unit type counts as: of the `equivalent_types` of what its order makes, the one an order
     makes rather than one morphed from another of them, and of two, the one needing fewer techs."""
-    rows = {unit_type: row for unit_type, row in game_data.units.items() if row.race == Race.TERRAN}
+    rows = {unit_type: row for unit_type, row in game_data.units.items() if row.race is Race.TERRAN}
     counted_types: dict[UnitTypeId, UnitTypeId] = {}
     for unit_type, row in rows.items():
         made = _made_by_its_order(game_data, row)
