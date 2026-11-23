@@ -34,7 +34,7 @@ codebases read alike. A new rule of style goes here, with an example from the co
   and the actions read off an observation hold one, where they had tuples. A `Units` equals another of the same units
   in the same order, so a frozen dataclass holding one compares by value. Inside, a list built up or sorted is wrapped
   where it is handed out.
-- **A parameter a function never reads is named `_`**, and `*_` takes any number of them: `def macro(_: TurnEvent)`
+- **A parameter a function never reads is named `_`**, and `*_` takes any number of them: `def spend_money(_: TurnEvent)`
   in the demo bot, and `MovementWindows._measure(self, *_: object)`. A handler of several events takes `*_`, over a
   second method that only forwards to it.
 

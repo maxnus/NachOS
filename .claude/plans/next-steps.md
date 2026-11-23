@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-18:
+As of 2026-11-22:
 
 - **The build planner is the work in progress**: `sc2nachos.extensions.planner`, a solver of build orders any bot hands
   its reward. [planner-plan.md](planner-plan.md) holds its decisions, the measurements behind them, its design and its
@@ -59,9 +59,12 @@ As of 2026-11-18:
   reads over an area, which read at points 0.1 apart by default, and a unit's `speed` is gone, `speed_with(buffs=False,
   on_creep=False)` now, beside the new `current_speed`, which counts creep and buffs where the unit stands. AvocaDOS #99
   takes it.
-- **Since 0.8.0**, on main: the buff a viper's Consume puts on the structure it drains, `VIPER_CONSUMED`. It had ended
-  AvocaDOS's AI Arena match 5118204 (AvocaDOS #98): upgrade inference read an enemy unit's buffs, and `Unit.buffs`
-  raised `UncuratedIdError`. Proposed: 0.8.1, a fix alone, which a bot takes with no change.
+- **0.8.1 is out** (2026-11-18, from 8c42dbb), with #257: the buff a viper's Consume puts on the structure it drains,
+  `VIPER_CONSUMED`, which had ended AvocaDOS's AI Arena match 5118204 (AvocaDOS #98) when upgrade inference read an
+  enemy unit's buffs and `Unit.buffs` raised `UncuratedIdError`. AvocaDOS #104 takes it.
+- **Since 0.8.1**, on main: #258, `py.typed`, Python 3.14 in CI, a creep tumor's own burrow as `CREEP_TUMOR_BURROW`,
+  and the collapsible towers' buffs skipped, the first of "Toward 1.0" (Next). Proposed: 0.8.2, which a bot takes with
+  no change. On its branch: a Zerg demo bot, and the Terran one renamed (Next).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -207,9 +210,13 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   one division of `total_repair_cost`; a forecast of when tech is there; a getter beside `api.data.units[t]`;
   `api.enemy.units`, which stays `api.units.enemy` (#121); and the numeric helpers `clip`, `lerp`, `remap`, `damp`,
   `s_curve` and `sticky_round`, which went back to AvocaDOS (#194).
-- **The demo bot, `examples/demo_bot.py`, is the library's example** (#125). It beat `Computer` at `MEDIUM` in all
-  21 games of the pool's 7 maps against each of the 3 races before #202 gave it speed mining, and has not played them
-  since (Next). What it needs that NachOS lacks goes into NachOS first, planned with the owner one gap at a time.
+- **The demo bots are the library's examples, one for each race** (#125; the owner, 2026-11-23, after Terran's
+  alone): `examples/terran_demo_bot.py`, `zerg_demo_bot.py` and, to come, `protoss_demo_bot.py`, each a whole bot in
+  one file run by `run_from_command_line`, which repeats its own budget and army rather than sharing a module. Each
+  beats `Computer` at `MEDIUM` in all 21 games of the pool's 7 maps against each of the 3 races, and an in-game test
+  plays one. What one needs that NachOS lacks goes into NachOS first, planned with the owner one gap at a time.
+- **An id the curated enums leave out raises when read** (the owner, 2026-11-23, over a fallback or catching it in
+  NachOS's extensions): that is how the ids are found fast.
 
 ### The map
 
@@ -364,6 +371,34 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **Toward 1.0** (proposed 2026-11-22, when the owner asked whether NachOS was ready): first, in #258, `py.typed`
+  (mypy read none of NachOS's annotations), Python 3.14 in CI, and the ids AI Arena's replays had shown raising, a
+  creep tumor's own burrow and the collapsible towers' buffs, beside which ten playbacks every step of five games, three
+  of them Zerg against Zerg, found no id left out. Decided since (above): uncurated ids keep raising, and a demo bot for
+  each race. Still to plan with the owner, one at a time (proposed, not decided): a quiet period on a 1.0.0rc1 with no
+  breaking change, since five of the nine releases since 0.1.0 broke a bot's code; a wider sweep of the season's
+  replays of every race for the ids left, which checks too whether a changeling's disguise or a locust's take-off, made
+  by the game as a tumor's burrow is, shows as the unit's order (review of #258); what 1.0 promises, `protocol`,
+  `testing` and the extensions included or not, and how a rename goes after it; semita, alpha and required as
+  `>=0.2.1` with no bound; and `needs_power` and the self types for energy, cargo and detection (section 1), which
+  would break a bot if they came after.
+- **The demo bots** (above), a pull request a bot, in this order (the owner, 2026-11-23):
+  1. On its branch: `zerg_demo_bot.py`, and `demo_bot.py` renamed `terran_demo_bot.py`. Each won all 21 games against
+     `MEDIUM` (2026-11-23, build 75689). The Zerg bot's tumors wait out the 289 steps after their burrow before they
+     plant (`docs/reference/game-behavior/units.md`). Found playing it, to plan with the owner, neither stopping it:
+     - Speed mining's return refused with `CANT_FIND_DROP_OFF`, over and over, for a drone carrying minerals 6.3 from
+       a finished hatchery of its own with no enemy near: 14 to 85 refusals a game in 4 of the 16 Zerg games on
+       PylonAIE whose refusals were counted, and none of the 54 elsewhere nor the Terran bot's 21; from 5:44 and 7:09
+       in the two whose steps were logged.
+     - A creep tumor refused a plant with `CANT_BUILD_LOCATION_INVALID` at sites beside a base, where
+       `api.placement.nearest_free(CREEP_TUMOR, ...)` found them free: (59.5, 117.5) on MagannathaAIE, 3 below the
+       expansion center at (59.5, 120.5), 35 and 39 times in 2 of 6 games there while the bot ordered a refused tumor
+       again, and 89 refusals of a site not logged in a third; and once each, (54.5, 124.5) beside a mineral field on
+       MagannathaAIE, (92.5, 149.5) on PylonAIE, 1 from the drone above, and (116.5, 111.5) on UltraloveAIE.
+  2. Power in the placement grids, in a pull request of its own that measures what the game requires (section 1),
+     which also settles `needs_power` before 1.0.
+  3. `protoss_demo_bot.py`: probes, pylons, gateways and a cybernetics core, zealots and stalkers trained at gateways
+     with no Warp Gate research, and chrono boost on the nexus.
 - **The build planner**, a phase at a time, as [planner-plan.md](planner-plan.md) orders them: after phase 1, playing it
   in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
   the owner to settle: a wide reward's item set, which is not solved in 3 seconds, the count-form cut, and workers
@@ -519,8 +554,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.
-- #202's checks in game, not run before it merged: the demo bot's 21 games. Its integration test passed in #203, and
-  an orbital's morph, which let its base's workers go, is fixed there.
 - **A unit's speed where it stands** (the owner, 2026-11-18, after AvocaDOS #99 worked out its melee units' speed
   itself): `Unit.speed` counts the creep under the unit and the buffs it wears, and `Unit.base_speed` is what `speed` is
   now, its type's with its owner's upgrades, for planning a path, which creep changes tile by tile (the owner, over
@@ -660,18 +693,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   fog-off view makes copies of its own. Probably settled by #192, since `State.actions` reads tags through
   `get_by_tag`, a tag never reported reading as not reported: confirm with one `run_replay(..., disable_fog=True)` and
   an `OwnActionEvent` handler, which raised `UnknownTagError` before, then drop this item.
-- **Ids AI Arena's replays report that the curated ids leave out**, found playing back matches 4805282 and 4846375
-  raw while curating the parasitic bomb's dummy, and 40 more of the season with the fog off, 4 steps a turn
-  (2026-11-04). None stops a playback, since each is read only when a bot reads it, but each raises then: ability 1662,
-  `BurrowCreepTumorDown_BurrowDown`, a creep tumor's own order as it burrows by itself, which `OwnUnit.orders` raises on
-  for a Zerg bot's tumors (5 of the 42 games); and buffs 39 to 42 (17 of the 42), each worn by every collapsible
-  tower of one kind, in the fog, in the first observation of a playback with the fog off, and never again, nor ever
-  in either player's own view: `CollapsibleRockTowerConjoinedSearch` by `CollapsibleRockTower`,
-  `CollapsibleRockTowerRampDiagonalConjoinedSearch` by `CollapsibleRockTowerDiagonal`,
-  `CollapsibleTerranTowerConjoinedSearch` by `CollapsibleTerranTower` and
-  `CollapsibleTerranTowerRampDiagonalConjoinedSearch` by `CollapsibleTerranTowerDiagonal` (4686890 and 4750796, on
-  MagannathaAIE, every 2 steps). `Api.all_units` shows that first report visible, so its towers' `buffs` raise in the
-  first turn. The 40 reported no unit type the curated ids leave out.
 
 ## 1. Waiting until something needs them
 
@@ -715,8 +736,6 @@ can be planned with the owner. Keeping the selections still waits on M5's exit g
   (the owner, 2026-10-29, over doing them in #185, and over never). No group holds their types, and the corpus shows
   too few: they need new groups, such as `WithEnergy`, `Transport` and `Detector`, from a sweep that creates every
   type and records its energy, cargo and detection.
-- Power in the placement grids, in a pull request of its own that measures what the game requires; `needs_power`
-  stays a bool until then.
 - An up-to-date pathing grid.
 - The next trial of `tools/sweep_fog.py` (begun with `retag` and `rebuilt`, 2026-10-24) checks that a structure lifted
   off or uprooted, and a viking in either form, is never left as a remembered copy, which the tracker assumes (the

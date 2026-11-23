@@ -364,7 +364,7 @@ def _products(
     that shares its ability with the type the table names it for, as a rich refinery shares the plain build with a
     refinery, leaves the table's product in place. An id no type is offered is carried out by the types offered
     another the same curated id stands for and making nothing else by it, as a liberator is offered the siege whose
-    reported id the table names, or by the type `SELF_MORPHS` names, as a gateway turns itself into a warp gate; one
+    reported id the table names, or by the types `SELF_MORPHS` names, as a gateway turns itself into a warp gate; one
     nothing carries out is left out, and `tests/test_tech_tree.py` checks that every unit type and upgrade is still
     made by something. Raises `ValueError` where a type would make two things by one curated id.
     """
@@ -390,11 +390,10 @@ def _products(
     # curated id it reads as.
     for ability, product in sorted(made.items(), key=lambda entry: not makers.get(entry[0])):
         curated = _folded(ability)
-        self_morph = SELF_MORPHS.get(curated)
         carried_out_by = (
             makers.get(ability)
             or curated_makers.get(curated, set()) - products[curated].keys()
-            or ({self_morph} if self_morph is not None else set())
+            or SELF_MORPHS.get(curated, frozenset())
         )
         for maker in carried_out_by:
             if products[curated].setdefault(maker, product) is not product:
@@ -508,7 +507,8 @@ def _morph_sources(
     trials: Iterable[Trial], creation_abilities: Mapping[UnitTypeId, AbilityId]
 ) -> dict[UnitTypeId, UnitTypeId]:
     """The type each unit type is made from, from the trials that used up the unit ordered, and for a type made by an
-    ability in `SELF_MORPHS`, which no trial saw, the type that turns itself into it there: a gateway, for a warp gate.
+    ability in `SELF_MORPHS`, which no trial saw, the type that turns itself into it there, where only one does: a
+    gateway, for a warp gate, but none for a burrowed creep tumor, which a queen's tumor and a tumor's both become.
 
     Where several types can be used up making one, the source is the one the others are themselves made from: an
     overseer is made from an overlord, and from the overlord transport an overlord becomes.
@@ -523,7 +523,9 @@ def _morph_sources(
         if len(roots) == 1:
             sources[product] = roots[0]
     for unit_type, creation_ability in creation_abilities.items():
-        if (self_morphing_type := SELF_MORPHS.get(creation_ability)) is not None:
+        self_morphing_types = SELF_MORPHS.get(creation_ability, frozenset())
+        if len(self_morphing_types) == 1:
+            (self_morphing_type,) = self_morphing_types
             sources.setdefault(unit_type, self_morphing_type)
     return sources
 

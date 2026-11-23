@@ -539,6 +539,8 @@ TECH_TREE: Final = TechTree(
             producers=frozenset({UnitTypeId.CREEP_TUMOR_BURROWED}),
         ),
         UnitTypeId.CREEP_TUMOR_BURROWED: TechTreeUnitType(
+            creation_ability=AbilityId.CREEP_TUMOR_BURROW,
+            producers=frozenset({UnitTypeId.CREEP_TUMOR, UnitTypeId.CREEP_TUMOR_QUEEN}),
             ability_requirements=MappingProxyType({
                 AbilityId.BUILD_CREEP_TUMOR: TechRequirements(),
                 AbilityId.SMART: TechRequirements(),
@@ -3221,6 +3223,12 @@ TECH_TREE: Final = TechTree(
             performers=frozenset({UnitTypeId.CORRUPTOR}),
             products=MappingProxyType({
                 UnitTypeId.CORRUPTOR: UnitTypeId.BROOD_LORD,
+            }),
+        ),
+        AbilityId.CREEP_TUMOR_BURROW: TechTreeAbility(
+            products=MappingProxyType({
+                UnitTypeId.CREEP_TUMOR: UnitTypeId.CREEP_TUMOR_BURROWED,
+                UnitTypeId.CREEP_TUMOR_QUEEN: UnitTypeId.CREEP_TUMOR_BURROWED,
             }),
         ),
         AbilityId.CYBERNETICS_CORE_RESEARCH_AIR_ARMOR_1: TechTreeAbility(

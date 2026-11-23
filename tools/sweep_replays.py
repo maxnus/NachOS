@@ -1,8 +1,8 @@
 """Find what the game does when it plays a replay back, from either player's view and with the fog off, and what
 playing one back costs.
 
-Needs StarCraft II installed. Every sweep plays back one shared game, and `ending` one more besides: the demo bot
-against the computer at Medium on the sandbox's map for 300 game seconds, a turn every 8 steps, recorded and its
+Needs StarCraft II installed. Every sweep plays back one shared game, and `ending` one more besides: the Terran demo
+bot against the computer at Medium on the sandbox's map for 300 game seconds, a turn every 8 steps, recorded and its
 replay saved at its time limit.
 
 - `views` plays the replay back as player 1 and compares each observation with the one recorded: the units by tag,
@@ -73,7 +73,7 @@ from sc2nachos.protocol import ConnectionClosedError, Recording, WebSocketTransp
 from sc2nachos.protocol._client import _raw_interface
 from sc2nachos.run import GameProcess, Installation
 
-_DEMO_BOT = Path(__file__).parents[1] / "examples" / "demo_bot.py"
+_DEMO_BOT = Path(__file__).parents[1] / "examples" / "terran_demo_bot.py"
 _GAME_SECONDS = 300
 _STEPS_PER_TURN = 8
 _IN_REPLAY = sc2api_pb2.Status.in_replay
@@ -120,9 +120,9 @@ _REPORTED_FIELDS = (
 
 
 def _record_the_shared_game(directory: Path) -> tuple[Path, Path]:
-    """Play the demo bot against the computer, recording the game into `directory` and saving its replay there, and
-    return the replay's path and the recording's."""
-    spec = importlib.util.spec_from_file_location("demo_bot", _DEMO_BOT)
+    """Play the Terran demo bot against the computer, recording the game into `directory` and saving its replay there,
+    and return the replay's path and the recording's."""
+    spec = importlib.util.spec_from_file_location("terran_demo_bot", _DEMO_BOT)
     if spec is None or spec.loader is None:
         raise SystemExit(f"{_DEMO_BOT} cannot be loaded")
     demo_bot = importlib.util.module_from_spec(spec)
