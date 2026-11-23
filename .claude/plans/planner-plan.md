@@ -632,6 +632,30 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     refinery, and the weight is in a plan's `objective`. Open: the default suits weights around 1, and a reward of
     much smaller ones wants it smaller, which nothing checks.
 
+14. **A start is paid from the stock at its interval's start and half the interval's income** (the owner, 2026-11-23:
+    "Is this not too optimistic in the planner, that we can use resources that are yet to come in to already start the
+    build time at the start of the interval?"). The half is the toy's, a constant, never measured before. It rounds a
+    start to the nearer edge of the grid: an item affordable in an interval's first half counts as started at its start,
+    up to half an interval early, and one affordable in its second half waits for the next, up to half an interval late;
+    with none of the income every start is late, with all of it early. Measured by a script outside the package that set
+    the share by interval, on the growing reward at a half-life of 240 s, 300 s ahead, every solve proven. In the first
+    24 s, against the default grid with those 16 intervals each cut in four, whose plans with none and with all of the
+    income bound what is true, and the far part the same in both: from 0:00 the default grid's plan is worth 2958.0 with
+    none, 2981.9 with a half and with all, the bounds 2973.5 and 2981.9, so a half is at most 0.3% optimistic and none
+    0.5 to 0.8% pessimistic, the first supply depot at 7.6 s for the finer grid's 8.3; from 3:00 and 6:00 the share
+    moves the plan's worth by 0.06% at most, and the default grid is 0.01 to 0.08% under the finer one's whatever the
+    share. After the first 24 s, where intervals are 3 to 24 s, against the same grid with intervals of 3 s at most
+    there, by the army at the horizon at its cost, objectives of different grids being no measure: the default grid's
+    army against the finer grid's with a half is, with none, a half and all of the income, 8.4% less, 0.3% more and 6.4%
+    more from 0:00; 3.7% less, 4.7% more and 8.1% more from 3:00; 1.0% more, 0.2% less and 0.6% more from 6:00. From
+    3:00 the default grid with a half also has 36.5 SCVs for the finer grid's 31.5 and collects 8.5% more: there the
+    owner's doubt holds, a long interval's income buying workers at its start that bring in more. A grid with intervals
+    of 6 s at most is within 0.8% of the finer one's army from every state with a half. So a half is the best single
+    share of the three, right in the near term and from two states of three in the far part, and what is off from 3:00
+    is the long intervals more than the share. A reference of 1.5 s intervals throughout was not solved in 60 s in five
+    solves of nine. Not built: the share as an argument of `Planner`, and `Plan.moment_at` reading no stock below
+    nothing.
+
 ## Risks
 
 - **Solve time on the full model.** A time limit with the incumbent, the old plan kept when nothing feasible comes
