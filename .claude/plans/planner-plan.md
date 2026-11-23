@@ -390,12 +390,20 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    quarter of an interval at most, 0.4 s on the default grid. On it a marauder is planned every 476 steps, a siege tank
    every 714 for its 720 and a thor every 952 for its 960, a marine every 408 as before; fluid starts keep their build
    time, and a build counts as done from the first edge at or after its end as before.
-10. **Workers per base** (the owner, review of #239: to come back to). The planner pools workers over every field
-    and refinery, so a new SCV mines from when it is done, even one that has to walk to another base, about 10
-    minerals too many each, and a new base's fields count from when its command center is done. Separate workers per
-    base, with transfers, would roughly double the reference program's 1388 variables and add some 125 integers to its
-    419, whether each future base stands yet, with the solver already short of optimal at 3 seconds; unmeasured. A
-    cheaper middle way, a delay the `Economy` sets before each new SCV mines, was left for this discussion.
+10. **Workers per base** (the owner, review of #239: to come back to; 2026-11-23: "I would really like to have workers
+    per base, but I don't think we can afford it"). The planner pools workers over every field and refinery, and a new
+    base's fields count from when its command center is done. What a pooled plan charges a move is
+    `Economy.reassignment_time` (Open 13, which built the cheaper middle way this point had left open): a new SCV's
+    first walk to a field, and a worker that moves to a new base's fields, which is a rise of a better tier of rates,
+    each bring in nothing for its 3 seconds, where a walk to another base is 10 to 25. That stays the only charge, with
+    no parameter of its own for a new base (the owner, the same day: "SCVs should already be delayed by 3 seconds when
+    they start to mine or change their assignment to the new base"). The error left, estimated and not measured: some 6
+    workers a new base, each half a mineral a second better off there, 10 to 20 seconds early, 30 to 75 minerals an
+    expansion. Separate workers per base, with transfers, would roughly double the reference program's 1388 variables
+    and add some 125 integers to its 419, whether each future base stands yet: estimated before the grid of 34 steps,
+    when the solver was short of optimal at 3 seconds, and unmeasured. It alone would have a plan say how many workers
+    each base gets, which is a bot's own economy management otherwise. A prototype outside the package to measure its
+    solve time is a few hours' work, and not made.
 11. **What an item needs first is whole** (the owner, 2026-11-20: built, and the bot's to set). The prerequisite rows
     hold an item's starts in an interval at most the interval's most times the count granting its tech, a switch while
     that count is whole and a dial once it is fluid: a hundredth of a factory unlocked a starport. The reference plan
