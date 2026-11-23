@@ -377,8 +377,6 @@ def _solve_and_print(
         max_ignored_overrun=_MAX_IGNORED_OVERRUN,
         unlock_fraction=_UNLOCK_FRACTION,
         spendable_income_fraction=_SPENDABLE_INCOME_FRACTION,
-        previous_plan=None,
-        hysteresis_bonus=0.0,
     )
     built = time.perf_counter() - started
     plan = program.solve(time_limit=time_limit, node_limit=None)

@@ -81,12 +81,9 @@ def _best_plan(
     max_ignored_overrun: float = 0.25,
     unlock_fraction: float = 1.0,
     spendable_income_fraction: float = 0.5,
-    previous_plan: BuildPlan | None = None,
-    hysteresis_bonus: float = 0.0,
 ) -> BuildPlan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
-    `economy`, with `loss_rates`, `start_limits`, `max_ignored_overrun` and `unlock_fraction`, keeping to
-    `previous_plan` for `hysteresis_bonus`, proven best."""
+    `economy`, with `loss_rates`, `start_limits`, `max_ignored_overrun` and `unlock_fraction`, proven best."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
     program = PlanProgram(
         items=items,
@@ -101,8 +98,6 @@ def _best_plan(
         max_ignored_overrun=max_ignored_overrun,
         unlock_fraction=unlock_fraction,
         spendable_income_fraction=spendable_income_fraction,
-        previous_plan=previous_plan,
-        hysteresis_bonus=hysteresis_bonus,
     )
     plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT)
     assert plan is not None
@@ -1006,42 +1001,6 @@ class TestKnownPlans:
         assert required.objective == pytest.approx(without.objective)
         assert _start_seconds(required, UnitTypeId.MARINE) == _start_seconds(without, UnitTypeId.MARINE)
 
-    def test_a_hysteresis_bonus_keeps_to_the_previous_plans_items(self) -> None:
-        """A barracks nothing else is worth gets built by when the previous plan had it, for a bonus above its cost in
-        what an SCV's mining would have been worth."""
-        previous = _A_PLAN_OF_ONE_BARRACKS
-        state = _game_start(minerals=500.0, supply_cap=23.0, units={UnitTypeId.SCV: 12, UnitTypeId.SUPPLY_DEPOT: 1})
-        reward = Reward.weighted({UnitTypeId.SCV: 1.0})
-
-        without = _best_plan(state, reward, horizon_seconds=40)
-        kept = _best_plan(state, reward, horizon_seconds=40, previous_plan=previous, hysteresis_bonus=100.0)
-
-        assert _start_seconds(without, UnitTypeId.BARRACKS) == []
-        assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
-        assert _start_seconds(kept, UnitTypeId.BARRACKS)[0] <= 30.0
-
-    def test_an_item_the_plan_is_behind_on_is_worth_its_share_of_the_hysteresis_bonus(self) -> None:
-        """Of three marines the previous plan expected, at 0, 20 and 40 seconds, the one the plan may start keeps to
-        the first, to half of the second, one started of two expected by then, and to a third of the third."""
-        marines = tuple(
-            PlannedItem(item=UnitTypeId.MARINE, start=GameTime(seconds=seconds), is_fluid=False)
-            for seconds in (0, 20, 40)
-        )
-        previous = dataclasses.replace(_A_PLAN_OF_ONE_BARRACKS, items=marines)
-        state = _game_start(minerals=500.0, units={UnitTypeId.SCV: 12, UnitTypeId.BARRACKS: 1})
-        worth_nothing = Reward(terms=[RewardTerm.weight(UnitTypeId.MARINE, 0.0)], stock_weight=0.0)
-
-        plan = _best_plan(
-            state,
-            worth_nothing,
-            horizon_seconds=60,
-            start_limits={UnitTypeId.MARINE: 1},
-            previous_plan=previous,
-            hysteresis_bonus=1.0,
-        )
-
-        assert plan.objective == pytest.approx(1 + 1 / 2 + 1 / 3)
-
 
 class TestPlan:
     def test_the_interval_at_a_time_is_the_one_from_its_start_to_before_its_end(self) -> None:
@@ -1341,8 +1300,6 @@ class TestFluidAfter:
                 max_ignored_overrun=0.25,
                 unlock_fraction=0.0,
                 spendable_income_fraction=0.5,
-                previous_plan=None,
-                hysteresis_bonus=0.0,
             )
             return program.linear_program.integral_count
 
@@ -1464,8 +1421,6 @@ class TestUnlockFraction:
                 max_ignored_overrun=0.25,
                 unlock_fraction=unlock_fraction,
                 spendable_income_fraction=0.5,
-                previous_plan=None,
-                hysteresis_bonus=0.0,
             )
             return program.linear_program.integral_count
 
@@ -2480,44 +2435,6 @@ class TestPlanner:
         ((plan),) = plans
         assert plan.made_at == plan.intervals[0].start.time == GameTime(seconds=90)
 
-    def test_it_keeps_to_a_previous_plan_it_is_handed_for_a_bonus(self) -> None:
-        """With 150 minerals and none mined, a barracks costs the plan its SCVs, which the reward is for: it starts
-        one for a bonus worth more. The barracks waits for the supply depot an SCV is walking to build, done 27.4
-        seconds in, so the previous plan has it at 32."""
-        game = ScriptedGame(
-            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
-        )
-        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
-        plans: list[BuildPlan] = []
-        a_barracks_at_32_seconds = PlannedItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=32), is_fluid=False)
-        previous_plan = dataclasses.replace(_A_PLAN_OF_ONE_BARRACKS, items=(a_barracks_at_32_seconds,))
-
-        @api.on(TurnEvent)
-        def plan_scvs_twice(_: TurnEvent) -> None:
-            state = dataclasses.replace(api.extensions.state(), resources=Resources(150.0, 0.0), mineral_fields=0)
-            reward = Reward.weighted({UnitTypeId.SCV: 1.0})
-            horizon = GameTime(seconds=40)
-            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon, state=state)))
-            plans.append(
-                _plan_found(
-                    api.extensions.plan_now(
-                        reward,
-                        horizon=horizon,
-                        state=state,
-                        previous_plan=previous_plan,
-                        hysteresis_bonus=100.0,
-                    )
-                )
-            )
-
-        api.play(game.joined())
-
-        without, kept = plans
-        assert _start_seconds(without, UnitTypeId.BARRACKS) == []
-        assert _start_seconds(without, UnitTypeId.SCV) != []
-        assert len(_start_seconds(kept, UnitTypeId.BARRACKS)) == 1
-        assert _start_seconds(kept, UnitTypeId.SCV) == []
-
     def test_it_starts_no_more_of_an_item_than_the_limit_it_is_handed(self) -> None:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
@@ -2544,19 +2461,10 @@ class TestPlanner:
         [
             {"start_limits": {UnitTypeId.COMMAND_CENTER: -1}},
             {"economy": EconomyModel(walk_time=lambda _: GameTime(seconds=-1))},
-            {"hysteresis_bonus": 1.0},
-            {"previous_plan": _A_PLAN_OF_ONE_BARRACKS, "hysteresis_bonus": -1.0},
         ],
-        ids=[
-            "a negative start limit",
-            "a negative walk",
-            "a bonus with no previous plan",
-            "a negative bonus",
-        ],
+        ids=["a negative start limit", "a negative walk"],
     )
-    def test_a_negative_limit_walk_or_bonus_or_a_bonus_with_no_previous_plan_raises(
-        self, arguments: dict[str, Any]
-    ) -> None:
+    def test_a_negative_limit_or_walk_raises(self, arguments: dict[str, Any]) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
         api = Api(extensions=Planner)
 

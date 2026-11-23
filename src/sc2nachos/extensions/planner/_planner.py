@@ -188,8 +188,6 @@ class Planner:
         economy: EconomyModel = EconomyModel(),
         loss_rates: Mapping[UnitTypeId, float] = _NO_LOSSES,
         start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
-        previous_plan: BuildPlan | None = None,
-        hysteresis_bonus: float = 0.0,
     ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing that
@@ -201,28 +199,18 @@ class Planner:
         most that many, none for 0, beside what the state holds in production: a reactor the bot does not build, an
         orbital command it does not morph, or the expansions it means to take less those an SCV is already on its way to
         build on. A unit type's limit is that of the type it counts as, the lowest of those of one type, and one on what
-        the plan would not make anyway does nothing. With a `previous_plan`, such as `plan`, each of its items still
-        ahead is worth up to `hysteresis_bonus`, beside the reward, so that the new plan differs from it only for more
-        than that: the whole bonus where the new plan has started as many of its kind by that item's start as the
-        previous plan would have from now, and that share of it where fewer. One marine started of three expected is
-        worth the bonus, a half of it and a third, which spares the solve a whole variable for each item. It solves
-        within the planner's limits, before it returns, and returns `None` if the solver finds no plan within them,
-        which leaves `plan` the one before.
+        the plan would not make anyway does nothing. It solves within the planner's limits, before it returns, and
+        returns `None` if the solver finds no plan within them, which leaves `plan` the one before.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate, start limit or `hysteresis_bonus`, a `hysteresis_bonus` with no `previous_plan`,
-        a negative time from `fluid_after` or from `economy`'s `walk_time`, a factor from a term's `time_factor`
-        or `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does
-        not make.
+        than 0, a negative loss rate or start limit, a negative time from `fluid_after` or from `economy`'s `walk_time`,
+        a factor from a term's `time_factor` or `count_factor` that is negative or not finite, or a `state` holding a
+        unit in production that Terran does not make.
         """
         if any(rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
         if any(limit < 0 for limit in start_limits.values()):
             raise ValueError(f"start limits must not be negative: {dict(start_limits)}")
-        if hysteresis_bonus < 0:
-            raise ValueError(f"hysteresis_bonus must not be negative, not {hysteresis_bonus}")
-        if hysteresis_bonus and previous_plan is None:
-            raise ValueError("a hysteresis bonus needs the previous plan it favors")
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
         planned_from = self.state() if state is None else state
@@ -241,8 +229,6 @@ class Planner:
             max_ignored_overrun=self._max_ignored_overrun,
             unlock_fraction=self._unlock_fraction,
             spendable_income_fraction=self._spendable_income_fraction,
-            previous_plan=previous_plan,
-            hysteresis_bonus=hysteresis_bonus,
         )
         plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)
         if plan is not None:

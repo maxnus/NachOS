@@ -62,9 +62,7 @@ class PlanProgram:
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
     supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type. Of an
     item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type it counts as,
-    the lowest of those of one type, and a limit on no item here does nothing. Each item of `previous_plan` still ahead
-    is worth up to `hysteresis_bonus`, beside the reward: the share of it that the plan has started of its kind by that
-    item's interval, of what the previous plan would have from the state's time, at most all of it.
+    the lowest of those of one type, and a limit on no item here does nothing.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
     `walk_time`, and for a unit in production in `state` of a type that is no item of `model`'s.
@@ -78,7 +76,6 @@ class PlanProgram:
         "_discounts",
         "_economy",
         "_edges",
-        "_hysteresis_bonus",
         "_index_of_unit_type",
         "_index_of_upgrade",
         "_items",
@@ -88,7 +85,6 @@ class PlanProgram:
         "_mining",
         "_model",
         "_objective",
-        "_previous_plan",
         "_program",
         "_reward",
         "_start_limits",
@@ -119,8 +115,6 @@ class PlanProgram:
         max_ignored_overrun: float,
         unlock_fraction: float,
         spendable_income_fraction: float,
-        previous_plan: BuildPlan | None,
-        hysteresis_bonus: float,
     ) -> None:
         if len(fluid_after_seconds) != len(items):
             raise ValueError(f"{len(fluid_after_seconds)} windows for {len(items)} items")
@@ -134,8 +128,6 @@ class PlanProgram:
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
         self._spendable_income_fraction = spendable_income_fraction
-        self._previous_plan = previous_plan
-        self._hysteresis_bonus = hysteresis_bonus
         self._walk_seconds = walk_seconds_of(
             economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         )
@@ -793,8 +785,7 @@ class PlanProgram:
     # The reward.
 
     def _reward_expression(self) -> RowExpression:
-        """The reward of a plan: each interval's worth, discounted, the stock left at the horizon, and the previous
-        plan's items kept to."""
+        """The reward of a plan: each interval's worth, discounted, and the stock left at the horizon."""
         reward = self._reward
         worth = RowExpression(self._interval_count)
         for term in reward.terms:
@@ -805,8 +796,6 @@ class PlanProgram:
         if reward.stock_weight:
             at_the_horizon = np.eye(1, self._interval_count + 1, k=self._interval_count) * reward.stock_weight
             objective.add(self._minerals, at_the_horizon).add(self._vespene, at_the_horizon)
-        if self._previous_plan is not None and self._hysteresis_bonus:
-            objective.add(self._previous_items_kept(self._previous_plan), self._hysteresis_bonus)
         return objective
 
     def _worth_of(self, term: RewardTerm) -> RowExpression:
@@ -871,31 +860,6 @@ class PlanProgram:
             )
             for group in term.groups
         )
-
-    def _previous_items_kept(self, previous: BuildPlan) -> VariableBlock:
-        """How far each of `previous`'s items still ahead is kept to, from 0 to 1: at most the starts of its kind by its
-        interval over it and the previous plan's items of its kind before it, still ahead. It is a share and no whole
-        variable, of which a plan kept to would need one for each item: the third marine expected is kept to by a third
-        for one started."""
-        kept_to: list[tuple[int, int, int]] = []
-        ranks: dict[tuple[bool, int], int] = {}
-        for planned in previous.items:
-            index = self._index_of(planned)
-            seconds = (planned.start - self._state.time).seconds
-            if index is None or seconds < 0 or seconds >= self._edges[-1]:
-                continue
-            key = (isinstance(planned.item, UpgradeId), int(planned.item))
-            ranks[key] = ranks.get(key, 0) + 1
-            interval = int(np.searchsorted(self._edges, seconds + SECONDS_TOLERANCE, side="right")) - 1
-            kept_to.append((index, interval, ranks[key]))
-        kept = self._program.add_variables(len(kept_to), upper=1.0)
-        for position, (index, interval, rank) in enumerate(kept_to):
-            enough = RowExpression(1).add(kept, np.eye(1, len(kept_to), k=position) * rank)
-            enough.add_expression(
-                self._started_so_far(index).selected(np.arange(self._interval_count) == interval), -1.0
-            )
-            self._program.constrain(enough, upper=0.0)
-        return kept
 
     # Reading the plan.
 
@@ -976,12 +940,6 @@ class PlanProgram:
             )
             for edge, seconds in enumerate(self._edges.tolist())
         ]
-
-    def _index_of(self, planned: PlannedItem) -> int | None:
-        """The index of the item `planned` makes, or `None` if this plan has none."""
-        if isinstance(planned.item, UpgradeId):
-            return self._index_of_upgrade.get(planned.item)
-        return self._index_of_unit_type.get(planned.item)
 
     def _walk_seconds_of(self, item: Item) -> float:
         """The seconds an SCV walks to build `item`, and back."""

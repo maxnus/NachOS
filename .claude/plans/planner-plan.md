@@ -94,29 +94,35 @@ rows of the table below and a few sentences of the decisions, can be run again f
 8. **A plan is executed as an order, not a timetable.** The next item starts when affordable; the predicted times
    are for monitoring and the debug overlay. In AvocaDOS the order maps onto the priorities of the production,
    construction and research objectives, so placement, workers and cancellation stay where they are.
-9. **Replanning is parameterised**: an interval in game time, zero for continuous, a wall-time budget per solve,
-   event triggers (a structure lost, the forecast changed, an item unplaceable, an attack beginning) and a hysteresis
-   bonus for the previous plan's near term. The solve runs in a background process; the bot applies the plan on
-   arrival, dropping what it already started. A new plan is never worse only if the old plan is a candidate, by a
-   warm start from the shifted previous plan or by re-scoring it, and only with the hysteresis; both are required.
-   A synchronous mode with a node limit is deterministic for tests and recordings.
+9. **Replanning is parameterised**: an interval in game time, zero for continuous, a wall-time budget per solve, and
+   event triggers (a structure lost, the forecast changed, an item unplaceable, an attack beginning). The solve runs in
+   a background process; the bot applies the plan on arrival, dropping what it already started. A new plan is never
+   worse only if the old plan is a candidate, by a warm start from the shifted previous plan or by re-scoring it. A
+   synchronous mode with a node limit is deterministic for tests and recordings. A hysteresis bonus for the previous
+   plan's near term was part of this, required beside the old plan as a candidate, and was built as `plan_now`'s
+   `previous_plan` and `hysteresis_bonus`. It is taken out (the owner, 2026-11-23: "do we actually really need the
+   hysteresis bonus? Does it cost performance? Does it make the code more complicated?", and then: "Yes, remove it"): no
+   game has shown it needed, an argument added later breaks no bot where one taken out does, and it comes back in phase
+   3 if its games show plans flipping, from the commit before the one that took it out, bfff4b6. What was measured of it
+   is in Open 16.
 10. **No caps on production structures.** Their number is bounded by the economics; the physical bounds stay: what
     the bot lets a plan start of an item, `start_limits`, its expansions say, with no limit by default, two
     refineries a base, one add-on a barracks, one of each upgrade, supply 200, and room to build near a base once the
     map supplies it.
 11. **Every input is visible and the bot's to change** (the owner, review of #239). What the game shows is a public
-    `PlannerState`, which `Planner.state` reads and `plan_now(state=...)` takes back changed, a base about to fall
-    left out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `EconomyModel`
-    handed to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first
-    worker on, the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and `start_limits`
-    beside it, the most a plan may start of a unit type or an upgrade, none for 0 (the owner, 2026-11-19, over
-    `new_command_center_limit`, now one entry of it): a plan makes only what the reward values and what that needs,
-    so the limits are for what the model adds itself, add-ons, the orbital command and expansions, and a bot that
-    opts out by situation hands another mapping to that plan. The constructor keeps only how to solve: the grid, the
-    limits and the windows. Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to
-    and the bonus for it are `plan_now`'s `previous_plan` and `hysteresis_bonus` too (the owner, 2026-11-18, over the
-    reward holding them, and over the planner keeping to its own last plan, an input the bot would not see): they say
-    how plans follow one another, not what the bot wants, so a reward is built once and handed to every plan.
+    `PlannerState`, which `Planner.state` reads and `plan_now(state=...)` takes back changed, a base about to fall left
+    out, say; it holds only what the game shows, never an assumption. What the bot assumes is an `EconomyModel` handed
+    to each `plan_now`: what each worker at a field or a refinery brings in a second, a list from the first worker on,
+    the MULEs' income, a new base's fields and geysers, and the walks; and `loss_rates` and `start_limits` beside it,
+    the most a plan may start of a unit type or an upgrade, none for 0 (the owner, 2026-11-19, over
+    `new_command_center_limit`, now one entry of it): a plan makes only what the reward values and what that needs, so
+    the limits are for what the model adds itself, add-ons, the orbital command and expansions, and a bot that opts out
+    by situation hands another mapping to that plan. The constructor keeps only how to solve: the grid, the limits and
+    the windows. Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to and the bonus
+    for it were `plan_now`'s `previous_plan` and `hysteresis_bonus` too (the owner, 2026-11-18, over the reward holding
+    them, and over the planner keeping to its own last plan, an input the bot would not see): they say how plans follow
+    one another, not what the bot wants, so a reward is built once and handed to every plan. Both are taken out
+    (decision 9), and go there again if they come back.
 
 ## Measurements
 
@@ -171,10 +177,9 @@ class Extensions:
   bases. A bot may change it and hand it back.
 - `_economy_model.py`: `EconomyModel`, what the bot assumes of its economy (decision 11), with defaults measured in
   game.
-- `_reward.py`: the reward as data the matrix builder reads, and the extension's public interface: per-type weights
-  or concave segments, coverage (effectiveness, enemy counts per interval, values), floors, the discount half-life and
-  the terminal value. The bot builds it; the planner never guesses it. The hysteresis bonus and the plan it favors
-  are `plan_now`'s (decision 11).
+- `_reward.py`: the reward as data the matrix builder reads, and the extension's public interface: per-type weights or
+  concave segments, coverage (effectiveness, enemy counts per interval, values), floors, the discount half-life and the
+  terminal value. The bot builds it; the planner never guesses it.
 - `_milp.py`: the matrix from model, grid, snapshot and reward; the solve with a time or node limit; the plan from
   the solution.
 - `_build_plan.py`: the `BuildPlan`: items in order with predicted start times and the predicted resource and count
@@ -217,12 +222,12 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    build `BuildOrderName.PLANNER` in `enabled_builds` with a static reward. Games against the built-in AI through
    `scripts/run.py`. Exit: it wins against VeryHard on the pool's maps as the current builds do, and plays a
    recorded game to the end without an error logged. Then a NachOS release and the pin bump, and `/sc2-match`.
-3. **Replanning**, in NachOS. The background process, the interval and continuous mode, the triggers, the hysteresis,
-   and the old plan kept as a candidate by re-scoring: its starts delayed until the new state can afford them, by the
-   planner's own program through scipy, and the better of it and the new solve's plan kept. No highspy to start with
-   (the owner, 2026-11-23, Open 2), which was to bring a warm start as an optional dependency, its wheel in AvocaDOS's
-   ladder zip (`LOCKED_WHEELS` in `scripts/release_helper.py`). Exit: AvocaDOS's step time unchanged with planning on,
-   and a release on the ladder.
+3. **Replanning**, in NachOS. The background process, the interval and continuous mode, the triggers, a hysteresis bonus
+   again if its games show plans flipping (decision 9), and the old plan kept as a candidate by re-scoring: its starts
+   delayed until the new state can afford them, by the planner's own program through scipy, and the better of it and the
+   new solve's plan kept. No highspy to start with (the owner, 2026-11-23, Open 2), which was to bring a warm start as
+   an optional dependency, its wheel in AvocaDOS's ladder zip (`LOCKED_WHEELS` in `scripts/release_helper.py`). Exit:
+   AvocaDOS's step time unchanged with planning on, and a release on the ladder.
 4. **The reward from intel**, in AvocaDOS. Coverage from the unit profiles and the enemy's counts, a forecast from
    scouted tech, loss rates from the memory's deaths and the matchup, floors from the threat. The composition
    optimizer's target as a progress term, or its objective as segments. Exit: the composition responds in scripted
@@ -348,8 +353,8 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    owner, 2026-11-19), where it raised a `NoPlanFoundError`: a bot keeps the plan it has, and the type makes it check.
 4. **Build space.** A bound on structures per base from the map, as the one physical limit the model lacks;
    `api.placement` may answer it.
-5. **Replanning defaults.** The interval, the budget and the hysteresis bonus are parameters; their defaults come
-   out of phase 3's games.
+5. **Replanning defaults.** The interval and the budget are parameters; their defaults come out of phase 3's games, as
+   does whether a hysteresis bonus is needed (decision 9).
 6. **The discount against the solver.** A discount made a 7-minute solve faster and a 10-minute one slower; settle
    it on the real model.
 7. **Phase 1's exit, the reference configuration solved within 3 seconds, is met since the grid of 34 steps: proven
@@ -731,14 +736,20 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       as of 102. The other rows keep forgiving, those of workers, producers, add-ons and morphs: I know no state the
       game hands over in deficit there but one with more structures left by their SCV than SCVs alive, and none has a
       bound as near as the supply limit.
-    - **The hysteresis bonus is paid in shares, and stays so** (the owner, 2026-11-23: "I don't think we can afford to
-      make the planning more expensive just for the hysteresis bonus"). How far an item of the previous plan is kept to
-      is a fluid variable held at the starts of its kind by its interval over its rank, so the third marine expected
-      earns a third of the bonus for one started: of marines expected at 0, 20 and 40 seconds with one start allowed, a
-      plan counts 1.83 bonuses, and the k-th item of a kind kept on time adds about 1/k of one. Exact would be a whole
-      variable for each item of the previous plan still ahead, some sixty for a full plan, in every replan, and was not
-      built or measured. `plan_now`, the program's docstrings and `docs/extensions.md` now say it is a share, where they
-      said each item kept was worth the bonus once, and a test holds the 1.83.
+    - **The hysteresis bonus was paid in shares, and is taken out** (the owner, 2026-11-23, to making it exact: "I don't
+      think we can afford to make the planning more expensive just for the hysteresis bonus"; and then: "Yes, remove
+      it", decision 9). How far an item of the previous plan was kept to was a fluid variable held at the starts of its
+      kind by its interval over its rank, so the third marine expected earned a third of the bonus for one started: of
+      marines expected at 0, 20 and 40 seconds with one start allowed, a plan counted 1.83 bonuses. Exact would have
+      been a whole variable for each item of the previous plan still ahead, and was not built. Measured before it went,
+      from the two mid-game states of `tools/benchmark_planner.py`, a plan made, 100 minerals taken away and a new plan
+      made, with a bonus of 1, 10 and 100 for the first and without. It cost a fluid variable and a row for each item of
+      the previous plan, 71 to 146, and no time that shows: of 18 replans 7 were slower to a proven plan than without
+      and 11 faster, the growing reward in 1.8 to 5.0 s against 2.3 to 4.6, the wide one in 5.3 s to not within 30
+      against 15.6 to 24.4. Plans do flip without it: at 6:00 the new plan dropped a barracks the first had at 14
+      seconds and three to five marines, for a medivac and a marauder or two, and with a bonus of 10 kept the barracks
+      at one of the two half-lives; at 3:00 it moved starts by seconds. Whether that costs a game is phase 3's to find.
+      It took about 40 lines, one method of the program and two arguments.
     - **Of the loss rates of two types that count as one, the highest is taken** (the owner, 2026-11-23: "The highest"),
       a hellion's and a hellbat's, where the later in the mapping replaced the earlier and nothing said so;
       `start_limits` takes the lowest. The owner first thought the sum right ("I think taking the sum would be the
@@ -755,8 +766,9 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
   back, and the item pruning. Measured before anything plays.
 - **Model error.** The income model, walks and rounding drift from the game; replanning absorbs drift, the
   collection-rate score calibrates the income, and the simulator of phase 6 measures the rest.
-- **Churn.** Plans flipping between near-equal alternatives cost workers walking and money saved for nothing; the
-  hysteresis bonus and the old plan kept as a candidate, re-scored (Open 2), are not optional.
+- **Churn.** Plans flipping between near-equal alternatives cost workers walking and money saved for nothing; the old
+  plan kept as a candidate, re-scored (Open 2), is not optional, and a hysteresis bonus comes back if phase 3's games
+  show the flips cost (decision 9).
 - **Execution.** The plan names a barracks, the construction manager must place it; an unplaceable item is a trigger
   and a dropped item, not a stall.
 - **Determinism.** Background planning depends on wall-clock speed; the synchronous node-limited mode keeps tests
