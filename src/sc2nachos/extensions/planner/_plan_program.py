@@ -49,20 +49,21 @@ class PlanProgram:
     Each item's starts so far by each interval's end are a variable, and an interval's starts those so far less those of
     the interval before; both are whole where the interval starts before the item's time in `fluid_after_seconds`, one
     for each item in the order of `items`, and throughout for an upgrade a term of the reward requires. A start pays
-    from the stock at its interval's start plus `spendable_income_fraction` of the interval's income, which rounds it
-    to the nearer edge of the grid at a half, keeps its producer busy for its build time
-    over the intervals it spans, its SCV from the walk there through the build to the walk back, takes its supply at
-    once, and counts as done from the first edge at or after its end. A whole start, or a build under way, that runs
-    into an interval by less than `max_ignored_overrun` of it leaves the interval free. Nothing starts before
-    `unlock_fraction` of a structure granting each tech it needs, and of each upgrade, is done; with 0, in the share
-    that the fractions done of them allow. Workers mine, collect or build, pooled over every field and refinery, in the
-    tiers of `economy`'s rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a
-    tier than the interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the
-    interval's start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for
-    income, supply and the reward. Of an item in `start_limits` at most that many start over the plan: a unit type's
-    limit is that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing.
-    Each item of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before
-    it, is worth `hysteresis_bonus` once, beside the reward.
+    from the stock at its interval's start plus `spendable_income_fraction` of the interval's income, which rounds it to
+    the nearer edge of the grid at a half, keeps its producer busy for its build time over the intervals it spans, its
+    SCV from the walk there through the build to the walk back, takes its supply at once, and counts as done from the
+    first edge at or after its end. A whole start, or a build under way, that runs into an interval by less than
+    `max_ignored_overrun` of it leaves the interval free. From a `state` with more supply taken than its cap, nothing
+    that takes supply starts until the cap is at least what is taken with it. Nothing starts before `unlock_fraction` of
+    a structure granting each tech it needs, and of each upgrade, is done; with 0, in the share that the fractions done
+    of them allow. Workers mine, collect or build, pooled over every field and refinery, in the tiers of `economy`'s
+    rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a tier than the
+    interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the interval's
+    start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
+    supply and the reward. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is
+    that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item
+    of `previous_plan` that the plan starts no later than that one expected, counting those of its kind before it, is
+    worth `hysteresis_bonus` once, beside the reward.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
     `walk_time`, and for a unit in production in `state` of a type that is no item of `model`'s.
@@ -436,12 +437,25 @@ class PlanProgram:
         whole = np.logical_and.reduce([self._whole[index] for index in indices])
         return (self._widths <= shortest + SECONDS_TOLERANCE) & whole
 
-    def _constrain_at_most(self, used: RowExpression, available: RowExpression) -> None:
-        """Hold `used` at or below `available` in each row, and at or below none where what is now already uses more,
-        so that a plan starting nothing more stays possible."""
+    def _constrain_at_most(
+        self, used: RowExpression, available: RowExpression, *, most_used: float | None = None
+    ) -> None:
+        """Hold `used` at or below `available` in each row. Where what is now already uses more, that would leave no
+        plan, so the row holds what the plan uses at no more than it makes available, which forgives the shortfall for
+        good. With `most_used`, the most `used` can come to, it is not forgiven: nothing more is used in such a row
+        unless `used` is at or below `available` there, at the cost of a whole variable for the row."""
         excess = RowExpression(used.rows).add_expression(used).add_expression(available, -1.0)
+        shortfall = np.maximum(excess.constant, 0.0)
         limit = np.maximum(-excess.constant, 0.0)
         excess.constant = np.zeros(used.rows)
+        is_short = shortfall > 0.0
+        if most_used is not None and is_short.any():
+            shortfall_made_up = self._program.add_variables(int(is_short.sum()), upper=1.0, integral=True)
+            excess.add(shortfall_made_up, np.diag(shortfall)[:, is_short])
+            more_used = used.selected(is_short)
+            most_more_used = np.maximum(most_used - more_used.constant, 0.0)
+            more_used.constant = np.zeros(more_used.rows)
+            self._program.constrain(more_used.add(shortfall_made_up, -np.diag(most_more_used)), upper=0.0)
         self._program.constrain(excess, upper=limit)
 
     # The constraints.
@@ -607,7 +621,7 @@ class PlanProgram:
             if rate and supply:
                 used.add_expression(self._count_alive(unit_type, at_end=False, survive=False), -supply)
                 used.add_expression(self._count_alive(unit_type, at_end=False), supply)
-        self._constrain_at_most(used, cap)
+        self._constrain_at_most(used, cap, most_used=SUPPLY_LIMIT)
         limit = RowExpression(intervals)
         limit.constant += SUPPLY_LIMIT
         self._constrain_at_most(used, limit)

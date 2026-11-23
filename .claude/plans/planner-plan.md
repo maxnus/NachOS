@@ -707,19 +707,31 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     `curve` and `combination`, `Reward.weighted`, `CurveSegment`, `TimeGrid`, `PlanInterval`, `PlanMoment`,
     `PlannedItem`, `PlanDeviation`, `UnitCompletion`, `WorkerBuild`, `Occupation`, `moment_at`, `deviation_of`,
     `interval_at`, `spendable_income_fraction`, `time_factor_at` and `count_factor_at`.
-16. **The code review of 2026-11-23 left three points open** (the owner: "OK do the code review and afterwards I will do
-    my review"; the whole pull request at high effort, each point confirmed by a script outside the package). Fixed with
-    it: a host's add-on of a type the plan does not make left the host free, so two barracks with a tech lab each took
-    two reactors under a reward on marines alone; a curve's piece but the last with no count to end at was taken, and
-    valued at the next piece's weight; `reassignment_time` charged no miner where the economy has no rate for a
-    collector; `Reward.weighted` took a numpy `float32` or integer for a curve; a state made by hand with a unit in
-    production that is no item raised a `KeyError`. A grid whose last segment ends before the horizon runs one interval
-    on to it, however long, which a test holds and the docstring now says. Open:
-    - **A bound the state already exceeds is forgiven for the whole plan.** `_constrain_at_most` holds a row at none
-      where what is now uses more than there is, so that starting nothing stays possible, and so drops the shortfall for
-      good: from 20 supply used of 15, two barracks and 1000 minerals, a plan starts one supply depot and six marines in
-      90 seconds, 26 supply against a cap of 23. Exact is a whole variable for each row in deficit, whether the
-      shortfall is made up by then, none in a state with no deficit.
+16. **The code review of 2026-11-23 left three points, two still open** (the owner: "OK do the code review and
+    afterwards I will do my review"; the whole pull request at high effort, each point confirmed by a script outside the
+    package). Fixed with it: a host's add-on of a type the plan does not make left the host free, so two barracks with a
+    tech lab each took two reactors under a reward on marines alone; a curve's piece but the last with no count to end
+    at was taken, and valued at the next piece's weight; `reassignment_time` charged no miner where the economy has no
+    rate for a collector; `Reward.weighted` took a numpy `float32` or integer for a curve; a state made by hand with a
+    unit in production that is no item raised a `KeyError`. A grid whose last segment ends before the horizon runs one
+    interval on to it, however long, which a test holds and the docstring now says. The three, the first settled since
+    and two open:
+    - **A supply deficit was forgiven for the whole plan, and is held now** (the owner, 2026-11-23: "Yes, build it", to
+      "Shall I build the exact fix for the deficit and measure it?"). `_constrain_at_most` holds a row at none where
+      what is now uses more than there is, so that starting nothing stays possible, and so dropped the shortfall for
+      good: from 20 supply used of 15, two barracks and 1000 minerals, a plan started one supply depot and six marines
+      in 90 seconds, 26 supply against a cap of 23. Given the most its `used` can come to, it now adds a whole variable
+      to each row in deficit, whether the shortfall is made up there, and nothing more is used in the row unless it is.
+      The supply cap's rows give it the game's limit, and that plan starts two depots. A state with no deficit gets no
+      variable and the program it had. Measured from the two mid-game states of `tools/benchmark_planner.py` with the
+      cap lowered, on the default grid over 300 seconds, against the code before on the same states. With a depot going
+      up that makes the deficit up in 13 seconds, 9 variables more, and the same objective in the same time. With none,
+      45 more: the growing reward is proven in 0.3 to 2.9 s where it was in 0.2 to 2.2, at most 0.8 s more, and the wide
+      reward in 10.8 to 13.6 s where it was in 8.2 to 8.8, 2.7 to 3.3% short after 3 s where it was 1.9 to 3.2%. The
+      plans are worth up to 1.5% less than those the code before made, which were worth the same from 114 supply of 110
+      as of 102. The other rows keep forgiving, those of workers, producers, add-ons and morphs: I know no state the
+      game hands over in deficit there but one with more structures left by their SCV than SCVs alive, and none has a
+      bound as near as the supply limit.
     - **The hysteresis bonus is paid in part for an item not kept to.** Whether an item of the previous plan is kept is
       a fluid variable held at the starts of its kind by its interval over its rank, so the third marine expected earns
       a third of the bonus for one started: of marines expected at 0, 20 and 40 seconds with one start allowed, a plan

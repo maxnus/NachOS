@@ -457,6 +457,39 @@ class TestKnownPlans:
         )
         assert [planned.item for planned in plan.items].count(UnitTypeId.REACTOR_BARRACKS) == reactors_started
 
+    @pytest.mark.parametrize(("supply_used", "depots_started"), [(15.0, 1), (20.0, 2)], ids=["at the cap", "over it"])
+    def test_supply_over_the_cap_is_made_up_before_a_unit_starts(self, supply_used: float, depots_started: int) -> None:
+        """Two barracks make six marines in 90 seconds, which one supply depot's 8 supply takes from 15 of 15, and from
+        20 of 15 two: the first leaves 20 of 23."""
+        units = {UnitTypeId.SCV: 12, UnitTypeId.BARRACKS: 2}
+        state = _game_start(minerals=1000.0, supply_used=supply_used, units=units)
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=90,
+            fluid_after=_whole_over_any_horizon,
+        )
+        assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 6
+        assert len(_start_seconds(plan, UnitTypeId.SUPPLY_DEPOT)) == depots_started
+
+    @pytest.mark.parametrize(
+        "fluid_after", [_whole_over_any_horizon, lambda _: GameTime.ZERO], ids=["whole starts", "fluid starts"]
+    )
+    def test_a_supply_depot_frees_only_what_it_adds_over_the_supply_used(
+        self, fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None]
+    ) -> None:
+        """From 20 of 15 supply, the one supply depot allowed, and no command center, makes it 20 of 23: three marines,
+        of the six two barracks make in 90 seconds, and not the eight its supply alone would take."""
+        state = _game_start(minerals=1000.0, supply_used=20.0, units={UnitTypeId.SCV: 12, UnitTypeId.BARRACKS: 2})
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=90,
+            fluid_after=fluid_after,
+            start_limits={UnitTypeId.SUPPLY_DEPOT: 1, UnitTypeId.COMMAND_CENTER: 0},
+        )
+        assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(3.0)
+
     def test_a_unit_in_production_counts_from_the_first_edge_after_it_is_done(self) -> None:
         """With nothing to spend, a marine 9 seconds from done is the plan's only one, alive from the edge at 10, the
         fifth interval's end."""

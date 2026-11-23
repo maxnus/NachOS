@@ -78,7 +78,8 @@ class PlannerState:
     supply_used: float
     """The supply taken, by units alive and in production."""
     supply_cap: float
-    """The supply cap, up to the game's limit."""
+    """The supply cap, up to the game's limit. Where it is below `supply_used`, after a supply depot was lost, say, a
+    plan starts nothing that takes supply until it has raised the cap to what is taken with it."""
     units: Mapping[UnitTypeId, int]
     """The number of this player's finished units alive counted as each type, those inside a gas building or a
     transport included, which the observation leaves out."""
