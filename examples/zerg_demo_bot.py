@@ -33,7 +33,6 @@ from sc2nachos.extensions.upgrade_inference import UpgradeInference
 
 if TYPE_CHECKING:
     from sc2nachos import Expansion, Point
-    from sc2nachos.state import InProduction
 
 
 class Extensions:
@@ -58,6 +57,7 @@ ARMY_SUPPLY_PER_DRONE_BEYOND_THE_FIRST_BASE = 0.5
 ATTACK_WITH_SUPPLY = 40
 RETREAT_BELOW_SUPPLY = 12
 DEFEND_WITHIN = 15.0
+ARMY_MORPHS = frozenset({AbilityId.LARVA_MORPH_ZERGLING, AbilityId.LARVA_MORPH_ROACH})
 CREEP_TUMOR_REACH = 7.0
 # A tumor is refused a plant up to 287 steps after its burrow ends, and takes one from 289 (in game).
 TUMOR_PLANTS_AFTER_ITS_BURROW = GameTime(steps=289)
@@ -91,12 +91,12 @@ class Budget:
 
 
 @api.on(TurnEvent)
-def macro(_: TurnEvent) -> None:
+def spend_money(_: TurnEvent) -> None:
     """Spend the turn's money, most important first."""
     budget = Budget()
     build_overlords(budget)
     train_queens(budget)
-    expand(budget)
+    take_next_expansion(budget)
     build_tech(budget)
     research_zergling_speed(budget)
     spend_larvae(budget)
@@ -141,8 +141,7 @@ def spend_larvae(budget: Budget) -> None:
     """Morph each free larva into a drone while the bases want more and the army is big enough for them, and else into
     a roach or a pair of zerglings once the pool stands."""
     drones = len(api.units.own.workers) + len(api.in_production(UnitTypeId.DRONE))
-    in_eggs = sum(api.data.units[item.product].supply_used for item in _army_in_production())
-    army_supply = _army_supply(_army_units()) + in_eggs
+    army_supply = _army_supply(_army_units()) + _army_supply_in_eggs()
     threatened = bool(_threats())
     for larva in _free_larvae():
         ability = _next_larva_morph(budget, drones, army_supply, threatened=threatened)
@@ -180,13 +179,13 @@ def _wanted_drones() -> int:
 # --- Drones
 
 
-# At a low priority, so it runs after `macro`, whose builders `_free_drones` then leaves out.
+# At a low priority, so it runs after `spend_money`, whose builders `_free_drones` then leaves out.
 @api.on(TurnEvent, min_interval=GameTime(steps=8), priority=EventPriority.LOW)
 def hand_drones_to_speed_mining(_: TurnEvent) -> None:
-    """Keep three drones collecting at each finished extractor, taking them from the miners, and hand every other free
-    drone that speed mining does not hold over to it to mine."""
+    """Keep three drones collecting at each extractor speed mining collects at, taking them from the miners, and hand
+    every other free drone that speed mining does not hold over to it to mine."""
     speed_mining = api.extensions.speed_mining
-    missing = COLLECTORS_PER_EXTRACTOR * len(api.units.own.gas_buildings.complete) - len(speed_mining.collectors)
+    missing = COLLECTORS_PER_EXTRACTOR * len(_extractors_to_collect_at()) - len(speed_mining.collectors)
     if missing > 0:
         for drone in speed_mining.release_miners(missing):
             speed_mining.collect(drone)
@@ -200,7 +199,7 @@ def _free_drones() -> Units[OwnUnit[Any]]:
     return api.units.own.workers.filter(lambda drone: not api.orders.issued_to(drone, include_sent=True))
 
 
-def _build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
+def _order_drone_to_build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
     """Order the free drone nearest `target` to morph into a structure there. The game charges it at once, while the
     drone walks."""
     drones = _free_drones()
@@ -214,7 +213,7 @@ def _build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
 # --- Structures
 
 
-def expand(budget: Budget) -> None:
+def take_next_expansion(budget: Budget) -> None:
     """Morph a hatchery at the next free expansion once the bases have nearly all the drones they can use, or the bank
     is full, saving for it first. A third one waits for the pool."""
     townhalls = api.units.own.townhalls
@@ -228,7 +227,7 @@ def expand(budget: Budget) -> None:
         return
     expansion = _next_expansion()
     if expansion is not None and budget.try_pay_for(AbilityId.DRONE_MORPH_HATCHERY, save=True):
-        _build(AbilityId.DRONE_MORPH_HATCHERY, expansion.center)
+        _order_drone_to_build(AbilityId.DRONE_MORPH_HATCHERY, expansion.center)
 
 
 def _next_expansion() -> Expansion | None:
@@ -246,8 +245,8 @@ def _next_expansion() -> Expansion | None:
 
 
 def build_tech(budget: Budget) -> None:
-    """Morph a spawning pool once the natural is under way, then an extractor, a roach warren once the pool stands,
-    and an extractor a finished townhall after it, each saving for it first."""
+    """Morph a spawning pool once the natural is under way or 18 drones mine, then an extractor, a roach warren once the
+    pool stands, and an extractor a finished townhall after it, each saving for it first."""
     own = api.units.own
     if not own.of_type(UnitType.SpawningPool) and not _ordered_count(AbilityId.DRONE_MORPH_SPAWNING_POOL):
         if len(own.townhalls) >= 2 or len(own.workers) >= 18:
@@ -258,7 +257,7 @@ def build_tech(budget: Budget) -> None:
     if len(own.gas_buildings) + _ordered_count(AbilityId.DRONE_MORPH_EXTRACTOR) < wanted_extractors:
         geyser = _free_geyser()
         if geyser is not None and budget.try_pay_for(AbilityId.DRONE_MORPH_EXTRACTOR):
-            _build(AbilityId.DRONE_MORPH_EXTRACTOR, geyser)
+            _order_drone_to_build(AbilityId.DRONE_MORPH_EXTRACTOR, geyser)
     if not has_warren and own.of_type(UnitType.SpawningPool).complete and len(own.townhalls) >= 2:
         _build_near_main(budget, AbilityId.DRONE_MORPH_ROACH_WARREN, UnitTypeId.ROACH_WARREN)
 
@@ -270,20 +269,39 @@ def _build_near_main(budget: Budget, ability: AbilityId, unit_type: UnitTypeId) 
     anchor = main.center.towards(main.mineral_fields.center, -6)
     site = api.placement.nearest_free(unit_type, near=anchor, max_distance=12, margin=1)
     if site is not None and budget.try_pay_for(ability, save=True):
-        _build(ability, site)
+        _order_drone_to_build(ability, site)
+
+
+def _expansions_with_a_finished_townhall() -> list[Expansion]:
+    """The expansions where a finished townhall of this player's stands."""
+    return [
+        expansion
+        for expansion in api.expansions
+        if isinstance(townhall := expansion.townhall, OwnUnit) and townhall.is_complete
+    ]
 
 
 def _free_geyser() -> Unit[UnitType.AnyVespeneGeyser] | None:
     """A geyser at one of this player's finished townhalls with no gas building on it."""
     gas_buildings = api.units.gas_buildings
-    for expansion in api.expansions:
-        townhall = expansion.townhall
-        if not isinstance(townhall, OwnUnit) or not townhall.is_complete:
-            continue
+    for expansion in _expansions_with_a_finished_townhall():
         for geyser in expansion.geysers:
             if not gas_buildings.within(1, of=geyser.position):
                 return geyser
     return None
+
+
+def _extractors_to_collect_at() -> list[Unit[Any]]:
+    """The finished extractors with vespene left at one of this player's finished townhalls: those speed mining
+    collects at."""
+    extractors = api.units.own.gas_buildings.complete
+    return [
+        extractor
+        for expansion in _expansions_with_a_finished_townhall()
+        for geyser in expansion.geysers
+        for extractor in extractors.within(1, of=geyser.position)
+        if extractor.vespene_contents
+    ]
 
 
 def train_queens(budget: Budget) -> None:
@@ -333,7 +351,7 @@ class QueenCommander:
         api.subscribe(self)
 
     @api.on(TurnEvent, min_interval=GameTime(steps=8))
-    def command(self, _: TurnEvent) -> None:
+    def order_queens(self, _: TurnEvent) -> None:
         """Pair the queens with the townhalls, and order each that is free."""
         queens = api.units.own.of_type(UnitType.Queen)
         self._pair(queens)
@@ -382,7 +400,7 @@ class CreepSpread:
         api.subscribe(self)
 
     @api.on(TurnEvent, min_interval=GameTime(steps=16))
-    def spread(self, _: TurnEvent) -> None:
+    def plant_tumors(self, _: TurnEvent) -> None:
         """Order each tumor that can plant one now, and has not been ordered to, to plant one toward the enemy."""
         for tumor in api.units.own.of_type(UnitType.CreepTumorBurrowed):
             if tumor.orders:
@@ -404,9 +422,14 @@ def _army_units() -> Units[OwnUnit[Any]]:
     return api.units.own.of_type(UnitType.Zergling, UnitType.Roach)
 
 
-def _army_in_production() -> tuple[InProduction, ...]:
-    """The zerglings and roaches in their eggs."""
-    return api.in_production([UnitTypeId.ZERGLING, UnitTypeId.ROACH])
+def _army_supply_in_eggs() -> float:
+    """The supply of the zerglings and roaches the eggs will hatch, as their morphs charge it: 1 for a pair of
+    zerglings."""
+    return sum(
+        api.data.abilities[order.ability].cost.supply
+        for egg in api.units.own.of_type(UnitType.Egg)
+        if (order := egg.current_order) is not None and order.ability in ARMY_MORPHS
+    )
 
 
 def _army_supply(army: Units[OwnUnit[Any]]) -> float:
@@ -415,8 +438,10 @@ def _army_supply(army: Units[OwnUnit[Any]]) -> float:
 
 
 def _threats() -> Units[Unit[Any]]:
-    """The enemy's ground units near this player's townhalls, which zerglings and roaches can fight."""
-    near = api.units.enemy.non_structures.within(DEFEND_WITHIN, of=api.units.own.townhalls)
+    """The enemy's ground units near this player's townhalls but workers, which zerglings and roaches can fight."""
+    near = api.units.enemy.non_structures.excluding_type(UnitType.Worker).within(
+        DEFEND_WITHIN, of=api.units.own.townhalls
+    )
     return near.filter(lambda unit: not unit.is_flying)
 
 
@@ -429,12 +454,13 @@ class Army:
         api.subscribe(self)
 
     @api.on(TurnEvent, min_interval=GameTime(steps=4))
-    def command(self, _: TurnEvent) -> None:
+    def order_army(self, _: TurnEvent) -> None:
         """Defend against what comes near the bases, attack once the army is big enough, and fall back once too little
         of it is left."""
         army = _army_units()
         supply = _army_supply(army)
         threats = _threats()
+        was_attacking = self.attacking
         if supply >= ATTACK_WITH_SUPPLY:
             self.attacking = True
         elif supply < RETREAT_BELOW_SUPPLY:
@@ -444,6 +470,8 @@ class Army:
                 unit.issue(AbilityId.ATTACK, target=threats.closest_to(unit.position).position)
         elif self.attacking:
             api.orders.issue(army, AbilityId.ATTACK, target=self._attack_target(army))
+        elif was_attacking:
+            api.orders.issue(army, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = army.idle.beyond(4, of=defense_location)

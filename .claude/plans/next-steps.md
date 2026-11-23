@@ -383,10 +383,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
        a finished hatchery of its own with no enemy near: 14 to 85 refusals a game in 4 of the 16 Zerg games on
        PylonAIE whose refusals were counted, and none of the 54 elsewhere nor the Terran bot's 21; from 5:44 and 7:09
        in the two whose steps were logged.
-     - A creep tumor refused a plant with `CANT_BUILD_LOCATION_INVALID` at (59.5, 117.5) on MagannathaAIE, 3 below the
-       expansion center at (59.5, 120.5), where `api.placement.nearest_free(CREEP_TUMOR, ...)` found it free: 35 and
-       39 times in 2 of 6 games there while the bot ordered a refused tumor again, and 89 refusals of a site not logged
-       in a third.
+     - A creep tumor refused a plant with `CANT_BUILD_LOCATION_INVALID` at sites beside a base, where
+       `api.placement.nearest_free(CREEP_TUMOR, ...)` found them free: (59.5, 117.5) on MagannathaAIE, 3 below the
+       expansion center at (59.5, 120.5), 35 and 39 times in 2 of 6 games there while the bot ordered a refused tumor
+       again, and 89 refusals of a site not logged in a third; and once each, (54.5, 124.5) beside a mineral field on
+       MagannathaAIE, (92.5, 149.5) on PylonAIE, 1 from the drone above, and (116.5, 111.5) on UltraloveAIE.
   2. Power in the placement grids, in a pull request of its own that measures what the game requires (section 1),
      which also settles `needs_power` before 1.0.
   3. `protoss_demo_bot.py`: probes, pylons, gateways and a cybernetics core, zealots and stalkers trained at gateways
