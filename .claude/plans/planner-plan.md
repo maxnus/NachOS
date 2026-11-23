@@ -707,15 +707,14 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     `curve` and `combination`, `Reward.weighted`, `CurveSegment`, `TimeGrid`, `PlanInterval`, `PlanMoment`,
     `PlannedItem`, `PlanDeviation`, `UnitCompletion`, `WorkerBuild`, `Occupation`, `moment_at`, `deviation_of`,
     `interval_at`, `spendable_income_fraction`, `time_factor_at` and `count_factor_at`.
-16. **The code review of 2026-11-23 left three points, one still open** (the owner: "OK do the code review and
+16. **The code review of 2026-11-23 left three points, all settled since** (the owner: "OK do the code review and
     afterwards I will do my review"; the whole pull request at high effort, each point confirmed by a script outside the
     package). Fixed with it: a host's add-on of a type the plan does not make left the host free, so two barracks with a
     tech lab each took two reactors under a reward on marines alone; a curve's piece but the last with no count to end
     at was taken, and valued at the next piece's weight; `reassignment_time` charged no miner where the economy has no
     rate for a collector; `Reward.weighted` took a numpy `float32` or integer for a curve; a state made by hand with a
     unit in production that is no item raised a `KeyError`. A grid whose last segment ends before the horizon runs one
-    interval on to it, however long, which a test holds and the docstring now says. The three, two settled since
-    and the last open:
+    interval on to it, however long, which a test holds and the docstring now says. The three:
     - **A supply deficit was forgiven for the whole plan, and is held now** (the owner, 2026-11-23: "Yes, build it", to
       "Shall I build the exact fix for the deficit and measure it?"). `_constrain_at_most` holds a row at none where
       what is now uses more than there is, so that starting nothing stays possible, and so dropped the shortfall for
@@ -740,8 +739,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       variable for each item of the previous plan still ahead, some sixty for a full plan, in every replan, and was not
       built or measured. `plan_now`, the program's docstrings and `docs/extensions.md` now say it is a share, where they
       said each item kept was worth the bonus once, and a test holds the 1.83.
-    - **Of the loss rates of two types that count as one, the later replaces the earlier**, a hellion's and a hellbat's,
-      where `start_limits` takes the lowest and says so.
+    - **Of the loss rates of two types that count as one, the highest is taken** (the owner, 2026-11-23: "The highest"),
+      a hellion's and a hellbat's, where the later in the mapping replaced the earlier and nothing said so;
+      `start_limits` takes the lowest. The owner first thought the sum right ("I think taking the sum would be the
+      correct behavior, to be honest"): it is where each rate is that form's deaths over the units in any form, and
+      doubles the rate where each is over the units in its own form, which is what `loss_rates` says a rate is. The
+      average weighted by the units in each form would be exact there, and the state pools the forms. A negative rate
+      stays refused (the owner, the same day: "Would there be anything fundamentally wrong with negative rates?"): the
+      program solves with one, and its units multiply for nothing, twelve SCVs at -0.01 a second being 39.8 after two
+      minutes with none started.
 
 ## Risks
 

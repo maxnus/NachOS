@@ -596,6 +596,26 @@ class TestKnownPlans:
         marines = [interval.end.units[UnitTypeId.MARINE] for interval in plan.intervals]
         assert marines == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
 
+    @pytest.mark.parametrize(
+        "loss_rates",
+        [
+            {UnitTypeId.SIEGE_TANK: 0.01, UnitTypeId.SIEGE_TANK_SIEGED: 0.002},
+            {UnitTypeId.SIEGE_TANK_SIEGED: 0.002, UnitTypeId.SIEGE_TANK: 0.01},
+            {UnitTypeId.SIEGE_TANK_SIEGED: 0.01, UnitTypeId.SIEGE_TANK: 0.002},
+        ],
+        ids=["the higher first", "the higher last", "the higher that of another form"],
+    )
+    def test_a_unit_types_loss_rate_is_that_of_the_type_it_counts_as_and_the_highest_of_them(
+        self, loss_rates: dict[UnitTypeId, float]
+    ) -> None:
+        """No factory, so no siege tank is made."""
+        state = _game_start(units={UnitTypeId.SIEGE_TANK: 10})
+        plan = _best_plan(
+            state, Reward.weighted({UnitTypeId.SIEGE_TANK: 1.0}), horizon_seconds=10, loss_rates=loss_rates
+        )
+        tanks = [interval.end.units[UnitTypeId.SIEGE_TANK] for interval in plan.intervals]
+        assert tanks == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
+
     def test_a_weight_on_types_counted_together_buys_those_that_count(self) -> None:
         """Ten wanted against air, where a marine counts for one and a marauder, which cannot shoot up, for none. Two
         barracks with tech labs make two at a time, and over 40 seconds those started at 36 would not be done."""

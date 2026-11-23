@@ -60,11 +60,11 @@ class PlanProgram:
     rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a tier than the
     interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the interval's
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
-    supply and the reward. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is
-    that of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing. Each item
-    of `previous_plan` still ahead is worth up to `hysteresis_bonus`, beside the reward: the share of it that the plan
-    has started of its kind by that item's interval, of what the previous plan would have from the state's time, at most
-    all of it.
+    supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type. Of an
+    item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type it counts as,
+    the lowest of those of one type, and a limit on no item here does nothing. Each item of `previous_plan` still ahead
+    is worth up to `hysteresis_bonus`, beside the reward: the share of it that the plan has started of its kind by that
+    item's interval, of what the previous plan would have from the state's time, at most all of it.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
     `walk_time`, and for a unit in production in `state` of a type that is no item of `model`'s.
@@ -129,7 +129,7 @@ class PlanProgram:
         self._state = state
         self._reward = reward
         self._economy = economy
-        self._loss_rates = {model.counted_as(unit_type): rate for unit_type, rate in loss_rates.items()}
+        self._loss_rates = _loss_rates_by_counted_type(loss_rates, model)
         self._start_limits = _limits_by_counted_type(start_limits, model)
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
@@ -997,6 +997,15 @@ def _limits_by_counted_type(
         counted = model.counted_as(made) if isinstance(made, UnitTypeId) else made
         limits[counted] = min(float(limit), limits.get(counted, math.inf))
     return limits
+
+
+def _loss_rates_by_counted_type(loss_rates: Mapping[UnitTypeId, float], model: TerranModel) -> dict[UnitTypeId, float]:
+    """`loss_rates`, each unit type's under the type it counts as by `model`, the highest of those of one type."""
+    rates: dict[UnitTypeId, float] = {}
+    for unit_type, rate in loss_rates.items():
+        counted = model.counted_as(unit_type)
+        rates[counted] = max(float(rate), rates.get(counted, 0.0))
+    return rates
 
 
 def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:
