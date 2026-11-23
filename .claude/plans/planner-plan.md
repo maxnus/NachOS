@@ -361,10 +361,10 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
    120 s, 1.5 at 240 and 2.2 at 480, the same to 0.02 s in three runs. Its objectives are 2.5 to 6.2% above those on
    2-second intervals, of another grid and so no measure, but in the direction of an SCV every 12.14 seconds for every
    14. The owner's question of the proof or the plan found by 3 seconds no longer decides the exit.
-8. **The count-form cut holds only where an interval's starts are whole** (phase 1, for the owner to confirm). The toy
-   applied it in every interval shorter than every build in it, fluid ones too, where it is no valid cut: in 16-second
-   intervals a barracks made a marine every 32 seconds, not every 17.86. Held to whole intervals, the toy's linear case
-   was worth 6.4% more, with 7 barracks instead of 13.
+8. **The count-form cut holds only where an interval's starts are whole: confirmed** (the owner, 2026-11-23: "Yes
+   confirm"; phase 1's, and marked for him until then). The toy applied it in every interval shorter than every build
+   in it, fluid ones too, where it is no valid cut: in 16-second intervals a barracks made a marine every 32 seconds,
+   not every 17.86. Held to whole intervals, the toy's linear case was worth 6.4% more, with 7 barracks instead of 13.
 9. **Production chained on one producer starts a whole number of intervals apart while its starts are whole**, since a
    start sits on an interval's first second. For workers the grid answers it since 2026-11-19 (decision 2): on 2-second
    intervals an SCV started every 14 seconds, and every 16 on 4-second ones, against 12.14 in game, which the toy's
