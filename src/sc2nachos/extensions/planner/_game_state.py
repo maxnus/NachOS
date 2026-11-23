@@ -71,6 +71,10 @@ class GameState:
     """The game time it was taken at, from which the plan's times count."""
     resources: Resources
     """The minerals and vespene in stock."""
+    collected: Resources = Resources(0.0, 0.0)
+    """The minerals and vespene collected in the game so far, as its score counts them. A plan adds what it expects to
+    collect to it, for `Plan.deviation_of` to hold a later state's against: nothing by default, which serves a state
+    made by hand as long as the later one's counts from there too."""
     supply_used: float
     """The supply taken, by units alive and in production."""
     supply_cap: float
@@ -112,6 +116,7 @@ def read_game_state(api: Api[object], *, model: TerranModel) -> GameState:
     return GameState(
         time=api.time,
         resources=api.resources,
+        collected=api.score.collected,
         supply_used=api.supply.used,
         supply_cap=api.supply.cap,
         units=counts,

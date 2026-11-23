@@ -956,6 +956,94 @@ class TestPlan:
         assert plan.intervals[-1].end.time == GameTime(seconds=44)
         assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == 10.0
 
+    def test_a_moment_holds_what_is_collected_by_it_from_what_the_state_had(self) -> None:
+        """What a plan collects is what it has more in stock and what it spent: here on SCVs, 50 minerals each."""
+        state = _game_start(time=GameTime(seconds=30), collected=Resources(600.0, 50.0))
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        first, last = plan.intervals[0].start, plan.intervals[-1].end
+        spent = 50.0 * len(plan.items)
+        assert {planned.item for planned in plan.items} == {UnitTypeId.SCV}
+        assert first.collected == state.collected
+        assert last.collected.minerals - 600.0 == pytest.approx(last.resources.minerals - 50.0 + spent)
+        assert last.collected.minerals > 600.0
+        assert last.collected.vespene == 50.0
+
+    def test_the_moment_at_an_edge_of_the_grid_is_that_intervals(self) -> None:
+        state = _game_start(time=GameTime(seconds=30))
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        assert plan.moment_at(GameTime(seconds=30)) is plan.intervals[0].start
+        assert plan.moment_at(GameTime(seconds=32)) is plan.intervals[1].start
+        assert plan.moment_at(GameTime(seconds=44)) is plan.intervals[-1].end
+
+    def test_the_moment_between_two_edges_is_as_far_between_theirs_as_its_time(self) -> None:
+        """A quarter into the interval from 40 to 42 seconds, with the upgrades of its start."""
+        state = _game_start(
+            time=GameTime(seconds=30), collected=Resources(600.0, 50.0), upgrades=frozenset({UpgradeId.STIMPACK})
+        )
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        start, end = plan.intervals[5].start, plan.intervals[5].end
+        moment = plan.moment_at(GameTime(seconds=40.5))
+        assert moment is not None
+        assert moment.time == GameTime(seconds=40.5)
+        assert moment.resources.minerals == pytest.approx(
+            0.75 * start.resources.minerals + 0.25 * end.resources.minerals
+        )
+        assert moment.collected.minerals == pytest.approx(
+            0.75 * start.collected.minerals + 0.25 * end.collected.minerals
+        )
+        assert moment.units[UnitTypeId.SCV] == pytest.approx(
+            0.75 * start.units[UnitTypeId.SCV] + 0.25 * end.units[UnitTypeId.SCV]
+        )
+        assert moment.upgrades == start.upgrades
+
+    @pytest.mark.parametrize("seconds", [29.9, 44.1], ids=["before it was made", "after the horizon"])
+    def test_no_moment_is_at_a_time_outside_the_plan(self, seconds: float) -> None:
+        state = _game_start(time=GameTime(seconds=30))
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        assert plan.moment_at(GameTime(seconds=seconds)) is None
+        assert plan.deviation_of(dataclasses.replace(state, time=GameTime(seconds=seconds))) is None
+        assert _A_PLAN_OF_ONE_BARRACKS.moment_at(GameTime.ZERO) is None
+
+    def test_a_state_deviates_by_what_it_has_more_than_the_plan_expected_at_its_time(self) -> None:
+        """A game that collected 30 minerals less than planned by 32 seconds, holds 20 more, has an SCV fewer, and a
+        medivac the plan knows nothing of; every other type the plan counts differs by nothing."""
+        state = _game_start(time=GameTime(seconds=30), collected=Resources(600.0, 50.0))
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+        expected = plan.intervals[0].end
+        later = dataclasses.replace(
+            state,
+            time=GameTime(seconds=32),
+            collected=expected.collected - Resources(30.0, 0.0),
+            resources=expected.resources + Resources(20.0, 0.0),
+            units={
+                UnitTypeId.SCV: int(expected.units[UnitTypeId.SCV]) - 1,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.MEDIVAC: 1,
+            },
+        )
+
+        deviation = plan.deviation_of(later)
+        assert deviation is not None
+        assert deviation.time == GameTime(seconds=32)
+        assert (deviation.collected.minerals, deviation.collected.vespene) == pytest.approx((-30.0, 0.0))
+        assert (deviation.resources.minerals, deviation.resources.vespene) == pytest.approx((20.0, 0.0))
+        differing = {unit_type: by for unit_type, by in deviation.units.items() if abs(by) > 1e-9}
+        assert differing == pytest.approx({UnitTypeId.SCV: -1.0, UnitTypeId.MEDIVAC: 1.0})
+        assert deviation.units[UnitTypeId.COMMAND_CENTER] == pytest.approx(0.0)
+
+    def test_the_state_a_plan_was_made_from_deviates_by_nothing(self) -> None:
+        state = _game_start(time=GameTime(seconds=30), collected=Resources(600.0, 50.0))
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
+
+        deviation = plan.deviation_of(state)
+        assert deviation is not None
+        assert (deviation.collected, deviation.resources) == (Resources(0.0, 0.0), Resources(0.0, 0.0))
+        assert set(deviation.units.values()) == {0.0}
+
     def test_a_moment_holds_the_upgrades_done_by_it(self) -> None:
         """Stimpack researched from the plan's start reads as done from the first edge at or after its research time,
         the infantry armor 9 seconds from done from the edge at 10, and the state's infantry weapons all along."""
@@ -1913,6 +2001,14 @@ class TestGameState:
             UnitTypeId.TECH_LAB_BARRACKS: 1,
             UnitTypeId.REFINERY: 1,
         }
+
+    def test_it_reads_what_the_score_counts_as_collected(self) -> None:
+        observation = _main_base_at(0)
+        details = observation.observation.score.score_details
+        details.collected_minerals, details.collected_vespene = 650, 100
+        (state,) = _states_of(observation)
+
+        assert state.collected == Resources(650, 100)
 
     def test_it_reads_what_is_in_production_with_the_seconds_until_done_and_what_keeps_each_producer_busy(self) -> None:
         """A marine queued behind a marauder waits for it; the depot an SCV walks to build waits for its walk, which the

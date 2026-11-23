@@ -445,10 +445,7 @@ class PlanProgram:
         """Each interval's stock of minerals and vespene: the stock before, plus what was mined, less what started; and
         what starts paid from the stock at the interval's start and half its income."""
         intervals = self._interval_count
-        mineral_income = self._income_of(self._mining, self._started_mining)
-        if mule_rate := self._economy.mule_minerals_per_orbital_second:
-            mineral_income.add_expression(self._count_alive(UnitTypeId.ORBITAL_COMMAND, at_end=False), mule_rate)
-        vespene_income = self._income_of(self._collecting, self._started_collecting)
+        mineral_income, vespene_income = self._incomes()
         for stock, income, is_minerals in (
             (self._minerals, mineral_income, True),
             (self._vespene, vespene_income, False),
@@ -465,6 +462,14 @@ class PlanProgram:
             paid = RowExpression(intervals).add(stock, np.eye(intervals, intervals + 1))
             paid.add_expression(income, _SHARE_OF_INCOME_SPENT * self._widths).add_expression(spent, -1.0)
             self._program.constrain(paid, lower=0.0)
+
+    def _incomes(self) -> tuple[RowExpression, RowExpression]:
+        """The minerals and the vespene that come in a second in each interval: what the workers bring in, and for
+        minerals the MULEs of the orbital commands alive at the interval's start."""
+        mineral_income = self._income_of(self._mining, self._started_mining)
+        if mule_rate := self._economy.mule_minerals_per_orbital_second:
+            mineral_income.add_expression(self._count_alive(UnitTypeId.ORBITAL_COMMAND, at_end=False), mule_rate)
+        return mineral_income, self._income_of(self._collecting, self._started_collecting)
 
     def _income_of(self, tiers: Sequence[_WorkerTier], started: Sequence[VariableBlock]) -> RowExpression:
         """What the workers in `tiers` bring in a second in each interval, less what those `started` in a tier do not
@@ -888,6 +893,10 @@ class PlanProgram:
         interval before it comes to at its end."""
         minerals, vespene = _values_of(self._minerals, values), _values_of(self._vespene, values)
         state = self._state
+        # What is collected by each edge: nothing more at the first, then each interval's income over its length.
+        minerals_collected, vespene_collected = (
+            np.concatenate([[0.0], np.cumsum(income.value_of(values) * self._widths)]) for income in self._incomes()
+        )
         in_production = {completion_type for completion_type, _ in self._completions}
         unit_types = sorted(self._index_of_unit_type.keys() | state.units.keys() | in_production)
         upgrades = sorted(state.upgrades | state.upgrade_completions.keys() | self._index_of_upgrade.keys())
@@ -914,6 +923,7 @@ class PlanProgram:
             PlanMoment(
                 time=state.time + GameTime(seconds=seconds),
                 resources=Resources(float(minerals[edge]), float(vespene[edge])),
+                collected=state.collected + Resources(float(minerals_collected[edge]), float(vespene_collected[edge])),
                 units={unit_type: float(counts[edge]) for unit_type, counts in at_edges.items()},
                 upgrades=frozenset(
                     upgrade

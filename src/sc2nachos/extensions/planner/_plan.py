@@ -5,11 +5,14 @@ from __future__ import annotations
 from bisect import bisect_right
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import final
+from typing import TYPE_CHECKING, final
 
 from sc2nachos.gamedata import Resources
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
+
+if TYPE_CHECKING:
+    from sc2nachos.extensions.planner._game_state import GameState
 
 
 @final
@@ -36,6 +39,9 @@ class PlanMoment:
     """The game time."""
     resources: Resources
     """The minerals and vespene expected in stock, before what starts at `time` is paid."""
+    collected: Resources
+    """The minerals and vespene expected collected in the game by then: what the state the plan was made from had
+    collected, and what the plan's workers and MULEs bring in from it."""
     units: Mapping[UnitTypeId, float]
     """The number of each unit type the planner considered expected alive, done and survived: every type the plan
     makes, and those of the state and of its production."""
@@ -57,6 +63,28 @@ class PlanInterval:
     """The workers the plan has at mineral fields in it."""
     collectors: float
     """The workers the plan has at refineries in it: what a bot holds its own at, the first interval's now."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlanDeviation:
+    """How a game differs at one game time from what a plan expected of it then: the game's number less the plan's, so
+    that the plan was optimistic where one is negative and pessimistic where one is positive.
+
+    Read together, the three say where a plan was off. Less `collected` than expected is the economy's: the workers
+    brought in less than `Economy` has them bring. As much collected and more in `resources` is the bot's, which
+    started less than the plan had it start. As much of both and fewer `units` is units lost, which `loss_rates` are
+    for.
+    """
+
+    time: GameTime
+    """The game time compared at."""
+    collected: Resources
+    """The minerals and vespene collected by then, the game's less the plan's."""
+    resources: Resources
+    """The minerals and vespene in stock, the game's less the plan's."""
+    units: Mapping[UnitTypeId, float]
+    """The number of each unit type done and alive, the game's less the plan's: every type either counts."""
 
 
 @final
@@ -99,6 +127,49 @@ class Plan:
         if position < 0 or time >= self.intervals[position].end.time:
             return None
         return self.intervals[position]
+
+    def moment_at(self, time: GameTime) -> PlanMoment | None:
+        """What the plan expects at `time`, or `None` for a time before `made_at` or after the horizon. At an edge of
+        the grid it is that interval's `start` or `end`. Between two it is an estimate the plan does not make itself:
+        each number as far from the start's towards the end's as `time` is between them, a straight line, and the
+        upgrades done at the start."""
+        if not self.intervals or time > self.intervals[-1].end.time:
+            return None
+        interval = self.interval_at(time)
+        if interval is None:
+            return self.intervals[-1].end if time == self.intervals[-1].end.time else None
+        start, end = interval.start, interval.end
+        if time == start.time:
+            return start
+        share = (time - start.time).seconds / (end.time - start.time).seconds
+        return PlanMoment(
+            time=time,
+            resources=start.resources + (end.resources - start.resources) * share,
+            collected=start.collected + (end.collected - start.collected) * share,
+            units={
+                unit_type: count + (end.units.get(unit_type, count) - count) * share
+                for unit_type, count in start.units.items()
+            },
+            upgrades=start.upgrades,
+        )
+
+    def deviation_of(self, state: GameState) -> PlanDeviation | None:
+        """How `state`, a later state of the game the plan was made in, differs from what the plan expected at its
+        time, by `moment_at`: the state's numbers less the plan's. `None` for a state from before `made_at` or after
+        the horizon."""
+        expected = self.moment_at(state.time)
+        if expected is None:
+            return None
+        unit_types = sorted(expected.units.keys() | state.units.keys())
+        return PlanDeviation(
+            time=state.time,
+            collected=state.collected - expected.collected,
+            resources=state.resources - expected.resources,
+            units={
+                unit_type: state.units.get(unit_type, 0) - expected.units.get(unit_type, 0.0)
+                for unit_type in unit_types
+            },
+        )
 
 
 def _start_of(interval: PlanInterval) -> GameTime:

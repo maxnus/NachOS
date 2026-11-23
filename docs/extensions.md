@@ -293,15 +293,25 @@ class ThreatMap:
 
   What it reads back is a `Plan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is expected
   to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second; and its
-  `intervals`, each a `PlanInterval` with the workers the plan has in it, from its `start` to its `end`. Each of the
-  two is a `PlanMoment`, what the planner expects at that `time`: the `resources` in stock, the `units` of each type
-  alive, and the `upgrades` done. One interval's end is the next one's start, the same object; the first interval's
-  start is the state the plan was made from, and the last one's end its horizon, so `plan.intervals[-1].end.units` is
-  what the plan comes to. `plan.interval_at(time)` is the interval a game time is in, or `None` outside the plan: its
-  workers are those the plan has at that time, and between its start and its end the plan says nothing of the stock,
-  the units or the upgrades. `plan_now` returns `None` if the solver finds no plan within its limits, and
-  `planner.plan` holds the last one it found. The planner orders nothing and holds no unit: where a structure goes,
-  which SCV builds it, and what to drop once the game moves on stay the bot's.
+  `intervals`, each a `PlanInterval` with the workers the plan has in it, from its `start` to its `end`. Each of the two
+  is a `PlanMoment`, what the planner expects at that `time`: the `resources` in stock, the minerals and vespene
+  `collected` in the game by then, the `units` of each type alive, and the `upgrades` done. One interval's end is the
+  next one's start, the same object; the first interval's start is the state the plan was made from, and the last one's
+  end its horizon, so `plan.intervals[-1].end.units` is what the plan comes to. `plan.interval_at(time)` is the interval
+  a game time is in, or `None` outside the plan: its workers are those the plan has at that time, and between its start
+  and its end the plan says nothing of the stock, the units or the upgrades. `plan.moment_at(time)` is an estimate
+  there, each number as far between the two moments' as the time is. `plan_now` returns `None` if the solver finds no
+  plan within its limits, and `planner.plan` holds the last one it found. The planner orders nothing and holds no unit:
+  where a structure goes, which SCV builds it, and what to drop once the game moves on stay the bot's.
+
+  How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `GameState`, such as
+  `planner.game_state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what
+  the plan expected at that time, so that the plan was optimistic where one is negative. Its three parts say what to
+  change. Less `collected` than expected is the economy's: the workers brought in less than `Economy` has them bring, so
+  lower its rates or raise its `reassignment_time`. As much collected and more `resources` in stock is the bot's, which
+  started less than the plan had it start. As much of both and fewer `units` of a type is units lost, which `loss_rates`
+  are for. It is `None` for a state from before the plan or after its horizon, and far ahead, where intervals are long,
+  the straight line between two moments is rough.
 
   How many workers mine and how many collect vespene is the plan's to choose, interval by interval, and each interval
   holds them as its `miners` and `collectors`. A bot holds its collectors at the first interval's,

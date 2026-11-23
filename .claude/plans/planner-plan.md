@@ -526,6 +526,20 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     and a generic `PlannedItem`, since pyright narrows `planned.item` by `isinstance` already and does not narrow
     `planned` with it.
 
+    **A plan can be held against the game later** (the owner, 2026-11-23: "I think we need some mechanism to evaluate
+    where a plan was optimistic or pessimistic. And I mean not just for development, but even for the user, so they can
+    tweak their parameters"). `Plan.deviation_of(state)` takes a later `GameState` and returns a `PlanDeviation`, the
+    game's numbers less what the plan expected at that time, in three parts that say what to change: `collected`, the
+    minerals and vespene brought in, for `Economy`'s rates and times; `resources`, the stock, for whether the bot starts
+    what the plan has it start; and `units`, for losses. One number would not say which. For it a `PlanMoment` holds
+    `collected`, the state's and each interval's income over its length since, MULEs included; `GameState.collected` is
+    what the game's score counts, read by `Planner.game_state`, nothing in a state made by hand; and
+    `Plan.moment_at(time)` is what a plan expects at any time, a straight line between an interval's two moments, which
+    the plan does not itself say holds and which is rough where intervals are long. It keeps no history and costs
+    nothing uncalled: a bot calls it before it replaces a plan and averages as it likes. Left for phase 2, when a bot
+    carries plans out: when each item started against when it was planned, which needs the bot to say what it started;
+    and whether the planner should keep a history itself.
+
     **A reward's weights hold its curves** (the owner, the same day, of the two: "Isn't the latter just a more general
     form of the former?"). `Reward.curves` is gone: `Reward.weights` holds for each unit type one number or a list of
     `CurveSegment`, so no type can be given both. A segment's `slope` is its `weight` and its `up_to` its
