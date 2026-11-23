@@ -54,7 +54,7 @@ def _row(
 
 
 # The footprints these units cover come from what the sweep measured.
-_TABLES = make_tables(
+_GAME_DATA = make_tables(
     _row(UnitTypeId.SCV, minerals=50, speed=2.8125),
     _row(UnitTypeId.MARINE, minerals=50, speed=2.25),
     _row(UnitTypeId.SUPPLY_DEPOT, minerals=100),
@@ -91,17 +91,22 @@ _TABLES = make_tables(
 )
 
 # Open ground 16 tiles square, but for a strip no structure can stand on along its left edge.
-_MAP = tuple(".." + "#" * 14 for _ in range(16))
+_OPEN_MAP_ROWS = tuple(".." + "#" * 14 for _ in range(16))
+# Level 8 throughout: the height at each tile's lower left corner, top row first.
+_FLAT_AT_LEVEL_8 = make_bytes(*([191] * 16 for _ in range(16)))
 
 
 class _Game:
     """A tracker and an order book on a drawn map, fed one observation at a time as `Api.play` feeds them."""
 
     def __init__(self, *, heights: common_pb2.ImageData | None = None) -> None:
-        """A game on `_MAP`, flat unless `heights` gives the height at each tile's lower left corner."""
-        self.tracker = make_tracker(_TABLES)
-        self.map = GameMap(make_game_info(*_MAP, heights=heights), start_location=Point((0.5, 0.5)))
-        self.book = OrderBook(_TABLES)
+        """A game on `_OPEN_MAP_ROWS`, flat at level 8 unless `heights` gives the height at each tile's lower left
+        corner."""
+        self.tracker = make_tracker(_GAME_DATA)
+        self.map = GameMap(
+            make_game_info(*_OPEN_MAP_ROWS, heights=heights or _FLAT_AT_LEVEL_8), start_location=Point((0.5, 0.5))
+        )
+        self.book = OrderBook(_GAME_DATA)
         self.grids: PlacementGrids | None = None
 
     def observe(
@@ -128,7 +133,7 @@ class _Game:
                 present_units=present,
                 state=state,
                 step=step,
-                game_data=_TABLES,
+                game_data=_GAME_DATA,
                 order_book=self.book,
             )
         else:
@@ -582,7 +587,7 @@ class TestPlacingOneStructure:
             make_unit(2, UnitTypeId.BARRACKS, at=(4.5, 4.5)),
             make_unit(3, UnitTypeId.MINERAL_FIELD, at=(13.0, 2.5), alliance=_NEUTRAL),
         )
-        footprint = _TABLES.units[unit_type].footprint
+        footprint = _GAME_DATA.units[unit_type].footprint
         assert footprint is not None
         centers = [footprint.center_in_tile(Tile(x, y)) for x in range(16) for y in range(16)]
         taken = [c for c in centers if c.distance_to(near) <= 4.0 and grids.is_free(unit_type, at=c, margin=margin)]
@@ -674,9 +679,13 @@ _PYLON_RADIUS = 6.5
 _PRISM_RADIUS = 3.75
 # Tiles from x 8 on stand 2 higher than those left of them: the height at each tile's lower left corner, from x 9 on.
 _CLIFF_AT_X_8 = make_bytes(*([191] * 9 + [207] * 7 for _ in range(16)))
+# Level 8, but for the corner at (4, 8), an eighth lower: the height at each tile's lower left corner, top row first.
+_DENT_UNDER_THE_CORNER_4_8 = make_bytes(
+    *([191] * 4 + [190] + [191] * 11 if row == 7 else [191] * 16 for row in range(16))
+)
 
 
-def _pylon(tag: int, at: tuple[float, float]) -> tuple[raw_pb2.Unit, raw_pb2.PowerSource]:
+def _finished_pylon(tag: int, at: tuple[float, float]) -> tuple[raw_pb2.Unit, raw_pb2.PowerSource]:
     """A finished pylon of this player's and the power source the game lists for it."""
     return make_unit(tag, UnitTypeId.PYLON, at=at), _power_source(tag, at, _PYLON_RADIUS)
 
@@ -700,7 +709,7 @@ def _observe_sources(game: _Game, *sources: tuple[raw_pb2.Unit, raw_pb2.PowerSou
 class TestPower:
     def test_the_power_sources_are_those_the_game_lists_with_their_units(self) -> None:
         game = _Game()
-        grids = _observe_sources(game, _pylon(1, (8.0, 8.0)), _phasing_prism(2, (12.25, 3.5)))
+        grids = _observe_sources(game, _finished_pylon(1, (8.0, 8.0)), _phasing_prism(2, (12.25, 3.5)))
         assert grids.power_sources == (
             PowerSource(unit=game.own(1), position=Point((8.0, 8.0)), radius=_PYLON_RADIUS),
             PowerSource(unit=game.own(2), position=Point((12.25, 3.5)), radius=_PRISM_RADIUS),
@@ -716,7 +725,7 @@ class TestPower:
     def test_a_center_is_read_by_the_tile_holding_it_so_the_same_tile_may_differ_by_footprint(self) -> None:
         """A gateway in tile (14, 8) centers at (14.5, 8.5), 6.52 from the pylon, and a cannon at (14, 8), 6.0 from
         it."""
-        grids = _observe_sources(_Game(), _pylon(1, (8.0, 8.0)))
+        grids = _observe_sources(_Game(), _finished_pylon(1, (8.0, 8.0)))
         assert not grids.powered_for(UnitTypeId.GATEWAY)[Tile(14, 8)]
         assert grids.powered_for(UnitTypeId.PHOTON_CANNON)[Tile(14, 8)]
         assert grids.powered_for(UnitTypeId.GATEWAY)[Tile(13, 8)]
@@ -739,9 +748,9 @@ class TestPower:
         assert not grids.powered_for(unit_type)[on_the_edge]
 
     def test_the_grid_is_every_center_within_a_radius_of_a_source(self) -> None:
-        grids = _observe_sources(_Game(), _pylon(1, (5.0, 6.0)), _phasing_prism(2, (12.25, 11.5)))
+        grids = _observe_sources(_Game(), _finished_pylon(1, (5.0, 6.0)), _phasing_prism(2, (12.25, 11.5)))
         for unit_type in (UnitTypeId.GATEWAY, UnitTypeId.PHOTON_CANNON):
-            footprint = _TABLES.units[unit_type].footprint
+            footprint = _GAME_DATA.units[unit_type].footprint
             assert footprint is not None
             powered = grids.powered_for(unit_type)
             for x in range(16):
@@ -755,16 +764,35 @@ class TestPower:
 
     def test_a_pylon_powers_no_center_on_higher_ground_and_any_on_lower(self) -> None:
         """Tiles from x 8 on stand 2 higher (tool `sweep_power`)."""
-        below = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (4.0, 8.0)))
+        below = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _finished_pylon(1, (4.0, 8.0)))
         assert below.powered_for(UnitTypeId.GATEWAY)[Point((6.5, 8.5))]
         assert not below.powered_for(UnitTypeId.GATEWAY)[Point((8.5, 8.5))]
-        above = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (12.0, 8.0)))
+        above = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _finished_pylon(1, (12.0, 8.0)))
         assert above.powered_for(UnitTypeId.GATEWAY)[Point((6.5, 8.5))]
         assert above.powered_for(UnitTypeId.GATEWAY)[Point((8.5, 8.5))]
 
+    def test_a_pylon_on_tiles_a_little_below_its_level_powers_the_level(self) -> None:
+        """The corner under the pylon an eighth below 8 leaves its four tiles at 7.97 (tool `sweep_power`)."""
+        game = _Game(heights=_DENT_UNDER_THE_CORNER_4_8)
+        grids = _observe_sources(game, _finished_pylon(1, (4.0, 8.0)))
+        assert game.map.height[Tile(4, 8)] == 7.96875
+        assert game.map.height[Tile(6, 8)] == 8.0
+        assert grids.powered_for(UnitTypeId.GATEWAY)[Point((6.5, 8.5))]
+        assert grids.powered_for(UnitTypeId.PHOTON_CANNON)[Point((7.0, 8.0))]
+
+    def test_where_no_structure_stands_a_tile_a_little_above_the_pylons_level_is_higher(self) -> None:
+        """The strip along the left edge, an eighth up, as a ramp's first tile above a level stands (tool
+        `sweep_power`)."""
+        game = _Game(heights=make_bytes(*([192, 192] + [191] * 14 for _ in range(16))))
+        grids = _observe_sources(game, _finished_pylon(1, (4.0, 8.0)))
+        assert game.map.height[Tile(0, 8)] == 8.125
+        assert not game.map.placement[Tile(0, 8)]
+        assert not grids.powered_for(UnitTypeId.GATEWAY)[Point((0.5, 8.5))]
+        assert grids.powered_for(UnitTypeId.GATEWAY)[Point((2.5, 8.5))]
+
     def test_a_center_on_a_tile_corner_takes_the_highest_tile_it_touches(self) -> None:
         """A cannon centered at (8, 8) touches tiles 7, low, and 8, high."""
-        grids = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (4.0, 8.0)))
+        grids = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _finished_pylon(1, (4.0, 8.0)))
         assert grids.powered_for(UnitTypeId.PHOTON_CANNON)[Point((7.0, 8.0))]
         assert not grids.powered_for(UnitTypeId.PHOTON_CANNON)[Point((8.0, 8.0))]
 
@@ -781,7 +809,7 @@ class TestPower:
 
     def test_it_is_built_once_an_observation_for_the_footprints_odd_or_even(self) -> None:
         game = _Game()
-        grids = _observe_sources(game, _pylon(1, (8.0, 8.0)))
+        grids = _observe_sources(game, _finished_pylon(1, (8.0, 8.0)))
         gateway = grids.powered_for(UnitTypeId.GATEWAY)
         assert grids.powered_for(UnitTypeId.FORGE) is gateway
         assert grids.powered_for(UnitTypeId.PHOTON_CANNON) is not gateway
@@ -789,14 +817,14 @@ class TestPower:
         assert not grids.powered_for(UnitTypeId.GATEWAY).values.any()
 
     def test_it_refuses_writes(self) -> None:
-        grids = _observe_sources(_Game(), _pylon(1, (8.0, 8.0)))
+        grids = _observe_sources(_Game(), _finished_pylon(1, (8.0, 8.0)))
         with pytest.raises(TypeError, match="read-only"):
             grids.powered_for(UnitTypeId.GATEWAY)[Tile(8, 8)] = False
         with pytest.raises(TypeError, match="read-only"):
             grids.powered_for(UnitTypeId.SUPPLY_DEPOT)[Tile(8, 8)] = False
 
     def test_is_free_needs_power_unless_told_not_to(self) -> None:
-        grids = _observe_sources(_Game(), _pylon(1, (4.0, 8.0)))
+        grids = _observe_sources(_Game(), _finished_pylon(1, (4.0, 8.0)))
         assert grids.is_free(UnitTypeId.GATEWAY, at=Point((6.5, 8.5)))
         assert not grids.is_free(UnitTypeId.GATEWAY, at=Point((12.5, 8.5)))
         assert grids.is_free(UnitTypeId.GATEWAY, at=Point((12.5, 8.5)), power=False)
@@ -804,7 +832,7 @@ class TestPower:
 
     def test_nearest_free_needs_power_unless_told_not_to(self) -> None:
         """A gateway centered at (10.5, 8.5) lies 6.52 from the pylon."""
-        grids = _observe_sources(_Game(), _pylon(1, (4.0, 8.0)))
+        grids = _observe_sources(_Game(), _finished_pylon(1, (4.0, 8.0)))
         near = Point((14.5, 8.5))
         site = grids.nearest_free(UnitTypeId.GATEWAY, near=near, max_distance=math.inf)
         assert site == Point((9.5, 8.5))
@@ -819,8 +847,10 @@ class TestPower:
     def test_nearest_free_is_the_nearest_center_is_free_takes(
         self, unit_type: UnitTypeId, near: Point, power: bool
     ) -> None:
-        grids = _observe_sources(_Game(heights=_CLIFF_AT_X_8), _pylon(1, (9.0, 6.0)), _phasing_prism(2, (4.25, 12.5)))
-        footprint = _TABLES.units[unit_type].footprint
+        grids = _observe_sources(
+            _Game(heights=_CLIFF_AT_X_8), _finished_pylon(1, (9.0, 6.0)), _phasing_prism(2, (4.25, 12.5))
+        )
+        footprint = _GAME_DATA.units[unit_type].footprint
         assert footprint is not None
         centers = [footprint.center_in_tile(Tile(x, y)) for x in range(16) for y in range(16)]
         taken = [c for c in centers if c.distance_to(near) <= 6.0 and grids.is_free(unit_type, at=c, power=power)]
@@ -832,8 +862,8 @@ class TestPower:
             assert grids.is_free(unit_type, at=found, power=power)
 
     def test_free_for_the_sites_where_a_footprint_fits_and_power_are_every_center_is_free_takes(self) -> None:
-        grids = _observe_sources(_Game(), _pylon(1, (6.0, 8.0)))
-        footprint = _TABLES.units[UnitTypeId.GATEWAY].footprint
+        grids = _observe_sources(_Game(), _finished_pylon(1, (6.0, 8.0)))
+        footprint = _GAME_DATA.units[UnitTypeId.GATEWAY].footprint
         assert footprint is not None
         sites = grids.free_for(UnitTypeId.GATEWAY).where_footprint_fits(footprint) & grids.powered_for(
             UnitTypeId.GATEWAY

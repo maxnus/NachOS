@@ -216,7 +216,7 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   NachOS's extensions): that is how the ids are found fast.
 - **Power is the placement grids'** (the owner, 2026-11-23): `api.placement.power_sources`, and `powered_for(t)`, a
   grid by the tile holding a structure's center, as `where_footprint_fits` has it, one for each parity of footprint,
-  since power goes by the center and a pylon powers no higher ground, which neither one grid nor a `SourceField` can
+  since power goes by the center and a pylon powers no higher level, which neither one grid nor a `SourceField` can
   hold. `is_free` and `nearest_free` heed it, unless `power=False` (over `check_power=False`, review of #123).
   `needs_power` stays a bool for 1.0 (over an enum of needing power, providing it and neither, review of #123): what
   provides power, and how far, is `power_sources`.

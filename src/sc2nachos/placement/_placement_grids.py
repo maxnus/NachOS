@@ -31,6 +31,10 @@ if TYPE_CHECKING:
     from sc2nachos.units import Unit, Units
 
 
+# Ground levels lie this far apart, at heights 8, 10, 12 and so on (#17).
+_HEIGHT_BETWEEN_LEVELS = 2.0
+
+
 @final
 class PlacementGrids:
     """Where a structure may stand, as this player knows the map in the current observation, in layers: `static`, the
@@ -211,8 +215,7 @@ class PlacementGrids:
         """Where a structure of `unit_type` may stand now, as the ground goes: `free`, on creep or off it as the type
         needs (`UnitTypeData.creep_requirement`), and for a townhall, off the ground around each mineral field and
         geyser this player knows of that keeps one off, as `api.expansions` heeds it. A gas building stands on a geyser,
-        which `static` closes, so it fits nowhere on any of them. Power goes by a structure's center, not by the tiles
-        it covers, so `powered_for` holds it."""
+        which `static` closes, so it fits nowhere on any of them. It leaves power out, which `powered_for` holds."""
         return self._ground_for(unit_type) & ~self.reserved
 
     @property
@@ -228,9 +231,11 @@ class PlacementGrids:
         powered_for(unit_type)` holds every center where one may stand now.
 
         A structure is powered where its center lies strictly within the `radius` of one of `power_sources`: on any
-        level for a warp prism, and for a pylon, only where no tile the center touches stands higher than the highest
-        the pylon covers, so that a pylon powers nothing up a cliff or a ramp (in game). Beyond the map it reads
-        false."""
+        level for a warp prism, and for a pylon, only where no tile the center touches lies on a higher level than the
+        highest the pylon covers. A tile's level is its height rounded to the nearest of the levels 2 apart, where the
+        map lets a structure stand (`GameMap.placement`), and its height elsewhere, as on a ramp. So a pylon powers
+        nothing up a cliff or a ramp, and one on tiles a little below its level powers the level (in game). Beyond the
+        map it reads false."""
         if not self._needs_power(unit_type):
             return self._grid_powered_everywhere()
         return self._powered_centers(_parity_of(self._footprint_of(unit_type)))
@@ -363,19 +368,25 @@ class PlacementGrids:
         return powered
 
     def _highest_level_powered_by(self, source: PowerSource) -> float:
-        """The height of the highest tile a center may touch for `source` to power it: for a pylon, of the highest of
-        the four it covers, around the corner it is centered on, and for a warp prism, infinite."""
+        """The level of the highest tile a center may touch for `source` to power it: for a pylon, its own, the
+        highest of the four tiles it covers, and for a warp prism, infinite."""
         if source.unit.type_id is not UnitTypeId.PYLON:
             return math.inf
-        x, y = round(source.position.x), round(source.position.y)
-        return float(self._game_map.height[Rectangle(x - 1, y - 1, 2, 2)].max())
+        origin = self._static.origin
+        # A pylon is centered on a tile corner, which the even centers' levels hold by the tile above and right of it.
+        column = round(source.position.x) - origin.x
+        row = round(source.position.y) - origin.y
+        return float(self._center_levels((0, 0))[column, row])
 
     def _center_levels(self, parity: tuple[int, int]) -> ndarray:
-        """The height of the highest tile each center of `parity`, as `_powered_centers` takes it, touches, by the tile
+        """The level of the highest tile each center of `parity`, as `_powered_centers` takes it, touches, by the tile
         holding the center: that tile alone along an odd side, and along an even side, that tile and the one before it.
-        Built once a game for each parity."""
+        A tile's level is its height rounded to the nearest of the levels, where the map lets a structure stand, and
+        its height elsewhere, as on a ramp. Built once a game for each parity."""
         if (levels := self._center_levels_by_parity.get(parity)) is None:
-            levels = self._static._aligned(self._game_map.height)
+            heights = self._static._aligned(self._game_map.height)
+            rounded = _HEIGHT_BETWEEN_LEVELS * numpy.floor(heights / _HEIGHT_BETWEEN_LEVELS + 0.5)
+            levels = numpy.where(self._static._aligned(self._game_map.placement), rounded, heights)
             if not parity[0]:
                 levels = numpy.maximum(levels, numpy.concatenate((levels[:1], levels[:-1]), axis=0))
             if not parity[1]:
