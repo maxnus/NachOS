@@ -759,6 +759,24 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       stays refused (the owner, the same day: "Would there be anything fundamentally wrong with negative rates?"): the
       program solves with one, and its units multiply for nothing, twelve SCVs at -0.01 a second being 39.8 after two
       minutes with none started.
+17. **A loss rate may change with the game time** (the owner, 2026-11-23: "I'm actually surprised to learn we have a
+    loss rate that is proportional to the unit number. I thought it was just an absolute rate. Which one makes more
+    sense? Could we support more general forward assumptions about losses, e.g. time dependent rates or discrete
+    losses?", and then: "I would build the time dependent rate for sure. I'm not sure about the one-off losses: can
+    these not also be modelled by a sharp peak in the time dependent rate?"). A rate stays the share of the units lost a
+    second, which keeps a count linear in the plan's starts and never below none. A number of units a second would need
+    the count held at none, a whole variable for each unit type and interval, and is left out: a bot gives the share its
+    number is of the count it expects. A rate in `loss_rates` is a number, or a function of the game time, as a term's
+    `time_factor` is. The program asks a function at each game step from the plan's start to its horizon and sums what
+    it gives, rather than once an interval, so that a peak loses its share wherever it falls on the grid, whose
+    intervals run from 1.5 to 24.3 seconds: a loss at once is a peak, with no argument of its own. A number is applied
+    as before, and gives the program it gave, to the last bit of its matrix. Of a number and a function for two types
+    that count as one, the higher at each step (Open 16). Measured from the two mid-game states of
+    `tools/benchmark_planner.py`, the growing reward at a half-life of 240 s on the default grid over 300 s, marines,
+    marauders and medivacs lost: three functions take a program from 5 ms to build to 9 or 10, and add no variable and
+    no row; 0.002 a second as functions gives the objective it gives as numbers; and a rate of 0.004 from 60 seconds on,
+    and 30% lost within a second at 120, are proven in 1.8 to 3.9 s, where numbers take 3.2 to 4.4 and no losses 2.1 to
+    4.4.
 
 ## Risks
 

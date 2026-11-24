@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, final
 
@@ -60,12 +60,14 @@ class PlanProgram:
     rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a tier than the
     interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the interval's
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
-    supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type. Of an
-    item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type it counts as,
-    the lowest of those of one type, and a limit on no item here does nothing.
+    supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type, and a
+    number or a function of the game time, asked at each game step and summed, so that a peak in it loses its share
+    whatever the grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that
+    of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
-    `walk_time`, and for a unit in production in `state` of a type that is no item of `model`'s.
+    `walk_time`, for a loss rate from a function that is negative or not finite, and for a unit in production in `state`
+    of a type that is no item of `model`'s.
     """
 
     __slots__ = (
@@ -79,6 +81,7 @@ class PlanProgram:
         "_index_of_unit_type",
         "_index_of_upgrade",
         "_items",
+        "_loss_rate_seconds",
         "_loss_rates",
         "_max_ignored_overrun",
         "_minerals",
@@ -91,6 +94,7 @@ class PlanProgram:
         "_started_collecting",
         "_spendable_income_fraction",
         "_started_mining",
+        "_summed_loss_rates",
         "_starts_so_far",
         "_state",
         "_vespene",
@@ -109,7 +113,7 @@ class PlanProgram:
         state: PlannerState,
         reward: Reward,
         economy: EconomyModel,
-        loss_rates: Mapping[UnitTypeId, float],
+        loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]],
         start_limits: Mapping[UnitTypeId | UpgradeId, int],
         fluid_after_seconds: Sequence[float],
         max_ignored_overrun: float,
@@ -123,7 +127,6 @@ class PlanProgram:
         self._state = state
         self._reward = reward
         self._economy = economy
-        self._loss_rates = _loss_rates_by_counted_type(loss_rates, model)
         self._start_limits = _limits_by_counted_type(start_limits, model)
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
@@ -134,6 +137,7 @@ class PlanProgram:
         self._completions, self._builders_free_after = self._completions_and_builders()
         self._edges: FloatArray = np.asarray(edges, dtype=float)
         self._widths: FloatArray = np.diff(self._edges)
+        self._read_loss_rates(loss_rates)
         self._index_of_unit_type = {
             item.unit_type: i for i, item in enumerate(self._items) if item.unit_type is not None
         }
@@ -197,6 +201,45 @@ class PlanProgram:
         self._mining = self._add_worker_tiers(self._economy.minerals_per_miner_second)
         self._collecting = self._add_worker_tiers(self._economy.vespene_per_collector_second)
         self._started_mining, self._started_collecting = self._add_work_starts()
+
+    def _read_loss_rates(self, loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]]) -> None:
+        """Read `loss_rates`, each unit type's under the type it counts as, the highest of those of one type: a number
+        as it is, and a function of the game time at each game step from the plan's start to its horizon, summed from
+        the start to each step. Of a number and a function for one type, the higher at each step.
+
+        Raises `ValueError` for a rate a function gives that is negative or not finite."""
+        horizon = float(self._edges[-1])
+        step_count = math.ceil(GameTime(seconds=horizon - SECONDS_TOLERANCE).steps)
+        self._loss_rate_seconds: FloatArray = np.minimum(np.arange(step_count + 1) * GameTime(steps=1).seconds, horizon)
+        self._loss_rates: dict[UnitTypeId, float] = {}
+        by_step: dict[UnitTypeId, FloatArray] = {}
+        step_times: list[GameTime] = []
+        for unit_type, rate in loss_rates.items():
+            counted = self._model.counted_as(unit_type)
+            if not callable(rate):
+                self._loss_rates[counted] = max(float(rate), self._loss_rates.get(counted, 0.0))
+                continue
+            if not step_times:
+                step_times = [self._state.time + GameTime(steps=step) for step in range(step_count)]
+            rates = np.array([_loss_rate_at(rate, time, unit_type) for time in step_times], dtype=float)
+            by_step[counted] = np.maximum(rates, by_step.get(counted, 0.0))
+        self._summed_loss_rates: dict[UnitTypeId, FloatArray] = {}
+        for counted, rates in by_step.items():
+            highest = np.maximum(rates, self._loss_rates.pop(counted, 0.0))
+            summed = np.cumsum(highest * np.diff(self._loss_rate_seconds))
+            self._summed_loss_rates[counted] = np.concatenate([[0.0], summed])
+
+    def _share_surviving(
+        self, unit_type: UnitTypeId, from_seconds: FloatArray | float, to_seconds: FloatArray | float
+    ) -> FloatArray:
+        """The share of the units of `unit_type` alive `from_seconds` after the plan's start that are alive `to_seconds`
+        after it by its loss rate, all of them where that is no later."""
+        summed = self._summed_loss_rates.get(unit_type)
+        if summed is None:
+            since = np.maximum(np.asarray(to_seconds, dtype=float) - from_seconds, 0.0)
+            return np.exp(-self._loss_rates.get(unit_type, 0.0) * since)
+        lost_by_then = np.interp(np.maximum(to_seconds, from_seconds), self._loss_rate_seconds, summed)
+        return np.exp(np.interp(from_seconds, self._loss_rate_seconds, summed) - lost_by_then)
 
     def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
         """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
@@ -336,38 +379,42 @@ class PlanProgram:
         """One row: the starts of item `index` over the whole plan."""
         return self._add_starts_to(RowExpression(1), index, 1.0)
 
-    def _starts_done(self, index: int, *, at_end: bool, rate: float = 0.0) -> RowExpression:
-        """The starts of item `index` done by each interval's start, or its end, each as it survives `rate` a second."""
+    def _starts_done(self, index: int, *, at_end: bool, survive: bool = False) -> RowExpression:
+        """The starts of item `index` done by each interval's start, or its end, each as it survives its loss rate from
+        when it is done if `survive`."""
         rows = self._row_edges(at_end=at_end)
         done = (self._completion_edges[index][None, :] <= rows[:, None]).astype(float)
-        if rate:
+        unit_type = self._items[index].unit_type
+        if survive and unit_type is not None:
             completed = self._edges[:-1] + self._items[index].build_seconds
-            since = np.maximum(self._edges[rows.astype(int)][:, None] - completed[None, :], 0.0)
-            done *= np.exp(-rate * since)
+            done *= self._share_surviving(unit_type, completed[None, :], self._edges[rows.astype(int)][:, None])
         return self._add_starts_to(RowExpression(len(rows)), index, done)
 
-    def _done_by(self, seconds: float, *, at_end: bool, rate: float = 0.0) -> FloatArray:
-        """For each interval's start, or its end, whether something done after `seconds` is done, as it survives `rate`
-        a second."""
+    def _done_by(self, seconds: float, *, at_end: bool, surviving_as: UnitTypeId | None = None) -> FloatArray:
+        """For each interval's start, or its end, whether something done after `seconds` is done, as a unit of the type
+        `surviving_as` survives its loss rate from then."""
         rows = self._row_edges(at_end=at_end)
         done = (self._edge_index(np.array([seconds]))[0] <= rows).astype(float)
-        return done * np.exp(-rate * np.maximum(self._edges[rows.astype(int)] - seconds, 0.0))
+        if surviving_as is None:
+            return done
+        return done * self._share_surviving(surviving_as, seconds, self._edges[rows.astype(int)])
 
     def _count_alive(self, unit_type: UnitTypeId, *, at_end: bool, survive: bool = True) -> RowExpression:
         """The units of `unit_type` alive at each interval's start, or its end: those alive now, those in production and
         those the plan starts, less those morphed into another type, each as it survives its loss rate if `survive`."""
-        rate = self._loss_rates.get(unit_type, 0.0) if survive else 0.0
         rows = self._row_edges(at_end=at_end)
         count = RowExpression(len(rows))
-        count.constant = self._state.units.get(unit_type, 0) * np.exp(-rate * self._edges[rows.astype(int)])
+        count.constant = np.full(len(rows), float(self._state.units.get(unit_type, 0)))
+        if survive:
+            count.constant *= self._share_surviving(unit_type, 0.0, self._edges[rows.astype(int)])
         for completion_type, seconds in self._completions:
             if completion_type == unit_type:
-                count.constant += self._done_by(seconds, at_end=at_end, rate=rate)
+                count.constant += self._done_by(seconds, at_end=at_end, surviving_as=unit_type if survive else None)
             elif self._model.unit_items[completion_type].morphed_from == unit_type:
                 count.constant -= self._done_by(seconds, at_end=at_end)
         for index, item in enumerate(self._items):
             if item.unit_type == unit_type:
-                count.add_expression(self._starts_done(index, at_end=at_end, rate=rate))
+                count.add_expression(self._starts_done(index, at_end=at_end, survive=survive))
             elif item.morphed_from == unit_type:
                 count.add_expression(self._starts_done(index, at_end=at_end), -1.0)
         return count
@@ -569,7 +616,7 @@ class PlanProgram:
         `working_now` in them, as many in each tier as the `sites` now take, the better tiers first; less as many in
         all as are `back_from_builds`."""
         intervals = self._interval_count
-        survival = np.exp(-self._loss_rates.get(UnitTypeId.SCV, 0.0) * self._widths)
+        survival = self._share_surviving(UnitTypeId.SCV, self._edges[:-1], self._edges[1:])
         risen_by = np.eye(intervals) - np.eye(intervals, k=-1) * survival[None, :]
         started_for_nothing = RowExpression(intervals)
         for tier, started_in_tier in zip(tiers, started, strict=True):
@@ -609,9 +656,9 @@ class PlanProgram:
         for completion_type, seconds in self._completions:
             if provided := self._model.unit_items[completion_type].supply_provided:
                 cap.constant += provided * self._done_by(seconds, at_end=False)
-        for unit_type, rate in self._loss_rates.items():
+        for unit_type in (*self._loss_rates, *self._summed_loss_rates):
             supply = self._model.game_data.units[unit_type].supply_used
-            if rate and supply:
+            if supply and (self._loss_rates.get(unit_type) or unit_type in self._summed_loss_rates):
                 used.add_expression(self._count_alive(unit_type, at_end=False, survive=False), -supply)
                 used.add_expression(self._count_alive(unit_type, at_end=False), supply)
         self._constrain_at_most(used, cap, most_used=SUPPLY_LIMIT)
@@ -957,13 +1004,12 @@ def _limits_by_counted_type(
     return limits
 
 
-def _loss_rates_by_counted_type(loss_rates: Mapping[UnitTypeId, float], model: TerranModel) -> dict[UnitTypeId, float]:
-    """`loss_rates`, each unit type's under the type it counts as by `model`, the highest of those of one type."""
-    rates: dict[UnitTypeId, float] = {}
-    for unit_type, rate in loss_rates.items():
-        counted = model.counted_as(unit_type)
-        rates[counted] = max(float(rate), rates.get(counted, 0.0))
-    return rates
+def _loss_rate_at(rate_of: Callable[[GameTime], float], time: GameTime, unit_type: UnitTypeId) -> float:
+    """What `rate_of` gives for `time`; raises `ValueError` unless it is a number not below 0, naming `unit_type`."""
+    rate = rate_of(time)
+    if not 0 <= rate < math.inf:
+        raise ValueError(f"a loss rate must be a number not below 0, not {rate} for {unit_type.name} at {time}")
+    return rate
 
 
 def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:

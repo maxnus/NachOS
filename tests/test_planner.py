@@ -4,7 +4,7 @@ off a made-up game, and the extension itself."""
 import dataclasses
 import itertools
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import numpy as np
@@ -76,7 +76,7 @@ def _best_plan(
     grid: TimeGrid = _TWO_SECOND_INTERVALS,
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: EconomyModel = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
-    loss_rates: dict[UnitTypeId, float] | None = None,
+    loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]] | None = None,
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
     max_ignored_overrun: float = 0.25,
     unlock_fraction: float = 1.0,
@@ -610,6 +610,94 @@ class TestKnownPlans:
         )
         tanks = [interval.end.units[UnitTypeId.SIEGE_TANK] for interval in plan.intervals]
         assert tanks == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
+
+    def test_a_loss_rate_may_be_a_function_of_the_game_time(self) -> None:
+        """No barracks, so no marine is made. None is lost before 5 seconds, 112 game steps, and 1% a second from
+        then."""
+        state = _game_start(units={UnitTypeId.MARINE: 10})
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=10,
+            loss_rates={UnitTypeId.MARINE: lambda time: 0.01 if time >= GameTime(steps=112) else 0.0},
+        )
+        marines = [interval.end.units[UnitTypeId.MARINE] for interval in plan.intervals]
+        assert marines == pytest.approx([10, 10, 10 * math.exp(-0.01), 10 * math.exp(-0.03), 10 * math.exp(-0.05)])
+
+    @pytest.mark.parametrize(
+        "grid",
+        [_TWO_SECOND_INTERVALS, TimeGrid.uniform(GameTime(seconds=10))],
+        ids=["intervals shorter than the peak", "an interval holding the peak"],
+    )
+    def test_a_peak_in_a_loss_rate_is_a_loss_at_once_on_any_grid(self, grid: TimeGrid) -> None:
+        """A rate over 28 game steps, 1.25 seconds, from 5 seconds, that loses 30% of the units then alive: of ten
+        marines seven, of one done at 3 seconds 0.7, and nothing of one done at 7."""
+        peak_start = GameTime(steps=112)
+        peak_end = GameTime(steps=140)
+        rate_in_the_peak = -math.log(0.7) / (peak_end - peak_start).seconds
+        state = _game_start(
+            units={UnitTypeId.MARINE: 10},
+            unit_completions=(
+                UnitCompletion(unit_type=UnitTypeId.MARINE, time_left=GameTime(seconds=3)),
+                UnitCompletion(unit_type=UnitTypeId.MARINE, time_left=GameTime(seconds=7)),
+            ),
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=20,
+            grid=grid,
+            loss_rates={UnitTypeId.MARINE: lambda time: rate_in_the_peak if peak_start <= time < peak_end else 0.0},
+        )
+        assert plan.intervals[0].start.units[UnitTypeId.MARINE] == 10
+        assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(7 + 0.7 + 1)
+
+    def test_a_unit_the_plan_makes_survives_a_loss_rate_of_the_game_time_from_when_it_is_done(self) -> None:
+        """50 minerals and none mined: one marine, started at once and done 18 seconds in, lost at 1% a second from
+        20 seconds, 448 game steps."""
+        state = _game_start(supply_used=0.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0)
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=30,
+            loss_rates={UnitTypeId.MARINE: lambda time: 0.01 if time >= GameTime(steps=448) else 0.0},
+        )
+        assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
+        assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(math.exp(-0.1))
+
+    @pytest.mark.parametrize(
+        ("loss_rates", "lost_by_10_seconds"),
+        [
+            ({UnitTypeId.SIEGE_TANK: lambda _: 0.002, UnitTypeId.SIEGE_TANK_SIEGED: 0.01}, 0.1),
+            ({UnitTypeId.SIEGE_TANK: 0.002, UnitTypeId.SIEGE_TANK_SIEGED: lambda _: 0.01}, 0.1),
+            (
+                {
+                    UnitTypeId.SIEGE_TANK: 0.002,
+                    UnitTypeId.SIEGE_TANK_SIEGED: lambda time: 0.01 if time >= GameTime(steps=112) else 0.0,
+                },
+                0.002 * 5 + 0.01 * 5,
+            ),
+        ],
+        ids=["a number above a function", "a function above a number", "each the higher for a time"],
+    )
+    def test_of_a_number_and_a_function_for_one_type_the_loss_rate_is_the_higher_at_each_time(
+        self, loss_rates: dict[UnitTypeId, float | Callable[[GameTime], float]], lost_by_10_seconds: float
+    ) -> None:
+        state = _game_start(units={UnitTypeId.SIEGE_TANK: 10})
+        plan = _best_plan(
+            state, Reward.weighted({UnitTypeId.SIEGE_TANK: 1.0}), horizon_seconds=10, loss_rates=loss_rates
+        )
+        assert plan.intervals[-1].end.units[UnitTypeId.SIEGE_TANK] == pytest.approx(10 * math.exp(-lost_by_10_seconds))
+
+    @pytest.mark.parametrize("rate", [-0.01, math.inf, math.nan], ids=["negative", "infinite", "not a number"])
+    def test_a_loss_rate_a_function_gives_that_is_negative_or_not_finite_raises(self, rate: float) -> None:
+        with pytest.raises(ValueError, match="a loss rate must be a number not below 0"):
+            _best_plan(
+                _game_start(),
+                Reward.weighted({UnitTypeId.MARINE: 1.0}),
+                horizon_seconds=10,
+                loss_rates={UnitTypeId.MARINE: lambda _: rate},
+            )
 
     def test_a_weight_on_types_counted_together_buys_those_that_count(self) -> None:
         """Ten wanted against air, where a marine counts for one and a marauder, which cannot shoot up, for none. Two
@@ -2405,6 +2493,29 @@ class TestPlanner:
 
         with pytest.raises(ValueError, match="loss rates"):
             api.play(game.joined())
+
+    def test_it_takes_a_loss_rate_that_is_a_function_of_the_game_time(self) -> None:
+        """SCVs lost at 1% a second count as they do with that rate as a number: fewer than with none lost."""
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        plans: list[BuildPlan] = []
+
+        @api.on(TurnEvent)
+        def plan_scvs(_: TurnEvent) -> None:
+            reward = Reward.weighted({UnitTypeId.SCV: 1.0})
+            for loss_rates in ({}, {UnitTypeId.SCV: 0.01}, {UnitTypeId.SCV: lambda _: 0.01}):
+                plan = api.extensions.plan_now(reward, horizon=GameTime(seconds=10), loss_rates=loss_rates)
+                plans.append(_plan_found(plan))
+
+        api.play(game.joined())
+
+        with_none_lost, with_a_number, with_a_function = (
+            plan.intervals[-1].end.units[UnitTypeId.SCV] for plan in plans
+        )
+        assert with_a_function == pytest.approx(with_a_number)
+        assert with_a_function < with_none_lost
 
     def test_a_negative_time_from_fluid_after_raises(self) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
