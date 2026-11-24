@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import numbers
 from typing import TYPE_CHECKING, final, overload
 
@@ -9,9 +10,10 @@ import numpy
 import scipy.ndimage
 
 from sc2nachos.gametime._game_time import GameTime, check_game_time
+from sc2nachos.gametime._time_dependent import NO_DEFAULT, default_of_many_times, steps_of_many_times
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Sequence
 
     from numpy import ndarray
 
@@ -21,13 +23,14 @@ INITIAL_BUFFER = 128
 
 @final
 class TimeSeries[T: float]:
-    """Values recorded against the game time they were observed at, one a step.
+    """Values recorded against the game time they were observed at, one a step: a `TimeDependent` that covers the
+    steps from its `start` to its `end`.
 
-    Indexing and slicing are by `GameTime`, not buffer position, so `series[time]` means the same thing for the whole
-    life of the series. A time between two steps reads the nearest, a tie the later: `series.at(api.time -
-    GameTime(seconds=1))` reads 22 steps back. A slice is a copy, sharing no memory with the series. Steps are
-    contiguous: a gap between appends is filled by linear interpolation, rounded to the nearest whole number in an
-    integer series, a tie up.
+    Calling it, indexing and slicing are by `GameTime`, not buffer position, so `series(time)` means the same thing for
+    the whole life of the series. A time between two steps reads the step before it, whose value holds until the next:
+    `series(api.time - GameTime(seconds=1))` reads 23 steps back, a second being 22.4. A slice is a copy, sharing no
+    memory with the series. Steps are contiguous: a gap between appends is filled by linear interpolation, rounded to
+    the nearest whole number in an integer series, a tie up.
     """
 
     # Makes a numpy scalar on the left, `numpy.float64(2) * series`, hand over to the reflected operator instead of
@@ -38,15 +41,15 @@ class TimeSeries[T: float]:
     _start: int | None
     _size: int
 
-    def __init__(self, buffer: ndarray, start_time: GameTime | None, size: int) -> None:
-        """A series over `buffer`, holding the `size` values recorded one a step from `start_time` onward, a whole
-        number of steps.
+    def __init__(self, buffer: ndarray, start: GameTime | None, size: int) -> None:
+        """A series over `buffer`, holding the `size` values recorded one a step from `start` onward, a whole number
+        of steps.
 
         `buffer` may be longer than `size`, leaving room to append. An empty series has no start; the first append
-        sets it. Raises `TypeError` for a `start_time` that is not a `GameTime`, and `ValueError` for one that is not
-        a whole number of steps.
+        sets it. Raises `TypeError` for a `start` that is not a `GameTime`, and `ValueError` for one that is not a
+        whole number of steps.
         """
-        self._set_up(buffer, None if start_time is None else _whole_step_of(start_time, "start_time"), size)
+        self._set_up(buffer, None if start is None else _whole_step_of(start, "start"), size)
 
     @classmethod
     def _from_steps(cls, buffer: ndarray, start: int | None, size: int) -> TimeSeries[T]:
@@ -84,13 +87,14 @@ class TimeSeries[T: float]:
         return self._size
 
     @property
-    def start_time(self) -> GameTime:
+    def start(self) -> GameTime:
         """The time of the first recorded step. An empty series has none, and raises `ValueError`."""
         return GameTime(steps=self._first_step)
 
     @property
-    def last_time(self) -> GameTime:
-        """The time of the most recently recorded step. An empty series has none, and raises `ValueError`."""
+    def end(self) -> GameTime:
+        """The time of the most recently recorded step, which the series holds a value at, where a slice leaves out
+        the time it ends at. An empty series has none, and raises `ValueError`."""
         return GameTime(steps=self._last_step)
 
     @property
@@ -161,34 +165,65 @@ class TimeSeries[T: float]:
             self._buffer[index - gap + 1 : index + 1] = interpolated[1:]
         self._size += gap
 
-    def at(self, time: GameTime) -> T | None:
-        """The value at `time`, taken from the nearest step, a tie the later, or `None` if that step was never
-        recorded. Raises `TypeError` for a `time` that is not a `GameTime`, and `ValueError` for one not finite,
-        such as `GameTime.INFINITE`."""
-        step = _nearest_step_of(time, "time")
-        if self._start is None:
-            return None
-        index = step - self._start
-        if not 0 <= index < self._size:
-            return None
-        return self._buffer.item(index)
+    @overload
+    def __call__(self, time: GameTime, /) -> T: ...
+
+    @overload
+    def __call__[D](self, time: GameTime, /, *, default: D) -> T | D: ...
+
+    @overload
+    def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: float = ...) -> ndarray: ...
+
+    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /, *, default: object = NO_DEFAULT) -> object:
+        """The value at `time`, or an array of the values at each of many, a sequence of `GameTime`s or an array of
+        steps, in its shape; each read at its step, or the step before a time between two.
+
+        A step never recorded raises `IndexError`, or reads `default` where one is given: any value for one time,
+        `None` among them, and a number for many, each step not recorded reading it. The array is of the series's
+        type, or of what numpy makes of it and a default it reads. Raises `TypeError` as a `TimeDependent` does, and
+        `ValueError` for a time not finite, such as `GameTime.INFINITE`. @public"""
+        if not isinstance(time, GameTime):
+            return self._values_at_steps(steps_of_many_times(time), default_of_many_times(default))
+        step = _step_reached_at(time, "time")
+        if self._start is not None and 0 <= step - self._start < self._size:
+            return self._buffer.item(step - self._start)
+        if default is NO_DEFAULT:
+            raise self._step_not_recorded_error(step)
+        return default
+
+    def _values_at_steps(self, steps: ndarray, default: float | None) -> ndarray:
+        """The value at each of `steps`, or the step before one between two, a step never recorded reading `default`
+        or raising `IndexError` where that is `None`; raises `ValueError` for a step not finite."""
+        if not numpy.isfinite(steps).all():
+            raise ValueError("a time not finite has no step, so a series has no value at it")
+        steps_reached = numpy.floor(steps).astype(numpy.intp)
+        indices = steps_reached - (self._start or 0)
+        recorded = (indices >= 0) & (indices < self._size)
+        if recorded.all():
+            return self._buffer[indices]
+        if default is None:
+            raise self._step_not_recorded_error(steps_reached[~recorded].item(0))
+        return numpy.where(recorded, self._buffer[numpy.where(recorded, indices, 0)], default)
 
     def _index(self, step: int) -> int:
         """The buffer position of a recorded step."""
+        if self._start is None or not 0 <= step - self._start < self._size:
+            raise self._step_not_recorded_error(step)
+        return step - self._start
+
+    def _step_not_recorded_error(self, step: int) -> IndexError:
+        """The error for reading `step`, which the series never recorded."""
         if self._start is None:
-            raise IndexError(f"step {step} is outside an empty series")
-        index = step - self._start
-        if not 0 <= index < self._size:
-            raise IndexError(f"step {step} outside the recorded range {self._start}-{self._last_step}")
-        return index
+            return IndexError(f"step {step} is outside an empty series")
+        return IndexError(f"step {step} outside the recorded range {self._start}-{self._last_step}")
 
     def _slice(self, item: slice) -> tuple[slice, int | None]:
         """A range of times as a range of buffer positions, none in an empty series, and the step it starts at, or
         `None` from the start."""
         if item.step is not None:
             raise NotImplementedError("TimeSeries does not support strided slicing")
-        start_step = None if item.start is None else _nearest_step_of(item.start, "a slice's start")
-        stop_step = None if item.stop is None else _nearest_step_of(item.stop, "a slice's stop")
+        start_step = None if item.start is None else _step_reached_at(item.start, "a slice's start")
+        stop_step = None if item.stop is None else _step_reached_at(item.stop, "a slice's stop")
         if self._start is None:
             return slice(0, 0), start_step
         start = 0 if start_step is None else start_step - self._start
@@ -204,10 +239,10 @@ class TimeSeries[T: float]:
     def __getitem__(self, item: slice) -> TimeSeries[T]: ...
 
     def __getitem__(self, item: GameTime | slice) -> T | TimeSeries[T]:
-        """The value at a time, or a copy of the series over a range of times, each read at the nearest step, a tie
-        the later. Raises `IndexError` for a step not recorded, or a range that begins before the first;
-        `TypeError` for anything but a `GameTime` or a slice of them; and `ValueError` for a time not finite, such as
-        `GameTime.INFINITE`."""
+        """The value at a time, or a copy of the series over a range of times, from its start up to its end and
+        without it, each read at its step, or the step before a time between two. Raises `IndexError` for a step not
+        recorded, or a range that begins before the first; `TypeError` for anything but a `GameTime` or a slice of
+        them; and `ValueError` for a time not finite, such as `GameTime.INFINITE`."""
         if isinstance(item, slice):
             positions, start_step = self._slice(item)
             values = self.values[positions]
@@ -215,13 +250,13 @@ class TimeSeries[T: float]:
                 return self._empty_like()
             start = self._start if start_step is None else start_step
             return TimeSeries._from_steps(values.copy(), start, len(values))
-        return self._buffer.item(self._index(_nearest_step_of(item, "an index")))
+        return self._buffer.item(self._index(_step_reached_at(item, "an index")))
 
     def __setitem__(self, item: GameTime | slice, value: T | ndarray) -> None:
         if isinstance(item, slice):
             self.values[self._slice(item)[0]] = value
         else:
-            self.values[self._index(_nearest_step_of(item, "an index"))] = value
+            self.values[self._index(_step_reached_at(item, "an index"))] = value
 
     def min(self) -> T:
         """The smallest recorded value."""
@@ -244,13 +279,13 @@ class TimeSeries[T: float]:
         return self.values.std().item()
 
     def derivative_at(self, time: GameTime, *, window: GameTime = GameTime(steps=100)) -> float | None:
-        """The rate of change per second over the `window` ending at `time`, each rounded to the nearest whole step, a
-        tie up.
+        """The rate of change per second over the `window` ending at `time`: `time` read at its step, or the step
+        before a time between two, and `window` rounded to the nearest whole step, a tie up.
 
         `None` if the series does not cover the whole range. Raises `TypeError` for a `time` or a `window` that is not
         a `GameTime`, and `ValueError` for a window under one step once rounded, or either not finite.
         """
-        step = _nearest_step_of(time, "time")
+        step = _step_reached_at(time, "time")
         check_game_time(window, "window")
         window_steps = window.nearest_step
         if window_steps <= 0:
@@ -344,11 +379,14 @@ def _whole_step_of(time: GameTime, argument_name: str) -> int:
     return int(time.steps)
 
 
-def _nearest_step_of(time: GameTime, argument_name: str) -> int:
-    """The step nearest `time`, given as `argument_name`, a tie the later: raises `TypeError` for anything but a
-    `GameTime`, and `ValueError` for one not finite."""
+def _step_reached_at(time: GameTime, argument_name: str) -> int:
+    """The step the game has reached at `time`, given as `argument_name`: its own, or the step before a time between
+    two. Raises `TypeError` for anything but a `GameTime`, and `ValueError` for one not finite."""
     check_game_time(time, argument_name)
-    return time.nearest_step
+    try:
+        return math.floor(time.steps)
+    except (OverflowError, ValueError):
+        raise ValueError(f"{time!r} is not finite, so it has no step") from None
 
 
 # The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every call. They

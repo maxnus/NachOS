@@ -392,8 +392,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      which also settles `needs_power` before 1.0.
   3. `protoss_demo_bot.py`: probes, pylons, gateways and a cybernetics core, zealots and stalkers trained at gateways
      with no Warp Gate research, and chrono boost on the nexus.
-- **A value that depends on the game time is a `TimeDependent`**, planned with the owner 2026-11-24 and not built, after
-  the planner's loss rate (#239) raised it (the owner: "Maybe we need to have a think about how we make TimeSeries
+- **A value that depends on the game time is a `TimeDependent`**, planned with the owner 2026-11-24, after the planner's
+  loss rate (#239) raised it (the owner: "Maybe we need to have a think about how we make TimeSeries
   better in a separate session then, so that this can become the standard way of expressing time dependence. For example
   we could introduce a protocol (similar to what we did with Field) and have multiple implementation, one via a dense
   array (as it is now), one as interpolated points and one as a callable."). Each point below is his choice of that day:
@@ -449,13 +449,20 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     `count_factor` stay `Callable[[GameTime], float] | None`, read once an interval, which a curve or a series passes
     as.
 
-  Proposed for the build and not yet agreed: many times are a sequence of `GameTime`s or a numpy array of steps, as a
-  field's `values_at` takes points or an array of them; a curve reads the time as given, and a function is handed it;
-  `__call__`'s docstring says `@public`, without which pdoc leaves a name with a leading underscore out of the API
-  reference; the four names and `Interpolation` are exported from
-  `sc2nachos.gametime`; one test probes all three kinds; and a short page in `docs/`, where nothing mentions
-  `TimeSeries` today. Two steps: the protocol and its three kinds in a pull request on `main`, then the planner's loss
-  rate as commits on #239.
+  - **Smaller points of the build** ("OK build it", to these as proposed): many times are a sequence of `GameTime`s or
+    a numpy array of steps, as a field's `values_at` takes points or an array of them; a curve reads the time as
+    given, and a function is handed it; `__call__`'s docstring says `@public`, without which pdoc leaves a name with a
+    leading underscore out of the API reference, where the word then shows only in the source it prints; one test
+    probes all three kinds, `test_time_dependent.py`; and `docs/time-dependent-values.md`.
+
+  Two steps:
+  1. Built on `claude/time-series-protocol-0f2e8c`: the protocol and its three kinds, in `sc2nachos.gametime` with
+     `Interpolation`. A bot changes `series.at(time)` to `series(time, default=None)`, `start_time` to `start` and
+     `last_time` to `end`, and about half its reads of a series between two steps move a step earlier: for the
+     release's notes. Not decided, and built the plainest way: a curve refuses a value not finite; a default is checked
+     for many times of a curve and a function too, which never read it; `GameTime` has no public lower step, the
+     series flooring its `steps`.
+  2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
      `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
