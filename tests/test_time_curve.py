@@ -127,6 +127,8 @@ class TestMaking:
 
     def test_iterating_hands_out_its_times_and_values(self, rising_losses):
         assert list(rising_losses) == [(GameTime(seconds=300), 0.0), (GameTime(seconds=360), 0.004)]
+        whole_step = GameTime(steps=300)
+        assert next(iter(TimeCurve([(whole_step, 1)])))[0] is whole_step
         longer = TimeCurve([*rising_losses, (GameTime(seconds=420), 0.0)])
         assert longer(GameTime(seconds=390)) == pytest.approx(0.002)
 
@@ -142,6 +144,24 @@ class TestMaking:
             repr(rising_losses) == f"TimeCurve([({GameTime(seconds=300)!r}, 0.0), ({GameTime(seconds=360)!r}, 0.004)])"
         )
         assert repr(losses_from_five_minutes).endswith("interpolation=Interpolation.STEP)")
+
+    def test_repr_shows_its_times_as_given(self):
+        assert repr(TimeCurve([(GameTime(steps=300), 1)])) == "TimeCurve([(GameTime(steps=300), 1.0)])"
+
+    @pytest.mark.parametrize(
+        "no_pairs",
+        [{GameTime(steps=0): 0.0}, [GameTime(steps=0)], [(GameTime(steps=0), 0.0, 1.0)], [(GameTime(steps=0),)], [7]],
+    )
+    def test_anything_but_pairs_raises(self, no_pairs):
+        """A mapping of times to values raised `cannot unpack non-iterable GameTime object`."""
+        with pytest.raises(TypeError, match="a curve is made of pairs of a GameTime and a value"):
+            TimeCurve(no_pairs)
+
+    def test_a_value_further_from_the_one_before_than_a_float_holds_raises(self):
+        """The line between them had an infinite slope, which read NaN at the first of the two times."""
+        with pytest.raises(ValueError, match="within a float of the one before"):
+            TimeCurve([(GameTime(steps=0), 1e308), (GameTime(steps=10), -1e308)])
+        assert TimeCurve([(GameTime(steps=0), 8e307), (GameTime(steps=10), -8e307)])(GameTime(steps=0)) == 8e307
 
     def test_no_value_raises(self):
         with pytest.raises(ValueError, match="at least one value"):

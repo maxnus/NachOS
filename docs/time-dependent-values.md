@@ -10,7 +10,7 @@ A value that changes as the game goes on, such as a supply recorded each step or
 ## Reading one
 
 A `TimeDependent` is called with a `GameTime` and gives the value at that time. Called with many times, it gives a
-numpy array of the values at them, which is far quicker than a call a time:
+numpy array of the values at them, which for a series or a curve is far quicker than a call a time:
 
 ```python
 import numpy

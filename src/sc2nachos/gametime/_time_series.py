@@ -196,14 +196,15 @@ class TimeSeries[T: float]:
         or raising `IndexError` where that is `None`; raises `ValueError` for a step not finite."""
         if not numpy.isfinite(steps).all():
             raise ValueError("a time not finite has no step, so a series has no value at it")
-        steps_reached = numpy.floor(steps).astype(numpy.intp)
-        indices = steps_reached - (self._start or 0)
-        recorded = (indices >= 0) & (indices < self._size)
+        # Compared as floats, since a step past what an integer holds has no index to compare.
+        steps_from_start = numpy.floor(steps) - (self._start or 0)
+        recorded = (steps_from_start >= 0) & (steps_from_start < self._size)
         if recorded.all():
-            return self._buffer[indices]
+            return numpy.asarray(self._buffer[steps_from_start.astype(numpy.intp)])
         if default is None:
-            raise self._step_not_recorded_error(steps_reached[~recorded].item(0))
-        return numpy.where(recorded, self._buffer[numpy.where(recorded, indices, 0)], default)
+            raise self._step_not_recorded_error(math.floor(steps[~recorded].item(0)))
+        indices = numpy.where(recorded, steps_from_start, 0).astype(numpy.intp)
+        return numpy.where(recorded, self._buffer[indices], default)
 
     def _index(self, step: int) -> int:
         """The buffer position of a recorded step."""

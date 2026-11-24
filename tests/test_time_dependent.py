@@ -67,6 +67,12 @@ class TestManyTimes:
         values = its_step(numpy.array([[0, 1, 2], [7, 8, 9]]))
         assert values.tolist() == [[0.0, 1.0, 2.0], [7.0, 8.0, 9.0]]
 
+    def test_an_array_with_no_dimension_gives_one_too(self, its_step):
+        """A series and a curve gave a numpy number there, and a function an array."""
+        value = its_step(numpy.array(4))
+        assert isinstance(value, numpy.ndarray)
+        assert (value.shape, value.item()) == ((), 4.0)
+
     def test_no_times_give_no_values(self, its_step):
         assert its_step([]).shape == (0,)
         assert its_step(numpy.zeros((0, 3))).shape == (0, 3)

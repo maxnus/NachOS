@@ -325,6 +325,12 @@ class TestCall:
         assert gaps_marked[1] == 4.0
         assert TimeSeries.empty(float)(numpy.array([3, 4]), default=1.0).tolist() == [1.0, 1.0]
 
+    def test_many_times_with_a_step_past_any_integer_name_it(self, ramp):
+        """It was cast to an integer, which numpy warned of, and the error named the smallest integer."""
+        with pytest.raises(IndexError, match=f"step {math.floor(1e300)} outside the recorded range 0-9"):
+            ramp(numpy.array([3.0, 1e300]))
+        assert ramp(numpy.array([-1e300, 3.0, 1e300]), default=-1.0).tolist() == [-1.0, 3.0, -1.0]
+
     def test_many_times_ignore_the_unwritten_buffer(self):
         series = TimeSeries.empty(float, initial_size=16)
         series.append(GameTime(steps=0), 1.0)

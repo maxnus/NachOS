@@ -456,10 +456,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     probes all three kinds, `test_time_dependent.py`; and `docs/time-dependent-values.md`.
 
   Two steps:
-  1. Built on `claude/time-series-protocol-0f2e8c`: the protocol and its three kinds, in `sc2nachos.gametime` with
-     `Interpolation`. A bot changes `series.at(time)` to `series(time, default=None)`, `start_time` to `start` and
-     `last_time` to `end`, and about half its reads of a series between two steps move a step earlier: for the
-     release's notes. Not decided, and built the plainest way: a curve refuses a value not finite; a default is checked
+  1. Done in #261: the protocol and its three kinds, in `sc2nachos.gametime` with `Interpolation`. A bot changes
+     `series.at(time)` to `series(time, default=None)`, `start_time` to `start` and `last_time` to `end`, and about
+     half its reads of a series between two steps move a step earlier: for the release's notes. Not decided, and built
+     the plainest way: a curve refuses a value not finite, or further from the one before it than a float holds; many
+     times given as an array with no dimension still give an array; a default is checked
      for many times of a curve and a function too, which never read it; `GameTime` has no public lower step, the
      series flooring its `steps`.
   2. The planner's loss rate, as commits on #239 once step 1 is on `main`.

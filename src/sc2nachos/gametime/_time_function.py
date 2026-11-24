@@ -65,7 +65,7 @@ class TimeFunction[T: float]:
         default_of_many_times(default)
         if isinstance(time, numpy.ndarray):
             check_array_holds_steps(time)
-            values = [self._function(GameTime(steps=step)) for step in time.ravel().tolist()]
+            values = [self._function(GameTime._from_steps(step)) for step in time.ravel().tolist()]
             return numpy.array(values).reshape(time.shape)
         return numpy.array([self._function(time_given) for time_given in game_times_of_sequence(time)])
 

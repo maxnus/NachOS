@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import numbers
 from enum import Enum
 from typing import TYPE_CHECKING, Final, Protocol, cast, overload
 
 import numpy
 
-from sc2nachos.gametime._game_time import GameTime, check_game_time
+from sc2nachos.gametime._game_time import _SCALAR_TYPES, GameTime, check_game_time
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -93,7 +92,7 @@ def default_of_many_times(default: object) -> float | None:
     """`default`, given with many times, or `None` where none was given: raises `TypeError` unless it is a number."""
     if default is NO_DEFAULT:
         return None
-    if not isinstance(default, numbers.Real):
+    if not isinstance(default, _SCALAR_TYPES):
         raise TypeError(
             f"the default of many times is a number, which an array can hold, not {default!r}; "
             "math.nan marks a time not covered"

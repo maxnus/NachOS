@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import math
-import numbers
 from bisect import bisect_right
 from typing import TYPE_CHECKING, final, overload
 
 import numpy
 
-from sc2nachos.gametime._game_time import GameTime, check_game_time
+from sc2nachos.gametime._game_time import _SCALAR_TYPES, GameTime, check_game_time
 from sc2nachos.gametime._interpolation import Interpolation
 from sc2nachos.gametime._time_dependent import NO_DEFAULT, default_of_many_times, steps_of_many_times
 
@@ -32,9 +31,12 @@ class TimeCurve:
     and iterating over it hands out each time with its value, in order.
     """
 
-    __slots__ = ("_interpolation", "_step_array", "_steps", "_value_array", "_values")
+    __slots__ = ("_interpolation", "_step_array", "_steps", "_times", "_value_array", "_values")
 
     _interpolation: Interpolation
+    _times: list[GameTime]
+    # A read of one time goes through these lists, which is several times quicker than numpy for one value, and a read
+    # of many through the arrays below.
     _steps: list[float]
     _values: list[float]
     _step_array: ndarray
@@ -44,17 +46,20 @@ class TimeCurve:
         self, time_value_pairs: Iterable[tuple[GameTime, float]], *, interpolation: Interpolation = Interpolation.LINEAR
     ) -> None:
         """A curve through `time_value_pairs`, each a game time and the value at it, in order of time. Raises
-        `TypeError` for a time that is not a `GameTime`, a value that is not a number, or an `interpolation` that is
-        not an `Interpolation`; and `ValueError` for no pair, a time or a value not finite, or a time not after the
-        one before it."""
+        `TypeError` for anything but pairs, a time that is not a `GameTime`, a value that is not a number, or an
+        `interpolation` that is not an `Interpolation`; and `ValueError` for no pair, a time or a value not finite, a
+        time not after the one before it, or a value further from the one before it than a float holds."""
         if not isinstance(interpolation, Interpolation):
             raise TypeError(f"interpolation is an Interpolation, not {interpolation!r}")
         self._interpolation = interpolation
+        self._times = []
         self._steps = []
         self._values = []
-        for time, value in time_value_pairs:
+        for time_value_pair in time_value_pairs:
+            time, value = _time_and_value_of(time_value_pair)
             self._steps.append(_finite_step_after(time, self._steps))
-            self._values.append(_finite_value_of(value, time))
+            self._values.append(_finite_value_after(value, time, self._values))
+            self._times.append(time)
         if not self._steps:
             raise ValueError("a time curve needs at least one value")
         self._step_array = numpy.array(self._steps, dtype=float)
@@ -70,8 +75,7 @@ class TimeCurve:
 
     def __iter__(self) -> Iterator[tuple[GameTime, float]]:
         """Each of its times with the value at it, in order."""
-        for step, value in zip(self._steps, self._values, strict=True):
-            yield GameTime(steps=step), value
+        yield from zip(self._times, self._values, strict=True)
 
     @overload
     def __call__(self, time: GameTime, /) -> float: ...
@@ -108,14 +112,24 @@ class TimeCurve:
             raise ValueError("a time of NaN steps is no time, so a curve has no value at it")
         if self._interpolation is Interpolation.STEP:
             pairs_reached = numpy.searchsorted(self._step_array, steps, side="right")
-            return self._value_array[numpy.maximum(pairs_reached - 1, 0)]
-        return numpy.interp(steps, self._step_array, self._value_array)
+            return numpy.asarray(self._value_array[numpy.maximum(pairs_reached - 1, 0)])
+        return numpy.asarray(numpy.interp(steps, self._step_array, self._value_array))
 
     def __repr__(self) -> str:
         pairs = ", ".join(f"({time!r}, {value!r})" for time, value in self)
         if self._interpolation is Interpolation.LINEAR:
             return f"{type(self).__name__}([{pairs}])"
         return f"{type(self).__name__}([{pairs}], interpolation={self._interpolation})"
+
+
+def _time_and_value_of(time_value_pair: tuple[GameTime, float]) -> tuple[GameTime, float]:
+    """The time and the value of `time_value_pair`, one of those a curve is made of: raises `TypeError` for anything
+    but a pair, such as a time alone, which a mapping of times to values hands over."""
+    try:
+        time, value = time_value_pair
+    except (TypeError, ValueError):
+        raise TypeError(f"a curve is made of pairs of a GameTime and a value, not {time_value_pair!r}") from None
+    return time, value
 
 
 def _finite_step_after(time: GameTime, steps_before: list[float]) -> float:
@@ -130,11 +144,14 @@ def _finite_step_after(time: GameTime, steps_before: list[float]) -> float:
     return step
 
 
-def _finite_value_of(value: float, time: GameTime) -> float:
-    """`value`, a curve's at `time`, as a float: raises `TypeError` for anything but a number, and `ValueError` for
-    one not finite."""
-    if not isinstance(value, numbers.Real):
+def _finite_value_after(value: float, time: GameTime, values_before: list[float]) -> float:
+    """`value`, a curve's at `time` and its next after `values_before`, as a float: raises `TypeError` for anything
+    but a number, and `ValueError` for one not finite, or further from the last of them than a float holds, between
+    which no line has a slope."""
+    if not isinstance(value, _SCALAR_TYPES):
         raise TypeError(f"a curve's value is a number, not {value!r} at {time!r}")
     if not math.isfinite(value):
         raise ValueError(f"a curve's value is finite, not {value!r} at {time!r}")
+    if values_before and not math.isfinite(value - values_before[-1]):
+        raise ValueError(f"a curve's value lies within a float of the one before, not {value!r} at {time!r}")
     return float(value)
