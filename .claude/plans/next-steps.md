@@ -418,6 +418,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     `TypeError` for `None`, which an array of numbers cannot hold. `TimeSeries.at` is removed ("A"), being
     `series(time, default=None)`, which breaks a bot's `series.at(time)`. Over an `outside` value held by the series,
     as `Grid.with_outside` has, which every copy, slice and sum would carry.
+  - **A recorded series keeps its indexing** ("Ok let's go with A"): `series[time]`, the one read the call also gives,
+    a range as a new `TimeSeries`, and its writes. Over removing `series[time]`, which would leave a container written
+    by index and not read by it. Its `start_time` becomes `start`, the constructor's argument too ("Btw the property
+    should be just `start` not `start_time`"), which breaks a bot reading it.
   - **A `TimeCurve` holds its first value before its first time and its last after its last** ("A"), so it covers every
     time. Over not covered there: the default is the reader's, and a curve handed to the planner is read by the planner.
     It is pairs of a `GameTime` and a value, the times strictly rising, floats, not changed once made.
