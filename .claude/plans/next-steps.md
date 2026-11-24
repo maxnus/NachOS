@@ -421,7 +421,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   - **A recorded series keeps its indexing** ("Ok let's go with A"): `series[time]`, the one read the call also gives,
     a range as a new `TimeSeries`, and its writes. Over removing `series[time]`, which would leave a container written
     by index and not read by it. Its `start_time` becomes `start`, the constructor's argument too ("Btw the property
-    should be just `start` not `start_time`"), which breaks a bot reading it.
+    should be just `start` not `start_time`"), and its `last_time` becomes `end`, still the time of the last value
+    recorded ("Having start and last_time is a bit asymmetric  I think", then "A"), which a range leaves out as a slice
+    leaves out its end. Over an `end` a step after the last value, where `series(series.end)` would raise, and over
+    `first_time` and `last_time`. Both renames break a bot reading them.
   - **A recorded series reads a time between two steps at the lower step** ("I think for a series, a time between two
     steps should either use the lower one or raise.", then "A"), where it read the nearest: the value as of that time,
     each held from its step until the next, as a curve's `STEP` holds one. In the call, `series[time]`, both ends of a
@@ -448,8 +451,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
   Proposed for the build and not yet agreed: many times are a sequence of `GameTime`s or a numpy array of steps, as a
   field's `values_at` takes points or an array of them; a curve reads the time as given, and a function is handed it;
-  `__call__`'s docstring says `@public`, without which pdoc leaves a
-  name with a leading underscore out of the API reference; the four names and `Interpolation` are exported from
+  `__call__`'s docstring says `@public`, without which pdoc leaves a name with a leading underscore out of the API
+  reference; the four names and `Interpolation` are exported from
   `sc2nachos.gametime`; one test probes all three kinds; and a short page in `docs/`, where nothing mentions
   `TimeSeries` today. Two steps: the protocol and its three kinds in a pull request on `main`, then the planner's loss
   rate as commits on #239.
