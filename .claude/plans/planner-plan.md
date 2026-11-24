@@ -778,6 +778,19 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     and 30% lost within a second at 120, are proven in 1.8 to 3.9 s, where numbers take 3.2 to 4.4 and no losses 2.1 to
     4.4.
 
+    A `TimeSeries` as a rate was weighed and is not built (the owner, 2026-11-24: "Actually, we have a class to
+    represent a time dependent value in NachOS: the TimeSeries. Should we not utilise this more, e.g. for the time
+    dependent loss rate?", and then: "Maybe we need to have a think about how we make TimeSeries better in a separate
+    session then, so that this can become the standard way of expressing time dependence. For example we could introduce
+    a protocol (similar to what we did with Field) and have multiple implementation, one via a dense array (as it is
+    now), one as interpolated points and one as a callable."). As it is, a series holds a value a game step over the
+    range it has and none outside it, so a rule about the game to come, which a function gives in a line, takes a value
+    for each step to the horizon; and its `at` passes as the function only where the series covers the plan, giving
+    `None` elsewhere, which pyright refuses and the program raises a bare `TypeError` for. Reading the 6720 steps of 300
+    seconds takes 1.2 ms through `at`, 1.1 through a function and 0.002 as a slice, so speed decides nothing. The
+    planner keeps a number or a function until that design is settled; then `loss_rates` and a term's `time_factor` and
+    `count_factor` take what it gives, which a function still passes as if the design keeps one.
+
 ## Risks
 
 - **Solve time on the full model.** A time limit with the incumbent, the old plan kept when nothing feasible comes
