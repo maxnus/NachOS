@@ -422,6 +422,12 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     a range as a new `TimeSeries`, and its writes. Over removing `series[time]`, which would leave a container written
     by index and not read by it. Its `start_time` becomes `start`, the constructor's argument too ("Btw the property
     should be just `start` not `start_time`"), which breaks a bot reading it.
+  - **A recorded series reads a time between two steps at the lower step** ("I think for a series, a time between two
+    steps should either use the lower one or raise.", then "A"), where it read the nearest: the value as of that time,
+    each held from its step until the next, as a curve's `STEP` holds one. In the call, `series[time]`, both ends of a
+    range and `derivative_at`'s time. Over raising, which a read a second back, 22.4 steps, would always meet. `append`
+    still raises for a time between steps, and a length, a filter's size or a window, still rounds to the nearest. No
+    bot's code breaks, and about half its reads between steps move a step earlier.
   - **A `TimeCurve` holds its first value before its first time and its last after its last** ("A"), so it covers every
     time. Over not covered there: the default is the reader's, and a curve handed to the planner is read by the planner.
     It is pairs of a `GameTime` and a value, the times strictly rising, floats, not changed once made.
@@ -441,8 +447,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     as.
 
   Proposed for the build and not yet agreed: many times are a sequence of `GameTime`s or a numpy array of steps, as a
-  field's `values_at` takes points or an array of them; a recorded series reads the nearest step, as it does, a curve
-  the time as given, and a function is handed it; `__call__`'s docstring says `@public`, without which pdoc leaves a
+  field's `values_at` takes points or an array of them; a curve reads the time as given, and a function is handed it;
+  `__call__`'s docstring says `@public`, without which pdoc leaves a
   name with a leading underscore out of the API reference; the four names and `Interpolation` are exported from
   `sc2nachos.gametime`; one test probes all three kinds; and a short page in `docs/`, where nothing mentions
   `TimeSeries` today. Two steps: the protocol and its three kinds in a pull request on `main`, then the planner's loss
