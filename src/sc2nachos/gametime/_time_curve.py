@@ -20,10 +20,6 @@ if TYPE_CHECKING:
     from sc2nachos._shared.supports_vector_arithmetic import SupportsVectorArithmetic
 
 
-# What a value that is no number has to do for a curve to read between two of them: a `SupportsVectorArithmetic`'s.
-_OPERATIONS_OF_A_VALUE = ("__add__", "__sub__", "__mul__")
-
-
 @final
 class TimeCurve[T]:
     """A `TimeDependent` made of a few values, each given at a game time, such as a rate of losses that rises from
@@ -212,7 +208,8 @@ def _value_after(value: Any, time: GameTime, values_before: list[Any]) -> Any:
         )
     if is_number(value):
         return _finite_number_after(value, time, values_before)
-    if not all(hasattr(type(value), operation) for operation in _OPERATIONS_OF_A_VALUE):
+    # The three operations of a `SupportsVectorArithmetic`, by which a curve reads between two of its values.
+    if not all(hasattr(type(value), operation) for operation in ("__add__", "__sub__", "__mul__")):
         raise TypeError(
             f"a curve's value is a number, or adds, subtracts and multiplies by one, not {value!r} at {time!r}"
         )
