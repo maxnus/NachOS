@@ -139,14 +139,30 @@ class TestMaking:
         assert len(curve) == 2
         assert curve(GameTime(steps=20)) == 10.0
 
-    def test_repr_shows_its_pairs_and_any_other_interpolation(self, rising_losses, losses_from_five_minutes):
-        assert (
-            repr(rising_losses) == f"TimeCurve([({GameTime(seconds=300)!r}, 0.0), ({GameTime(seconds=360)!r}, 0.004)])"
+    def test_repr_shows_its_pairs_and_its_interpolation(self, rising_losses, losses_from_five_minutes):
+        """The owner, review of #261: a linear curve says so too."""
+        assert repr(rising_losses) == (
+            f"TimeCurve([({GameTime(seconds=300)!r}, 0.0), ({GameTime(seconds=360)!r}, 0.004)],"
+            " interpolation=Interpolation.LINEAR)"
         )
         assert repr(losses_from_five_minutes).endswith("interpolation=Interpolation.STEP)")
 
     def test_repr_shows_its_times_as_given(self):
-        assert repr(TimeCurve([(GameTime(steps=300), 1)])) == "TimeCurve([(GameTime(steps=300), 1.0)])"
+        assert repr(TimeCurve([(GameTime(steps=300), 1)])).startswith("TimeCurve([(GameTime(steps=300), 1.0)],")
+
+    def test_repr_shows_six_pairs_whole(self):
+        curve = TimeCurve([(GameTime(steps=step), float(step)) for step in range(6)])
+        assert "..." not in repr(curve)
+        assert repr(curve).count("GameTime") == 6
+
+    def test_repr_of_more_pairs_shows_the_first_five_and_the_last(self):
+        """The owner, review of #261: a curve of a value a step is not printed whole."""
+        curve = TimeCurve([(GameTime(steps=step), float(step)) for step in range(6720)])
+        assert repr(curve) == (
+            "TimeCurve([(GameTime(steps=0), 0.0), (GameTime(steps=1), 1.0), (GameTime(steps=2), 2.0),"
+            " (GameTime(steps=3), 3.0), (GameTime(steps=4), 4.0), ..., (GameTime(steps=6719), 6719.0)],"
+            " interpolation=Interpolation.LINEAR)"
+        )
 
     @pytest.mark.parametrize(
         "no_pairs",

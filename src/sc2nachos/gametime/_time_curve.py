@@ -18,6 +18,11 @@ if TYPE_CHECKING:
     from numpy import ndarray
 
 
+# A curve of a value a step would fill a screen with its repr, so one of more pairs shows all but one of this many
+# from its start, then "..." and its last.
+_MOST_PAIRS_A_REPR_SHOWS = 6
+
+
 @final
 class TimeCurve:
     """A `TimeDependent` of floats made of a few values, each given at a game time, such as a rate of losses that
@@ -116,10 +121,14 @@ class TimeCurve:
         return numpy.asarray(numpy.interp(steps, self._step_array, self._value_array))
 
     def __repr__(self) -> str:
-        pairs = ", ".join(f"({time!r}, {value!r})" for time, value in self)
-        if self._interpolation is Interpolation.LINEAR:
-            return f"{type(self).__name__}([{pairs}])"
-        return f"{type(self).__name__}([{pairs}], interpolation={self._interpolation})"
+        """Its pairs and its interpolation; of more pairs than `_MOST_PAIRS_A_REPR_SHOWS`, the first ones, `...` and
+        the last."""
+        pairs = list(self)
+        if len(pairs) > _MOST_PAIRS_A_REPR_SHOWS:
+            pairs_shown = [*map(repr, pairs[: _MOST_PAIRS_A_REPR_SHOWS - 1]), "...", repr(pairs[-1])]
+        else:
+            pairs_shown = [*map(repr, pairs)]
+        return f"{type(self).__name__}([{', '.join(pairs_shown)}], interpolation={self._interpolation})"
 
 
 def _time_and_value_of(time_value_pair: tuple[GameTime, float]) -> tuple[GameTime, float]:
