@@ -255,10 +255,10 @@ class ThreatMap:
   later or come at once, a `TimeCurve`, a `TimeSeries` that covers the plan, or a function in a `TimeFunction`, which a
   plan reads at each game step of its horizon, and which passes as a term's `time_factor` too. A plan makes nothing that
   pays back only past its horizon: over 5 minutes from a game's start, a reward on army units alone takes no expansion,
-  and one that also values SCVs, or command centers, takes it. A longer horizon weighs such things itself and solves
-  slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit counts as
-  one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat as a
-  hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
+  and one that also values SCVs, or command centers, takes one it is handed. A longer horizon weighs such things itself
+  and solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit
+  counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat
+  as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
   Everything else a plan rests on is the bot's to read and change. `planner.state()` returns the `PlannerState`
   `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and when
@@ -266,16 +266,19 @@ class ThreatMap:
   collecting vespene and free geysers at its bases, pooled, since the planner never knows which base a worker is at.
   `plan_now(state=...)` plans from one the bot changed instead. `plan_now(economy=...)` takes an `EconomyModel`: what
   each worker at a field or a refinery brings in a second, a list from the first worker on, what each orbital command's
-  MULEs mine, what a new command center brings, how long an SCV walks to build each structure, and how long a worker
-  that starts to mine or to collect brings in nothing. Its defaults are the rates measured speed mining, with two
-  workers a field and three a refinery, the third collecting about half of what each of the first two does, a walk of 10
-  seconds to a command center and 6 to anything else, and 3 seconds before a worker's first income.
-  `plan_now(start_limits=...)` takes the most a plan may start of a unit type or an upgrade, none of it for 0. A plan
-  makes only what the reward values and what that needs, with SCVs, supply depots, command centers, orbital commands,
-  refineries and add-ons, so the limits are for those the bot will not make itself, a reactor or an orbital command, and
-  for its own count of command centers, such as the expansions it means to take less those an SCV is already on its way
-  to build on, which the state holds as worker builds. A base about to fall, with no refinery yet, left out, the MULEs'
-  energy spent on scans, one expansion more and no reactor on a starport:
+  MULEs mine, how long an SCV walks to build each structure, and how long a worker that starts to mine or to collect
+  brings in nothing. Its defaults are the rates measured speed mining, with two workers a field and three a refinery,
+  the third collecting about half of what each of the first two does, a walk of 10 seconds to a command center and 6 to
+  anything else, and 3 seconds before a worker's first income. `plan_now(start_limits=...)` takes the most a plan may
+  start of a unit type or an upgrade, none of it for 0. A plan makes only what the reward values and what that needs,
+  with SCVs, supply depots, command centers, orbital commands, refineries and add-ons, so the limits are for those the
+  bot will not make itself, a reactor or an orbital command. `plan_now(expansions=...)` takes the expansions the bot
+  means to take next, from `api.expansions`, in the order it means to take them. A plan finishes at most that many more
+  command centers, the first bringing the mineral fields left and the geysers of the first expansion, and so on, and
+  with none, the default, it starts no command center. A command center going up, or one an SCV is on its way to build,
+  takes the first of the list, so its expansion stays in it until the command center is finished; with fewer expansions
+  than command centers in production `plan_now` raises `ValueError`. A base about to fall, with no refinery yet, left
+  out, the MULEs' energy spent on scans, the natural to take and no reactor on a starport:
 
   ```python
   import dataclasses
@@ -290,8 +293,14 @@ class ThreatMap:
       free_geysers=state.free_geysers - len(falling_base.geysers),
   )
   economy = EconomyModel(mule_minerals_per_orbital_second=0.0)
-  start_limits = {UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.REACTOR_STARPORT: 0}
-  plan = planner.plan_now(reward, horizon=GameTime(minutes=10), state=state, economy=economy, start_limits=start_limits)
+  plan = planner.plan_now(
+      reward,
+      horizon=GameTime(minutes=10),
+      state=state,
+      economy=economy,
+      start_limits={UnitTypeId.REACTOR_STARPORT: 0},
+      expansions=[natural],
+  )
   ```
 
   What it reads back is a `BuildPlan`: its `items`, each a `PlanItem` of a unit type or an upgrade, when it is expected

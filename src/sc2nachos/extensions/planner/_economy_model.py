@@ -1,5 +1,4 @@
-"""What the bot assumes of its economy: what its workers bring in, what a new base holds, and how far they walk to
-build."""
+"""What the bot assumes of its economy: what its workers bring in, and how far they walk to build."""
 
 from __future__ import annotations
 
@@ -33,7 +32,7 @@ _DEFAULT_WALK_TO_ANOTHER_STRUCTURE: Final = GameTime(seconds=6)
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EconomyModel:
     """What the bot assumes of its economy, which the planner plans with: what each worker mines or collects, what each
-    orbital command's MULEs mine, what a new townhall brings, and how far a worker walks to build.
+    orbital command's MULEs mine, and how far a worker walks to build.
 
     The workers are pooled: in each interval the planner splits them anew among every mineral field and gas building
     there is, as if each could work anywhere at once. So a new worker mines from when it is done, even one that has to
@@ -57,11 +56,6 @@ class EconomyModel:
     mule_minerals_per_orbital_second: float = _MULE_MINERALS_PER_ORBITAL_SECOND
     """The minerals each orbital command's MULEs mine a second, by default a MULE's 225 for each 50 energy, the game's
     stated figures; 0 for a bot that spends the energy otherwise."""
-    mineral_fields_per_new_base: int = 8
-    """The mineral fields a new townhall brings, by default a full base's, as every main and natural of the pool has
-    (corpus)."""
-    geysers_per_new_base: int = 2
-    """The geysers a new townhall brings."""
     initial_harvest_delay: GameTime = GameTime(seconds=3)
     """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
     applies to a new worker on its first walk and to a worker moved between minerals and vespene, and not to a builder
@@ -92,11 +86,6 @@ class EconomyModel:
             )
         if self.initial_harvest_delay < GameTime.ZERO:
             raise ValueError(f"initial_harvest_delay must not be negative, not {self.initial_harvest_delay}")
-        if self.mineral_fields_per_new_base < 0 or self.geysers_per_new_base < 0:
-            raise ValueError(
-                f"a new base's fields and geysers must not be negative, not {self.mineral_fields_per_new_base} and "
-                f"{self.geysers_per_new_base}"
-            )
 
 
 def rate_tiers(rates: Sequence[float]) -> tuple[tuple[int, float], ...]:

@@ -59,7 +59,7 @@ from sc2nachos.extensions.planner import (
     WeightCurve,
     WorkerBuild,
 )
-from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._plan_program import NewBase, PlanProgram
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId
@@ -70,7 +70,9 @@ _TOY_HORIZON = GameTime(minutes=10)
 # What `plan_now` plans over by default, and the cases on the planner's defaults.
 _PLANNER_HORIZON = GameTime(minutes=5)
 _CASES_ON_THE_PLANNERS_DEFAULTS = frozenset({"reference", "replans", "items"})
-_START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER: 3}
+_START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {}
+# The expansions a plan may take: three full bases.
+_NEW_BASES = (NewBase(mineral_fields=8, geysers=2),) * 3
 # The planner's default: a whole build running into an interval by less than a quarter of it leaves the interval free.
 _MAX_IGNORED_OVERRUN = 0.25
 # The planner's default: nothing starts before a whole structure granting each tech it needs is done.
@@ -387,6 +389,7 @@ def _solve_and_print(
         economy=planned_by,
         loss_rates=loss_rates,
         start_limits=_START_LIMITS,
+        new_bases=_NEW_BASES,
         fluid_after_seconds=fluid_after_seconds_of(
             items, fluid_after=fluid_after, state=planned_from, economy=planned_by
         ),

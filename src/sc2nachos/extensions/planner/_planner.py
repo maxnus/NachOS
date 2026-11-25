@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
-from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._plan_program import NewBase, PlanProgram
 from sc2nachos.extensions.planner._planner_state import PlannerState, read_planner_state
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import TimeGrid
@@ -16,7 +16,7 @@ from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Race
 
 if TYPE_CHECKING:
-    from sc2nachos import Api
+    from sc2nachos import Api, Expansion
     from sc2nachos.extensions.planner._build_plan import BuildPlan
     from sc2nachos.extensions.planner._reward import Reward
     from sc2nachos.extensions.planner._terran_model import Item
@@ -68,9 +68,11 @@ class Planner:
       order makes rather than one morphed from another, and of two, the one needing fewer techs. So a flying barracks
       counts as a barracks, and a hellbat as a hellion, which needs no armory: a plan makes hellions, and an armory
       only if the reward values one. A rich refinery counts as a refinery, which its order makes.
-    - What workers mine and collect, what each orbital command's MULEs add, what a new command center brings, and how
-      far an SCV walks to build: the `EconomyModel` handed to `plan_now`. The workers are pooled over every field and
-      refinery, as if each could work anywhere at once.
+    - What workers mine and collect, what each orbital command's MULEs add, and how far an SCV walks to build: the
+      `EconomyModel` handed to `plan_now`. The workers are pooled over every field and refinery, as if each could work
+      anywhere at once.
+    - A new command center brings the mineral fields and the geysers of the next of the `expansions` handed to
+      `plan_now`, and a plan starts none without them.
     - How many workers mine and how many collect vespene is the plan's choice in each interval, which the interval holds
       as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
       `initial_harvest_delay`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
@@ -197,6 +199,7 @@ class Planner:
         economy: EconomyModel = EconomyModel(),
         loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]] = _NO_LOSSES,
         start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
+        expansions: Sequence[Expansion] = (),
     ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing that
@@ -209,19 +212,22 @@ class Planner:
         start to its horizon by one call: none before an attack is expected, say, or a peak for a loss at once, as
         `-math.log(0.7)` for one second loses 30% of the units alive then, whatever the grid. Of a unit type or an
         upgrade in `start_limits` the plan starts at most that many, none for 0, beside what the state holds in
-        production: a reactor the bot does not build, an orbital command it does not morph, or the expansions it means
-        to take less those an SCV is already on its way to build on. A unit type's limit is that of the type it counts
-        as, the lowest of those of one type, and one on what the plan would not make anyway does nothing. It solves
-        within the planner's limits, before it returns, and returns `None` if the solver finds no plan within them,
-        which leaves `plan` the one before.
+        production: a reactor the bot does not build, or an orbital command it does not morph. A unit type's limit is
+        that of the type it counts as, the lowest of those of one type, and one on what the plan would not make anyway
+        does nothing. `expansions` are the expansions the bot means to take next, in that order, from `api.expansions`:
+        a plan finishes at most that many more command centers, the first bringing the mineral fields left and the
+        geysers of the first, and so on, and with none, the default, it starts no command center. A command center going
+        up, or one an SCV is on its way to build, takes the first of them, so its expansion stays in the list until it
+        is finished. It solves within the planner's limits, before it returns, and returns `None` if the solver finds no
+        plan within them, which leaves `plan` the one before.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
         than 0, a negative loss rate or start limit, a loss rate from a `TimeDependent` that is negative or not finite,
         a negative time from `fluid_after` or from `economy`'s `builder_walk_time`, a factor from a term's `time_factor`
-        or `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does not
-        make; `TypeError` for a loss rate that is neither a number nor gives one for each of many game steps, as a
-        function not in a `TimeFunction`; and `IndexError` from a loss rate that does not cover a step of the plan, as a
-        `TimeSeries` recorded for fewer.
+        or `count_factor` that is negative or not finite, a `state` holding a unit in production that Terran does not
+        make, or fewer `expansions` than it holds command centers in production; `TypeError` for a loss rate that is
+        neither a number nor gives one for each of many game steps, as a function not in a `TimeFunction`; and
+        `IndexError` from a loss rate that does not cover a step of the plan, as a `TimeSeries` recorded for fewer.
         """
         if any(not callable(rate) and rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
@@ -239,6 +245,10 @@ class Planner:
             economy=economy,
             loss_rates=loss_rates,
             start_limits=start_limits,
+            new_bases=[
+                NewBase(mineral_fields=len(expansion.mineral_fields.alive), geysers=len(expansion.geysers))
+                for expansion in expansions
+            ],
             fluid_after_seconds=fluid_after_seconds_of(
                 items, fluid_after=self._fluid_after, state=planned_from, economy=economy
             ),

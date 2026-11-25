@@ -31,6 +31,30 @@ _MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
 
 
 @final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NewBase:
+    """What a townhall a plan may still finish brings: the mineral fields and the geysers of the expansion it goes to.
+
+    Raises `ValueError` for a negative count.
+    """
+
+    mineral_fields: int
+    """The mineral fields it brings."""
+    geysers: int
+    """The geysers it brings, each free for a refinery."""
+
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        """Raise `ValueError` for a field that holds what the class's docstring refuses."""
+        if self.mineral_fields < 0 or self.geysers < 0:
+            raise ValueError(
+                f"a new base's fields and geysers must not be negative, not {self.mineral_fields} and {self.geysers}"
+            )
+
+
+@final
 @dataclass(frozen=True, slots=True)
 class _WorkerTier:
     """One tier of the workers at mineral fields or refineries: how many work in it in each interval, how many of them a
@@ -61,14 +85,16 @@ class PlanProgram:
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
     supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type, and a
     number or a `TimeDependent`, read at each game step and summed, so that a peak in it loses its share whatever the
-    grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type
-    it counts as, the lowest of those of one type, and a limit on no item here does nothing.
+    grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type it
+    counts as, the lowest of those of one type, and a limit on no item here does nothing. Of command centers at most as
+    many are finished as `new_bases` holds, those in production counted first, each bringing the fields and geysers of
+    the next of them.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
-    `builder_walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, and for a unit in
-    production in `state` of a type that is no item of `model`'s; `TypeError` for a loss rate that is neither a number
-    nor gives one for each of many game steps, as a function of one game time does not; and `IndexError` from a loss
-    rate that does not cover a step of the plan.
+    `builder_walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, for a unit in production
+    in `state` of a type that is no item of `model`'s, and for more command centers in production in it than `new_bases`
+    holds; `TypeError` for a loss rate that is neither a number nor gives one for each of many game steps, as a function
+    of one game time does not; and `IndexError` from a loss rate that does not cover a step of the plan.
     """
 
     __slots__ = (
@@ -88,6 +114,7 @@ class PlanProgram:
         "_minerals",
         "_mining",
         "_model",
+        "_new_bases",
         "_objective",
         "_program",
         "_reward",
@@ -116,6 +143,7 @@ class PlanProgram:
         economy: EconomyModel,
         loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]],
         start_limits: Mapping[UnitTypeId | UpgradeId, int],
+        new_bases: Sequence[NewBase],
         fluid_after_seconds: Sequence[float],
         max_ignored_overrun: float,
         unlock_fraction: float,
@@ -136,6 +164,7 @@ class PlanProgram:
             economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         )
         self._completions, self._builders_free_after = self._completions_and_builders()
+        self._new_bases = self._new_bases_checked(new_bases)
         self._edges: FloatArray = np.asarray(edges, dtype=float)
         self._widths: FloatArray = np.diff(self._edges)
         self._read_loss_rates(loss_rates)
@@ -313,17 +342,33 @@ class PlanProgram:
             working.add(tier.block, np.eye(self._interval_count))
         return working
 
+    def _new_bases_checked(self, new_bases: Sequence[NewBase]) -> tuple[NewBase, ...]:
+        """`new_bases`, the first of them for the townhalls the state has in production.
+
+        Raises `ValueError` for fewer of them than those townhalls."""
+        in_production = _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
+        if in_production > len(new_bases):
+            raise ValueError(
+                f"the state has {in_production} command centers in production, and only {len(new_bases)} expansions "
+                "to take were named: name the expansion of each townhall going up or on its way first"
+            )
+        return tuple(new_bases)
+
+    def _most_new_townhall_starts(self) -> int:
+        """The most command centers the plan may start: one for each new base no townhall in production takes."""
+        return len(self._new_bases) - _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
+
     def _most_starts_in_an_interval(self, item: Item) -> float:
         """The most of `item` that can start in one interval."""
         state = self._state
-        new_townhalls = self._start_limits.get(UnitTypeId.COMMAND_CENTER, _MOST_STARTS_IN_AN_INTERVAL)
-        townhalls_coming = new_townhalls + _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
         if item.upgrade is not None:
             most = 1.0
+        elif item.unit_type is UnitTypeId.COMMAND_CENTER:
+            most = float(self._most_new_townhall_starts())
         elif item.unit_type is UnitTypeId.REFINERY:
-            most = float(state.free_geysers + self._economy.geysers_per_new_base * townhalls_coming)
+            most = float(state.free_geysers + sum(base.geysers for base in self._new_bases))
         elif item.morphed_from is not None:
-            most = float(state.units.get(item.morphed_from, 0) + townhalls_coming)
+            most = float(state.units.get(item.morphed_from, 0) + len(self._new_bases))
         elif item.supply_used > 0:
             most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
         else:
@@ -721,9 +766,7 @@ class PlanProgram:
         """What the game's counts bound: workers at the fields and refineries there are, each tier its share of each, an
         add-on a host, a morph a townhall, an item its limit of starts, a refinery a geyser, and an upgrade once."""
         intervals = self._interval_count
-        economy = self._economy
-        new_bases = self._made_since_start(UnitTypeId.COMMAND_CENTER)
-        fields = RowExpression(intervals).add_expression(new_bases, economy.mineral_fields_per_new_base)
+        fields, geysers = self._fields_and_geysers_of_new_bases()
         fields.constant += self._state.mineral_fields
         refineries = self._made_since_start(UnitTypeId.REFINERY)
         refineries.constant += self._state.refineries_with_vespene
@@ -736,13 +779,65 @@ class PlanProgram:
             limit = None if item.made is None else self._start_limits.get(item.made)
             if limit is not None:
                 self._program.constrain(self._starts_over_the_plan(index), upper=limit)
+        if (command_center := self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)) is not None:
+            self._program.constrain(
+                self._starts_over_the_plan(command_center), upper=float(self._most_new_townhall_starts())
+            )
         if (refinery := self._index_of_unit_type.get(UnitTypeId.REFINERY)) is not None:
-            geysers = RowExpression(intervals).add_expression(new_bases, economy.geysers_per_new_base)
             geysers.constant += self._state.free_geysers
             self._constrain_at_most(self._started_so_far(refinery), geysers)
         for index, item in enumerate(self._items):
             if item.upgrade is not None:
                 self._program.constrain(self._starts_over_the_plan(index), upper=1.0)
+
+    def _fields_and_geysers_of_new_bases(self) -> tuple[RowExpression, RowExpression]:
+        """The mineral fields and the geysers that the townhalls done since the plan's start bring by each interval's
+        start, those in production and the plan's: the first done brings the first new base's, and so on.
+
+        Bases that all bring the same take no variable. Otherwise each base has a variable an interval, how much of
+        it is taken: all of them together as many as the townhalls done, and each base no more than the one before
+        it."""
+        intervals = self._interval_count
+        done = self._made_since_start(UnitTypeId.COMMAND_CENTER)
+        fields = RowExpression(intervals)
+        geysers = RowExpression(intervals)
+        bases = self._new_bases
+        if len(set(bases)) <= 1:
+            for base in bases[:1]:
+                fields.add_expression(done, base.mineral_fields)
+                geysers.add_expression(done, base.geysers)
+            return fields, geysers
+        each_interval = np.eye(intervals)
+        taken_in_all = RowExpression(intervals)
+        taken = [self._program.add_variables(intervals, upper=1.0) for _ in bases]
+        for base, taken_of_it in zip(bases, taken, strict=True):
+            fields.add(taken_of_it, each_interval * base.mineral_fields)
+            geysers.add(taken_of_it, each_interval * base.geysers)
+            taken_in_all.add(taken_of_it, each_interval)
+        self._program.constrain(taken_in_all.add_expression(done, -1.0), lower=0.0, upper=0.0)
+        for position in range(1, len(bases)):
+            self._take_a_base_after_the_one_before(bases, taken, position)
+        return fields, geysers
+
+    def _take_a_base_after_the_one_before(
+        self, bases: Sequence[NewBase], taken: Sequence[VariableBlock], position: int
+    ) -> None:
+        """Hold the base at `position` no more taken than the one before it, in each interval. Where it brings more
+        fields or geysers than the one before, the solver would rather take a share of each than the earlier whole:
+        a whole variable an interval then holds that none of it is taken before all of the one before."""
+        intervals = self._interval_count
+        each_interval = np.eye(intervals)
+        base, base_before = bases[position], bases[position - 1]
+        of_it, of_the_one_before = taken[position], taken[position - 1]
+        if base.mineral_fields <= base_before.mineral_fields and base.geysers <= base_before.geysers:
+            more_of_it = RowExpression(intervals).add(of_it, each_interval).add(of_the_one_before, -each_interval)
+            self._program.constrain(more_of_it, upper=0.0)
+            return
+        is_before_whole = self._program.add_variables(intervals, upper=1.0, integral=True)
+        any_of_it = RowExpression(intervals).add(of_it, each_interval).add(is_before_whole, -each_interval)
+        self._program.constrain(any_of_it, upper=0.0)
+        not_whole = RowExpression(intervals).add(is_before_whole, each_interval).add(of_the_one_before, -each_interval)
+        self._program.constrain(not_whole, upper=0.0)
 
     def _constrain_add_ons_and_morphs(self) -> None:
         """At most one add-on a host, those standing and those in production counted, and at most one morph a

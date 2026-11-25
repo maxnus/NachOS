@@ -4,7 +4,7 @@ off a made-up game, and the extension itself."""
 import dataclasses
 import itertools
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -31,7 +31,7 @@ from sc2nachos.extensions.planner import (
     WorkerBuild,
 )
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
-from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._plan_program import NewBase, PlanProgram
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent, TimeFunction, TimeSeries
@@ -82,6 +82,7 @@ def _best_plan(
     economy: EconomyModel = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
     loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]] | None = None,
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
+    new_bases: Sequence[NewBase] = (),
     max_ignored_overrun: float = 0.25,
     unlock_fraction: float = 1.0,
     spendable_income_fraction: float = 0.5,
@@ -98,6 +99,7 @@ def _best_plan(
         economy=economy,
         loss_rates=loss_rates or {},
         start_limits=start_limits or {},
+        new_bases=new_bases,
         fluid_after_seconds=fluid_after_seconds_of(items, fluid_after=fluid_after, state=state, economy=economy),
         max_ignored_overrun=max_ignored_overrun,
         unlock_fraction=unlock_fraction,
@@ -109,6 +111,8 @@ def _best_plan(
     return plan
 
 
+# What a townhall at a full base brings.
+_A_FULL_BASE = NewBase(mineral_fields=8, geysers=2)
 # A plan that starts one barracks, 30 seconds after it was made at the game's start.
 _A_PLAN_OF_ONE_BARRACKS = BuildPlan(
     time=GameTime.ZERO,
@@ -545,6 +549,7 @@ class TestKnownPlans:
             grid=TimeGrid.doubling(),
             fluid_after=_whole_over_any_horizon,
             economy=dataclasses.replace(_WALKING_6_SECONDS_TO_EVERY_STRUCTURE, initial_harvest_delay=GameTime.ZERO),
+            new_bases=[_A_FULL_BASE],
         )
 
         scv_seconds = GameTime(steps=272).seconds
@@ -1614,6 +1619,7 @@ class TestFluidAfter:
                 economy=EconomyModel(),
                 loss_rates={},
                 start_limits={},
+                new_bases=(),
                 fluid_after_seconds=[fluid_after.seconds] * len(items),
                 max_ignored_overrun=0.25,
                 unlock_fraction=0.0,
@@ -1733,6 +1739,7 @@ class TestUnlockFraction:
                 economy=_WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
                 loss_rates={},
                 start_limits={},
+                new_bases=(),
                 fluid_after_seconds=[
                     factory_fluid_after.seconds if item.unit_type == UnitTypeId.FACTORY else math.inf for item in items
                 ],
@@ -1756,16 +1763,12 @@ class TestEconomy:
             {"minerals_per_miner_second": (1.0, 1.1)},
             {"vespene_per_collector_second": (-0.1,)},
             {"mule_minerals_per_orbital_second": -1.0},
-            {"mineral_fields_per_new_base": -1},
-            {"geysers_per_new_base": -1},
             {"initial_harvest_delay": GameTime(seconds=-1)},
         ],
         ids=[
             "a rate above the one before",
             "a negative rate",
             "a negative MULE rate",
-            "negative fields",
-            "negative geysers",
             "a negative reassignment time",
         ],
     )
@@ -2113,6 +2116,62 @@ class TestEconomy:
             start_limits={UnitTypeId.COMMAND_CENTER: 0},
         )
         assert _start_seconds(plan, UnitTypeId.COMMAND_CENTER) == []
+
+
+class TestNewBases:
+    @pytest.mark.parametrize("base_count", [0, 1, 2])
+    def test_a_plan_starts_at_most_a_command_center_for_each_new_base(self, base_count: int) -> None:
+        """Minerals for three command centers, each worth something once done, and time for all of them."""
+        plan = _best_plan(
+            _game_start(minerals=1500.0),
+            Reward.weighted({UnitTypeId.COMMAND_CENTER: 1.0}, half_life=None),
+            horizon_seconds=100,
+            fluid_after=_whole_over_any_horizon,
+            new_bases=[_A_FULL_BASE] * base_count,
+        )
+        assert len(_start_seconds(plan, UnitTypeId.COMMAND_CENTER)) == base_count
+
+    @pytest.mark.parametrize(
+        ("new_bases", "miners_at_the_end"),
+        [
+            ([NewBase(mineral_fields=2, geysers=0), NewBase(mineral_fields=8, geysers=0)], 4.0),
+            ([NewBase(mineral_fields=8, geysers=0), NewBase(mineral_fields=2, geysers=0)], 16.0),
+        ],
+        ids=["the small base first", "the full base first"],
+    )
+    def test_a_command_center_in_production_brings_the_first_new_bases_fields(
+        self, new_bases: list[NewBase], miners_at_the_end: float
+    ) -> None:
+        """No field to mine, sixteen SCVs and a command center done in 10 seconds, with nothing to pay for another:
+        until it is done no SCV mines, and from then two a field of the first new base, whatever the second holds."""
+        going_up = WorkerBuild(
+            unit_type=UnitTypeId.COMMAND_CENTER, time_left=GameTime(seconds=10), builder_walks_there=False
+        )
+        state = _game_start(
+            minerals=0.0,
+            units={UnitTypeId.SCV: 16, UnitTypeId.COMMAND_CENTER: 1},
+            supply_used=16.0,
+            mineral_fields=0,
+            free_geysers=0,
+            worker_builds=(going_up,),
+        )
+        plan = _best_plan(state, Reward(half_life=None), horizon_seconds=30, new_bases=new_bases)
+
+        assert plan.intervals[0].miners == pytest.approx(0.0)
+        assert plan.intervals[-1].miners == pytest.approx(miners_at_the_end)
+
+    def test_fewer_new_bases_than_command_centers_in_production_raises(self) -> None:
+        going_up = WorkerBuild(
+            unit_type=UnitTypeId.COMMAND_CENTER, time_left=GameTime(seconds=10), builder_walks_there=False
+        )
+        state = _game_start(worker_builds=(going_up,))
+        with pytest.raises(ValueError, match="1 command centers in production, and only 0 expansions"):
+            _best_plan(state, Reward(half_life=None), horizon_seconds=30)
+
+    @pytest.mark.parametrize("counts", [{"mineral_fields": -1, "geysers": 2}, {"mineral_fields": 8, "geysers": -1}])
+    def test_a_new_base_of_a_negative_count_raises(self, counts: dict[str, int]) -> None:
+        with pytest.raises(ValueError, match="must not be negative"):
+            NewBase(**counts)
 
 
 class TestStartLimits:
@@ -2682,6 +2741,30 @@ class TestPlanner:
         assert found is not None
         assert not_found is None
         assert api.extensions.plan is found
+
+    def test_it_starts_a_command_center_only_for_an_expansion_it_is_handed(self) -> None:
+        """A command center worth something once done, 200 minerals and twelve SCVs mining: over two minutes a plan
+        starts one for the expansion it is handed, and none without."""
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=Planner)
+        plans: list[BuildPlan] = []
+
+        @api.on(TurnEvent)
+        def plan_with_and_without_an_expansion(_: TurnEvent) -> None:
+            reward = Reward.weighted({UnitTypeId.COMMAND_CENTER: 1.0}, half_life=None)
+            horizon = GameTime(minutes=2)
+            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon)))
+            plans.append(
+                _plan_found(api.extensions.plan_now(reward, horizon=horizon, expansions=list(api.expansions)[:1]))
+            )
+
+        api.play(game.joined())
+
+        without, with_one = plans[:2]
+        assert [planned.item for planned in without.items].count(UnitTypeId.COMMAND_CENTER) == 0
+        assert [planned.item for planned in with_one.items].count(UnitTypeId.COMMAND_CENTER) == 1
 
     def test_it_plans_over_5_minutes_unless_handed_a_horizon(self) -> None:
         game = ScriptedGame(
