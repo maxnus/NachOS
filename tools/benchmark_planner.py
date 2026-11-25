@@ -341,7 +341,7 @@ def _economy_walking(
     `initial_harvest_delay`, by default none as in the toy, which moves a worker to or from a refinery for nothing."""
     return EconomyModel(
         initial_harvest_delay=initial_harvest_delay,
-        walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)),
+        builder_walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)),
     )
 
 
@@ -392,9 +392,10 @@ def _solve_and_print(
         print(f"{label}: {size}, no plan within {time_limit} s")
         return None
     counts = Counter(planned.item.name for planned in plan.items)
+    report = plan.solve_report
     print(
-        f"{label}: {size}, {plan.solve_seconds:.2f} s, objective {plan.objective:.1f}, gap {plan.gap:.1e}"
-        f"{', optimal' if plan.is_optimal else ''}"
+        f"{label}: {size}, {report.seconds:.2f} s, reward {plan.reward:.1f}, gap {report.gap:.1e}"
+        f"{', optimal' if report.is_optimal else ''}"
     )
     print(f"    counts: {dict(counts)}")
     first = [planned for planned in plan.items if (planned.start - plan.time).seconds < _FIRST_SECONDS_SHOWN]

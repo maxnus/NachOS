@@ -217,11 +217,11 @@ class Planner:
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
         than 0, a negative loss rate or start limit, a loss rate from a `TimeDependent` that is negative or not finite,
-        a negative time from `fluid_after` or from `economy`'s `walk_time`, a factor from a term's `time_factor` or
-        `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does not
+        a negative time from `fluid_after` or from `economy`'s `builder_walk_time`, a factor from a term's `time_factor`
+        or `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does not
         make; `TypeError` for a loss rate that is neither a number nor gives one for each of many game steps, as a
-        function not in a `TimeFunction`; and `IndexError` from a loss rate that does not cover a step of the plan, as
-        a `TimeSeries` recorded for fewer.
+        function not in a `TimeFunction`; and `IndexError` from a loss rate that does not cover a step of the plan, as a
+        `TimeSeries` recorded for fewer.
         """
         if any(not callable(rate) and rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")

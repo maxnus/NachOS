@@ -66,7 +66,7 @@ class EconomyModel:
     """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
     applies to a new worker on its first walk and to a worker moved between minerals and vespene, and not to a builder
     back from its structure, whose walk back is counted already. With 0 a worker brings in from when it starts."""
-    walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
+    builder_walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
     """How long a worker walks to build a structure of a unit type, and walks back after: what the function returns
     for the type. Where it returns `None`, or is `None`, the default applies: 10 seconds to a townhall and 6 to any
     other structure. A build a worker has not begun, or has left, takes that walk first. The function is asked about
@@ -122,13 +122,15 @@ def minerals_mined_a_second(
 def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
     """The seconds a worker walks to build each of `unit_types`, by `economy`.
 
-    Raises `ValueError` for a negative time from its `walk_time`.
+    Raises `ValueError` for a negative time from its `builder_walk_time`.
     """
     seconds: dict[UnitTypeId, float] = {}
     for unit_type in unit_types:
-        chosen = None if economy.walk_time is None else economy.walk_time(unit_type)
+        chosen = None if economy.builder_walk_time is None else economy.builder_walk_time(unit_type)
         if chosen is not None and chosen < GameTime.ZERO:
-            raise ValueError(f"walk_time must not return a negative time, but returned {chosen} for {unit_type.name}")
+            raise ValueError(
+                f"builder_walk_time must not return a negative time, but returned {chosen} for {unit_type.name}"
+            )
         is_townhall = unit_type is UnitTypeId.COMMAND_CENTER
         default = _DEFAULT_WALK_TO_A_TOWNHALL if is_townhall else _DEFAULT_WALK_TO_ANOTHER_STRUCTURE
         seconds[unit_type] = (default if chosen is None else chosen).seconds

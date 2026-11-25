@@ -298,16 +298,18 @@ class ThreatMap:
   than to the second; and its `intervals`, each a `PlanInterval` with the workers the plan has in it and its `duration`,
   from its `start` to its `end`. Each of the two is a `PlanMoment`, what the planner expects at that `time`: the
   `resources` in stock, the minerals and vespene `collected` in the game by then, the `units` of each type alive, and
-  the `upgrades` done. One interval's end is the next one's start, the same object; the first interval's start is the
-  state the plan was made from, and the last one's end its horizon, so `plan.intervals[-1].end.units` is what the plan
-  comes to. `plan.interval_at(time)` is the interval a game time is in, or `None` outside the plan: its workers are
-  those the plan has at that time, and between its start and its end the plan says nothing of the stock, the units or
-  the upgrades. `plan.moment_at(time)` is what the planner's model has there, which jumps at the edges: the units and
-  upgrades of the interval's start, what its income has brought in by then, and the stock with all that starts in the
-  interval paid at its start, which is less than nothing just after an interval's start by what the plan has spent of
-  income yet to come. `plan_now` returns `None` if the solver finds no plan within its limits, and `planner.plan` holds
-  the last one it found. The planner orders nothing and holds no unit: where a structure goes, which SCV builds it, and
-  what to drop once the game moves on stay the bot's.
+  how much of each of the `upgrades` is done, 1 for one done. A `BuildPlan` also holds its `reward`, what it is worth by
+  the reward it was planned for, and a `solve_report`: the solver's `gap`, whether it proved the plan the best,
+  `is_optimal`, and the `seconds` the solve took. One interval's end is the next one's start, the same object; the first
+  interval's start is the state the plan was made from, and the last one's end its horizon, so
+  `plan.intervals[-1].end.units` is what the plan comes to. `plan.interval_at(time)` is the interval a game time is in,
+  or `None` outside the plan: its workers are those the plan has at that time, and between its start and its end the
+  plan says nothing of the stock, the units or the upgrades. `plan.moment_at(time)` is what the planner's model has
+  there, which jumps at the edges: the units and upgrades of the interval's start, what its income has brought in by
+  then, and the stock with all that starts in the interval paid at its start, which is less than nothing just after an
+  interval's start by what the plan has spent of income yet to come. `plan_now` returns `None` if the solver finds no
+  plan within its limits, and `planner.plan` holds the last one it found. The planner orders nothing and holds no unit:
+  where a structure goes, which SCV builds it, and what to drop once the game moves on stay the bot's.
 
   How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `PlannerState`, such as
   `planner.state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what

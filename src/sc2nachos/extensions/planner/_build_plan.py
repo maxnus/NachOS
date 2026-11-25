@@ -57,8 +57,11 @@ class PlanMoment:
     is done. A number is a fraction where the plan starts units in fractions or a loss rate applies. It holds every
     unit type the planner considered, and every type the state held or had in production, at 0 where none is
     expected."""
-    upgrades: frozenset[UpgradeId]
-    """The upgrades expected done, one whose start is fluid from half of it done."""
+    upgrades: Mapping[UpgradeId, float]
+    """How much of each upgrade is expected done at `time`: 1 for one that is done, 0 for one that is not, and a share
+    between them where the plan researches an upgrade in fractions, as it does far ahead. An upgrade being researched
+    counts as 0 until it is done. It holds every upgrade the planner considered, and every one the state had done or
+    was researching."""
 
 
 @final
@@ -89,10 +92,10 @@ class PlanDeviation:
     """How a game differs at one game time from what a plan expected of it then: the game's number less the plan's, so
     that the plan was optimistic where one is negative and pessimistic where one is positive.
 
-    Read together, the three say where a plan was off. Less `collected` than expected is the economy's: the workers
+    Read together, they say where a plan was off. Less `collected` than expected is the economy's: the workers
     brought in less than `EconomyModel` has them bring. As much collected and more in `resources` is the bot's, which
     started less than the plan had it start. As much of both and fewer `units` is units lost, which `loss_rates` are
-    for.
+    for. Less of an upgrade is a research the bot started late or not at all.
     """
 
     time: GameTime
@@ -103,6 +106,22 @@ class PlanDeviation:
     """The minerals and vespene in stock, the game's less the plan's."""
     units: Mapping[UnitTypeId, float]
     """The number of each unit type done and alive, the game's less the plan's: every type either counts."""
+    upgrades: Mapping[UpgradeId, float]
+    """How much of each upgrade is done, the game's less the plan's: the game's is 1 for one done and 0 for any other,
+    and the plan's the share it expected done. It holds every upgrade either counts."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SolveReport:
+    """What the solver says of the solve that found a plan."""
+
+    gap: float
+    """The solver's bound on how far the plan's `reward` may fall short of the best plan's, relative to it."""
+    is_optimal: bool
+    """Whether the solver proved the plan the best, to the planner's `relative_gap`, rather than stopping at a limit."""
+    seconds: float
+    """The wall-clock seconds the solve took."""
 
 
 @final
@@ -128,14 +147,10 @@ class BuildPlan:
     game's data lists their types, then the upgrades."""
     intervals: tuple[PlanInterval, ...]
     """The intervals of its grid in order, the first from `time` and the last to the horizon."""
-    objective: float
-    """What the reward makes of the plan."""
-    gap: float
-    """The solver's bound on how far `objective` may fall short of the best plan's, relative to it."""
-    is_optimal: bool
-    """Whether the solver proved it the best plan, to the planner's `relative_gap`, rather than stopping at a limit."""
-    solve_seconds: float
-    """The wall-clock seconds the solve took."""
+    reward: float
+    """What the plan is worth by the `Reward` it was planned for: what the solver made as large as it could."""
+    solve_report: SolveReport
+    """What the solver says of the solve: how near the best the plan is proven, and how long it took."""
 
     def interval_at(self, time: GameTime) -> PlanInterval | None:
         """The interval `time` is in, from its start to before its end, or `None` for a time before the plan starts or
@@ -182,6 +197,7 @@ class BuildPlan:
         if expected is None:
             return None
         unit_types = sorted(expected.units.keys() | state.units.keys())
+        upgrades = sorted(expected.upgrades.keys() | state.upgrades)
         return PlanDeviation(
             time=state.time,
             collected=state.collected - expected.collected,
@@ -189,5 +205,8 @@ class BuildPlan:
             units={
                 unit_type: state.units.get(unit_type, 0) - expected.units.get(unit_type, 0.0)
                 for unit_type in unit_types
+            },
+            upgrades={
+                upgrade: float(upgrade in state.upgrades) - expected.upgrades.get(upgrade, 0.0) for upgrade in upgrades
             },
         )

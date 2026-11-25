@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Final, final
 import numpy as np
 from numpy.typing import NDArray
 
-from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment
+from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment, SolveReport
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
@@ -28,8 +28,6 @@ if TYPE_CHECKING:
 
 # The most an item without a tighter bound starts in one interval.
 _MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
-# An upgrade reads as done from this share of it, as a fluid start is listed from half of one.
-_SHARE_OF_AN_UPGRADE_READ_AS_DONE: Final = 0.5
 
 
 @final
@@ -67,10 +65,10 @@ class PlanProgram:
     it counts as, the lowest of those of one type, and a limit on no item here does nothing.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
-    `walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, and for a unit in production in
-    `state` of a type that is no item of `model`'s; `TypeError` for a loss rate that is neither a number nor gives one
-    for each of many game steps, as a function of one game time does not; and `IndexError` from a loss rate that does
-    not cover a step of the plan.
+    `builder_walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, and for a unit in
+    production in `state` of a type that is no item of `model`'s; `TypeError` for a loss rate that is neither a number
+    nor gives one for each of many game steps, as a function of one game time does not; and `IndexError` from a loss
+    rate that does not cover a step of the plan.
     """
 
     __slots__ = (
@@ -170,10 +168,8 @@ class PlanProgram:
             time=self._state.time,
             items=self._planned_items(solution.values),
             intervals=self._planned_intervals(solution.values),
-            objective=solution.objective,
-            gap=solution.gap,
-            is_optimal=solution.is_optimal,
-            solve_seconds=solution.seconds,
+            reward=solution.objective,
+            solve_report=SolveReport(gap=solution.gap, is_optimal=solution.is_optimal, seconds=solution.seconds),
         )
 
     def _whole_intervals_of(self, fluid_after_seconds: Sequence[float]) -> list[NDArray[np.bool_]]:
@@ -986,11 +982,7 @@ class PlanProgram:
                 resources=Resources(float(minerals[edge]), float(vespene[edge])),
                 collected=state.collected + Resources(float(minerals_collected[edge]), float(vespene_collected[edge])),
                 units={unit_type: float(counts[edge]) for unit_type, counts in at_edges.items()},
-                upgrades=frozenset(
-                    upgrade
-                    for upgrade, done in done_at_edges.items()
-                    if done[edge] >= _SHARE_OF_AN_UPGRADE_READ_AS_DONE
-                ),
+                upgrades={upgrade: float(done[edge]) for upgrade, done in done_at_edges.items()},
             )
             for edge, seconds in enumerate(self._edges.tolist())
         ]

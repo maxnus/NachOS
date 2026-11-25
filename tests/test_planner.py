@@ -24,6 +24,7 @@ from sc2nachos.extensions.planner import (
     ProducerActivity,
     Reward,
     RewardTerm,
+    SolveReport,
     TimeGrid,
     UnitCompletion,
     WorkerBuild,
@@ -52,7 +53,7 @@ _NOTHING_BUT_UNITS: dict[UnitTypeId | UpgradeId, int] = {
     UnitTypeId.REFINERY: 0,
 }
 # The economy the known plans are worked out with: the default, but an SCV walking 6 seconds to every structure.
-_WALKING_6_SECONDS_TO_EVERY_STRUCTURE = EconomyModel(walk_time=lambda _: GameTime(seconds=6))
+_WALKING_6_SECONDS_TO_EVERY_STRUCTURE = EconomyModel(builder_walk_time=lambda _: GameTime(seconds=6))
 
 
 def _game_start(*, minerals: float = 50.0, vespene: float = 0.0, **changes: Any) -> PlannerState:
@@ -103,7 +104,7 @@ def _best_plan(
     )
     plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT, relative_gap=1e-4)
     assert plan is not None
-    assert plan.is_optimal
+    assert plan.solve_report.is_optimal
     return plan
 
 
@@ -114,10 +115,8 @@ _A_PLAN_OF_ONE_BARRACKS = BuildPlan(
         PlanItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30), duration=GameTime(steps=1040), is_fluid=False),
     ),
     intervals=(),
-    objective=0.0,
-    gap=0.0,
-    is_optimal=True,
-    solve_seconds=0.0,
+    reward=0.0,
+    solve_report=SolveReport(gap=0.0, is_optimal=True, seconds=0.0),
 )
 
 
@@ -390,7 +389,7 @@ class TestKnownPlans:
                 fluid_after=lambda _: GameTime.ZERO,
                 start_limits=_NOTHING_BUT_UNITS,
                 max_ignored_overrun=max_ignored_overrun,
-            ).objective
+            ).reward
             for max_ignored_overrun in (0.0, 1.0)
         ]
         assert worths[0] == pytest.approx(worths[1])
@@ -885,7 +884,7 @@ class TestKnownPlans:
         by_curve = Reward.weighted({UnitTypeId.MARINE: [CurveSegment(weight=1.0, end_count=3)]})
         weighted, curved = (_best_plan(state, reward, horizon_seconds=40) for reward in (by_weight, by_curve))
 
-        assert curved.objective == pytest.approx(weighted.objective)
+        assert curved.reward == pytest.approx(weighted.reward)
         assert len(_start_seconds_of_units_done_in_time(curved, UnitTypeId.MARINE)) > 3
 
     def test_a_term_that_ends_where_another_starts_buys_for_that_time(self) -> None:
@@ -914,7 +913,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[up_to_40_seconds]), horizon_seconds=80)
 
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
-        assert plan.objective == pytest.approx(11 * 2)
+        assert plan.reward == pytest.approx(11 * 2)
 
     def test_a_curve_between_two_times_is_worth_what_it_gives_between_them(self) -> None:
         """A reactor could make two marines at once and the curve counts one, so one is made, done by 20: worth 1 a
@@ -933,7 +932,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[one_marine]), horizon_seconds=40)
 
         assert len(_start_seconds(plan, UnitTypeId.MARINE)) == 1
-        assert plan.objective == pytest.approx(5 * 2 + 450 * 1e-4)
+        assert plan.reward == pytest.approx(5 * 2 + 450 * 1e-4)
 
     def test_a_term_that_starts_past_the_horizon_is_worth_nothing(self) -> None:
         state = _game_start(
@@ -943,7 +942,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[too_late]), horizon_seconds=40)
 
         assert plan.items == ()
-        assert plan.objective == pytest.approx(500 * 1e-4)
+        assert plan.reward == pytest.approx(500 * 1e-4)
 
     @pytest.mark.parametrize(
         "a_tenth_of_the_seconds_since_100",
@@ -971,7 +970,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[rising]), horizon_seconds=40)
 
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
-        assert plan.objective == pytest.approx(348 / 10 * 2)
+        assert plan.reward == pytest.approx(348 / 10 * 2)
 
     def test_a_time_factor_multiplies_a_curve_between_two_times(self) -> None:
         """The marine of the curve between 20 and 30 seconds, worth three times its 5 intervals of 2 seconds."""
@@ -993,7 +992,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[one_marine]), horizon_seconds=40)
 
         assert len(_start_seconds(plan, UnitTypeId.MARINE)) == 1
-        assert plan.objective == pytest.approx(3 * 5 * 2 + 450 * 1e-4)
+        assert plan.reward == pytest.approx(3 * 5 * 2 + 450 * 1e-4)
 
     def test_a_term_of_a_time_factor_of_0_is_worth_nothing(self) -> None:
         state = _game_start(
@@ -1003,7 +1002,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[never]), horizon_seconds=40)
 
         assert plan.items == ()
-        assert plan.objective == pytest.approx(500 * 1e-4)
+        assert plan.reward == pytest.approx(500 * 1e-4)
 
     def test_a_negative_time_factor_raises_where_the_plan_is_made(self) -> None:
         state = _game_start(
@@ -1024,7 +1023,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[more_wanted]), horizon_seconds=40)
 
         assert plan.items == ()
-        assert plan.objective == pytest.approx((48 + 5 * 6) * 2)
+        assert plan.reward == pytest.approx((48 + 5 * 6) * 2)
 
     def test_a_count_factor_buys_the_count_it_makes_wanted(self) -> None:
         """One marine is wanted, and two with a count factor of 2, which one barracks has done at 18 and 36."""
@@ -1054,7 +1053,7 @@ class TestKnownPlans:
             )
         )
 
-        assert with_one.objective == pytest.approx(without.objective)
+        assert with_one.reward == pytest.approx(without.reward)
         assert _start_seconds(with_one, UnitTypeId.MARINE) == _start_seconds(without, UnitTypeId.MARINE)
 
     def test_a_count_factor_counts_in_what_a_term_that_requires_an_upgrade_could_be_worth(self) -> None:
@@ -1081,8 +1080,8 @@ class TestKnownPlans:
             )
         )
 
-        assert required.objective == pytest.approx(6 * 20 * 2)
-        assert without.objective == pytest.approx(required.objective)
+        assert required.reward == pytest.approx(6 * 20 * 2)
+        assert without.reward == pytest.approx(required.reward)
 
     def test_a_negative_count_factor_raises_where_the_plan_is_made(self) -> None:
         state = _game_start(
@@ -1105,7 +1104,7 @@ class TestKnownPlans:
             for reward in (halves, Reward.weighted({UnitTypeId.MARINE: 1.0}))
         )
 
-        assert in_two.objective == pytest.approx(in_one.objective)
+        assert in_two.reward == pytest.approx(in_one.reward)
         assert _start_seconds(in_two, UnitTypeId.MARINE) == _start_seconds(in_one, UnitTypeId.MARINE)
 
     def test_a_term_that_requires_an_upgrade_is_worth_nothing_until_it_is_done(self) -> None:
@@ -1127,7 +1126,7 @@ class TestKnownPlans:
 
         assert _start_seconds(plan, UpgradeId.COMBAT_SHIELD) == [0.0]
         assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 4
-        assert plan.objective == pytest.approx(4 * 21 * 2)
+        assert plan.reward == pytest.approx(4 * 21 * 2)
 
     def test_an_upgrade_a_term_requires_starts_whole_where_every_start_is_fluid(self) -> None:
         """A share of the upgrade would unlock that share of all the term could be worth, far more than of its
@@ -1168,7 +1167,7 @@ class TestKnownPlans:
             for reward in (with_the_shield, Reward.weighted({UnitTypeId.MARINE: 1.0}))
         )
 
-        assert required.objective == pytest.approx(weighted.objective)
+        assert required.reward == pytest.approx(weighted.reward)
         assert _start_seconds(required, UnitTypeId.MARINE) == _start_seconds(weighted, UnitTypeId.MARINE)
 
     def test_a_combination_buys_no_more_of_a_group_than_its_scarcest_group_allows(self) -> None:
@@ -1187,7 +1186,7 @@ class TestKnownPlans:
         plan = _best_plan(state, Reward(terms=[healed]), horizon_seconds=80, fluid_after=_whole_over_any_horizon)
 
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0, 18.0, 36.0, 54.0]
-        assert plan.objective == pytest.approx(74 * 2 + 800 * 1e-4)
+        assert plan.reward == pytest.approx(74 * 2 + 800 * 1e-4)
 
     def test_a_combination_buys_the_group_it_is_short_of(self) -> None:
         """Sixteen marines, no barracks for more, and a medivac heals eight: the starport makes two and no third."""
@@ -1237,7 +1236,7 @@ class TestKnownPlans:
             )
         )
 
-        assert required.objective == pytest.approx(without.objective)
+        assert required.reward == pytest.approx(without.reward)
         assert _start_seconds(required, UnitTypeId.MARINE) == _start_seconds(without, UnitTypeId.MARINE)
 
 
@@ -1273,7 +1272,8 @@ class TestPlan:
         plan = _best_plan(state, Reward.weighted({UnitTypeId.SCV: 1.0}), horizon_seconds=14)
 
         first = plan.intervals[0].start
-        assert (first.time, first.resources, first.upgrades) == (state.time, state.resources, state.upgrades)
+        assert (first.time, first.resources) == (state.time, state.resources)
+        assert first.upgrades == {UpgradeId.STIMPACK: 1.0}
         assert {unit_type: first.units[unit_type] for unit_type in state.units} == state.units
         assert all(
             earlier.end is later.start for earlier, later in zip(plan.intervals, plan.intervals[1:], strict=False)
@@ -1384,6 +1384,7 @@ class TestPlan:
         differing = {unit_type: by for unit_type, by in deviation.units.items() if abs(by) > 1e-9}
         assert differing == pytest.approx({UnitTypeId.SCV: -1.0, UnitTypeId.MEDIVAC: 1.0})
         assert deviation.units[UnitTypeId.COMMAND_CENTER] == pytest.approx(0.0)
+        assert deviation.upgrades == {}
 
     def test_the_state_a_plan_was_made_from_deviates_by_nothing(self) -> None:
         state = _game_start(time=GameTime(seconds=30), collected=Resources(600.0, 50.0))
@@ -1393,6 +1394,34 @@ class TestPlan:
         assert deviation is not None
         assert (deviation.collected, deviation.resources) == (Resources(0.0, 0.0), Resources(0.0, 0.0))
         assert set(deviation.units.values()) == {0.0}
+
+    def test_a_deviation_holds_how_much_less_of_each_upgrade_is_done_than_the_plan_expected(self) -> None:
+        """Stimpack planned from the plan's start and expected done by its horizon: a state then without it is one
+        stimpack short, one with it deviates by nothing, and the state's infantry weapons by nothing either way."""
+        stimpack_seconds = _TERRAN_MODEL.upgrade_items[UpgradeId.STIMPACK].build_seconds
+        horizon_seconds = 2 * math.ceil(stimpack_seconds / 2) + 4
+        state = _game_start(
+            minerals=100.0,
+            vespene=100.0,
+            units={UnitTypeId.BARRACKS: 1, UnitTypeId.TECH_LAB_BARRACKS: 1},
+            mineral_fields=0,
+            upgrades=frozenset({UpgradeId.TERRAN_INFANTRY_WEAPONS_1}),
+        )
+        plan = _best_plan(
+            state,
+            Reward(upgrade_weights={UpgradeId.STIMPACK: 1.0}),
+            horizon_seconds=horizon_seconds,
+            fluid_after=_whole_over_any_horizon,
+        )
+        at_the_horizon = dataclasses.replace(state, time=GameTime(seconds=horizon_seconds))
+        with_stimpack = dataclasses.replace(at_the_horizon, upgrades=state.upgrades | {UpgradeId.STIMPACK})
+
+        without, with_it = plan.deviation_of(at_the_horizon), plan.deviation_of(with_stimpack)
+
+        assert without is not None
+        assert with_it is not None
+        assert without.upgrades == {UpgradeId.STIMPACK: -1.0, UpgradeId.TERRAN_INFANTRY_WEAPONS_1: 0.0}
+        assert with_it.upgrades == {UpgradeId.STIMPACK: 0.0, UpgradeId.TERRAN_INFANTRY_WEAPONS_1: 0.0}
 
     def test_a_moment_holds_the_upgrades_done_by_it(self) -> None:
         """Stimpack researched from the plan's start reads as done from the first edge at or after its research time,
@@ -1415,9 +1444,9 @@ class TestPlan:
 
         assert _start_seconds(plan, UpgradeId.STIMPACK) == [0.0]
         moments = [plan.intervals[0].start, *(interval.end for interval in plan.intervals)]
-        assert all(UpgradeId.TERRAN_INFANTRY_WEAPONS_1 in moment.upgrades for moment in moments)
+        assert all(moment.upgrades[UpgradeId.TERRAN_INFANTRY_WEAPONS_1] == 1.0 for moment in moments)
         seconds_done_from = {
-            upgrade: next((moment.time - plan.time).seconds for moment in moments if upgrade in moment.upgrades)
+            upgrade: next((moment.time - plan.time).seconds for moment in moments if moment.upgrades[upgrade] == 1.0)
             for upgrade in (UpgradeId.TERRAN_INFANTRY_ARMOR_1, UpgradeId.STIMPACK)
         }
         assert seconds_done_from == {
@@ -1645,7 +1674,7 @@ class TestUnlockFraction:
     def test_a_higher_unlock_fraction_leaves_less_for_what_it_unlocks(self) -> None:
         """A quarter of the first level, then a half, then the whole of it has to be paid before the second starts."""
         worths = [
-            self._plan_for_the_second_level(unlock_fraction=unlock_fraction).objective
+            self._plan_for_the_second_level(unlock_fraction=unlock_fraction).reward
             for unlock_fraction in (0.25, 0.5, 1.0)
         ]
         assert worths[0] > worths[1] > worths[2]
@@ -1719,13 +1748,15 @@ class TestEconomy:
             UnitTypeId.SUPPLY_DEPOT: 6.0,
             UnitTypeId.BARRACKS: 6.0,
         }
-        depots_near = EconomyModel(walk_time=lambda t: GameTime(seconds=3) if t == UnitTypeId.SUPPLY_DEPOT else None)
+        depots_near = EconomyModel(
+            builder_walk_time=lambda t: GameTime(seconds=3) if t == UnitTypeId.SUPPLY_DEPOT else None
+        )
         assert walk_seconds_of(depots_near, unit_types)[UnitTypeId.SUPPLY_DEPOT] == 3.0
         assert walk_seconds_of(depots_near, unit_types)[UnitTypeId.COMMAND_CENTER] == 10.0
 
     def test_a_negative_walk_raises(self) -> None:
         with pytest.raises(ValueError, match="BARRACKS"):
-            walk_seconds_of(EconomyModel(walk_time=lambda _: GameTime(seconds=-1)), [UnitTypeId.BARRACKS])
+            walk_seconds_of(EconomyModel(builder_walk_time=lambda _: GameTime(seconds=-1)), [UnitTypeId.BARRACKS])
 
     @pytest.mark.parametrize(
         ("rates", "marine_start"),
@@ -2103,7 +2134,7 @@ class TestStartLimits:
         limited = _best_plan(_game_start(), reward, horizon_seconds=60, start_limits=limits)
 
         assert limited.items == without.items
-        assert limited.objective == without.objective
+        assert limited.reward == without.reward
 
 
 class TestReward:
@@ -2750,7 +2781,7 @@ class TestPlanner:
         "arguments",
         [
             {"start_limits": {UnitTypeId.COMMAND_CENTER: -1}},
-            {"economy": EconomyModel(walk_time=lambda _: GameTime(seconds=-1))},
+            {"economy": EconomyModel(builder_walk_time=lambda _: GameTime(seconds=-1))},
         ],
         ids=["a negative start limit", "a negative walk"],
     )
