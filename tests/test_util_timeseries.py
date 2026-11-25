@@ -1,3 +1,5 @@
+import math
+
 import numpy
 import pytest
 
@@ -19,7 +21,7 @@ class TestEmpty:
         series = TimeSeries.empty(float)
         assert len(series) == 0
         assert series.size == 0
-        assert series.at(GameTime(steps=0)) is None
+        assert series(GameTime(steps=0), default=None) is None
 
     def test_honors_the_requested_buffer(self):
         series = TimeSeries.empty(float, initial_size=64)
@@ -33,15 +35,15 @@ class TestEmpty:
     def test_has_no_start_until_the_first_append(self):
         series = TimeSeries.empty(float)
         with pytest.raises(ValueError, match="no start step"):
-            _ = series.start_time.steps
+            _ = series.start.steps
         with pytest.raises(ValueError, match="no start step"):
-            _ = series.last_time.steps
+            _ = series.end.steps
 
     def test_the_first_append_sets_the_start(self):
         series = TimeSeries.empty(float)
         series.append(GameTime(steps=500), 1.0)
-        assert series.start_time.steps == 500
-        assert series.last_time.steps == 500
+        assert series.start.steps == 500
+        assert series.end.steps == 500
 
     def test_the_constructor_requires_a_start(self):
         with pytest.raises(TypeError):
@@ -70,8 +72,8 @@ class TestEmpty:
 
 class TestAppend:
     def test_single(self, ramp):
-        assert ramp.start_time.steps == 0
-        assert ramp.last_time.steps == 9
+        assert ramp.start.steps == 0
+        assert ramp.end.steps == 9
         assert ramp.last_value == 9.0
 
     def test_consecutive(self, ramp):
@@ -130,8 +132,8 @@ class TestAppend:
     def test_first_append_sets_the_start(self):
         series = TimeSeries.empty(float)
         series.append(GameTime(steps=100), 1.0)
-        assert series.start_time.steps == 100
-        assert series.last_time.steps == 100
+        assert series.start.steps == 100
+        assert series.end.steps == 100
 
     def test_out_of_order_raises(self, ramp):
         # An `assert` here would vanish under `python -O`, corrupting the series instead.
@@ -176,13 +178,13 @@ class TestIndexing:
 
     def test_slice_is_by_time(self, ramp):
         window = ramp[GameTime(steps=2) : GameTime(steps=5)]
-        assert window.start_time.steps == 2
+        assert window.start.steps == 2
         assert window.size == 3
         assert list(window.values) == [2.0, 3.0, 4.0]
 
     def test_open_slice_takes_the_whole_series(self, ramp):
         window = ramp[:]
-        assert window.start_time.steps == 0
+        assert window.start.steps == 0
         assert window.size == 10
 
     def test_slice_past_the_end_clamps(self, ramp):
@@ -215,15 +217,25 @@ class TestIndexing:
         series.append(GameTime(steps=51), 2.0)
         assert list(series) == [(GameTime(steps=50), 1.0), (GameTime(steps=51), 2.0)]
 
-    def test_a_time_between_two_steps_indexes_the_nearest_a_tie_the_later(self, ramp):
+    def test_a_time_between_two_steps_indexes_the_step_before(self, ramp):
+        """It read the nearest step, so 3.5 and 3.9 read step 4, which the game had not reached."""
         assert ramp[GameTime(steps=3.4)] == 3.0
-        assert ramp[GameTime(steps=3.5)] == 4.0
+        assert ramp[GameTime(steps=3.5)] == 3.0
+        assert ramp[GameTime(steps=3.9)] == 3.0
         assert ramp[GameTime(seconds=4 / 22.4)] == 4.0
 
-    def test_a_slice_between_steps_takes_the_nearest_ends(self, ramp):
-        """A second back from step 9 is 22.4 steps back, before the start; a fifth of a second is 4.48, read as 4."""
-        window = ramp[ramp.last_time - GameTime(seconds=0.2) :]
-        assert (window.start_time, window.values.tolist()) == (GameTime(steps=5), [5.0, 6.0, 7.0, 8.0, 9.0])
+    def test_a_time_between_two_steps_writes_the_step_before(self, ramp):
+        ramp[GameTime(steps=3.9)] = 30.0
+        assert ramp.values.tolist()[3:5] == [30.0, 4.0]
+
+    def test_a_slice_between_steps_starts_and_ends_at_the_step_before(self, ramp):
+        """A fifth of a second is 4.48 steps, so it starts at 4.52, read as step 4, and ends at 8.9, read as 8."""
+        window = ramp[ramp.end - GameTime(seconds=0.2) : GameTime(steps=8.9)]
+        assert (window.start, window.values.tolist()) == (GameTime(steps=4), [4.0, 5.0, 6.0, 7.0])
+
+    def test_a_slice_from_start_to_end_leaves_out_the_last_value(self, ramp):
+        assert ramp[ramp.start : ramp.end].values.tolist() == [float(step) for step in range(9)]
+        assert ramp(ramp.end) == ramp.last_value
 
     def test_a_plain_index_raises(self, ramp):
         with pytest.raises(TypeError, match="an index is a GameTime"):
@@ -246,32 +258,109 @@ class TestValue:
         with pytest.raises(ValueError, match="no last value"):
             _ = TimeSeries.empty(float).last_value
 
-    def test_at_a_given_time(self, ramp):
-        assert ramp.at(GameTime(steps=3)) == 3.0
-
-    def test_outside_the_range_is_none(self, ramp):
-        assert ramp.at(GameTime(steps=-1)) is None
-        assert ramp.at(GameTime(steps=10)) is None
-
-    def test_at_reads_the_nearest_step(self, ramp):
-        assert ramp.at(GameTime(seconds=4 / STEPS_PER_SECOND)) == 4.0
-        assert ramp.at(GameTime(steps=3.6)) == 4.0
-
-    def test_at_between_two_steps_reads_the_later(self, ramp):
-        assert ramp.at(GameTime(steps=3.5)) == 4.0
-
-    def test_at_an_infinite_time_raises(self, ramp):
+    def test_an_infinite_time_raises(self, ramp):
         with pytest.raises(ValueError, match="not finite"):
-            ramp.at(GameTime.INFINITE)
+            ramp[GameTime.INFINITE]
         with pytest.raises(ValueError, match="not finite"):
-            ramp[ramp.start_time : GameTime.INFINITE]
+            ramp[ramp.start : GameTime.INFINITE]
 
-    def test_at_in_plain_seconds_raises(self, ramp):
-        with pytest.raises(TypeError, match="time is a GameTime"):
-            ramp.at(4.0)  # pyright: ignore[reportArgumentType]
 
-    def test_at_outside_the_range_is_none(self, ramp):
-        assert ramp.at(GameTime(seconds=100.0)) is None
+class TestCall:
+    def test_reads_the_value_at_a_time(self, ramp):
+        assert ramp(GameTime(steps=3)) == 3.0
+        assert ramp(GameTime(steps=3)) == ramp[GameTime(steps=3)]
+
+    def test_a_step_never_recorded_raises(self, ramp):
+        with pytest.raises(IndexError, match="step -1 outside the recorded range 0-9"):
+            ramp(GameTime(steps=-1))
+        with pytest.raises(IndexError, match="step 10 outside the recorded range 0-9"):
+            ramp(GameTime(steps=10))
+        with pytest.raises(IndexError, match="empty series"):
+            TimeSeries.empty(float)(GameTime(steps=0))
+
+    def test_a_step_never_recorded_reads_the_default(self, ramp):
+        assert ramp(GameTime(steps=-1), default=None) is None
+        assert ramp(GameTime(seconds=100.0), default=0.5) == 0.5
+        assert ramp(GameTime(steps=3), default=None) == 3.0
+        assert TimeSeries.empty(float)(GameTime(steps=0), default=7.0) == 7.0
+
+    def test_a_default_changes_no_read_of_a_step_recorded(self, ramp):
+        assert ramp(GameTime(steps=4), default=-1.0) == 4.0
+        assert ramp(numpy.arange(10), default=-1.0).tolist() == [float(step) for step in range(10)]
+        assert ramp(numpy.arange(3), default=numpy.float32(0.5)).tolist() == [0.0, 1.0, 2.0]
+
+    @pytest.mark.parametrize("default", [None, "none", [0.0]])
+    def test_a_default_of_many_times_that_is_no_number_raises(self, ramp, default):
+        """An array of numbers holds no `None`, whether or not the default would be read."""
+        with pytest.raises(TypeError, match="the default of many times is a number"):
+            ramp(numpy.arange(3), default=default)
+
+    def test_a_time_between_two_steps_reads_the_step_before(self, ramp):
+        """A second back from step 1000 is step 977.6, whose value is step 977's: the game reaches 978 later."""
+        assert ramp(GameTime(steps=3.5)) == 3.0
+        assert ramp(GameTime(steps=3.999)) == 3.0
+        assert ramp(GameTime(seconds=4 / STEPS_PER_SECOND)) == 4.0
+        assert ramp(GameTime(steps=9.9)) == 9.0
+        assert ramp(GameTime(steps=-0.5), default=None) is None
+
+    def test_reads_many_times_as_an_array(self, ramp):
+        values = ramp([GameTime(steps=2), GameTime(steps=3.7), GameTime(steps=9)])
+        assert isinstance(values, numpy.ndarray)
+        assert values.tolist() == [2.0, 3.0, 9.0]
+
+    def test_reads_an_array_of_steps_in_its_shape(self, ramp):
+        values = ramp(numpy.array([[0, 1, 2], [7.5, 8.5, 9.5]]))
+        assert values.tolist() == [[0.0, 1.0, 2.0], [7.0, 8.0, 9.0]]
+
+    def test_many_times_of_an_integer_series_stay_integers(self):
+        series = TimeSeries(numpy.arange(5), GameTime(steps=10), 5)
+        assert series(numpy.arange(10, 15)).dtype == series.dtype
+        assert series(numpy.arange(8, 13), default=-1).tolist() == [-1, -1, 0, 1, 2]
+        assert series(numpy.arange(8, 13), default=-1).dtype == series.dtype
+
+    def test_many_times_are_a_copy(self, ramp):
+        values = ramp(numpy.arange(3))
+        values[:] = 99.0
+        assert ramp.values.tolist()[:3] == [0.0, 1.0, 2.0]
+
+    def test_many_times_with_one_never_recorded_raise(self, ramp):
+        with pytest.raises(IndexError, match="step 12 outside the recorded range 0-9"):
+            ramp(numpy.array([3, 12, 40]))
+        with pytest.raises(IndexError, match="empty series"):
+            TimeSeries.empty(float)(numpy.array([3]))
+
+    def test_many_times_read_the_default_where_never_recorded(self, ramp):
+        assert ramp(numpy.array([-1, 0, 9, 10]), default=0.5).tolist() == [0.5, 0.0, 9.0, 0.5]
+        gaps_marked = ramp(numpy.array([-1, 4]), default=math.nan)
+        assert math.isnan(gaps_marked[0])
+        assert gaps_marked[1] == 4.0
+        assert TimeSeries.empty(float)(numpy.array([3, 4]), default=1.0).tolist() == [1.0, 1.0]
+
+    def test_many_times_with_a_step_past_any_integer_name_it(self, ramp):
+        """It was cast to an integer, which numpy warned of, and the error named the smallest integer."""
+        with pytest.raises(IndexError, match=f"step {math.floor(1e300)} outside the recorded range 0-9"):
+            ramp(numpy.array([3.0, 1e300]))
+        assert ramp(numpy.array([-1e300, 3.0, 1e300]), default=-1.0).tolist() == [-1.0, 3.0, -1.0]
+
+    def test_many_times_ignore_the_unwritten_buffer(self):
+        series = TimeSeries.empty(float, initial_size=16)
+        series.append(GameTime(steps=0), 1.0)
+        assert series(numpy.array([0, 1, 2]), default=-1.0).tolist() == [1.0, -1.0, -1.0]
+
+    def test_no_times_give_an_empty_array(self, ramp):
+        assert ramp([]).shape == (0,)
+
+    def test_a_time_not_finite_raises(self, ramp):
+        with pytest.raises(ValueError, match="not finite"):
+            ramp(GameTime.INFINITE)
+        with pytest.raises(ValueError, match="not finite"):
+            ramp(GameTime.INFINITE, default=0.0)
+        with pytest.raises(ValueError, match="not finite"):
+            ramp(numpy.array([1.0, math.inf]), default=0.0)
+
+    def test_plain_seconds_raise(self, ramp):
+        with pytest.raises(TypeError, match="a time is a GameTime"):
+            ramp(4.0)  # pyright: ignore[reportCallIssue, reportArgumentType]
 
 
 class TestStatistics:
@@ -343,9 +432,12 @@ class TestDerivativeAt:
         with pytest.raises(TypeError, match="time is a GameTime"):
             ramp.derivative_at(5)  # pyright: ignore[reportArgumentType]
 
-    def test_a_time_between_two_steps_ends_at_the_nearest(self, ramp):
-        assert ramp.derivative_at(GameTime(steps=5.4), window=GameTime(steps=5)) == ramp.derivative_at(
-            GameTime(steps=5), window=GameTime(steps=5)
+    def test_a_time_between_two_steps_ends_at_the_step_before(self):
+        series = TimeSeries.empty(float)
+        for step in range(20):
+            series.append(GameTime(steps=step), float(step**2))
+        assert series.derivative_at(GameTime(steps=10.9), window=GameTime(steps=5)) == series.derivative_at(
+            GameTime(steps=10), window=GameTime(steps=5)
         )
 
     def test_measures_before_the_last_step(self, ramp):
@@ -369,7 +461,7 @@ class TestDerivativeAt:
 class TestFilters:
     def test_gaussian_filter_keeps_the_geometry(self, ramp):
         filtered = ramp.gaussian_filter(sigma=GameTime(steps=1.0))
-        assert filtered.start_time.steps == ramp.start_time.steps
+        assert filtered.start.steps == ramp.start.steps
         assert filtered.size == ramp.size
 
     def test_gaussian_filter_with_a_plain_sigma_raises(self, ramp):
@@ -378,7 +470,7 @@ class TestFilters:
 
     def test_uniform_filter_keeps_the_geometry(self, ramp):
         filtered = ramp.uniform_filter(size=GameTime(steps=3))
-        assert filtered.start_time.steps == ramp.start_time.steps
+        assert filtered.start.steps == ramp.start.steps
         assert filtered.size == ramp.size
 
     @pytest.mark.parametrize("size", [GameTime(steps=0), GameTime(steps=2.5), GameTime(seconds=1)])
@@ -399,7 +491,7 @@ class TestCopyAndAdd:
 
     def test_add_overlapping(self, ramp):
         combined = ramp + ramp
-        assert combined.start_time.steps == 0
+        assert combined.start.steps == 0
         assert combined.size == 10
         assert combined[GameTime(steps=5)] == 10.0
 
@@ -411,8 +503,8 @@ class TestCopyAndAdd:
         for step in range(3, 8):
             second.append(GameTime(steps=step), 10.0)
         combined = first + second
-        assert combined.start_time.steps == 3
-        assert combined.last_time.steps == 4
+        assert combined.start.steps == 3
+        assert combined.end.steps == 4
         assert list(combined.values) == [11.0, 11.0]
 
     def test_combining_disjoint_series_gives_an_empty_series(self):
@@ -441,8 +533,8 @@ class TestCopyAndAdd:
 
     def test_scalar_arithmetic_keeps_the_step_range(self, ramp):
         scaled = ramp * 2
-        assert scaled.start_time.steps == ramp.start_time.steps
-        assert scaled.last_time.steps == ramp.last_time.steps
+        assert scaled.start.steps == ramp.start.steps
+        assert scaled.end.steps == ramp.end.steps
 
     def test_scalar_arithmetic_reflects(self, ramp):
         assert (1 + ramp)[GameTime(steps=4)] == 5.0
@@ -455,7 +547,7 @@ class TestCopyAndAdd:
         scalar = getattr(numpy, dtype)(2)
         for result in (ramp * scalar, scalar * ramp, ramp + scalar, scalar + ramp, ramp - scalar, scalar - ramp):
             assert isinstance(result, TimeSeries)
-            assert (result.start_time.steps, result.last_time.steps) == (0, 9)
+            assert (result.start.steps, result.end.steps) == (0, 9)
         assert (scalar * ramp)[GameTime(steps=4)] == 8.0
         assert (scalar - ramp)[GameTime(steps=4)] == -2.0
 
@@ -477,14 +569,14 @@ class TestCopyAndAdd:
 class TestConstruction:
     def test_wraps_an_existing_array(self):
         series = TimeSeries(numpy.array([1.0, 2.0, 3.0]), GameTime(steps=10), 3)
-        assert series.start_time.steps == 10
-        assert series.last_time.steps == 12
+        assert series.start.steps == 10
+        assert series.end.steps == 12
         assert series[GameTime(steps=11)] == 2.0
 
     def test_buffer_may_be_longer_than_the_recorded_size(self):
         series = TimeSeries(numpy.arange(10.0), GameTime(steps=0), 3)
         assert series.size == 3
-        assert series.last_time.steps == 2
+        assert series.end.steps == 2
         assert list(series.values) == [0.0, 1.0, 2.0]
 
     def test_size_beyond_the_buffer_raises(self):
@@ -503,11 +595,11 @@ class TestConstruction:
         assert TimeSeries(numpy.zeros(4), GameTime(steps=99), 0)._start is None
 
     def test_a_start_at_a_fraction_of_a_step_raises(self):
-        with pytest.raises(ValueError, match="start_time is a whole number of steps"):
+        with pytest.raises(ValueError, match="start is a whole number of steps"):
             TimeSeries(numpy.zeros(4), GameTime(steps=0.5), 3)
 
     def test_a_plain_start_raises(self):
-        with pytest.raises(TypeError, match="start_time is a GameTime"):
+        with pytest.raises(TypeError, match="start is a GameTime"):
             TimeSeries(numpy.zeros(4), 0, 3)  # pyright: ignore[reportArgumentType]
 
     def test_an_empty_buffer_is_rejected(self):
@@ -519,7 +611,7 @@ class TestConstruction:
         for series in (ramp[GameTime(steps=5) : GameTime(steps=5)], TimeSeries.empty(float).copy()):
             assert series.size == 0
             series.append(GameTime(steps=7), 1.0)
-            assert series.start_time.steps == 7
+            assert series.start.steps == 7
             assert series.last_value == 1.0
 
     def test_repr_names_the_step_range(self, ramp):

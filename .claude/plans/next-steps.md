@@ -392,6 +392,97 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      which also settles `needs_power` before 1.0.
   3. `protoss_demo_bot.py`: probes, pylons, gateways and a cybernetics core, zealots and stalkers trained at gateways
      with no Warp Gate research, and chrono boost on the nexus.
+- **A value that depends on the game time is a `TimeDependent`**, planned with the owner 2026-11-24, after the planner's
+  loss rate (#239) raised it (the owner: "Maybe we need to have a think about how we make TimeSeries
+  better in a separate session then, so that this can become the standard way of expressing time dependence. For example
+  we could introduce a protocol (similar to what we did with Field) and have multiple implementation, one via a dense
+  array (as it is now), one as interpolated points and one as a callable."). Each point below is his choice of that day:
+  - **The protocol is one call, `rate(time)` for a value and `rate(times)` for an array of them through numpy**, and
+    nothing else. He first chose two named reads, `value_at` and `values_at`, as a `Field` has ("A", over a plain
+    callable with no read of many times), then added the call ("I would suggest adding __call__ to the protocol, so
+    that every TimeDependent class is also a callable and the loser callable spelling can be used in places where we
+    only need this functionality. I like the decorator too, though."), and then made it the only read ("I wonder if we
+    should also accept a sequence of times in __call__ (and default where it applies) and get rid of value_at and
+    values_at?", then "Ok let's do A"). So it parts with `Field`, whose reads are named. Sum, smallest, largest and
+    rate of change stay off it: a moment is a whole step, so the values at every step of a range give them exactly.
+    Measured over the 6720 steps of 300 seconds: a recorded series read by one numpy index takes 0.008 ms and a
+    `GameTime` and a call a step 2.4 to 2.6, and values joined by `numpy.interp` 0.014 ms at once and 2.0 a step.
+  - **The names**: `TimeDependent` the protocol, `TimeSeries` the recorded series as it is, `TimeCurve` a few values
+    joined between their times, `TimeFunction` a function's wrapper ("TimeDependent and TimeFunction are good. I don't
+    like InterpolatedValues", then "Let's use TimeCurve", over `TimeProfile`, `SparseTimeSeries` and
+    `InterpolatedTimeSeries`). Over the protocol taking the name `TimeSeries`, which no bot could then build with
+    `TimeSeries.empty`. The planner calls a term's worth by count its curve, so its docs keep the two apart.
+  - **A time not covered raises `IndexError`, or reads the `default` the read was given** ("I think it's more elegant to
+    give a default or fallback value when reading from the object. E.g. we would add a keyword argument to value_at."),
+    a keyword of a recorded series's call alone, the one kind with times it does not cover, and no part of the
+    protocol: first on the protocol, for all three kinds ("A"), then taken off it in the review of #261, 2026-11-25
+    ("Do we really want to have the default in the protocol at all, if not all classes actually use it?", then "Yes,
+    series alone"), a curve and a function having accepted one and never read it. So a consumer of any `TimeDependent`
+    gives no fallback: it meets the `IndexError`, or takes a `TimeSeries`. A read of many times reads it at each time
+    not covered, and raises `TypeError` for `None`, which an array of numbers cannot hold. `TimeSeries.at` is removed
+    ("A"), being `series(time, default=None)`, which breaks a bot's `series.at(time)`. Over an `outside` value held by
+    the series, as `Grid.with_outside` has, which every copy, slice and sum would carry.
+  - **A recorded series keeps its indexing** ("Ok let's go with A"): `series[time]`, the one read the call also gives,
+    a range as a new `TimeSeries`, and its writes. Over removing `series[time]`, which would leave a container written
+    by index and not read by it. Its `start_time` becomes `start`, the constructor's argument too ("Btw the property
+    should be just `start` not `start_time`"), and its `last_time` becomes `end`, still the time of the last value
+    recorded ("Having start and last_time is a bit asymmetric  I think", then "A"), which a range leaves out as a slice
+    leaves out its end. Over an `end` a step after the last value, where `series(series.end)` would raise, and over
+    `first_time` and `last_time`. Both renames break a bot reading them.
+  - **A recorded series reads a time between two steps at the lower step** ("I think for a series, a time between two
+    steps should either use the lower one or raise.", then "A"), where it read the nearest: the value as of that time,
+    each held from its step until the next, as a curve's `STEP` holds one. In the call, `series[time]`, both ends of a
+    range and `derivative_at`'s time. Over raising, which a read a second back, 22.4 steps, would always meet. `append`
+    still raises for a time between steps, and a length, a filter's size or a window, still rounds to the nearest. No
+    bot's code breaks, and about half its reads between steps move a step earlier.
+  - **A `TimeCurve` holds its first value before its first time and its last after its last** ("A"), so it covers every
+    time. Over not covered there: the default is the reader's, and a curve handed to the planner is read by the planner.
+    It is pairs of a `GameTime` and a value, the times strictly rising, not changed once made.
+  - **A value is of any kind, not a number alone**, the owner's review of #261, 2026-11-25 ("Do we really want to
+    restrict this class to floats? In principle anything that supports addition (and subtraction?) should work, such
+    as `Resources` right?" and "Why does T need to be a float", then "A: any value", over the curve staying floats
+    until a bot needs more). The protocol and `TimeFunction` take any value. A `TimeCurve` takes numbers, held as
+    floats, or values that add, subtract and multiply by a number: `Resources`, a `Cost`, a `Point`, a `GameTime`.
+    The protocol of those is `SupportsVectorArithmetic` (the owner, 2026-11-25: "SupportsInterpolation is a bad name,
+    alternatives that are more descriptive or math motivated?", then "SupportsVectorArithmetic", over
+    `VectorArithmetic`, `VectorLike` and `Interpolable`): the three are what a vector space asks, which a later cubic
+    mode needs no more than. It is defined in `_shared`, being nothing of the game time's ("should this not go into
+    `_shared` or somewhere more central?"), and public from `sc2nachos.gametime`, where its one user is. A recorded
+    series stays numbers, being a numpy buffer with a mean, filters and a derivative. Many times of values that are no
+    numbers give an array of objects, a value each. Measured over 6720 steps: a linear curve of `Resources` 3.2 ms, of
+    floats 0.015, as before; a function of `Resources` 1.6 ms, of floats 0.99, where it took 0.91.
+  - **A curve joins its values by its `interpolation`, an `Interpolation`**: `LINEAR`, the default, or `STEP`, each
+    value held from its time until the next ("The advantage with the enum is that we can add more modes in the future.
+    E.g. cubic spline interpolation", then "Let's call it STEP", over `HELD`, proposed since a step is a game step
+    here). Over lines alone with a time given twice as a jump. A cubic mode waits for a bot that needs it, and for the
+    choice between a plain spline, which overshoots, dipping below 0 through 0, 0 and 0.004, and one that does not.
+  - **A consumer takes a `Callable[[GameTime], float]` or a `TimeDependent`, case by case**: the first where it reads
+    a value at a time, which a bare function passes as too, and the second where it reads many at once. `TimeFunction`
+    wraps a function, as a decorator too, calling it for each of many times. Over a consumer taking a `TimeDependent`
+    alone. A consumer that reads many at once cannot tell a bare function from a `TimeDependent` before it reads, so
+    it checks what comes back and names `TimeFunction` in its error; pyright refuses the function before that.
+  - **The planner's `loss_rates` take `float | TimeDependent[float]`**, read by one call with every step ("B", over a
+    callable read a step at a time), so a function there goes in a `TimeFunction`. A term's `time_factor` and
+    `count_factor` stay `Callable[[GameTime], float] | None`, read once an interval, which a curve or a series passes
+    as.
+
+  - **Smaller points of the build** ("OK build it", to these as proposed): many times are a sequence of `GameTime`s or
+    a numpy array of steps, as a field's `values_at` takes points or an array of them; a curve reads the time as
+    given, and a function is handed it; `__call__`'s docstring says `@public`, without which pdoc leaves a name with a
+    leading underscore out of the API reference, where the word then shows only in the source it prints; one test
+    probes all three kinds, `test_time_dependent.py`; and `docs/time-dependent-values.md`.
+
+  Two steps:
+  1. Done in #261: the protocol and its three kinds, in `sc2nachos.gametime` with `Interpolation`. A bot changes
+     `series.at(time)` to `series(time, default=None)`, `start_time` to `start` and `last_time` to `end`, and about
+     half its reads of a series between two steps move a step earlier: for the release's notes. Not decided, and built
+     the plainest way: a curve refuses a number not finite, or further from the one before it than a float holds; many
+     times given as an array with no dimension still give an array; `GameTime` has no public lower step, the series
+     flooring its `steps`. With values of any kind: a curve asks its values to add, subtract and multiply in every
+     interpolation, `STEP` too, which needs none of it, and works out the value halfway between each two as it is
+     made, refusing two no line joins, as a number and a value that is none; a value that is no number is not checked
+     for being finite; a numpy boolean counts as a number.
+  2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
      `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
