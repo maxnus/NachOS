@@ -59,7 +59,8 @@ from sc2nachos.extensions.planner import (
     WeightCurve,
     WorkerBuild,
 )
-from sc2nachos.extensions.planner._plan_program import NewBase, PlanProgram
+from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.ids import UnitTypeId, UpgradeId

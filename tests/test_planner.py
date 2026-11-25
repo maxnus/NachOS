@@ -31,7 +31,8 @@ from sc2nachos.extensions.planner import (
     WorkerBuild,
 )
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
-from sc2nachos.extensions.planner._plan_program import NewBase, PlanProgram
+from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent, TimeFunction, TimeSeries

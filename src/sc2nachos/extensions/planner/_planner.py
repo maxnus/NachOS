@@ -7,7 +7,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, final
 
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
-from sc2nachos.extensions.planner._plan_program import NewBase, PlanProgram
+from sc2nachos.extensions.planner._plan_program import PlanProgram
+from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner_state import PlannerState, read_planner_state
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import TimeGrid

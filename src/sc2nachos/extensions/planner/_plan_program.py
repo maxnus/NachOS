@@ -4,19 +4,17 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, final
+from typing import TYPE_CHECKING, final
 
 import numpy as np
-from numpy.typing import NDArray
 
 from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment, SolveReport
-from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
-from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
+from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression
+from sc2nachos.extensions.planner._plan_constraints import PlanConstraints
+from sc2nachos.extensions.planner._plan_variables import NewBase, values_of
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
-from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
 from sc2nachos.gamedata import Resources
-from sc2nachos.gametime import GameTime, TimeFunction
+from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
@@ -26,47 +24,9 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
     from sc2nachos.gametime import TimeDependent
 
-# The most an item without a tighter bound starts in one interval.
-_MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
-
 
 @final
-@dataclass(frozen=True, slots=True, kw_only=True)
-class NewBase:
-    """What a townhall a plan may still finish brings: the mineral fields and the geysers of the expansion it goes to.
-
-    Raises `ValueError` for a negative count.
-    """
-
-    mineral_fields: int
-    """The mineral fields it brings."""
-    geysers: int
-    """The geysers it brings, each free for a refinery."""
-
-    def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
-        """Raise `ValueError` for a field that holds what the class's docstring refuses."""
-        if self.mineral_fields < 0 or self.geysers < 0:
-            raise ValueError(
-                f"a new base's fields and geysers must not be negative, not {self.mineral_fields} and {self.geysers}"
-            )
-
-
-@final
-@dataclass(frozen=True, slots=True)
-class _WorkerTier:
-    """One tier of the workers at mineral fields or refineries: how many work in it in each interval, how many of them a
-    field or refinery takes, and what each brings in a second."""
-
-    block: VariableBlock
-    workers_per_site: int
-    per_worker_second: float
-
-
-@final
-class PlanProgram:
+class PlanProgram(PlanConstraints):
     """The mixed-integer linear program of one plan over the intervals between `edges`, in seconds from `state`'s time.
 
     Each item's starts so far by each interval's end are a variable, and an interval's starts those so far less those of
@@ -97,40 +57,7 @@ class PlanProgram:
     of one game time does not; and `IndexError` from a loss rate that does not cover a step of the plan.
     """
 
-    __slots__ = (
-        "_builders_free_after",
-        "_collecting",
-        "_completion_edges",
-        "_completions",
-        "_discounts",
-        "_economy",
-        "_edges",
-        "_index_of_unit_type",
-        "_index_of_upgrade",
-        "_items",
-        "_loss_rate_seconds",
-        "_loss_rates",
-        "_max_ignored_overrun",
-        "_minerals",
-        "_mining",
-        "_model",
-        "_new_bases",
-        "_objective",
-        "_program",
-        "_reward",
-        "_start_limits",
-        "_started_collecting",
-        "_spendable_income_fraction",
-        "_started_mining",
-        "_summed_loss_rates",
-        "_starts_so_far",
-        "_state",
-        "_vespene",
-        "_walk_seconds",
-        "_unlock_fraction",
-        "_whole",
-        "_widths",
-    )
+    __slots__ = ("_discounts", "_objective")
 
     def __init__(
         self,
@@ -149,33 +76,21 @@ class PlanProgram:
         unlock_fraction: float,
         spendable_income_fraction: float,
     ) -> None:
-        if len(fluid_after_seconds) != len(items):
-            raise ValueError(f"{len(fluid_after_seconds)} windows for {len(items)} items")
-        self._items = tuple(items)
-        self._model = model
-        self._state = state
-        self._reward = reward
-        self._economy = economy
-        self._start_limits = _limits_by_counted_type(start_limits, model)
-        self._max_ignored_overrun = max_ignored_overrun
-        self._unlock_fraction = unlock_fraction
-        self._spendable_income_fraction = spendable_income_fraction
-        self._walk_seconds = walk_seconds_of(
-            economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
+        super().__init__(
+            items=items,
+            model=model,
+            edges=edges,
+            state=state,
+            reward=reward,
+            economy=economy,
+            loss_rates=loss_rates,
+            start_limits=start_limits,
+            new_bases=new_bases,
+            fluid_after_seconds=fluid_after_seconds,
+            max_ignored_overrun=max_ignored_overrun,
+            unlock_fraction=unlock_fraction,
+            spendable_income_fraction=spendable_income_fraction,
         )
-        self._completions, self._builders_free_after = self._completions_and_builders()
-        self._new_bases = self._new_bases_checked(new_bases)
-        self._edges: FloatArray = np.asarray(edges, dtype=float)
-        self._widths: FloatArray = np.diff(self._edges)
-        self._read_loss_rates(loss_rates)
-        self._index_of_unit_type = {
-            item.unit_type: i for i, item in enumerate(self._items) if item.unit_type is not None
-        }
-        self._index_of_upgrade = {item.upgrade: i for i, item in enumerate(self._items) if item.upgrade is not None}
-        self._program = LinearProgram()
-        self._completion_edges = [self._edge_index(self._edges[:-1] + item.build_seconds) for item in self._items]
-        self._whole = self._whole_intervals_of(fluid_after_seconds)
-        self._add_variables()
         self._discounts = self._discounts_of(reward)
         self._add_constraints()
         self._objective = self._reward_expression()
@@ -201,180 +116,6 @@ class PlanProgram:
             solve_report=SolveReport(gap=solution.gap, is_optimal=solution.is_optimal, seconds=solution.seconds),
         )
 
-    def _whole_intervals_of(self, fluid_after_seconds: Sequence[float]) -> list[NDArray[np.bool_]]:
-        """For each item, the intervals its starts are whole in: those that start before its time in
-        `fluid_after_seconds`, and every one for an upgrade a term of the reward requires, a share of which would
-        unlock that share of all the term could ever be worth, far more than of what its units are."""
-        required = frozenset[UpgradeId]().union(*(term.requirements for term in self._reward.terms))
-        return [
-            np.ones(len(self._edges) - 1, dtype=bool)
-            if item.upgrade in required
-            else self._edges[:-1] < fluid_after - SECONDS_TOLERANCE
-            for item, fluid_after in zip(self._items, fluid_after_seconds, strict=True)
-        ]
-
-    @property
-    def _interval_count(self) -> int:
-        """How many intervals the grid has."""
-        return len(self._widths)
-
-    # The variables.
-
-    def _add_variables(self) -> None:
-        """Add the variables every plan has: each item's starts so far, the stock of minerals and of vespene at each
-        edge, the workers in each tier, and those that start to mine or to collect."""
-        self._starts_so_far: list[VariableBlock] = []
-        for item, whole in zip(self._items, self._whole, strict=True):
-            self._add_starts_so_far(item, whole)
-        self._minerals = self._add_stock(self._state.resources.minerals)
-        self._vespene = self._add_stock(self._state.resources.vespene)
-        self._mining = self._add_worker_tiers(self._economy.minerals_per_miner_second)
-        self._collecting = self._add_worker_tiers(self._economy.vespene_per_collector_second)
-        self._started_mining, self._started_collecting = self._add_work_starts()
-
-    def _read_loss_rates(self, loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]]) -> None:
-        """Read `loss_rates`, each unit type's under the type it counts as, the highest of those of one type: a number
-        as it is, and a `TimeDependent` at each game step from the plan's start to its horizon, asked for all of them by
-        one call and summed from the start to each step. Of a number and a `TimeDependent` for one type, the higher at
-        each step.
-
-        Raises `ValueError` for a rate a `TimeDependent` gives that is negative or not finite, `TypeError` for one that
-        does not give a number for each step, as a function of one game time does not, and `IndexError` from one that
-        does not cover a step."""
-        horizon = float(self._edges[-1])
-        step_count = math.ceil(GameTime(seconds=horizon - SECONDS_TOLERANCE).steps)
-        self._loss_rate_seconds: FloatArray = np.minimum(np.arange(step_count + 1) * GameTime(steps=1).seconds, horizon)
-        self._loss_rates: dict[UnitTypeId, float] = {}
-        by_step: dict[UnitTypeId, FloatArray] = {}
-        for unit_type, rate in loss_rates.items():
-            counted = self._model.counted_as(unit_type)
-            if callable(rate):
-                rates = _loss_rates_from(rate, self._state.time, step_count, unit_type)
-                by_step[counted] = np.maximum(rates, by_step.get(counted, 0.0))
-            else:
-                self._loss_rates[counted] = max(float(rate), self._loss_rates.get(counted, 0.0))
-        self._summed_loss_rates: dict[UnitTypeId, FloatArray] = {}
-        for counted, rates in by_step.items():
-            highest = np.maximum(rates, self._loss_rates.pop(counted, 0.0))
-            summed = np.cumsum(highest * np.diff(self._loss_rate_seconds))
-            self._summed_loss_rates[counted] = np.concatenate([[0.0], summed])
-
-    def _share_surviving(
-        self, unit_type: UnitTypeId, from_seconds: FloatArray | float, to_seconds: FloatArray | float
-    ) -> FloatArray:
-        """The share of the units of `unit_type` alive `from_seconds` after the plan's start that are alive `to_seconds`
-        after it by its loss rate, all of them where that is no later."""
-        summed = self._summed_loss_rates.get(unit_type)
-        if summed is None:
-            since = np.maximum(np.asarray(to_seconds, dtype=float) - from_seconds, 0.0)
-            return np.exp(-self._loss_rates.get(unit_type, 0.0) * since)
-        lost_by_then = np.interp(np.maximum(to_seconds, from_seconds), self._loss_rate_seconds, summed)
-        return np.exp(np.interp(from_seconds, self._loss_rate_seconds, summed) - lost_by_then)
-
-    def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
-        """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
-        and the seconds until each SCV building, or walking to build, is back at work after its walk back.
-
-        Raises `ValueError` for a unit in production of a type that is no item of the model's."""
-        for in_production in (*self._state.unit_completions, *self._state.worker_builds):
-            if in_production.unit_type not in self._model.unit_items:
-                raise ValueError(
-                    f"the state holds a {in_production.unit_type.name} in production, which the planner cannot make "
-                    "for Terran"
-                )
-        completions = [
-            (completion.unit_type, completion.time_left.seconds) for completion in self._state.unit_completions
-        ]
-        builders_free_after: list[float] = []
-        for build in self._state.worker_builds:
-            walk = self._walk_seconds.get(build.unit_type, 0.0)
-            done_after = build.time_left.seconds + (walk if build.builder_walks_there else 0.0)
-            completions.append((build.unit_type, done_after))
-            builders_free_after.append(done_after + walk)
-        return tuple(completions), tuple(builders_free_after)
-
-    def _add_starts_so_far(self, item: Item, whole: NDArray[np.bool_]) -> None:
-        """Add the variables of the next item, `item`: its starts so far by each interval's end, whole in the intervals
-        `whole` marks, which run from the first, so that each of those intervals' starts is whole too. An interval's
-        starts are held between none and the most the interval takes: none before an SCV could walk there, and none of
-        an upgrade done or being researched."""
-        interval_starts = self._edges[:-1]
-        most_in_interval = np.full(len(interval_starts), self._most_starts_in_an_interval(item))
-        if item.unit_type is not None and item.is_built_by_worker:
-            most_in_interval[interval_starts < self._walk_seconds.get(item.unit_type, 0.0) - SECONDS_TOLERANCE] = 0.0
-        if item.upgrade is not None and (
-            item.upgrade in self._state.upgrades or item.upgrade in self._state.upgrade_completions
-        ):
-            most_in_interval[:] = 0.0
-        block = self._program.add_variables(len(interval_starts), upper=np.cumsum(most_in_interval), integral=whole)
-        self._starts_so_far.append(block)
-        self._program.constrain(
-            self._starts_in_interval(len(self._starts_so_far) - 1), lower=0.0, upper=most_in_interval
-        )
-
-    def _add_stock(self, initial: float) -> VariableBlock:
-        """The variables of a resource's stock at each edge, the first `initial`."""
-        lower = np.zeros(self._interval_count + 1)
-        upper = np.full(self._interval_count + 1, math.inf)
-        lower[0] = upper[0] = initial
-        return self._program.add_variables(self._interval_count + 1, lower=lower, upper=upper)
-
-    def _add_worker_tiers(self, rates: Sequence[float]) -> tuple[_WorkerTier, ...]:
-        """The variables of how many workers work in each tier of `rates`, each worker's at a field or refinery, in each
-        interval."""
-        return tuple(
-            _WorkerTier(self._program.add_variables(self._interval_count), workers, rate)
-            for workers, rate in rate_tiers(rates)
-        )
-
-    def _add_work_starts(self) -> tuple[tuple[VariableBlock, ...], tuple[VariableBlock, ...]]:
-        """The variables of the workers that start to mine in each interval, a block for each mining tier, and of those
-        that start to collect, one for each collecting tier; none where the economy's `initial_harvest_delay` is 0."""
-        if not self._economy.initial_harvest_delay.seconds:
-            return (), ()
-        started_mining = tuple(self._program.add_variables(self._interval_count) for _ in self._mining)
-        return started_mining, tuple(self._program.add_variables(self._interval_count) for _ in self._collecting)
-
-    def _working_in(self, tiers: Sequence[_WorkerTier]) -> RowExpression:
-        """The workers working in `tiers` in each interval."""
-        working = RowExpression(self._interval_count)
-        for tier in tiers:
-            working.add(tier.block, np.eye(self._interval_count))
-        return working
-
-    def _new_bases_checked(self, new_bases: Sequence[NewBase]) -> tuple[NewBase, ...]:
-        """`new_bases`, the first of them for the townhalls the state has in production.
-
-        Raises `ValueError` for fewer of them than those townhalls."""
-        in_production = _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
-        if in_production > len(new_bases):
-            raise ValueError(
-                f"the state has {in_production} command centers in production, and only {len(new_bases)} expansions "
-                "to take were named: name the expansion of each townhall going up or on its way first"
-            )
-        return tuple(new_bases)
-
-    def _most_new_townhall_starts(self) -> int:
-        """The most command centers the plan may start: one for each new base no townhall in production takes."""
-        return len(self._new_bases) - _count_of(self._completions, UnitTypeId.COMMAND_CENTER)
-
-    def _most_starts_in_an_interval(self, item: Item) -> float:
-        """The most of `item` that can start in one interval."""
-        state = self._state
-        if item.upgrade is not None:
-            most = 1.0
-        elif item.unit_type is UnitTypeId.COMMAND_CENTER:
-            most = float(self._most_new_townhall_starts())
-        elif item.unit_type is UnitTypeId.REFINERY:
-            most = float(state.free_geysers + sum(base.geysers for base in self._new_bases))
-        elif item.morphed_from is not None:
-            most = float(state.units.get(item.morphed_from, 0) + len(self._new_bases))
-        elif item.supply_used > 0:
-            most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
-        else:
-            most = _MOST_STARTS_IN_AN_INTERVAL
-        return most if item.made is None else min(most, self._start_limits.get(item.made, math.inf))
-
     def _discounts_of(self, reward: Reward) -> FloatArray:
         """What each interval's seconds count for, discounted from the plan's start, the last interval's with what the
         state at the horizon counts for after it."""
@@ -388,544 +129,6 @@ class PlanProgram:
         discounts = (np.exp(-decay * self._edges[:-1]) - np.exp(-decay * self._edges[1:])) / decay
         discounts[-1] += (math.exp(-decay * horizon) - math.exp(-decay * (horizon + tail))) / decay
         return discounts
-
-    # Expressions over the intervals.
-
-    def _edge_index(self, seconds: FloatArray) -> FloatArray:
-        """The index of the first edge at or after each of `seconds`, past the last edge's index if after it."""
-        return np.searchsorted(self._edges, seconds - SECONDS_TOLERANCE, side="left").astype(float)
-
-    def _row_edges(self, *, at_end: bool) -> FloatArray:
-        """The index of the edge each interval's row counts at: its start, or its end."""
-        return np.arange(self._interval_count, dtype=float) + (1.0 if at_end else 0.0)
-
-    def _add_starts_to(
-        self, expression: RowExpression, index: int, per_start_in_interval: FloatArray | float
-    ) -> RowExpression:
-        """Add to `expression` the starts of item `index` in each interval, each times `per_start_in_interval`: a matrix
-        of a row to each of the expression's rows and a column to each interval, or one number for every one of them;
-        returns `expression`. An interval's starts being those so far less those of the interval before, the starts so
-        far by an interval's end take the interval's column less the next one's."""
-        per_start = np.broadcast_to(
-            np.asarray(per_start_in_interval, dtype=float), (expression.rows, self._interval_count)
-        )
-        per_start_so_far = per_start.copy()
-        per_start_so_far[:, :-1] -= per_start[:, 1:]
-        return expression.add(self._starts_so_far[index], per_start_so_far)
-
-    def _started_so_far(self, index: int) -> RowExpression:
-        """The starts of item `index` in each interval and the intervals before."""
-        return RowExpression(self._interval_count).add(self._starts_so_far[index], np.eye(self._interval_count))
-
-    def _starts_in_interval(self, index: int) -> RowExpression:
-        """The starts of item `index` in each interval."""
-        return self._add_starts_to(RowExpression(self._interval_count), index, np.eye(self._interval_count))
-
-    def _starts_over_the_plan(self, index: int) -> RowExpression:
-        """One row: the starts of item `index` over the whole plan."""
-        return self._add_starts_to(RowExpression(1), index, 1.0)
-
-    def _starts_done(self, index: int, *, at_end: bool, survive: bool = False) -> RowExpression:
-        """The starts of item `index` done by each interval's start, or its end, each as it survives its loss rate from
-        when it is done if `survive`."""
-        rows = self._row_edges(at_end=at_end)
-        done = (self._completion_edges[index][None, :] <= rows[:, None]).astype(float)
-        unit_type = self._items[index].unit_type
-        if survive and unit_type is not None:
-            completed = self._edges[:-1] + self._items[index].build_seconds
-            done *= self._share_surviving(unit_type, completed[None, :], self._edges[rows.astype(int)][:, None])
-        return self._add_starts_to(RowExpression(len(rows)), index, done)
-
-    def _done_by(self, seconds: float, *, at_end: bool, surviving_as: UnitTypeId | None = None) -> FloatArray:
-        """For each interval's start, or its end, whether something done after `seconds` is done, as a unit of the type
-        `surviving_as` survives its loss rate from then."""
-        rows = self._row_edges(at_end=at_end)
-        done = (self._edge_index(np.array([seconds]))[0] <= rows).astype(float)
-        if surviving_as is None:
-            return done
-        return done * self._share_surviving(surviving_as, seconds, self._edges[rows.astype(int)])
-
-    def _count_alive(self, unit_type: UnitTypeId, *, at_end: bool, survive: bool = True) -> RowExpression:
-        """The units of `unit_type` alive at each interval's start, or its end: those alive now, those in production and
-        those the plan starts, less those morphed into another type, each as it survives its loss rate if `survive`."""
-        rows = self._row_edges(at_end=at_end)
-        count = RowExpression(len(rows))
-        count.constant = np.full(len(rows), float(self._state.units.get(unit_type, 0)))
-        if survive:
-            count.constant *= self._share_surviving(unit_type, 0.0, self._edges[rows.astype(int)])
-        for completion_type, seconds in self._completions:
-            if completion_type == unit_type:
-                count.constant += self._done_by(seconds, at_end=at_end, surviving_as=unit_type if survive else None)
-            elif self._model.unit_items[completion_type].morphed_from == unit_type:
-                count.constant -= self._done_by(seconds, at_end=at_end)
-        for index, item in enumerate(self._items):
-            if item.unit_type == unit_type:
-                count.add_expression(self._starts_done(index, at_end=at_end, survive=survive))
-            elif item.morphed_from == unit_type:
-                count.add_expression(self._starts_done(index, at_end=at_end), -1.0)
-        return count
-
-    def _made_since_start(self, unit_type: UnitTypeId) -> RowExpression:
-        """The units of `unit_type` done since the plan's start by each interval's start, from production or the
-        plan."""
-        made = RowExpression(self._interval_count)
-        for completion_type, seconds in self._completions:
-            if completion_type == unit_type:
-                made.constant += self._done_by(seconds, at_end=False)
-        if (index := self._index_of_unit_type.get(unit_type)) is not None:
-            made.add_expression(self._starts_done(index, at_end=False))
-        return made
-
-    def _upgrade_done(self, upgrade: UpgradeId, *, at_end: bool) -> RowExpression:
-        """Whether `upgrade` is done by each interval's start, or its end."""
-        done = RowExpression(self._interval_count)
-        if upgrade in self._state.upgrades:
-            done.constant += 1.0
-        elif upgrade in self._state.upgrade_completions:
-            done.constant += self._done_by(self._state.upgrade_completions[upgrade].seconds, at_end=at_end)
-        elif (index := self._index_of_upgrade.get(upgrade)) is not None:
-            done.add_expression(self._starts_done(index, at_end=at_end))
-        return done
-
-    def _busy_seconds(self, index: int, *, before: float = 0.0, after: float = 0.0) -> FloatArray:
-        """The seconds of each interval, by row, that one start of item `index` in each interval, by column, keeps busy:
-        from `before` seconds ahead of the start to `after` seconds past its end, less the overrun ignored of a whole
-        start."""
-        busy_from = self._edges[:-1][None, :] - before
-        busy_until = self._edges[:-1][None, :] + self._items[index].build_seconds + after
-        overlap_start = np.maximum(busy_from, self._edges[:-1][:, None])
-        overlap_end = np.minimum(busy_until, self._edges[1:][:, None])
-        busy = np.maximum(overlap_end - overlap_start, 0.0)
-        began_before = self._edges[:-1][:, None] > busy_from + SECONDS_TOLERANCE
-        ignored = self._is_overrun_ignored(busy, self._widths[:, None], began_before) & self._whole[index][None, :]
-        return np.where(ignored, 0.0, busy)
-
-    def _busy_seconds_until(self, end_seconds: float, *, start_seconds: float = 0.0) -> FloatArray:
-        """The seconds of each interval within `start_seconds` to `end_seconds` from the plan's start, less the overrun
-        ignored. What is busy from the plan's start began before it."""
-        overlap_start = np.maximum(self._edges[:-1], start_seconds)
-        busy = np.maximum(np.minimum(self._edges[1:], end_seconds) - overlap_start, 0.0)
-        began_before = (self._edges[:-1] > start_seconds + SECONDS_TOLERANCE) | (start_seconds <= SECONDS_TOLERANCE)
-        return np.where(self._is_overrun_ignored(busy, self._widths, began_before), 0.0, busy)
-
-    def _is_overrun_ignored(
-        self, busy: FloatArray, widths: FloatArray, began_before: NDArray[np.bool_]
-    ) -> NDArray[np.bool_]:
-        """Whether the `busy` seconds of each interval, `widths` long, are an overrun to ignore: of what `began_before`
-        the interval and ends in it, less than `max_ignored_overrun` of the interval."""
-        most_ignored = self._max_ignored_overrun * widths - SECONDS_TOLERANCE
-        return began_before & (busy > SECONDS_TOLERANCE) & (busy < most_ignored)
-
-    def _shorter_than_every_build_and_whole(self, indices: list[int]) -> NDArray[np.bool_]:
-        """Whether each interval is no longer than every build of the items `indices`, and their starts in it are whole:
-        where a build under way keeps its producer from a start in the interval, as a start sits on its first second."""
-        shortest = min(self._items[index].build_seconds for index in indices)
-        whole = np.logical_and.reduce([self._whole[index] for index in indices])
-        return (self._widths <= shortest + SECONDS_TOLERANCE) & whole
-
-    def _constrain_at_most(
-        self, used: RowExpression, available: RowExpression, *, most_used: float | None = None
-    ) -> None:
-        """Hold `used` at or below `available` in each row. Where what is now already uses more, that would leave no
-        plan, so the row holds what the plan uses at no more than it makes available, which forgives the shortfall for
-        good. With `most_used`, the most `used` can come to, it is not forgiven: nothing more is used in such a row
-        unless `used` is at or below `available` there, at the cost of a whole variable for the row."""
-        excess = RowExpression(used.rows).add_expression(used).add_expression(available, -1.0)
-        shortfall = np.maximum(excess.constant, 0.0)
-        limit = np.maximum(-excess.constant, 0.0)
-        excess.constant = np.zeros(used.rows)
-        is_short = shortfall > 0.0
-        if most_used is not None and is_short.any():
-            shortfall_made_up = self._program.add_variables(int(is_short.sum()), upper=1.0, integral=True)
-            excess.add(shortfall_made_up, np.diag(shortfall)[:, is_short])
-            more_used = used.selected(is_short)
-            most_more_used = np.maximum(most_used - more_used.constant, 0.0)
-            more_used.constant = np.zeros(more_used.rows)
-            self._program.constrain(more_used.add(shortfall_made_up, -np.diag(most_more_used)), upper=0.0)
-        self._program.constrain(excess, upper=limit)
-
-    # The constraints.
-
-    def _add_constraints(self) -> None:
-        """Every constraint of the program."""
-        self._constrain_resources()
-        self._constrain_workers()
-        self._constrain_supply()
-        self._constrain_producers()
-        self._constrain_counts()
-        self._constrain_prerequisites()
-
-    def _constrain_resources(self) -> None:
-        """Each interval's stock of minerals and vespene: the stock before, plus what was mined, less what started; and
-        what starts paid from the stock at the interval's start and the spendable fraction of its income."""
-        intervals = self._interval_count
-        mineral_income, vespene_income = self._incomes_a_second()
-        for stock, income, is_minerals in (
-            (self._minerals, mineral_income, True),
-            (self._vespene, vespene_income, False),
-        ):
-            spent = RowExpression(intervals)
-            for index, item in enumerate(self._items):
-                if cost := item.minerals if is_minerals else item.vespene:
-                    spent.add_expression(self._starts_in_interval(index), cost)
-            flow = RowExpression(intervals).add(
-                stock, np.eye(intervals, intervals + 1, k=1) - np.eye(intervals, intervals + 1)
-            )
-            flow.add_expression(income, -self._widths).add_expression(spent)
-            self._program.constrain(flow, lower=0.0, upper=0.0)
-            paid = RowExpression(intervals).add(stock, np.eye(intervals, intervals + 1))
-            paid.add_expression(income, self._spendable_income_fraction * self._widths).add_expression(spent, -1.0)
-            self._program.constrain(paid, lower=0.0)
-
-    def _incomes_a_second(self) -> tuple[RowExpression, RowExpression]:
-        """The minerals and the vespene that come in a second in each interval: what the workers bring in, and for
-        minerals the MULEs of the orbital commands alive at the interval's start."""
-        mineral_income = self._income_of(self._mining, self._started_mining)
-        if mule_rate := self._economy.mule_minerals_per_orbital_second:
-            mineral_income.add_expression(self._count_alive(UnitTypeId.ORBITAL_COMMAND, at_end=False), mule_rate)
-        return mineral_income, self._income_of(self._collecting, self._started_collecting)
-
-    def _income_of(self, tiers: Sequence[_WorkerTier], started: Sequence[VariableBlock]) -> RowExpression:
-        """What the workers in `tiers` bring in a second in each interval, less what those `started` in a tier do not
-        yet: nothing for the economy's `initial_harvest_delay` from the start of the interval they start in."""
-        income = RowExpression(self._interval_count)
-        for tier in tiers:
-            income.add(tier.block, np.eye(self._interval_count) * tier.per_worker_second)
-        for tier, started_in_tier in zip(tiers, started, strict=False):
-            income.add(started_in_tier, -tier.per_worker_second * self._initial_harvest_delay_shares())
-        return income
-
-    def _constrain_workers(self) -> None:
-        """Miners, collectors and each builder's share of an interval at most the SCVs alive at its start; with no
-        walks, the builders counted whole where an interval is shorter than every build; and the workers that start to
-        mine or to collect held at what the miners and collectors rise by."""
-        intervals = self._interval_count
-        working = self._working_in((*self._mining, *self._collecting))
-        builders = RowExpression(intervals)
-        back_from_builds = RowExpression(intervals)
-        built = [(index, item) for index, item in enumerate(self._items) if item.is_built_by_worker]
-        for index, item in built:
-            walk = self._walk_seconds_of(item)
-            busy_share = self._busy_seconds(index, before=walk, after=walk) / self._widths[:, None]
-            self._add_starts_to(builders, index, busy_share)
-            self._add_starts_to(back_from_builds, index, _falls_of(busy_share, from_share=0.0))
-        for free_after in self._builders_free_after:
-            busy_share = self._busy_seconds_until(free_after) / self._widths
-            builders.constant += busy_share
-            back_from_builds.constant += _falls_of(busy_share[:, None], from_share=1.0)[:, 0]
-        self._constrain_work_starts(back_from_builds)
-        workers = self._count_alive(UnitTypeId.SCV, at_end=False)
-        self._constrain_at_most(RowExpression(intervals).add_expression(working).add_expression(builders), workers)
-        if not built or any(self._walk_seconds_of(item) for _, item in built):
-            return
-        short_and_whole = self._shorter_than_every_build_and_whole([index for index, _ in built])
-        builders_whole = RowExpression(intervals).add_expression(working)
-        for index, _ in built:
-            is_busy = (self._busy_seconds(index) > SECONDS_TOLERANCE).astype(float)
-            self._add_starts_to(builders_whole, index, is_busy)
-        for free_after in self._builders_free_after:
-            builders_whole.constant += self._busy_seconds_until(free_after) > SECONDS_TOLERANCE
-        self._constrain_at_most(builders_whole.selected(short_and_whole), workers.selected(short_and_whole))
-
-    def _constrain_work_starts(self, back_from_builds: RowExpression) -> None:
-        """Hold the workers that start to mine or to collect in each interval at no fewer than those of each tier rise
-        by: over what the interval before had left of them, as its SCVs survive, or over those of the state, where every
-        SCV that neither collects nor builds mines. Of the miners, as many as are `back_from_builds` in the interval
-        start for nothing: their walk back was the builder's."""
-        if not self._started_mining and not self._started_collecting:
-            return
-        state = self._state
-        collecting_now = float(state.vespene_collectors)
-        building_now = len(self._builders_free_after)
-        mining_now = max(state.units.get(UnitTypeId.SCV, 0) - collecting_now - building_now, 0.0)
-        self._hold_starts_at_rises(
-            self._collecting, self._started_collecting, working_now=collecting_now, sites=state.refineries_with_vespene
-        )
-        self._hold_starts_at_rises(
-            self._mining,
-            self._started_mining,
-            working_now=mining_now,
-            sites=state.mineral_fields,
-            back_from_builds=back_from_builds,
-        )
-
-    def _hold_starts_at_rises(
-        self,
-        tiers: Sequence[_WorkerTier],
-        started: Sequence[VariableBlock],
-        *,
-        working_now: float,
-        sites: int,
-        back_from_builds: RowExpression | None = None,
-    ) -> None:
-        """Hold the workers `started` in each of `tiers` in each interval at no fewer than the tier rises by, from the
-        `working_now` in them, as many in each tier as the `sites` now take, the better tiers first; less as many in
-        all as are `back_from_builds`."""
-        intervals = self._interval_count
-        survival = self._share_surviving(UnitTypeId.SCV, self._edges[:-1], self._edges[1:])
-        risen_by = np.eye(intervals) - np.eye(intervals, k=-1) * survival[None, :]
-        started_for_nothing = RowExpression(intervals)
-        for tier, started_in_tier in zip(tiers, started, strict=True):
-            in_tier_now = min(working_now, float(tier.workers_per_site * sites))
-            working_now -= in_tier_now
-            risen = RowExpression(intervals).add(tier.block, risen_by).add(started_in_tier, -np.eye(intervals))
-            risen.constant[0] = -in_tier_now
-            if back_from_builds is not None:
-                back_in_tier = self._program.add_variables(intervals)
-                risen.add(back_in_tier, -np.eye(intervals))
-                started_for_nothing.add(back_in_tier, np.eye(intervals))
-            self._program.constrain(risen, upper=0.0)
-        if back_from_builds is not None:
-            self._program.constrain(started_for_nothing.add_expression(back_from_builds, -1.0), upper=0.0)
-
-    def _initial_harvest_delay_shares(self) -> FloatArray:
-        """The share of each interval, by row, within the economy's `initial_harvest_delay` of each interval's start, by
-        column: what a worker that starts work at that start loses of it."""
-        started_at = self._edges[:-1][None, :]
-        overlap_start = np.maximum(started_at, self._edges[:-1][:, None])
-        overlap_end = np.minimum(started_at + self._economy.initial_harvest_delay.seconds, self._edges[1:][:, None])
-        return np.maximum(overlap_end - overlap_start, 0.0) / self._widths[:, None]
-
-    def _constrain_supply(self) -> None:
-        """The supply taken at most the cap and the game's limit at each interval's start: taken as a unit starts and
-        given back as it is lost, and the cap raised as a supply depot or a command center is done."""
-        intervals = self._interval_count
-        used = RowExpression(intervals)
-        used.constant += self._state.supply_used
-        cap = RowExpression(intervals)
-        cap.constant += self._state.supply_cap
-        for index, item in enumerate(self._items):
-            if item.supply_used:
-                used.add_expression(self._started_so_far(index), item.supply_used)
-            if item.supply_provided:
-                cap.add_expression(self._starts_done(index, at_end=False), item.supply_provided)
-        for completion_type, seconds in self._completions:
-            if provided := self._model.unit_items[completion_type].supply_provided:
-                cap.constant += provided * self._done_by(seconds, at_end=False)
-        for unit_type in (*self._loss_rates, *self._summed_loss_rates):
-            supply = self._model.game_data.units[unit_type].supply_used
-            if supply and (self._loss_rates.get(unit_type) or unit_type in self._summed_loss_rates):
-                used.add_expression(self._count_alive(unit_type, at_end=False, survive=False), -supply)
-                used.add_expression(self._count_alive(unit_type, at_end=False), supply)
-        self._constrain_at_most(used, cap, most_used=SUPPLY_LIMIT)
-        limit = RowExpression(intervals)
-        limit.constant += SUPPLY_LIMIT
-        self._constrain_at_most(used, limit)
-
-    def _constrain_producers(self) -> None:
-        """For each set of producers an item takes, what its items and every item taking fewer of them keep busy at
-        most what those producers can make, and their tech labs for the items that need one."""
-        producer_sets = {item.producers for item in self._items if not item.is_built_by_worker}
-        for producers in sorted(producer_sets, key=sorted):
-            members = [
-                index
-                for index, item in enumerate(self._items)
-                if not item.is_built_by_worker and item.producers <= producers
-            ]
-            self._constrain_producer_time(producers, members, on_tech_labs=False)
-            if needing_tech_lab := [index for index in members if self._items[index].needs_tech_lab]:
-                self._constrain_producer_time(producers, needing_tech_lab, on_tech_labs=True)
-
-    def _constrain_producer_time(
-        self, producers: frozenset[UnitTypeId], members: list[int], *, on_tech_labs: bool
-    ) -> None:
-        """The seconds the `members` and what is made now keep `producers` busy, or their tech labs, at most the
-        seconds those can make, a reactor making a second; and where an interval is shorter than every member's build,
-        the builds under way at most how many make them."""
-        intervals = self._interval_count
-        lanes = RowExpression(intervals)
-        for producer in sorted(producers):
-            add_on = self._model.tech_lab_of(producer) if on_tech_labs else self._model.reactor_of(producer)
-            lane_types = [add_on] if on_tech_labs else [producer, add_on]
-            for lane_type in lane_types:
-                if lane_type is not None:
-                    lanes.add_expression(self._count_alive(lane_type, at_end=False))
-        producer_activities = [
-            occupation
-            for occupation in self._state.producer_activities
-            if occupation.producer in producers and (occupation.needs_tech_lab or not on_tech_labs)
-        ]
-        busy = RowExpression(intervals)
-        running = RowExpression(intervals)
-        for index in members:
-            busy_seconds = self._busy_seconds(index)
-            self._add_starts_to(busy, index, busy_seconds)
-            self._add_starts_to(running, index, (busy_seconds > SECONDS_TOLERANCE).astype(float))
-        for occupation in producer_activities:
-            seconds = self._busy_seconds_until(
-                occupation.time_left.seconds, start_seconds=occupation.time_until_start.seconds
-            )
-            busy.constant += seconds
-            running.constant += seconds > SECONDS_TOLERANCE
-        self._constrain_at_most(busy, RowExpression(intervals).add_expression(lanes, self._widths))
-        short_and_whole = self._shorter_than_every_build_and_whole(members)
-        if short_and_whole.any():
-            self._constrain_at_most(running.selected(short_and_whole), lanes.selected(short_and_whole))
-
-    def _constrain_counts(self) -> None:
-        """What the game's counts bound: workers at the fields and refineries there are, each tier its share of each, an
-        add-on a host, a morph a townhall, an item its limit of starts, a refinery a geyser, and an upgrade once."""
-        intervals = self._interval_count
-        fields, geysers = self._fields_and_geysers_of_new_bases()
-        fields.constant += self._state.mineral_fields
-        refineries = self._made_since_start(UnitTypeId.REFINERY)
-        refineries.constant += self._state.refineries_with_vespene
-        for tiers, sites in ((self._mining, fields), (self._collecting, refineries)):
-            for tier in tiers:
-                working = RowExpression(intervals).add(tier.block, np.eye(intervals))
-                self._constrain_at_most(working, RowExpression(intervals).add_expression(sites, tier.workers_per_site))
-        self._constrain_add_ons_and_morphs()
-        for index, item in enumerate(self._items):
-            limit = None if item.made is None else self._start_limits.get(item.made)
-            if limit is not None:
-                self._program.constrain(self._starts_over_the_plan(index), upper=limit)
-        if (command_center := self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)) is not None:
-            self._program.constrain(
-                self._starts_over_the_plan(command_center), upper=float(self._most_new_townhall_starts())
-            )
-        if (refinery := self._index_of_unit_type.get(UnitTypeId.REFINERY)) is not None:
-            geysers.constant += self._state.free_geysers
-            self._constrain_at_most(self._started_so_far(refinery), geysers)
-        for index, item in enumerate(self._items):
-            if item.upgrade is not None:
-                self._program.constrain(self._starts_over_the_plan(index), upper=1.0)
-
-    def _fields_and_geysers_of_new_bases(self) -> tuple[RowExpression, RowExpression]:
-        """The mineral fields and the geysers that the townhalls done since the plan's start bring by each interval's
-        start, those in production and the plan's: the first done brings the first new base's, and so on.
-
-        Bases that all bring the same take no variable. Otherwise each base has a variable an interval, how much of
-        it is taken: all of them together as many as the townhalls done, and each base no more than the one before
-        it."""
-        intervals = self._interval_count
-        done = self._made_since_start(UnitTypeId.COMMAND_CENTER)
-        fields = RowExpression(intervals)
-        geysers = RowExpression(intervals)
-        bases = self._new_bases
-        if len(set(bases)) <= 1:
-            for base in bases[:1]:
-                fields.add_expression(done, base.mineral_fields)
-                geysers.add_expression(done, base.geysers)
-            return fields, geysers
-        each_interval = np.eye(intervals)
-        taken_in_all = RowExpression(intervals)
-        taken = [self._program.add_variables(intervals, upper=1.0) for _ in bases]
-        for base, taken_of_it in zip(bases, taken, strict=True):
-            fields.add(taken_of_it, each_interval * base.mineral_fields)
-            geysers.add(taken_of_it, each_interval * base.geysers)
-            taken_in_all.add(taken_of_it, each_interval)
-        self._program.constrain(taken_in_all.add_expression(done, -1.0), lower=0.0, upper=0.0)
-        for position in range(1, len(bases)):
-            self._take_a_base_after_the_one_before(bases, taken, position)
-        return fields, geysers
-
-    def _take_a_base_after_the_one_before(
-        self, bases: Sequence[NewBase], taken: Sequence[VariableBlock], position: int
-    ) -> None:
-        """Hold the base at `position` no more taken than the one before it, in each interval. Where it brings more
-        fields or geysers than the one before, the solver would rather take a share of each than the earlier whole:
-        a whole variable an interval then holds that none of it is taken before all of the one before."""
-        intervals = self._interval_count
-        each_interval = np.eye(intervals)
-        base, base_before = bases[position], bases[position - 1]
-        of_it, of_the_one_before = taken[position], taken[position - 1]
-        if base.mineral_fields <= base_before.mineral_fields and base.geysers <= base_before.geysers:
-            more_of_it = RowExpression(intervals).add(of_it, each_interval).add(of_the_one_before, -each_interval)
-            self._program.constrain(more_of_it, upper=0.0)
-            return
-        is_before_whole = self._program.add_variables(intervals, upper=1.0, integral=True)
-        any_of_it = RowExpression(intervals).add(of_it, each_interval).add(is_before_whole, -each_interval)
-        self._program.constrain(any_of_it, upper=0.0)
-        not_whole = RowExpression(intervals).add(is_before_whole, each_interval).add(of_the_one_before, -each_interval)
-        self._program.constrain(not_whole, upper=0.0)
-
-    def _constrain_add_ons_and_morphs(self) -> None:
-        """At most one add-on a host, those standing and those in production counted, and at most one morph a
-        command center, those in production counted: of every type that takes the host, the plan's items or not."""
-        sources: dict[UnitTypeId, list[int]] = {}
-        for index, item in enumerate(self._items):
-            if item.unit_type is not None and self._model.is_add_on(item.unit_type):
-                for host in sorted(item.producers):
-                    sources.setdefault(host, []).append(index)
-            elif item.morphed_from is not None:
-                sources.setdefault(item.morphed_from, []).append(index)
-        for source, indices in sorted(sources.items()):
-            is_host = self._items[indices[0]].morphed_from is None
-            taking_it = self._add_ons_of(source) if is_host else self._types_morphed_from(source)
-            started = RowExpression(self._interval_count)
-            for index in indices:
-                started.add_expression(self._started_so_far(index))
-            started.constant += sum(unit_type in taking_it for unit_type, _ in self._completions)
-            if is_host:
-                started.constant += sum(self._state.units.get(add_on, 0) for add_on in taking_it)
-            available = self._made_since_start(source)
-            available.constant += self._state.units.get(source, 0)
-            self._constrain_at_most(started, available)
-
-    def _add_ons_of(self, host: UnitTypeId) -> frozenset[UnitTypeId]:
-        """The add-on types `host` builds: its tech lab and its reactor."""
-        add_ons = (self._model.tech_lab_of(host), self._model.reactor_of(host))
-        return frozenset(add_on for add_on in add_ons if add_on is not None)
-
-    def _types_morphed_from(self, unit_type: UnitTypeId) -> frozenset[UnitTypeId]:
-        """The types a unit of `unit_type` morphs into."""
-        unit_items = self._model.unit_items.items()
-        return frozenset(morphed for morphed, item in unit_items if item.morphed_from is unit_type)
-
-    def _constrain_prerequisites(self) -> None:
-        """No item starts in an interval before the techs and upgrades it needs are done by the interval's start: before
-        the unlock fraction of a structure granting each tech, and of each upgrade, is; with one of 0, in the share
-        that the fractions done of them allow."""
-        met: dict[frozenset[UnitTypeId] | UpgradeId, RowExpression] = {}
-        for index, item in enumerate(self._items):
-            needed: list[RowExpression] = []
-            for tech in sorted(item.techs, key=lambda tech: tech.name):
-                granting = self._model.types_granting(tech)
-                if any(self._state.units.get(unit_type, 0) for unit_type in granting):
-                    continue
-                if granting not in met:
-                    granted = RowExpression(self._interval_count)
-                    for unit_type in sorted(granting):
-                        granted.add_expression(self._count_alive(unit_type, at_end=False, survive=False))
-                    counted = [
-                        made
-                        for made, other in enumerate(self._items)
-                        if other.unit_type in granting or other.morphed_from in granting
-                    ]
-                    met[granting] = self._whether_unlocked(granted, counted)
-                needed.append(met[granting])
-            for upgrade in sorted(item.upgrades_needed):
-                if upgrade in self._state.upgrades:
-                    continue
-                if upgrade not in met:
-                    researched = self._index_of_upgrade.get(upgrade)
-                    is_under_way = upgrade in self._state.upgrade_completions
-                    counted = [] if researched is None or is_under_way else [researched]
-                    met[upgrade] = self._whether_unlocked(self._upgrade_done(upgrade, at_end=False), counted)
-                needed.append(met[upgrade])
-            bound = self._most_starts_in_an_interval(item)
-            for done in needed:
-                available = RowExpression(self._interval_count).add_expression(done, bound)
-                self._constrain_at_most(self._starts_in_interval(index), available)
-
-    def _whether_unlocked(self, done: RowExpression, counted: Sequence[int]) -> RowExpression:
-        """Whether what `done` counts by each interval's start unlocks what needs it, 0 or 1: 1 only where the unlock
-        fraction of one is done. With an unlock fraction of 0 it is `done` itself. `done` counts the starts of the
-        items `counted`, and so in whole numbers until a fluid start of one of them can be done: the 0 or 1 is held
-        whole from that edge on alone, and `done` returned if there is no such edge."""
-        intervals = self._interval_count
-        fractional_from = min(
-            (self._completion_edges[index][~self._whole[index]].min(initial=math.inf) for index in counted),
-            default=math.inf,
-        )
-        if not self._unlock_fraction or fractional_from >= intervals:
-            return done
-        unlocked = self._program.add_variables(intervals, upper=1.0, integral=np.arange(intervals) >= fractional_from)
-        needed = RowExpression(intervals).add(unlocked, np.eye(intervals) * self._unlock_fraction)
-        self._constrain_at_most(needed, done)
-        return RowExpression(intervals).add(unlocked, np.eye(intervals))
-
-    # The reward.
 
     def _reward_expression(self) -> RowExpression:
         """The reward of a plan: each interval's worth, discounted, and the stock left at the horizon."""
@@ -1007,8 +210,6 @@ class PlanProgram:
             for group in term.groups
         )
 
-    # Reading the plan.
-
     def _planned_items(self, values: FloatArray) -> tuple[PlanItem, ...]:
         """Each item started, in order of start, those of one interval in the order of the items: of fractional starts,
         one each time their sum reaches a whole number, rounded, and fluid where its interval's starts are."""
@@ -1018,7 +219,7 @@ class PlanProgram:
             if made is None:
                 continue
             duration = GameTime(seconds=item.build_seconds)
-            whole = np.floor(_values_of(self._starts_so_far[index], values) + 0.5)
+            whole = np.floor(values_of(self._starts_so_far[index], values) + 0.5)
             for interval, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._state.time + GameTime(seconds=float(self._edges[interval]))
                 is_fluid = not self._whole[index][interval]
@@ -1045,7 +246,7 @@ class PlanProgram:
     def _planned_moments(self, values: FloatArray) -> list[PlanMoment]:
         """What the plan expects at each edge of the grid: the state's at the first, and at each other what the
         interval before it comes to at its end."""
-        minerals, vespene = _values_of(self._minerals, values), _values_of(self._vespene, values)
+        minerals, vespene = values_of(self._minerals, values), values_of(self._vespene, values)
         state = self._state
         # What is collected by each edge: nothing more at the first, then each interval's income over its length.
         minerals_collected, vespene_collected = (
@@ -1085,53 +286,6 @@ class PlanProgram:
             for edge, seconds in enumerate(self._edges.tolist())
         ]
 
-    def _walk_seconds_of(self, item: Item) -> float:
-        """The seconds an SCV walks to build `item`, and back."""
-        return 0.0 if item.unit_type is None else self._walk_seconds.get(item.unit_type, 0.0)
-
-
-def _limits_by_counted_type(
-    start_limits: Mapping[UnitTypeId | UpgradeId, int], model: TerranModel
-) -> dict[UnitTypeId | UpgradeId, float]:
-    """`start_limits`, each unit type's under the type it counts as by `model`, the lowest of those of one type."""
-    limits: dict[UnitTypeId | UpgradeId, float] = {}
-    for made, limit in start_limits.items():
-        counted = model.counted_as(made) if isinstance(made, UnitTypeId) else made
-        limits[counted] = min(float(limit), limits.get(counted, math.inf))
-    return limits
-
-
-def _loss_rates_from(rate: TimeDependent[float], start: GameTime, step_count: int, unit_type: UnitTypeId) -> FloatArray:
-    """What `rate` gives for each of `step_count` game steps from `start`, asked for all of them by one call, the steps
-    whole numbers where `start`'s are. Raises `TypeError` unless that is a number for each, which a function of one
-    game time does not give, and `ValueError` for a number below 0 or not finite, each naming `unit_type`; an
-    `IndexError` or a `TypeError` of the call's own is noted with it."""
-    steps = start.steps + np.arange(step_count)
-    asked_as = f"the loss rate of {unit_type.name} is asked for every game step of the plan by one call"
-    # What a function handed over as it is needs, which one in a `TimeFunction` already has.
-    advice_for_a_function = (
-        "" if isinstance(rate, TimeFunction) else "; a function of one game time goes in a TimeFunction"
-    )
-    try:
-        rates: object = rate(steps)
-    except IndexError as error:
-        error.add_note(asked_as)
-        raise
-    except TypeError as error:
-        error.add_note(asked_as + advice_for_a_function)
-        raise
-    if not (isinstance(rates, np.ndarray) and rates.shape == steps.shape and rates.dtype.kind in "iuf"):
-        given = f"an array of {rates.dtype}, {rates.shape}" if isinstance(rates, np.ndarray) else repr(rates)
-        raise TypeError(f"{asked_as}, and gave {given} for {step_count} steps{advice_for_a_function}")
-    is_refused = ~((rates >= 0) & (rates < math.inf))
-    if is_refused.any():
-        first_refused = int(np.argmax(is_refused))
-        raise ValueError(
-            f"a loss rate must be a number not below 0, not {float(rates[first_refused])} for {unit_type.name} at "
-            f"{start + GameTime(steps=first_refused)}"
-        )
-    return rates.astype(float, copy=False)
-
 
 def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:
     """What `segments` give `count` a second, each piece ending at its count times `count_factor`."""
@@ -1144,19 +298,3 @@ def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: f
         worth += segment.weight * max(count_within - count_before, 0.0)
         count_before = max(count_before, count_within)
     return worth
-
-
-def _falls_of(shares: FloatArray, *, from_share: float) -> FloatArray:
-    """How far each column of `shares` falls from the row before to each row, to the first row from `from_share`."""
-    before = np.vstack([np.full((1, shares.shape[1]), from_share), shares[:-1]])
-    return np.maximum(before - shares, 0.0)
-
-
-def _values_of(block: VariableBlock, values: FloatArray) -> FloatArray:
-    """The values of `block`'s variables."""
-    return values[block.to_slice()]
-
-
-def _count_of(completions: Sequence[tuple[UnitTypeId, float]], unit_type: UnitTypeId) -> int:
-    """How many of `completions` make `unit_type`."""
-    return sum(completion_type == unit_type for completion_type, _ in completions)
