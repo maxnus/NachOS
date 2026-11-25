@@ -805,6 +805,62 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     The program takes 4.7 ms to build with no losses, 8.7 with three functions, where it took 9.1, and 5.2 to 5.3 with
     three curves or series.
 
+18. **The owner's first round of review, 48 comments, 2026-11-25.** What a comment asked for and needed no decision of
+    his was done as it asked; eight questions of design went to him one at a time; and ten comments were answered with
+    no change, which he may still object to. Names in the points above that this overtakes: `PlannedItem` is `PlanItem`,
+    `made_at` is `time`, `objective` is `reward`, `walk_time` is `builder_walk_time`, `reassignment_time` is
+    `initial_harvest_delay`, `requires` is `requirements`, `segments` is `weights`, `Occupation` is `ProducerActivity`,
+    and the two numbers of a new base are gone from the economy (decisions 7, 10 and 11).
+    - **Done as asked:** the renames above but `reward`, `builder_walk_time` and `weights`; a `PlanItem`'s `duration`
+      and `end` and a `PlanInterval`'s `duration`; plainer docstrings of the result classes ("Your docstrings are
+      completely incomprehensible!", on `PlanMoment.units`); the economy's wording of workers and townhalls; two workers
+      a field by default ("I think we only want to assign up to two SCVs per mineral field"); a refinery's third worker
+      at about half of the first two ("the first to workers collect much faster than the third"), measured with
+      `tools/sweep_gas.py` in local games on Pylon's main, build 75689, over three minutes at its two refineries: one
+      SCV a refinery took 184 and 172 vespene on plain gathers and 204 and 188 speed collected, two 368 and 344 and 404
+      and 376, three 492 and 488 and 492 and 492; the solver's gap as `Planner(relative_gap=...)`; `GridSegment`;
+      `VariableBlock.to_slice`; a dataclass's checks in `_validate`, now a rule of the code style; and
+      `GameTime(minutes=...)`, which a test had refused on purpose.
+    - **A plan's result** ("Maybe call it PlanResult or PlanOutput?", "Should these four attributes sit in a separate
+      dataclass?", "why `objective` and not `reward` - which one is better?"): he chose "BuildPlan + SolveReport". The
+      class is the plan, so it keeps its name; what it is worth is its `reward`, the bot's word; and `gap`, `is_optimal`
+      and `seconds` are a `SolveReport` it holds.
+    - **Wall-clock times** ("Why not timedelta?"): he chose "Float seconds", as `HandlerTiming` has them; the library
+      uses `timedelta` nowhere.
+    - **Upgrades in a moment** ("Why are units floats but upgrades a frozenset (i.e. integer)?", "Do we really need both
+      classes? Why are upgrades missing from the deviations?"): he chose "Shares, in both". `PlanMoment.upgrades` maps
+      an upgrade to the share of it done, `PlanDeviation` gains them, and the two classes stay two, one what a plan
+      expects and one the game's numbers less the plan's.
+    - **The walk's name** ("I don't like the name. It needs to indicate that this is specifically for construction"): he
+      chose `builder_walk_time`, over `construction_walk_time`, which I recommended, and `construction_delay`.
+    - **New bases** ("This is not always true. I think we should let the user specify a series of next expansions...",
+      then "Actually we should let the user just pass a list of expansions to the planner, and then the planner can look
+      up the number of mineral fields and geysers, right?", and to a list in `plan_now` with today's behavior as its
+      default: "Yes, but required"). `plan_now(expansions=...)` takes `Expansion`s in the order the bot takes them; with
+      none a plan starts no command center; a command center in production takes the first, and fewer expansions than
+      those raise. Where a base brings more than the one before it, a whole variable an interval holds the earlier taken
+      whole first: without it the solver took half of each, which a test caught. Three bases alike are proven in 1.2,
+      2.8 and 1.1 s from the start and the two mid-game states, a smaller one last in 1.1, 2.4 and 1.5, and one in the
+      middle, 45 whole variables more, in 1.1, 2.5 and 1.6.
+    - **A term's weights** ("I think we should name things after the concept that they hold, not how it's implemented...
+      maybe the sequence of weight segments deserves a class on its own?"): he chose "WeightCurve class, field weights".
+    - **A default half-life** ("I think we want to use some `half_life` by default, what do you think?"): he typed "3
+      minutes", where I had offered 4, 2 and none.
+    - **The long file** ("This file is quite long - can it be logically be broken down?"): he chose "Yes, four modules":
+      `_survival.py`, `_plan_variables.py`, `_plan_constraints.py` and `_plan_program.py`, every method moved as it is,
+      54 programs the same to the last bit before and after.
+    - **Answered with no change:** `deviation_of` stays on the plan, which holds what was expected, the state being
+      plain values; module constants hold a measured number beside how it was measured; `read_planner_state` stays a
+      function behind `Planner.state()`, since it needs the planner's model; `LinearProgram` stays private until a
+      second user shows what it should offer, and a maximum or an absolute value is the caller's variable and rows, as
+      the reward's smallest count is; a lower `_MOST_STARTS_IN_AN_INTERVAL` gained nothing that shows, 30 and 10 against
+      100 giving the same plans in 2.0, 2.5 and 2.9 s and 1.2, 3.3 and 2.1 against 1.6, 2.4 and 2.9; the planner is
+      Terran's alone for now, `TerranModel` being the one part a race writes; a `ProducerActivity` and a
+      `UnitCompletion` are no `Progress`, which holds a fraction and a total time a state made by hand would have to
+      invent; `upgrade_completions` stays a mapping, an upgrade being researched once; what each field and geyser has
+      left would take the workers at each, which the planner pools, and is left out; and `SECONDS_TOLERANCE` guards sums
+      of floats, off by 1e-13, not game steps.
+
 ## Risks
 
 - **Solve time on the full model.** A time limit with the incumbent, the old plan kept when nothing feasible comes
