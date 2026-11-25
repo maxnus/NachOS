@@ -5,27 +5,10 @@ from __future__ import annotations
 import itertools
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Final, final
+from typing import final
 
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId
-
-# Twelve SCVs speed mined Pylon's main's eight fields for 2315 minerals in three minutes (in game, build 75689): each
-# of the first two workers a field mines this much a second.
-_SPEED_MINED_MINERALS_PER_MINER_SECOND: Final = 2315 / 180 / 12
-# Speed collected, two SCVs at each of the two refineries of Pylon's main took 780 vespene in three minutes, and three
-# at each 984 (in game, build 75689): what each of a refinery's first two workers collects a second, and what a third
-# adds.
-_SPEED_COLLECTED_VESPENE_PER_COLLECTOR_SECOND: Final = 780 / 180 / 4
-_VESPENE_PER_THIRD_COLLECTOR_SECOND: Final = (984 - 780) / 180 / 2
-# A MULE mines 225 minerals in its life, and an orbital command's energy, 0.7875 a second, calls one every 50
-# (stated, not measured).
-_MULE_MINERALS_PER_ORBITAL_SECOND: Final = 225 / (50 / 0.7875)
-# How long a worker walks to build by default: to a townhall, about the walk from a main's mineral line to its natural
-# on every map of the pool, 8.0 to 10.9 seconds by the pathing distance and an SCV's speed (corpus), and to any other
-# structure.
-_DEFAULT_WALK_TO_A_TOWNHALL: Final = GameTime(seconds=10)
-_DEFAULT_WALK_TO_ANOTHER_STRUCTURE: Final = GameTime(seconds=6)
 
 
 @final
@@ -41,21 +24,19 @@ class EconomyModel:
     Raises `ValueError` for a negative rate or count, or a rate above the one before it.
     """
 
-    minerals_per_miner_second: Sequence[float] = (_SPEED_MINED_MINERALS_PER_MINER_SECOND,) * 2
+    minerals_per_miner_second: Sequence[float] = (2315 / 180 / 12,) * 2
     """The minerals each worker at a mineral field mines a second, one number for each worker a field takes, the first
     worker's first. The plan puts no more workers at a field than there are numbers. By default two workers a field,
-    each at the rate twelve SCVs speed mined a main's eight fields (in game)."""
-    vespene_per_collector_second: Sequence[float] = (
-        _SPEED_COLLECTED_VESPENE_PER_COLLECTOR_SECOND,
-        _SPEED_COLLECTED_VESPENE_PER_COLLECTOR_SECOND,
-        _VESPENE_PER_THIRD_COLLECTOR_SECOND,
-    )
+    each at the rate twelve SCVs speed mined the eight fields of Pylon's main: 2315 minerals in three minutes (in game,
+    build 75689)."""
+    vespene_per_collector_second: Sequence[float] = (780 / 180 / 4, 780 / 180 / 4, (984 - 780) / 180 / 2)
     """The vespene each worker at a gas building collects a second, one number for each worker it takes, the first
-    worker's first. By default three workers: the first two each at the rate two SCVs a refinery speed collected, and
-    the third at what a third added, about half of that (in game)."""
-    mule_minerals_per_orbital_second: float = _MULE_MINERALS_PER_ORBITAL_SECOND
-    """The minerals each orbital command's MULEs mine a second, by default a MULE's 225 for each 50 energy, the game's
-    stated figures; 0 for a bot that spends the energy otherwise."""
+    worker's first. By default three workers, as SCVs speed collected at the two refineries of Pylon's main: two at each
+    took 780 vespene in three minutes, and three at each 984, so that a third adds about half of what each of the first
+    two brings (in game, build 75689)."""
+    mule_minerals_per_orbital_second: float = 225 / (50 / 0.7875)
+    """The minerals each orbital command's MULEs mine a second, by default a MULE's 225 for each 50 energy, an orbital
+    command gaining 0.7875 a second, the game's stated figures; 0 for a bot that spends the energy otherwise."""
     initial_harvest_delay: GameTime = GameTime(seconds=3)
     """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
     applies to a new worker on its first walk and to a worker moved between minerals and vespene, and not to a builder
@@ -109,7 +90,9 @@ def minerals_mined_a_second(
 
 
 def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
-    """The seconds a worker walks to build each of `unit_types`, by `economy`.
+    """The seconds a worker walks to build each of `unit_types`, by `economy`: by default 10 to a townhall, about the
+    walk from a main's mineral line to its natural on every map of the pool, 8.0 to 10.9 seconds by the pathing
+    distance and an SCV's speed (corpus), and 6 to any other structure.
 
     Raises `ValueError` for a negative time from its `builder_walk_time`.
     """
@@ -121,6 +104,6 @@ def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> 
                 f"builder_walk_time must not return a negative time, but returned {chosen} for {unit_type.name}"
             )
         is_townhall = unit_type is UnitTypeId.COMMAND_CENTER
-        default = _DEFAULT_WALK_TO_A_TOWNHALL if is_townhall else _DEFAULT_WALK_TO_ANOTHER_STRUCTURE
+        default = GameTime(seconds=10) if is_townhall else GameTime(seconds=6)
         seconds[unit_type] = (default if chosen is None else chosen).seconds
     return seconds

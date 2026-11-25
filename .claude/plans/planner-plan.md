@@ -806,7 +806,7 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     three curves or series.
 
 18. **The owner's first round of review, 48 comments, 2026-11-25.** What a comment asked for and needed no decision of
-    his was done as it asked; eight questions of design went to him one at a time; and ten comments were answered with
+    his was done as it asked; eight questions of design went to him one at a time; and nine comments were answered with
     no change, which he may still object to. Names in the points above that this overtakes: `PlannedItem` is `PlanItem`,
     `made_at` is `time`, `objective` is `reward`, `walk_time` is `builder_walk_time`, `reassignment_time` is
     `initial_harvest_delay`, `requires` is `requirements`, `segments` is `weights`, `Occupation` is `ProducerActivity`,
@@ -819,8 +819,10 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       `tools/sweep_gas.py` in local games on Pylon's main, build 75689, over three minutes at its two refineries: one
       SCV a refinery took 184 and 172 vespene on plain gathers and 204 and 188 speed collected, two 368 and 344 and 404
       and 376, three 492 and 488 and 492 and 492; the solver's gap as `Planner(relative_gap=...)`; `GridSegment`;
-      `VariableBlock.to_slice`; a dataclass's checks in `_validate`, now a rule of the code style; and
-      `GameTime(minutes=...)`, which a test had refused on purpose.
+      `VariableBlock.to_slice`; a dataclass's checks in `_validate`, now a rule of the code style; the private constants
+      one function reads written in that function ("I don't understand why we introduce module constants for such
+      things", and as he asked twice in review of #261), the measured rates as the defaults themselves with the
+      measurement in each docstring; and `GameTime(minutes=...)`, which a test had refused on purpose.
     - **A plan's result** ("Maybe call it PlanResult or PlanOutput?", "Should these four attributes sit in a separate
       dataclass?", "why `objective` and not `reward` - which one is better?"): he chose "BuildPlan + SolveReport". The
       class is the plan, so it keeps its name; what it is worth is its `reward`, the bot's word; and `gap`, `is_optimal`
@@ -850,16 +852,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       `_survival.py`, `_plan_variables.py`, `_plan_constraints.py` and `_plan_program.py`, every method moved as it is,
       54 programs the same to the last bit before and after.
     - **Answered with no change:** `deviation_of` stays on the plan, which holds what was expected, the state being
-      plain values; module constants hold a measured number beside how it was measured; `read_planner_state` stays a
-      function behind `Planner.state()`, since it needs the planner's model; `LinearProgram` stays private until a
-      second user shows what it should offer, and a maximum or an absolute value is the caller's variable and rows, as
-      the reward's smallest count is; a lower `_MOST_STARTS_IN_AN_INTERVAL` gained nothing that shows, 30 and 10 against
-      100 giving the same plans in 2.0, 2.5 and 2.9 s and 1.2, 3.3 and 2.1 against 1.6, 2.4 and 2.9; the planner is
-      Terran's alone for now, `TerranModel` being the one part a race writes; a `ProducerActivity` and a
-      `UnitCompletion` are no `Progress`, which holds a fraction and a total time a state made by hand would have to
-      invent; `upgrade_completions` stays a mapping, an upgrade being researched once; what each field and geyser has
-      left would take the workers at each, which the planner pools, and is left out; and `SECONDS_TOLERANCE` guards sums
-      of floats, off by 1e-13, not game steps.
+      plain values; `read_planner_state` stays a function behind `Planner.state()`, since it needs the planner's model;
+      `LinearProgram` stays private until a second user shows what it should offer, and a maximum or an absolute value
+      is the caller's variable and rows, as the reward's smallest count is; a lower `_MOST_STARTS_IN_AN_INTERVAL` gained
+      nothing that shows, 30 and 10 against 100 giving the same plans in 2.0, 2.5 and 2.9 s and 1.2, 3.3 and 2.1 against
+      1.6, 2.4 and 2.9; the planner is Terran's alone for now, `TerranModel` being the one part a race writes; a
+      `ProducerActivity` and a `UnitCompletion` are no `Progress`, which holds a fraction and a total time a state made
+      by hand would have to invent; `upgrade_completions` stays a mapping, an upgrade being researched once; what each
+      field and geyser has left would take the workers at each, which the planner pools, and is left out; and
+      `SECONDS_TOLERANCE` guards sums of floats, off by 1e-13, not game steps.
 
 ## Risks
 

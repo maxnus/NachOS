@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, final
+from typing import TYPE_CHECKING, final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -23,9 +23,6 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._reward import Reward
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
     from sc2nachos.gametime import TimeDependent
-
-# The most an item without a tighter bound starts in one interval.
-_MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
 
 
 @final
@@ -279,7 +276,8 @@ class PlanVariables:
         elif item.supply_used > 0:
             most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
         else:
-            most = _MOST_STARTS_IN_AN_INTERVAL
+            # No tighter bound: more than any plan starts of one item in one interval.
+            most = 100.0
         return most if item.made is None else min(most, self._start_limits.get(item.made, math.inf))
 
     def _edge_index(self, seconds: FloatArray) -> FloatArray:

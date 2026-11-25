@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Final, final
+from typing import TYPE_CHECKING, final
 
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
 from sc2nachos.extensions.planner._plan_program import PlanProgram
@@ -26,13 +26,6 @@ if TYPE_CHECKING:
 
 _NO_LOSSES: Mapping[UnitTypeId, float | TimeDependent[float]] = MappingProxyType({})
 _NO_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = MappingProxyType({})
-# By default an item starts whole for this long for each 100 minerals and vespene it costs at the income a game starts
-# with, that of so many workers on so many mineral fields, less in proportion at a higher income, but at least the
-# shortest.
-_DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES: Final = 60.0
-_SHORTEST_DEFAULT_WHOLE_SECONDS: Final = 30.0
-_WORKERS_AS_A_GAME_STARTS: Final = 12
-_MINERAL_FIELDS_AS_A_GAME_STARTS: Final = 8
 
 
 @final
@@ -276,15 +269,15 @@ def fluid_after_seconds_of(
 
     Raises `ValueError` for a negative time from `fluid_after`.
     """
-    seconds_a_hundred_resources = _DEFAULT_WHOLE_SECONDS_A_HUNDRED_RESOURCES * _start_income_as_a_share_of_the_income(
-        state, economy
-    )
+    # By default an item starts whole for 60 seconds for each 100 minerals and vespene it costs at the income a game
+    # starts with, less in proportion at a higher income, but for 30 seconds at least.
+    seconds_a_hundred_resources = 60.0 * _start_income_as_a_share_of_the_income(state, economy)
     seconds: list[float] = []
     for item in items:
         chosen = None if fluid_after is None or item.made is None else fluid_after(item.made)
         if chosen is None:
             by_cost = seconds_a_hundred_resources * (item.minerals + item.vespene) / 100
-            seconds.append(max(_SHORTEST_DEFAULT_WHOLE_SECONDS, by_cost))
+            seconds.append(max(30.0, by_cost))
         elif chosen < GameTime.ZERO:
             raise ValueError(f"fluid_after must not return a negative time, but returned {chosen} for {item.name}")
         else:
@@ -293,11 +286,10 @@ def fluid_after_seconds_of(
 
 
 def _start_income_as_a_share_of_the_income(state: PlannerState, economy: EconomyModel) -> float:
-    """The income a game starts with as a share of that of `state`, at most 1, each by `economy`: what the SCVs mine if
-    every one mines, with the orbital commands' MULEs. It is 1 where the state brings in nothing."""
-    start_income = minerals_mined_a_second(
-        economy, workers=_WORKERS_AS_A_GAME_STARTS, mineral_fields=_MINERAL_FIELDS_AS_A_GAME_STARTS, orbital_commands=0
-    )
+    """The income a game starts with, that of twelve workers on eight mineral fields, as a share of that of `state`,
+    at most 1, each by `economy`: what the SCVs mine if every one mines, with the orbital commands' MULEs. It is 1
+    where the state brings in nothing."""
+    start_income = minerals_mined_a_second(economy, workers=12, mineral_fields=8, orbital_commands=0)
     income = minerals_mined_a_second(
         economy,
         workers=state.units.get(UnitTypeId.SCV, 0),

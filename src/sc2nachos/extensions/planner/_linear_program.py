@@ -7,14 +7,12 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Final, final
+from typing import final
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import milp
 from scipy.sparse import coo_array, csr_array
-
-_OPTIMAL_STATUS: Final = 0
 
 type FloatArray = NDArray[np.float64]
 
@@ -221,7 +219,8 @@ class LinearProgram:
             values=np.asarray(result.x, dtype=float),
             objective=-float(result.fun) + float(objective.constant[0]),
             gap=0.0 if gap is None else float(gap),
-            is_optimal=result.status == _OPTIMAL_STATUS,
+            # Scipy's status 0: the solver proved its values the best, to the gap asked for.
+            is_optimal=result.status == 0,
             seconds=seconds,
             message=str(result.message),
         )
