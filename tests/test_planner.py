@@ -31,6 +31,7 @@ from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
+from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent, TimeFunction, TimeSeries
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Race
@@ -76,7 +77,7 @@ def _best_plan(
     grid: TimeGrid = _TWO_SECOND_INTERVALS,
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: EconomyModel = _WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
-    loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]] | None = None,
+    loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]] | None = None,
     start_limits: dict[UnitTypeId | UpgradeId, int] | None = None,
     max_ignored_overrun: float = 0.25,
     unlock_fraction: float = 1.0,
@@ -611,18 +612,48 @@ class TestKnownPlans:
         tanks = [interval.end.units[UnitTypeId.SIEGE_TANK] for interval in plan.intervals]
         assert tanks == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
 
-    def test_a_loss_rate_may_be_a_function_of_the_game_time(self) -> None:
+    @pytest.mark.parametrize(
+        "rate",
+        [
+            TimeFunction(lambda time: 0.01 if time >= GameTime(steps=112) else 0.0),
+            TimeCurve([(GameTime.ZERO, 0.0), (GameTime(steps=112), 0.01)], interpolation=Interpolation.STEP),
+            TimeSeries(np.where(np.arange(224) >= 112, 0.01, 0.0), GameTime.ZERO, 224),
+        ],
+        ids=["a function", "a curve", "a recorded series"],
+    )
+    def test_a_loss_rate_may_depend_on_the_game_time(self, rate: TimeDependent[float]) -> None:
         """No barracks, so no marine is made. None is lost before 5 seconds, 112 game steps, and 1% a second from
         then."""
+        state = _game_start(units={UnitTypeId.MARINE: 10})
+        plan = _best_plan(
+            state, Reward.weighted({UnitTypeId.MARINE: 1.0}), horizon_seconds=10, loss_rates={UnitTypeId.MARINE: rate}
+        )
+        marines = [interval.end.units[UnitTypeId.MARINE] for interval in plan.intervals]
+        assert marines == pytest.approx([10, 10, 10 * math.exp(-0.01), 10 * math.exp(-0.03), 10 * math.exp(-0.05)])
+
+    def test_a_loss_rate_that_rises_along_a_line_is_summed_a_game_step_at_a_time(self) -> None:
+        """No barracks, so no marine is made. A rate from none to 2% a second over 10 seconds, 224 game steps, read at
+        the start of each step."""
         state = _game_start(units={UnitTypeId.MARINE: 10})
         plan = _best_plan(
             state,
             Reward.weighted({UnitTypeId.MARINE: 1.0}),
             horizon_seconds=10,
-            loss_rates={UnitTypeId.MARINE: lambda time: 0.01 if time >= GameTime(steps=112) else 0.0},
+            loss_rates={UnitTypeId.MARINE: TimeCurve([(GameTime.ZERO, 0.0), (GameTime(steps=224), 0.02)])},
         )
-        marines = [interval.end.units[UnitTypeId.MARINE] for interval in plan.intervals]
-        assert marines == pytest.approx([10, 10, 10 * math.exp(-0.01), 10 * math.exp(-0.03), 10 * math.exp(-0.05)])
+        lost_by_the_end = sum(0.02 * step / 224 for step in range(224)) * GameTime(steps=1).seconds
+        assert lost_by_the_end == pytest.approx(0.1, rel=0.005)
+        assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(10 * math.exp(-lost_by_the_end))
+
+    def test_a_loss_rate_is_read_from_the_states_time_on(self) -> None:
+        """No barracks, so no marine is made. A plan from 5 seconds, 112 game steps, loses 1% a second throughout by a
+        rate of that from 5 seconds on."""
+        state = _game_start(time=GameTime(steps=112), units={UnitTypeId.MARINE: 10})
+        rate = TimeCurve([(GameTime.ZERO, 0.0), (GameTime(steps=112), 0.01)], interpolation=Interpolation.STEP)
+        plan = _best_plan(
+            state, Reward.weighted({UnitTypeId.MARINE: 1.0}), horizon_seconds=10, loss_rates={UnitTypeId.MARINE: rate}
+        )
+        assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(10 * math.exp(-0.1))
 
     @pytest.mark.parametrize(
         "grid",
@@ -647,7 +678,9 @@ class TestKnownPlans:
             Reward.weighted({UnitTypeId.MARINE: 1.0}),
             horizon_seconds=20,
             grid=grid,
-            loss_rates={UnitTypeId.MARINE: lambda time: rate_in_the_peak if peak_start <= time < peak_end else 0.0},
+            loss_rates={
+                UnitTypeId.MARINE: TimeFunction(lambda time: rate_in_the_peak if peak_start <= time < peak_end else 0.0)
+            },
         )
         assert plan.intervals[0].start.units[UnitTypeId.MARINE] == 10
         assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(7 + 0.7 + 1)
@@ -660,7 +693,7 @@ class TestKnownPlans:
             state,
             Reward.weighted({UnitTypeId.MARINE: 1.0}),
             horizon_seconds=30,
-            loss_rates={UnitTypeId.MARINE: lambda time: 0.01 if time >= GameTime(steps=448) else 0.0},
+            loss_rates={UnitTypeId.MARINE: TimeFunction(lambda time: 0.01 if time >= GameTime(steps=448) else 0.0)},
         )
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
         assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(math.exp(-0.1))
@@ -668,20 +701,36 @@ class TestKnownPlans:
     @pytest.mark.parametrize(
         ("loss_rates", "lost_by_10_seconds"),
         [
-            ({UnitTypeId.SIEGE_TANK: lambda _: 0.002, UnitTypeId.SIEGE_TANK_SIEGED: 0.01}, 0.1),
-            ({UnitTypeId.SIEGE_TANK: 0.002, UnitTypeId.SIEGE_TANK_SIEGED: lambda _: 0.01}, 0.1),
+            ({UnitTypeId.SIEGE_TANK: TimeFunction(lambda _: 0.002), UnitTypeId.SIEGE_TANK_SIEGED: 0.01}, 0.1),
+            ({UnitTypeId.SIEGE_TANK: 0.002, UnitTypeId.SIEGE_TANK_SIEGED: TimeFunction(lambda _: 0.01)}, 0.1),
             (
                 {
                     UnitTypeId.SIEGE_TANK: 0.002,
-                    UnitTypeId.SIEGE_TANK_SIEGED: lambda time: 0.01 if time >= GameTime(steps=112) else 0.0,
+                    UnitTypeId.SIEGE_TANK_SIEGED: TimeCurve(
+                        [(GameTime.ZERO, 0.0), (GameTime(steps=112), 0.01)], interpolation=Interpolation.STEP
+                    ),
+                },
+                0.002 * 5 + 0.01 * 5,
+            ),
+            (
+                {
+                    UnitTypeId.SIEGE_TANK: TimeFunction(lambda _: 0.002),
+                    UnitTypeId.SIEGE_TANK_SIEGED: TimeCurve(
+                        [(GameTime.ZERO, 0.0), (GameTime(steps=112), 0.01)], interpolation=Interpolation.STEP
+                    ),
                 },
                 0.002 * 5 + 0.01 * 5,
             ),
         ],
-        ids=["a number above a function", "a function above a number", "each the higher for a time"],
+        ids=[
+            "a number above a function",
+            "a function above a number",
+            "a number and a curve, each the higher for a time",
+            "a function and a curve, each the higher for a time",
+        ],
     )
-    def test_of_a_number_and_a_function_for_one_type_the_loss_rate_is_the_higher_at_each_time(
-        self, loss_rates: dict[UnitTypeId, float | Callable[[GameTime], float]], lost_by_10_seconds: float
+    def test_of_the_loss_rates_for_one_type_the_higher_at_each_time_is_taken(
+        self, loss_rates: dict[UnitTypeId, float | TimeDependent[float]], lost_by_10_seconds: float
     ) -> None:
         state = _game_start(units={UnitTypeId.SIEGE_TANK: 10})
         plan = _best_plan(
@@ -690,13 +739,56 @@ class TestKnownPlans:
         assert plan.intervals[-1].end.units[UnitTypeId.SIEGE_TANK] == pytest.approx(10 * math.exp(-lost_by_10_seconds))
 
     @pytest.mark.parametrize("rate", [-0.01, math.inf, math.nan], ids=["negative", "infinite", "not a number"])
-    def test_a_loss_rate_a_function_gives_that_is_negative_or_not_finite_raises(self, rate: float) -> None:
-        with pytest.raises(ValueError, match="a loss rate must be a number not below 0"):
+    def test_a_loss_rate_that_is_negative_or_not_finite_at_a_game_time_raises(self, rate: float) -> None:
+        """From 5 seconds, 112 game steps, which is the time the error names."""
+        refused_from = GameTime(steps=112)
+        with pytest.raises(ValueError, match="a loss rate must be a number not below 0") as raised:
             _best_plan(
                 _game_start(),
                 Reward.weighted({UnitTypeId.MARINE: 1.0}),
                 horizon_seconds=10,
-                loss_rates={UnitTypeId.MARINE: lambda _: rate},
+                loss_rates={UnitTypeId.MARINE: TimeFunction(lambda time: rate if time >= refused_from else 0.0)},
+            )
+        assert f"for MARINE at {refused_from}" in str(raised.value)
+
+    @pytest.mark.parametrize(
+        "function_of_one_game_time",
+        [lambda _: 0.01, lambda time: 0.01 if time >= GameTime(steps=112) else 0.0],
+        ids=["that gives one number", "that compares its time"],
+    )
+    def test_a_loss_rate_that_is_a_function_not_in_a_time_function_raises(
+        self, function_of_one_game_time: Callable[[GameTime], float]
+    ) -> None:
+        """Pyright refuses it too. A function that raises for the steps it is handed keeps its own error, with a note
+        of what was asked of it."""
+        with pytest.raises(TypeError) as raised:
+            _best_plan(
+                _game_start(),
+                Reward.weighted({UnitTypeId.MARINE: 1.0}),
+                horizon_seconds=10,
+                loss_rates={UnitTypeId.MARINE: function_of_one_game_time},  # pyright: ignore[reportArgumentType]
+            )
+        said = "\n".join([str(raised.value), *getattr(raised.value, "__notes__", [])])
+        assert "the loss rate of MARINE is asked for every game step of the plan by one call" in said
+        assert "a function of one game time goes in a TimeFunction" in said
+
+    def test_a_loss_rate_that_gives_no_numbers_raises(self) -> None:
+        with pytest.raises(TypeError, match="it gave an array of object"):
+            _best_plan(
+                _game_start(),
+                Reward.weighted({UnitTypeId.MARINE: 1.0}),
+                horizon_seconds=10,
+                loss_rates={UnitTypeId.MARINE: TimeFunction(lambda _: "none")},  # pyright: ignore[reportArgumentType]
+            )
+
+    def test_a_recorded_series_that_covers_fewer_steps_than_the_plan_raises(self) -> None:
+        """A plan over 10 seconds reads 224 game steps, and the series holds 200."""
+        with pytest.raises(IndexError, match="outside the recorded range"):
+            _best_plan(
+                _game_start(),
+                Reward.weighted({UnitTypeId.MARINE: 1.0}),
+                horizon_seconds=10,
+                loss_rates={UnitTypeId.MARINE: TimeSeries(np.zeros(200), GameTime.ZERO, 200)},
             )
 
     def test_a_weight_on_types_counted_together_buys_those_that_count(self) -> None:
@@ -812,7 +904,17 @@ class TestKnownPlans:
         assert plan.items == ()
         assert plan.objective == pytest.approx(500 * 1e-4)
 
-    def test_a_time_factor_multiplies_what_a_term_is_worth_at_each_game_time(self) -> None:
+    @pytest.mark.parametrize(
+        "a_tenth_of_the_seconds_since_100",
+        [
+            lambda time: (time.seconds - 100) / 10,
+            TimeCurve([(GameTime(seconds=100), 0.0), (GameTime(seconds=140), 4.0)]),
+        ],
+        ids=["a function", "a curve"],
+    )
+    def test_a_time_factor_multiplies_what_a_term_is_worth_at_each_game_time(
+        self, a_tenth_of_the_seconds_since_100: Callable[[GameTime], float]
+    ) -> None:
         """One marine to afford in a state at 100 seconds, done 18 seconds on, each second worth a tenth of the seconds
         since the state: counted at the ends of the intervals of 2 seconds from 18 to 40, which sum to 348, a tenth of
         each over its 2 seconds."""
@@ -824,7 +926,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1},
             mineral_fields=0,
         )
-        rising = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda time: (time.seconds - 100) / 10)
+        rising = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=a_tenth_of_the_seconds_since_100)
         plan = _best_plan(state, Reward(terms=[rising]), horizon_seconds=40)
 
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
@@ -1999,6 +2101,14 @@ class TestReward:
         factors = [term.time_factor_at(GameTime(seconds=seconds)) for seconds in (20, 30, 50, 60)]
         assert factors == pytest.approx([0.0, 0.0, 2.0, 0.0])
 
+    def test_a_time_dependent_value_passes_as_a_time_factor_and_as_a_count_factor(self) -> None:
+        """Pyright checks that it does. A curve from none at 30 seconds to 3 at 60, and a series of 2 a step."""
+        rising = TimeCurve([(GameTime(seconds=30), 0.0), (GameTime(seconds=60), 3.0)])
+        recorded = TimeSeries(np.full(2000, 2.0), GameTime.ZERO, 2000)
+        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, time_factor=rising, count_factor=recorded)
+        assert term.time_factor_at(GameTime(seconds=50)) == pytest.approx(2.0)
+        assert term.count_factor_at(GameTime(seconds=50)) == 2.0
+
     @pytest.mark.parametrize("factor", [-0.5, math.inf, math.nan], ids=["negative", "infinite", "not a number"])
     def test_a_time_factor_that_is_negative_or_not_finite_raises(self, factor: float) -> None:
         term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda _: factor)
@@ -2494,7 +2604,7 @@ class TestPlanner:
         with pytest.raises(ValueError, match="loss rates"):
             api.play(game.joined())
 
-    def test_it_takes_a_loss_rate_that_is_a_function_of_the_game_time(self) -> None:
+    def test_it_takes_a_loss_rate_that_depends_on_the_game_time(self) -> None:
         """SCVs lost at 1% a second count as they do with that rate as a number: fewer than with none lost."""
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
@@ -2505,7 +2615,8 @@ class TestPlanner:
         @api.on(TurnEvent)
         def plan_scvs(_: TurnEvent) -> None:
             reward = Reward.weighted({UnitTypeId.SCV: 1.0})
-            for loss_rates in ({}, {UnitTypeId.SCV: 0.01}, {UnitTypeId.SCV: lambda _: 0.01}):
+            constant_rate = TimeFunction(lambda _: 0.01)
+            for loss_rates in ({}, {UnitTypeId.SCV: 0.01}, {UnitTypeId.SCV: constant_rate}):
                 plan = api.extensions.plan_now(reward, horizon=GameTime(seconds=10), loss_rates=loss_rates)
                 plans.append(_plan_found(plan))
 

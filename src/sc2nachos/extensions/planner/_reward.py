@@ -61,7 +61,8 @@ class RewardTerm:
     """The game time it is worth something up to, and nothing at: none by default."""
     time_factor: Callable[[GameTime], float] | None = None
     """What the curve is multiplied by at a game time between `start` and `end`, never negative; `None` for 1
-    throughout. A plan asks it at the end of each of its intervals, so it misses what happens within one."""
+    throughout. A plan asks it at the end of each of its intervals, so it misses what happens within one. A
+    `TimeDependent` passes as one, a `TimeCurve` for one."""
     count_factor: Callable[[GameTime], float] | None = None
     """What every `end_count` of the curve is multiplied by at a game time between `start` and `end`, never negative,
     each unit's weight staying what it is; `None` for 1 throughout. It changes nothing in a curve of one piece, which

@@ -250,7 +250,9 @@ class ThreatMap:
   than what it could have bought under weights around 1, and enough that a plan's workers bring in what they can where
   it buys nothing more. A reward of much smaller weights wants it smaller in proportion. `plan_now` takes the horizon, 5
   minutes by default, and the share of each unit type the bot expects lost a second, so that only what is expected to
-  survive counts: a number, or a function of the game time for losses that start later or come at once. A plan makes
+  survive counts: a number, or a [value that depends on the game time](time-dependent-values.md) for losses that start
+  later or come at once, a `TimeCurve`, a `TimeSeries` that covers the plan, or a function in a `TimeFunction`, which a
+  plan reads at each game step of its horizon, and which passes as a term's `time_factor` too. A plan makes
   nothing that pays back only past its horizon: over 5 minutes from a game's start, a reward on army units alone takes
   no expansion, and one that also values SCVs, or command centers, takes it. A longer horizon weighs such things itself
   and solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit

@@ -791,6 +791,19 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     planner keeps a number or a function until that design is settled; then `loss_rates` and a term's `time_factor` and
     `count_factor` take what it gives, which a function still passes as if the design keeps one.
 
+    That design is `TimeDependent` (#261, [next-steps.md](next-steps.md)), and a rate in `loss_rates` is now a number or
+    a `TimeDependent[float]` (the owner, 2026-11-24: "B", over a callable read a step at a time): a `TimeCurve`, a
+    `TimeSeries`, or a function in a `TimeFunction`, read at every game step of the plan by one call with all of them.
+    A function not in a `TimeFunction` is refused, by pyright and by a `TypeError` that names `TimeFunction`: where it
+    gives one number for the steps, and as a note on its own error where it raises for them, as one that compares its
+    time does. A rate gives no fallback, the protocol having no default: a recorded series that covers fewer steps
+    than the plan raises its `IndexError`. A term's `time_factor` and `count_factor` stay a function of the game time,
+    read once an interval, which a `TimeDependent` passes as. A function in a `TimeFunction` gives the program the bare
+    function gave, to the last bit, and so do a step curve and a recorded series of the same rates: 0.004 a second
+    from 60 seconds on for marines, marauders and medivacs, from both mid-game states of `tools/benchmark_planner.py`.
+    The program takes 4.7 ms to build with no losses, 8.7 with three functions, where it took 9.1, and 5.2 to 5.3 with
+    three curves or series.
+
 ## Risks
 
 - **Solve time on the full model.** A time limit with the incumbent, the old plan kept when nothing feasible comes

@@ -494,7 +494,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      interpolation, `STEP` too, which needs none of it, and works out the value halfway between each two as it is
      made, refusing two no line joins, as a number and a value that is none; a value that is no number is not checked
      for being finite; a numpy boolean counts as a number.
-  2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
+  2. Done on #239: the planner's `loss_rates` take a number or a `TimeDependent[float]`, read by one call with every
+     step of the plan; [planner-plan.md](planner-plan.md)'s Open 17 holds what a function not in a `TimeFunction` and a
+     series too short for the plan raise, and what was measured.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
      `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the

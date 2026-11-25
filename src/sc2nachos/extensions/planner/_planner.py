@@ -20,9 +20,10 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._build_plan import BuildPlan
     from sc2nachos.extensions.planner._reward import Reward
     from sc2nachos.extensions.planner._terran_model import Item
+    from sc2nachos.gametime import TimeDependent
     from sc2nachos.ids import UpgradeId
 
-_NO_LOSSES: Mapping[UnitTypeId, float | Callable[[GameTime], float]] = MappingProxyType({})
+_NO_LOSSES: Mapping[UnitTypeId, float | TimeDependent[float]] = MappingProxyType({})
 _NO_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = MappingProxyType({})
 # By default an item starts whole for this long for each 100 minerals and vespene it costs at the income a game starts
 # with, that of so many workers on so many mineral fields, less in proportion at a higher income, but at least the
@@ -186,7 +187,7 @@ class Planner:
         horizon: GameTime = GameTime(seconds=300),
         state: PlannerState | None = None,
         economy: EconomyModel = EconomyModel(),
-        loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]] = _NO_LOSSES,
+        loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]] = _NO_LOSSES,
         start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
     ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
@@ -195,21 +196,24 @@ class Planner:
         is a slower solve. The plan's workers mine, collect and walk as `economy` says. A unit of a type in `loss_rates`
         is expected lost at that share a second, those alive now and those the plan makes, so that only the share
         expected alive counts. A unit type's rate is that of the type it counts as, the highest of those of one type:
-        the higher of a hellion's and a hellbat's. A rate is a number, or a function that gives it for a game time,
-        asked at each game step from the plan's start to its horizon: none before an attack is expected, say, or a peak
-        for a loss at once, as `-math.log(0.7)` for one second loses 30% of the units alive then, whatever the grid. Of
-        a unit type or an upgrade in `start_limits` the plan starts at most that many, none for 0, beside what the state
-        holds in production: a reactor the bot does not build, an orbital command it does not morph, or the expansions
-        it means to take less those an SCV is already on its way to build on. A unit type's limit is that of the type it
-        counts as, the lowest of those of one type, and one on what the plan would not make anyway does nothing. It
-        solves within the planner's limits, before it returns, and returns `None` if the solver finds no plan within
-        them, which leaves `plan` the one before.
+        the higher of a hellion's and a hellbat's. A rate is a number, or a `TimeDependent` that gives it for a game
+        time, a `TimeCurve`, a `TimeSeries` or a function in a `TimeFunction`, read at each game step from the plan's
+        start to its horizon by one call: none before an attack is expected, say, or a peak for a loss at once, as
+        `-math.log(0.7)` for one second loses 30% of the units alive then, whatever the grid. Of a unit type or an
+        upgrade in `start_limits` the plan starts at most that many, none for 0, beside what the state holds in
+        production: a reactor the bot does not build, an orbital command it does not morph, or the expansions it means
+        to take less those an SCV is already on its way to build on. A unit type's limit is that of the type it counts
+        as, the lowest of those of one type, and one on what the plan would not make anyway does nothing. It solves
+        within the planner's limits, before it returns, and returns `None` if the solver finds no plan within them,
+        which leaves `plan` the one before.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate or start limit, a loss rate from a function that is negative or not finite, a
-        negative time from `fluid_after` or from `economy`'s `walk_time`, a factor from a term's `time_factor` or
+        than 0, a negative loss rate or start limit, a loss rate from a `TimeDependent` that is negative or not finite,
+        a negative time from `fluid_after` or from `economy`'s `walk_time`, a factor from a term's `time_factor` or
         `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does not
-        make.
+        make; `TypeError` for a loss rate that is neither a number nor gives one for each of many game steps, as a
+        function not in a `TimeFunction`; and `IndexError` from a loss rate that does not cover a step of the plan, as
+        a `TimeSeries` recorded for fewer.
         """
         if any(not callable(rate) and rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, final
 
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._planner_state import PlannerState
     from sc2nachos.extensions.planner._reward import CurveSegment, Reward, RewardTerm
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
+    from sc2nachos.gametime import TimeDependent
 
 # The most an item without a tighter bound starts in one interval.
 _MOST_STARTS_IN_AN_INTERVAL: Final = 100.0
@@ -61,13 +62,15 @@ class PlanProgram:
     interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the interval's
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
     supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type, and a
-    number or a function of the game time, asked at each game step and summed, so that a peak in it loses its share
-    whatever the grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that
-    of the type it counts as, the lowest of those of one type, and a limit on no item here does nothing.
+    number or a `TimeDependent`, read at each game step and summed, so that a peak in it loses its share whatever the
+    grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type
+    it counts as, the lowest of those of one type, and a limit on no item here does nothing.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
-    `walk_time`, for a loss rate from a function that is negative or not finite, and for a unit in production in `state`
-    of a type that is no item of `model`'s.
+    `walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, and for a unit in production in
+    `state` of a type that is no item of `model`'s; `TypeError` for a loss rate that is neither a number nor gives one
+    for each of many game steps, as a function of one game time does not; and `IndexError` from a loss rate that does
+    not cover a step of the plan.
     """
 
     __slots__ = (
@@ -113,7 +116,7 @@ class PlanProgram:
         state: PlannerState,
         reward: Reward,
         economy: EconomyModel,
-        loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]],
+        loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]],
         start_limits: Mapping[UnitTypeId | UpgradeId, int],
         fluid_after_seconds: Sequence[float],
         max_ignored_overrun: float,
@@ -202,27 +205,27 @@ class PlanProgram:
         self._collecting = self._add_worker_tiers(self._economy.vespene_per_collector_second)
         self._started_mining, self._started_collecting = self._add_work_starts()
 
-    def _read_loss_rates(self, loss_rates: Mapping[UnitTypeId, float | Callable[[GameTime], float]]) -> None:
+    def _read_loss_rates(self, loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]]) -> None:
         """Read `loss_rates`, each unit type's under the type it counts as, the highest of those of one type: a number
-        as it is, and a function of the game time at each game step from the plan's start to its horizon, summed from
-        the start to each step. Of a number and a function for one type, the higher at each step.
+        as it is, and a `TimeDependent` at each game step from the plan's start to its horizon, asked for all of them by
+        one call and summed from the start to each step. Of a number and a `TimeDependent` for one type, the higher at
+        each step.
 
-        Raises `ValueError` for a rate a function gives that is negative or not finite."""
+        Raises `ValueError` for a rate a `TimeDependent` gives that is negative or not finite, `TypeError` for one that
+        does not give a number for each step, as a function of one game time does not, and `IndexError` from one that
+        does not cover a step."""
         horizon = float(self._edges[-1])
         step_count = math.ceil(GameTime(seconds=horizon - SECONDS_TOLERANCE).steps)
         self._loss_rate_seconds: FloatArray = np.minimum(np.arange(step_count + 1) * GameTime(steps=1).seconds, horizon)
         self._loss_rates: dict[UnitTypeId, float] = {}
         by_step: dict[UnitTypeId, FloatArray] = {}
-        step_times: list[GameTime] = []
         for unit_type, rate in loss_rates.items():
             counted = self._model.counted_as(unit_type)
-            if not callable(rate):
+            if callable(rate):
+                rates = _loss_rates_from(rate, self._state.time, step_count, unit_type)
+                by_step[counted] = np.maximum(rates, by_step.get(counted, 0.0))
+            else:
                 self._loss_rates[counted] = max(float(rate), self._loss_rates.get(counted, 0.0))
-                continue
-            if not step_times:
-                step_times = [self._state.time + GameTime(steps=step) for step in range(step_count)]
-            rates = np.array([_loss_rate_at(rate, time, unit_type) for time in step_times], dtype=float)
-            by_step[counted] = np.maximum(rates, by_step.get(counted, 0.0))
         self._summed_loss_rates: dict[UnitTypeId, FloatArray] = {}
         for counted, rates in by_step.items():
             highest = np.maximum(rates, self._loss_rates.pop(counted, 0.0))
@@ -1004,12 +1007,31 @@ def _limits_by_counted_type(
     return limits
 
 
-def _loss_rate_at(rate_of: Callable[[GameTime], float], time: GameTime, unit_type: UnitTypeId) -> float:
-    """What `rate_of` gives for `time`; raises `ValueError` unless it is a number not below 0, naming `unit_type`."""
-    rate = rate_of(time)
-    if not 0 <= rate < math.inf:
-        raise ValueError(f"a loss rate must be a number not below 0, not {rate} for {unit_type.name} at {time}")
-    return rate
+def _loss_rates_from(rate: TimeDependent[float], start: GameTime, step_count: int, unit_type: UnitTypeId) -> FloatArray:
+    """What `rate` gives for each of `step_count` game steps from `start`, asked for all of them by one call. Raises
+    `TypeError` unless that is a number for each, which a function of one game time does not give, and `ValueError` for
+    a number below 0 or not finite, each naming `unit_type`; a `TypeError` of the call's own is noted with the same."""
+    steps = start.steps + np.arange(step_count, dtype=float)
+    asked_as = (
+        f"the loss rate of {unit_type.name} is asked for every game step of the plan by one call, as a TimeDependent "
+        f"is; a function of one game time goes in a TimeFunction"
+    )
+    try:
+        rates: object = rate(steps)
+    except TypeError as error:
+        error.add_note(asked_as)
+        raise
+    if not (isinstance(rates, np.ndarray) and rates.shape == steps.shape and rates.dtype.kind in "iuf"):
+        given = f"an array of {rates.dtype}, {rates.shape}" if isinstance(rates, np.ndarray) else repr(rates)
+        raise TypeError(f"{asked_as}, and it gave {given} for {step_count} steps")
+    is_refused = ~((rates >= 0) & (rates < math.inf))
+    if is_refused.any():
+        first_refused = int(np.argmax(is_refused))
+        raise ValueError(
+            f"a loss rate must be a number not below 0, not {float(rates[first_refused])} for {unit_type.name} at "
+            f"{start + GameTime(steps=first_refused)}"
+        )
+    return rates.astype(float)
 
 
 def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:
