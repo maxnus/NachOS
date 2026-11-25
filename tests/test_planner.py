@@ -1770,7 +1770,7 @@ class TestEconomy:
             "a rate above the one before",
             "a negative rate",
             "a negative MULE rate",
-            "a negative reassignment time",
+            "a negative initial harvest delay",
         ],
     )
     def test_a_rate_above_the_one_before_or_a_negative_number_raises(self, arguments: dict[str, Any]) -> None:
@@ -1858,7 +1858,7 @@ class TestEconomy:
     @pytest.mark.parametrize(
         ("reassignment_seconds", "marauder_start"), [(3.0, 12.0), (2.0, 11.0), (0.0, 9.0)], ids=["3 s", "2 s", "none"]
     )
-    def test_a_worker_moved_to_a_refinery_collects_nothing_for_the_reassignment_time(
+    def test_a_worker_moved_to_a_refinery_collects_nothing_for_the_initial_harvest_delay(
         self, reassignment_seconds: float, marauder_start: float
     ) -> None:
         """No vespene and one refinery with no SCV at it, on 1-second intervals: the marauder's 25 vespene, 9 seconds'
@@ -1885,7 +1885,7 @@ class TestEconomy:
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == [marauder_start]
 
     @pytest.mark.parametrize(("reassignment_seconds", "marine_start"), [(3.0, 19.0), (0.0, 16.0)], ids=["3 s", "none"])
-    def test_a_worker_moved_from_a_refinery_mines_nothing_for_the_reassignment_time(
+    def test_a_worker_moved_from_a_refinery_mines_nothing_for_the_initial_harvest_delay(
         self, reassignment_seconds: float, marine_start: float
     ) -> None:
         """No minerals and the only three SCVs at a refinery, on 1-second intervals: the marine's 50 minerals, 16
@@ -1914,7 +1914,7 @@ class TestEconomy:
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
 
     @pytest.mark.parametrize(("reassignment_seconds", "marine_start"), [(3.0, 55.0), (0.0, 52.0)], ids=["3 s", "none"])
-    def test_a_new_scv_mines_nothing_for_the_reassignment_time(
+    def test_a_new_scv_mines_nothing_for_the_initial_harvest_delay(
         self, reassignment_seconds: float, marine_start: float
     ) -> None:
         """No minerals and no SCV but one done in 5 seconds, on 1-second intervals: the marine's 50 minerals, 47
@@ -1936,7 +1936,7 @@ class TestEconomy:
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
 
-    def test_a_new_scv_mines_nothing_for_the_reassignment_time_where_no_worker_collects(self) -> None:
+    def test_a_new_scv_mines_nothing_for_the_initial_harvest_delay_where_no_worker_collects(self) -> None:
         """As above, by an economy with no rate for a worker at a refinery: the marine starts at 55 seconds all the
         same."""
         state = _game_start(
