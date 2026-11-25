@@ -93,8 +93,8 @@ once made; iterating over it hands its pairs back, to make another from.
 ### Values that are no numbers
 
 A curve's values are numbers, or anything else that adds, subtracts and multiplies by a number, as `Resources`, a
-`Cost`, a `Point` and a `GameTime` do: a `SupportsInterpolation`, to a type checker. It reads along the line between
-two of them by their own arithmetic:
+`Cost`, a `Point` and a `GameTime` do: a `SupportsVectorArithmetic`, to a type checker. It reads along the line
+between two of them by their own arithmetic:
 
 ```python
 income = TimeCurve([(GameTime.ZERO, Resources(0, 0)), (GameTime(seconds=300), Resources(900, 300))])

@@ -17,14 +17,14 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
-    from sc2nachos.gametime._supports_interpolation import SupportsInterpolation
+    from sc2nachos.gametime._supports_vector_arithmetic import SupportsVectorArithmetic
 
 
 # A curve of a value a step would fill a screen with its repr, so one of more pairs shows all but one of this many
 # from its start, then "..." and its last.
 _MOST_PAIRS_A_REPR_SHOWS = 6
 
-# What a value that is no number has to do for a curve to read between two of them, as `SupportsInterpolation` says.
+# What a value that is no number has to do for a curve to read between two of them: a `SupportsVectorArithmetic`'s.
 _OPERATIONS_OF_A_VALUE = ("__add__", "__sub__", "__mul__")
 
 
@@ -77,7 +77,7 @@ class TimeCurve[T]:
     ) -> None: ...
 
     @overload
-    def __init__[V: SupportsInterpolation](
+    def __init__[V: SupportsVectorArithmetic](
         self: TimeCurve[V], time_value_pairs: Iterable[tuple[GameTime, V]], *, interpolation: Interpolation = ...
     ) -> None: ...
 
