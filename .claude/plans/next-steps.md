@@ -441,8 +441,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     floats, or values that add, subtract and multiply by a number, the protocol `SupportsInterpolation`: `Resources`,
     a `Cost`, a `Point`, a `GameTime`. A recorded series stays numbers, being a numpy buffer with a mean, filters and
     a derivative. Many times of values that are no numbers give an array of objects, a value each. Measured over 6720
-    steps: a linear curve of `Resources` 3.2 ms, of floats 0.015, as before; a function of `Resources` 1.8 ms, of
-    floats 0.98, where it took 0.91.
+    steps: a linear curve of `Resources` 3.2 ms, of floats 0.015, as before; a function of `Resources` 1.6 ms, of
+    floats 0.99, where it took 0.91.
   - **A curve joins its values by its `interpolation`, an `Interpolation`**: `LINEAR`, the default, or `STEP`, each
     value held from its time until the next ("The advantage with the enum is that we can add more modes in the future.
     E.g. cubic spline interpolation", then "Let's call it STEP", over `HELD`, proposed since a step is a game step
@@ -473,8 +473,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      flooring its `steps`. With values of any kind: the default of many times stays a number in the protocol's type,
      since a default of the value's type would stop a series of integers passing as a `TimeDependent[float]`, and a
      curve and a function, which never read one, take any; a curve asks its values to add, subtract and multiply in
-     every interpolation, `STEP` too, which needs none of it, and refuses numbers among values that are none; a value
-     that is no number is not checked for being finite; `SupportsInterpolation` is a new public name.
+     every interpolation, `STEP` too, which needs none of it, and works out the value halfway between each two as it
+     is made, refusing two no line joins, as a number and a value that is none; a value that is no number is not
+     checked for being finite; a numpy boolean counts as a number; `SupportsInterpolation` is a new public name.
   2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
