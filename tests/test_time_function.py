@@ -99,6 +99,14 @@ class TestValuesThatAreNoNumbers:
         mixed = TimeFunction(lambda time: 0.0 if time.steps else Resources(0, 0))
         assert mixed(numpy.arange(3)).dtype == object
 
+    def test_numpy_booleans_stay_an_array_of_booleans(self):
+        """A comparison of numpy's gives one, which Python does not count among its numbers; as objects they made no
+        mask."""
+        heights = numpy.arange(6.0)
+        above_three = TimeFunction(lambda time: heights[int(time.steps)] > 3)(numpy.arange(6))
+        assert above_three.dtype == bool
+        assert heights[above_three].tolist() == [4.0, 5.0]
+
     def test_booleans_and_whole_numbers_stay_what_numpy_makes_of_them(self):
         assert TimeFunction(lambda time: time.steps > 1)(numpy.arange(3)).tolist() == [False, False, True]
         assert TimeFunction(lambda time: time.steps > 1)(numpy.arange(3)).dtype == bool

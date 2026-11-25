@@ -92,21 +92,23 @@ def game_times_of_sequence(times: Sequence[GameTime]) -> list[GameTime]:
     return times_given
 
 
+# What a numpy array holds as a number. A numpy boolean, which a comparison of numpy's gives, is none of Python's
+# numbers, though Python's own boolean is.
+_NUMBER_TYPES = (*_SCALAR_TYPES, numpy.bool_)
+
+
 def is_number(value: object) -> bool:
     """Whether `value` is a number, which a numpy array holds as one, and not a value it holds as an object."""
-    return isinstance(value, _SCALAR_TYPES)
+    return isinstance(value, _NUMBER_TYPES)
 
 
 def array_of_values(values: Sequence[object]) -> ndarray:
     """`values`, those of a `TimeDependent` at many times, as an array of their length: of numbers where all are
-    numbers, and else of objects, a value each. Filled a value at a time, since numpy would read a value that is a
-    sequence, as a `Point` is, as a row of numbers."""
-    if all(issubclass(value_type, _SCALAR_TYPES) for value_type in set(map(type, values))):
+    numbers, and else of objects, a value each. Those are handed to numpy a value at a time, since it would read a
+    list of values that are sequences, as a `Point` is, as rows of numbers."""
+    if all(issubclass(value_type, _NUMBER_TYPES) for value_type in set(map(type, values))):
         return numpy.array(values)
-    array = numpy.empty(len(values), dtype=object)
-    for index, value in enumerate(values):
-        array[index] = value
-    return array
+    return numpy.fromiter(values, dtype=object, count=len(values))
 
 
 def default_of_many_times(default: object) -> float | None:
@@ -114,7 +116,7 @@ def default_of_many_times(default: object) -> float | None:
     number."""
     if default is NO_DEFAULT:
         return None
-    if not isinstance(default, _SCALAR_TYPES):
+    if not is_number(default):
         raise TypeError(
             f"the default of many times is a number, which an array can hold, not {default!r}; "
             "math.nan marks a time not covered"

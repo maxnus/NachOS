@@ -103,9 +103,8 @@ income(numpy.arange(6720)).sum()  # the Resources of them all, added up
 ```
 
 Many times give a numpy array of objects, a value each, in the shape of the times as an array of numbers is. numpy
-works on it a value at a time, so reading a linear curve of `Resources` at every step of five minutes takes some 3 ms,
-where one of numbers takes 0.015 ms. Where that counts, a curve for the minerals and one for the vespene read as
-quickly as numbers do.
+works on it a value at a time, so along a line a curve of `Resources` reads many times far slower than one of numbers.
+Where that counts, a curve for the minerals and one for the vespene read as quickly as numbers do.
 
 A `TimeFunction` gives values of any kind, whatever its function gives, and many of them the same way.
 

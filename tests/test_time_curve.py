@@ -1,10 +1,11 @@
+import decimal
 import math
 
 import numpy
 import pytest
 
 from sc2nachos import GameTime, Point
-from sc2nachos.gamedata import Resources
+from sc2nachos.gamedata import Cost, Resources
 from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent
 
 
@@ -344,6 +345,34 @@ class TestValuesThatAreNoNumbers:
         pairs = [(GameTime(steps=step), value) for step, value in enumerate(values)]
         with pytest.raises(TypeError, match="a curve's values are all numbers or none of them is"):
             TimeCurve(pairs)
+
+    @pytest.mark.parametrize(
+        "values",
+        [
+            (Resources(0, 0), Cost(100, 0, 1)),
+            (Cost(100, 0, 1), Resources(0, 0)),
+            (decimal.Decimal(0), decimal.Decimal(1)),
+            (Resources(0, 0), Resources(5, 5), Point((0, 0))),
+        ],
+    )
+    def test_values_no_line_joins_raise_as_the_curve_is_made(self, values):
+        """They have the operations and raise in them, which the first read between two would have met, in the
+        planner or wherever the curve was handed to."""
+        pairs = [(GameTime(steps=step), value) for step, value in enumerate(values)]
+        for interpolation in Interpolation:
+            with pytest.raises(TypeError, match="a curve's values add, subtract and multiply by a number, which"):
+                TimeCurve(pairs, interpolation=interpolation)
+
+    def test_one_value_alone_needs_no_line(self):
+        """Its kind is not one a type checker lets by, and a curve of one value reads it at every time."""
+        curve = TimeCurve([(GameTime.ZERO, decimal.Decimal(1))])  # pyright: ignore[reportCallIssue, reportArgumentType]
+        assert curve(GameTime(seconds=5)) == decimal.Decimal(1)
+
+    def test_a_numpy_boolean_is_a_number(self):
+        """A comparison of numpy's gives one, which Python does not count among its numbers."""
+        curve = TimeCurve([(GameTime(steps=0), numpy.bool_(False)), (GameTime(steps=10), numpy.bool_(True))])  # pyright: ignore[reportCallIssue, reportArgumentType]
+        assert curve(GameTime(steps=5)) == 0.5
+        assert curve(numpy.array([0, 5])).dtype == float
 
     def test_a_value_is_not_asked_to_be_finite(self):
         """Only a number is checked; what a value of another kind holds is its own."""

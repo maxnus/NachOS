@@ -9,7 +9,8 @@ from sc2nachos.gametime._game_speed import (
     STEPS_PER_SECOND,
 )
 from sc2nachos.gametime._game_time import GameTime
-from sc2nachos.gametime._interpolation import Interpolation, SupportsInterpolation
+from sc2nachos.gametime._interpolation import Interpolation
+from sc2nachos.gametime._supports_interpolation import SupportsInterpolation
 from sc2nachos.gametime._time_curve import TimeCurve
 from sc2nachos.gametime._time_dependent import TimeDependent
 from sc2nachos.gametime._time_function import TimeFunction

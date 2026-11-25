@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
-    from sc2nachos.gametime._interpolation import SupportsInterpolation
+    from sc2nachos.gametime._supports_interpolation import SupportsInterpolation
 
 
 # A curve of a value a step would fill a screen with its repr, so one of more pairs shows all but one of this many
@@ -40,8 +40,7 @@ class TimeCurve[T]:
     Its values are numbers, which it holds as floats, or all of another kind that adds, subtracts and multiplies by a
     number, as `Resources` and a `Point` do: `TimeCurve([(GameTime.ZERO, Resources(0, 0)), (GameTime(seconds=300),
     Resources(900, 300))])`. Many times of numbers are read through numpy at once. Those of another kind are read by
-    the values' own arithmetic, a value at a time, into an array of objects, which along a line is some two hundred
-    times slower.
+    the values' own arithmetic, a value at a time, into an array of objects, which along a line is far slower.
 
     A time is read as it is given, between two steps too. A curve is not changed once made. `len` counts its values,
     and iterating over it hands out each time with its value, in order.
@@ -87,9 +86,10 @@ class TimeCurve[T]:
     ) -> None:
         """A curve through `time_value_pairs`, each a game time and the value at it, in order of time. Raises
         `TypeError` for anything but pairs, a time that is not a `GameTime`, a value that is neither a number nor adds,
-        subtracts and multiplies by one, numbers among values that are none, or an `interpolation` that is not an
-        `Interpolation`; and `ValueError` for no pair, a time or a number not finite, a time not after the one before
-        it, or a number further from the one before it than a float holds."""
+        subtracts and multiplies by one, two values no line can be worked out between, as a number and one that is
+        none are, or an `interpolation` that is not an `Interpolation`; and `ValueError` for no pair, a time or a
+        number not finite, a time not after the one before it, or a number further from the one before it than a float
+        holds."""
         if not isinstance(interpolation, Interpolation):
             raise TypeError(f"interpolation is an Interpolation, not {interpolation!r}")
         self._interpolation = interpolation
@@ -211,8 +211,9 @@ def _finite_step_after(time: GameTime, steps_before: list[float]) -> float:
 
 def _value_after(value: Any, time: GameTime, values_before: list[Any]) -> Any:
     """`value`, a curve's at `time` and its next after `values_before`, a number as a float: raises `TypeError` for a
-    number among values that are none or the other way around, and for a value that is neither a number nor adds,
-    subtracts and multiplies by one; and `ValueError` as `_finite_number_after` does."""
+    number among values that are none or the other way around, for a value that is neither a number nor adds,
+    subtracts and multiplies by one, and as `_check_a_line_joins` does; and `ValueError` as `_finite_number_after`
+    does."""
     if values_before and is_number(value) != is_number(values_before[-1]):
         raise TypeError(
             f"a curve's values are all numbers or none of them is, and {value!r} at {time!r} "
@@ -224,7 +225,22 @@ def _value_after(value: Any, time: GameTime, values_before: list[Any]) -> Any:
         raise TypeError(
             f"a curve's value is a number, or adds, subtracts and multiplies by one, not {value!r} at {time!r}"
         )
+    if values_before:
+        _check_a_line_joins(values_before[-1], value, time)
     return value
+
+
+def _check_a_line_joins(value_before: Any, value: Any, time: GameTime) -> None:
+    """Raise `TypeError` unless the value halfway from `value_before` to `value`, a curve's at `time`, can be worked
+    out as a read works it out: two values of different kinds cannot, nor can ones that have the operations and raise
+    in them. Found as the curve is made, and not at the first read between the two, which may be a consumer's."""
+    try:
+        _ = value_before + (value - value_before) * 0.5
+    except Exception as error:
+        raise TypeError(
+            f"a curve's values add, subtract and multiply by a number, which {value!r} at {time!r} "
+            f"and {value_before!r} before it do not: {error}"
+        ) from error
 
 
 def _finite_number_after(number: float, time: GameTime, numbers_before: list[float]) -> float:
