@@ -15,6 +15,7 @@ from sc2nachos.gametime._game_speed import SECONDS_PER_STEP, STEPS_PER_NORMAL_SE
 # exact up to the division, which rounds once, so a whole number of steps comes out whole; multiplying by the stored
 # 22.4, a little under it, takes 45 seconds to 1007.9999999999999 steps.
 _STEPS_PER_FIVE_SECONDS = 112
+_STEPS_PER_MINUTE = 1344
 _MOST_DECIMALS = 3
 
 
@@ -23,11 +24,11 @@ class GameTime:
     """A moment of a game, counted from its start, or a length of game time, in steps of the game: 22.4 make a
     second at the Faster speed games are played at.
 
-    Made from one of `steps`; `seconds` at the Faster speed; or `normal_seconds` at the Normal speed, 16 steps a
-    second, in which the game gives some times, such as a weapon's cooldown. `GameTime(seconds=120)` is 2688 steps.
-    Steps are kept as given. Seconds are multiplied out unrounded, exactly where they make a whole number of steps, so
-    `GameTime(seconds=45) == GameTime(steps=1008)`; normal seconds exactly, 16 being a power of two. Any other
-    keyword, none, or more than one raises `TypeError`.
+    Made from one of `steps`; `seconds` or `minutes` at the Faster speed; or `normal_seconds` at the Normal speed, 16
+    steps a second, in which the game gives some times, such as a weapon's cooldown. `GameTime(seconds=120)` and
+    `GameTime(minutes=2)` are 2688 steps. Steps are kept as given. Seconds and minutes are multiplied out unrounded,
+    exactly where they make a whole number of steps, so `GameTime(seconds=45) == GameTime(steps=1008)`; normal seconds
+    exactly, 16 being a power of two. Any other keyword, none, or more than one raises `TypeError`.
 
     A moment is a whole number of steps; a length may be fractional, as a weapon's cooldown is. Two add, subtract and
     take `%` to a `GameTime`, and divide, `/` or `//`, to a plain number; one multiplies by a plain number and divides
@@ -61,21 +62,33 @@ class GameTime:
     @overload
     def __init__(self, *, normal_seconds: float) -> None: ...
 
+    @overload
+    def __init__(self, *, minutes: float) -> None: ...
+
     def __init__(
-        self, *, steps: float | None = None, seconds: float | None = None, normal_seconds: float | None = None
+        self,
+        *,
+        steps: float | None = None,
+        seconds: float | None = None,
+        normal_seconds: float | None = None,
+        minutes: float | None = None,
     ) -> None:
         if steps is not None:
-            if seconds is not None or normal_seconds is not None:
-                raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds)
+            if seconds is not None or normal_seconds is not None or minutes is not None:
+                raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds, minutes=minutes)
             counted_steps = steps
         elif seconds is not None:
-            if normal_seconds is not None:
-                raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds)
+            if normal_seconds is not None or minutes is not None:
+                raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds, minutes=minutes)
             counted_steps = seconds * _STEPS_PER_FIVE_SECONDS / 5
         elif normal_seconds is not None:
+            if minutes is not None:
+                raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds, minutes=minutes)
             counted_steps = normal_seconds * STEPS_PER_NORMAL_SECOND
+        elif minutes is not None:
+            counted_steps = minutes * _STEPS_PER_MINUTE
         else:
-            raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds)
+            raise _not_one_unit_error(steps=steps, seconds=seconds, normal_seconds=normal_seconds, minutes=minutes)
         object.__setattr__(self, "steps", counted_steps)
 
     @classmethod
@@ -89,6 +102,11 @@ class GameTime:
     def seconds(self) -> float:
         """The seconds it counts at the Faster speed, unrounded."""
         return self.steps * SECONDS_PER_STEP
+
+    @property
+    def minutes(self) -> float:
+        """The minutes it counts at the Faster speed, unrounded."""
+        return self.steps / _STEPS_PER_MINUTE
 
     @property
     def normal_seconds(self) -> float:
@@ -220,7 +238,8 @@ def _not_one_unit_error(**given: float | None) -> TypeError:
     """The error for a `GameTime` given other than exactly one of its keywords."""
     given_names = [name for name, value in given.items() if value is not None]
     return TypeError(
-        f"GameTime takes exactly one of steps, seconds and normal_seconds, not {' and '.join(given_names) or 'none'}"
+        "GameTime takes exactly one of steps, seconds, normal_seconds and minutes, not "
+        f"{' and '.join(given_names) or 'none'}"
     )
 
 

@@ -62,16 +62,25 @@ class TestConversions:
             ({"seconds": 1.0, "normal_seconds": 1.0}, "seconds and normal_seconds"),
             ({"steps": 96, "normal_seconds": 1.0}, "steps and normal_seconds"),
             ({"steps": 0, "seconds": 0, "normal_seconds": 0}, "steps and seconds and normal_seconds"),
+            ({"seconds": 30.0, "minutes": 1.0}, "seconds and minutes"),
+            ({"normal_seconds": 1.0, "minutes": 1.0}, "normal_seconds and minutes"),
+            ({"steps": 96, "minutes": 1.0}, "steps and minutes"),
         ],
     )
     def test_takes_exactly_one_unit(self, units, given):
         """A zero counts as given."""
-        with pytest.raises(TypeError, match=f"exactly one of steps, seconds and normal_seconds, not {given}$"):
+        with pytest.raises(TypeError, match=f"exactly one of steps, seconds, normal_seconds and minutes, not {given}$"):
             GameTime(**units)
 
     def test_takes_no_other_unit(self):
         with pytest.raises(TypeError):
-            GameTime(minutes=1)  # type: ignore[call-overload]
+            GameTime(hours=1)  # type: ignore[call-overload]
+
+    def test_a_minute_is_60_seconds_at_the_faster_speed(self):
+        assert GameTime(minutes=1) == GameTime(seconds=60) == GameTime(steps=1344)
+        assert GameTime(minutes=2.5) == GameTime(seconds=150)
+        assert GameTime(steps=2016).minutes == 1.5
+        assert GameTime.INFINITE.minutes == math.inf
 
     def test_each_unit_makes_the_same_time(self):
         assert GameTime(steps=2688) == GameTime(seconds=120) == GameTime(normal_seconds=168)
