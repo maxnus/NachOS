@@ -216,7 +216,7 @@ class ThreatMap:
   def replan(event: TurnEvent) -> None:
       if api.step % 448 == 0:
           marines = [CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.3)]
-          reward = Reward.weighted({UnitTypeId.MARINE: marines}, half_life=GameTime(seconds=240))
+          reward = Reward.weighted({UnitTypeId.MARINE: marines}, half_life=GameTime(minutes=4))
           plan = api.extensions.planner.plan_now(reward)
   ```
 
@@ -233,14 +233,14 @@ class ThreatMap:
   such as `lambda time: 1 + time.seconds / 600` for a worth that doubles over 10 minutes, which a plan asks at the end
   of each of its intervals; with `count_factor=...` for such a function that `end_count` is multiplied by, for more
   units wanted as the game goes on where `time_factor` makes the same units worth more, such as `lambda time:
-  time.seconds / 60` with `end_count=1` for a viking to each minute gone; and with `requires=[...]` for upgrades it
+  time.seconds / 60` with `end_count=1` for a viking to each minute gone; and with `requirements=[...]` for upgrades it
   counts only once done, such as what marines are worth more with combat shield, which a plan then starts whole wherever
   in its horizon. `RewardTerm.curve(units, segments)` takes the same for a curve. `RewardTerm.combination(groups,
   weight)` is for units worth something in combination: each group is counted, and each unit of the smallest count is
   worth the weight, so that the scarcest group limits what the others are worth. `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER:
   2}]` with 0.3 is 0.3 for each marine a medivac heals, of which it heals 8, a marauder for two, beside the terms for
   what each is worth without the other: a plan with 24 marines finds a third medivac worth making and a fourth not. It
-  takes `end_count`, `start`, `end`, `time_factor`, `count_factor` and `requires` as `weight` does, and no negative
+  takes `end_count`, `start`, `end`, `time_factor`, `count_factor` and `requirements` as `weight` does, and no negative
   weight. What units are worth changes at a game time where one term ends and another starts, the time in both: a term
   counts from its `start` and no longer at its `end`. `Reward.weighted({unit_type: weight})` is a reward of a term for
   each type, a number or a curve, and takes more `terms` beside. A weight may be negative, for a unit a plan should make
@@ -260,14 +260,15 @@ class ThreatMap:
   as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
   Everything else a plan rests on is the bot's to read and change. `planner.state()` returns the `PlannerState`
-  `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and
-  when it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries,
-  workers collecting vespene and free geysers at its bases, pooled, since the planner never knows which base a worker
-  is at. `plan_now(state=...)` plans from one the bot changed instead. `plan_now(economy=...)` takes an `EconomyModel`:
-  what each worker at a field or a refinery brings in a second, a list from the first worker on, what each orbital
-  command's MULEs mine, what a new command center brings, how long an SCV walks to build each structure, and how long a
-  worker that starts to mine or to collect brings in nothing. Its defaults are the rates measured speed mining, a walk
-  of 10 seconds to a command center and 6 to anything else, and 3 seconds before a worker's first income.
+  `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and when
+  it is done, the structures SCVs build and whether one still walks there, and the mineral fields, refineries, workers
+  collecting vespene and free geysers at its bases, pooled, since the planner never knows which base a worker is at.
+  `plan_now(state=...)` plans from one the bot changed instead. `plan_now(economy=...)` takes an `EconomyModel`: what
+  each worker at a field or a refinery brings in a second, a list from the first worker on, what each orbital command's
+  MULEs mine, what a new command center brings, how long an SCV walks to build each structure, and how long a worker
+  that starts to mine or to collect brings in nothing. Its defaults are the rates measured speed mining, with two
+  workers a field and three a refinery, the third collecting about half of what each of the first two does, a walk of 10
+  seconds to a command center and 6 to anything else, and 3 seconds before a worker's first income.
   `plan_now(start_limits=...)` takes the most a plan may start of a unit type or an upgrade, none of it for 0. A plan
   makes only what the reward values and what that needs, with SCVs, supply depots, command centers, orbital commands,
   refineries and add-ons, so the limits are for those the bot will not make itself, a reactor or an orbital command, and
@@ -289,30 +290,30 @@ class ThreatMap:
   )
   economy = EconomyModel(mule_minerals_per_orbital_second=0.0)
   start_limits = {UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.REACTOR_STARPORT: 0}
-  plan = planner.plan_now(reward, horizon=GameTime(seconds=600), state=state, economy=economy, start_limits=start_limits)
+  plan = planner.plan_now(reward, horizon=GameTime(minutes=10), state=state, economy=economy, start_limits=start_limits)
   ```
 
-  What it reads back is a `BuildPlan`: its `items`, each a `PlannedItem` of a unit type or an upgrade and when it is
-  expected to start, which a bot carries out in order, each as soon as it can be afforded, rather than to the second;
-  and its `intervals`, each a `PlanInterval` with the workers the plan has in it, from its `start` to its `end`. Each of
-  the two is a `PlanMoment`, what the planner expects at that `time`: the `resources` in stock, the minerals and vespene
-  `collected` in the game by then, the `units` of each type alive, and the `upgrades` done. One interval's end is the
-  next one's start, the same object; the first interval's start is the state the plan was made from, and the last one's
-  end its horizon, so `plan.intervals[-1].end.units` is what the plan comes to. `plan.interval_at(time)` is the interval
-  a game time is in, or `None` outside the plan: its workers are those the plan has at that time, and between its start
-  and its end the plan says nothing of the stock, the units or the upgrades. `plan.moment_at(time)` is what the
-  planner's model has there, which jumps at the edges: the units and upgrades of the interval's start, what its income
-  has brought in by then, and the stock with all that starts in the interval paid at its start, which is less than
-  nothing just after an interval's start by what the plan has spent of income yet to come. `plan_now` returns `None` if
-  the solver finds no plan within its limits, and `planner.plan` holds the last one it found. The planner orders nothing
-  and holds no unit: where a structure goes, which SCV builds it, and what to drop once the game moves on stay the
-  bot's.
+  What it reads back is a `BuildPlan`: its `items`, each a `PlanItem` of a unit type or an upgrade, when it is expected
+  to `start`, and its `duration` and `end`, which a bot carries out in order, each as soon as it can be afforded, rather
+  than to the second; and its `intervals`, each a `PlanInterval` with the workers the plan has in it and its `duration`,
+  from its `start` to its `end`. Each of the two is a `PlanMoment`, what the planner expects at that `time`: the
+  `resources` in stock, the minerals and vespene `collected` in the game by then, the `units` of each type alive, and
+  the `upgrades` done. One interval's end is the next one's start, the same object; the first interval's start is the
+  state the plan was made from, and the last one's end its horizon, so `plan.intervals[-1].end.units` is what the plan
+  comes to. `plan.interval_at(time)` is the interval a game time is in, or `None` outside the plan: its workers are
+  those the plan has at that time, and between its start and its end the plan says nothing of the stock, the units or
+  the upgrades. `plan.moment_at(time)` is what the planner's model has there, which jumps at the edges: the units and
+  upgrades of the interval's start, what its income has brought in by then, and the stock with all that starts in the
+  interval paid at its start, which is less than nothing just after an interval's start by what the plan has spent of
+  income yet to come. `plan_now` returns `None` if the solver finds no plan within its limits, and `planner.plan` holds
+  the last one it found. The planner orders nothing and holds no unit: where a structure goes, which SCV builds it, and
+  what to drop once the game moves on stay the bot's.
 
   How far a plan was off shows some seconds on. `plan.deviation_of(state)` takes a later `PlannerState`, such as
   `planner.state()` just before the next `plan_now`, and returns a `PlanDeviation`: the game's numbers less what
   the plan expected at that time, so that the plan was optimistic where one is negative. Its three parts say what to
   change. Less `collected` than expected is the economy's: the workers brought in less than `EconomyModel` has them
-  bring, so lower its rates or raise its `reassignment_time`. As much collected and more `resources` in stock is the
+  bring, so lower its rates or raise its `initial_harvest_delay`. As much collected and more `resources` in stock is the
   bot's, which started less than the plan had it start. As much of both and fewer `units` of a type is units lost, which
   `loss_rates` are for. It is `None` for a state from before the plan or after its horizon. Within an interval the
   plan's stock is the model's, everything that starts in it paid at its start, where a bot pays for each item as it can.
@@ -328,23 +329,25 @@ class ThreatMap:
   more than a refinery. With a `stock_weight` of 0 a plan may leave workers idle where what they would bring in buys
   nothing before its horizon, as in its last intervals, and its stocks may read less than its workers would bring in. A
   plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
-  `reassignment_time`, 3 seconds by default, whatever the interval's length: a worker moved between minerals and
+  `initial_harvest_delay`, 3 seconds by default, whatever the interval's length: a worker moved between minerals and
   vespene, and a new SCV on its first walk. A builder back from its structure pays its walk back instead. The plan
   starts from the state's `vespene_collectors`, the workers the game counts at its refineries, with every other SCV that
   builds nothing mining, so a plan that keeps them pays nothing.
 
   `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that much
   longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan
-  the same on every machine, for tests and recorded games. `Planner`'s docstring says what the model holds: the items
-  from the game's data, pruned to what the reward needs, the workers pooled over every field and refinery, the SCV away
-  from the walk to a structure through the build to the walk back, and starts on the first second of an interval of its
-  `TimeGrid`, by default 34 game steps long at first, 1.5 seconds, and doubling every time the time from the plan's
-  start doubles from 544 steps, 24 seconds. A worker's 272 steps are eight of the first intervals, so workers trained
-  one after another start as far apart as in the game. A build no interval divides is planned to the interval where one
-  follows another: one that runs into an interval by less than a quarter of it leaves the interval free, so marauders
-  follow each other every 476 steps for their 480, and one that runs further takes all of it, marines every 408 for
-  their 400. `Planner(api, max_ignored_overrun=...)` takes another share of an interval, 0 for none: a higher one lets a
-  plan start the next build up to that much of an interval before the game could.
+  the same on every machine, for tests and recorded games. Before either limit the solver stops once the plan is proven
+  within `relative_gap` of the best, 0.0001 of what it is worth by default, and `Planner(api, relative_gap=...)` takes a
+  larger one for a faster solve. `Planner`'s docstring says what the model holds: the items from the game's data, pruned
+  to what the reward needs, the workers pooled over every field and refinery, the SCV away from the walk to a structure
+  through the build to the walk back, and starts on the first second of an interval of its `TimeGrid`, by default 34
+  game steps long at first, 1.5 seconds, and doubling every time the time from the plan's start doubles from 544 steps,
+  24 seconds. A worker's 272 steps are eight of the first intervals, so workers trained one after another start as far
+  apart as in the game. A build no interval divides is planned to the interval where one follows another: one that runs
+  into an interval by less than a quarter of it leaves the interval free, so marauders follow each other every 476 steps
+  for their 480, and one that runs further takes all of it, marines every 408 for their 400. `Planner(api,
+  max_ignored_overrun=...)` takes another share of an interval, 0 for none: a higher one lets a plan start the next
+  build up to that much of an interval before the game could.
 
   An item starts in whole numbers for a time from the plan's start and is fluid after it, starting in fractions: the
   solver weighs fractions far faster, and the bot carries out only the near term before it plans again. By default that
@@ -359,7 +362,7 @@ class ThreatMap:
   ```
 
   `GameTime.INFINITE` keeps an item whole throughout. Longer makes a plan exact further ahead, and the solve slower. A
-  `PlannedItem` that starts where its item is fluid reads `is_fluid`: it stands for the fractions whose sum reached a
+  `PlanItem` that starts where its item is fluid reads `is_fluid`: it stands for the fractions whose sum reached a
   whole number there, rounded, so a bot can tell what the plan started in whole from what it only expects to follow.
   What an item needs first, a structure that unlocks it or the upgrade before it, it needs whole, fluid or not: no
   starport starts before a whole factory is done. `Planner(api, unlock_fraction=...)` takes the share of one that

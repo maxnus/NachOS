@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Final, Self, final
 
 from sc2nachos.gametime import GameTime
@@ -13,30 +14,51 @@ SECONDS_TOLERANCE: Final = 1e-9
 
 
 @final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class GridSegment:
+    """A stretch of a `TimeGrid` whose intervals are all one length.
+
+    Raises `ValueError` for an `interval_length` not longer than 0.
+    """
+
+    interval_length: GameTime
+    """How long each of its intervals is."""
+    end: GameTime
+    """The time from the plan's start the segment runs to: `GameTime.INFINITE` for one that runs on to any horizon."""
+
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        """Raise `ValueError` for a field that holds what the class's docstring refuses."""
+        if self.interval_length <= GameTime.ZERO:
+            raise ValueError(f"an interval must be longer than 0, not {self.interval_length}")
+
+
+@final
 class TimeGrid:
     """The intervals a plan's starts fall in, from the moment it is made: each start is planned at an interval's first
     second, and a build counts as done from the first edge at or after its end. Durations are never rounded.
 
-    It is laid out in segments, each an interval length and the time from the plan's start it runs to: a segment's
-    intervals follow one another while the next would still end by its time, and the next segment carries on from the
-    last edge. The grid ends at the horizon, its last interval cut short there; past the last segment's time, one
-    interval runs to the horizon, however long.
+    It is laid out in segments, each a `GridSegment`: a segment's intervals follow one another while the next would
+    still end by the segment's `end`, and the next segment carries on from the last edge. The grid ends at the horizon,
+    its last interval cut short there; past the last segment's `end`, one interval runs to the horizon, however long.
 
-    Raises `ValueError` for no segments, an interval not longer than 0, or a segment's time not after the one before.
+    Raises `ValueError` for no segments, or a segment that does not end after the one before.
     """
 
     __slots__ = ("_segments",)
 
-    def __init__(self, *, segments: Sequence[tuple[GameTime, GameTime]]) -> None:
+    def __init__(self, *, segments: Sequence[GridSegment]) -> None:
         if not segments:
             raise ValueError("a time grid needs at least one segment")
         previous_end = GameTime.ZERO
-        for interval, end in segments:
-            if interval <= GameTime.ZERO:
-                raise ValueError(f"an interval must be longer than 0, not {interval}")
-            if end <= previous_end:
-                raise ValueError(f"each segment must end after the one before, but {end} follows {previous_end}")
-            previous_end = end
+        for segment in segments:
+            if segment.end <= previous_end:
+                raise ValueError(
+                    f"each segment must end after the one before, but {segment.end} follows {previous_end}"
+                )
+            previous_end = segment.end
         self._segments = tuple(segments)
 
     @classmethod
@@ -65,24 +87,24 @@ class TimeGrid:
             raise ValueError(f"the initial interval count must be even and above 0, not {initial_interval_count}")
         if max_interval_doublings < 0:
             raise ValueError(f"the interval doublings must not be negative, not {max_interval_doublings}")
-        segments: list[tuple[GameTime, GameTime]] = []
+        segments: list[GridSegment] = []
         interval = initial_interval_length
         end = initial_interval_length * initial_interval_count
         for _ in range(max_interval_doublings):
-            segments.append((interval, end))
+            segments.append(GridSegment(interval_length=interval, end=end))
             interval *= 2
             end *= 2
-        segments.append((interval, GameTime.INFINITE))
+        segments.append(GridSegment(interval_length=interval, end=GameTime.INFINITE))
         return cls(segments=segments)
 
     @classmethod
     def uniform(cls, interval: GameTime) -> Self:
         """A grid of intervals all `interval` long."""
-        return cls(segments=[(interval, GameTime.INFINITE)])
+        return cls(segments=[GridSegment(interval_length=interval, end=GameTime.INFINITE)])
 
     @property
-    def segments(self) -> tuple[tuple[GameTime, GameTime], ...]:
-        """Each segment's interval length, and the time from the plan's start it runs to."""
+    def segments(self) -> tuple[GridSegment, ...]:
+        """Its segments, in order."""
         return self._segments
 
     def edges(self, horizon: GameTime) -> tuple[float, ...]:
@@ -94,10 +116,11 @@ class TimeGrid:
             raise ValueError(f"a horizon must be longer than 0 and finite, not {horizon}")
         end_of_plan = horizon.seconds
         edges = [0.0]
-        for interval, end in self._segments:
-            segment_end = min(end.seconds, end_of_plan)
-            while edges[-1] + interval.seconds <= segment_end + SECONDS_TOLERANCE:
-                edges.append(edges[-1] + interval.seconds)
+        for segment in self._segments:
+            interval_seconds = segment.interval_length.seconds
+            segment_end = min(segment.end.seconds, end_of_plan)
+            while edges[-1] + interval_seconds <= segment_end + SECONDS_TOLERANCE:
+                edges.append(edges[-1] + interval_seconds)
             if segment_end >= end_of_plan:
                 break
         if end_of_plan - edges[-1] > SECONDS_TOLERANCE:

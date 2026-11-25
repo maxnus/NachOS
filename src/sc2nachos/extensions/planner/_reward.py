@@ -39,16 +39,15 @@ class RewardTerm:
     on, its whole curve times what the function gives for a game time, and a `count_factor` makes it want more or
     fewer units, the counts its curve's pieces end at times what that function gives.
 
-    A term that `requires` upgrades is worth nothing until each is done: what marines are worth more with combat
-    shield than without is such a term, beside the one for what they are worth anyway. A plan starts such an upgrade
-    whole over all its horizon, whatever the planner's `fluid_after` says, since a share of one would count for far
-    more than that share of the term's units.
+    A term with `requirements` is worth nothing until each of those upgrades is done: what marines are worth more with
+    combat shield than without is such a term, beside the one for what they are worth anyway. A plan starts such an
+    upgrade whole over all its horizon, whatever the planner's `fluid_after` says, since a share of one would count for
+    far more than that share of the term's units.
 
     Raises `ValueError` for no group, an `end` not later than `start`, a curve that is not concave, its weights falling
     and its counts rising, a piece but the last that ends at no count above 0, or a negative weight in a term of several
-    groups or that requires an upgrade. What
-    `time_factor` and `count_factor` give is only seen where a plan is made: see `time_factor_at` and
-    `count_factor_at`.
+    groups or with requirements. What `time_factor` and `count_factor` give is only seen where a plan is made: see
+    `time_factor_at` and `count_factor_at`.
     """
 
     groups: Sequence[Mapping[UnitTypeId, float]]
@@ -67,10 +66,14 @@ class RewardTerm:
     """What every `end_count` of the curve is multiplied by at a game time between `start` and `end`, never negative,
     each unit's weight staying what it is; `None` for 1 throughout. It changes nothing in a curve of one piece, which
     ends at no count. A plan asks it as it does `time_factor`."""
-    requires: frozenset[UpgradeId] = frozenset()
+    requirements: frozenset[UpgradeId] = frozenset()
     """The upgrades that must be done for the term to be worth anything."""
 
     def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        """Raise `ValueError` for a field that holds what the class's docstring refuses."""
         if not self.groups:
             raise ValueError("a term must count a group of units at least")
         if self.end <= self.start:
@@ -79,8 +82,8 @@ class RewardTerm:
         if any(segment.weight < 0 for segment in self.segments):
             if len(self.groups) > 1:
                 raise ValueError(f"a term of several groups may not hold a negative weight: {self.segments}")
-            if self.requires:
-                raise ValueError(f"a term that requires an upgrade may not hold a negative weight: {self.segments}")
+            if self.requirements:
+                raise ValueError(f"a term with requirements may not hold a negative weight: {self.segments}")
 
     @classmethod
     def weight(
@@ -93,14 +96,14 @@ class RewardTerm:
         end: GameTime = GameTime.INFINITE,
         time_factor: Callable[[GameTime], float] | None = None,
         count_factor: Callable[[GameTime], float] | None = None,
-        requires: Iterable[UpgradeId] = (),
+        requirements: Iterable[UpgradeId] = (),
     ) -> Self:
         """Each unit of `units` is worth `weight` a second, however many there are: of one unit type, or of several
         counted together, one unit of each for what the mapping says. With an `end_count`, each unit up to that count
         is, and none past it anything: a count the bot wants, which a plan may fall short of. From the game time
         `start`, the game's start by default, to `end`, and nothing before or from then, times what `time_factor`
         gives for a game time between them, and with `end_count` times what `count_factor` gives for it; and only once
-        every upgrade of `requires` is done."""
+        every upgrade of `requirements` is done."""
         return cls.curve(
             units,
             _segments_of(weight, end_count),
@@ -108,7 +111,7 @@ class RewardTerm:
             end=end,
             time_factor=time_factor,
             count_factor=count_factor,
-            requires=requires,
+            requirements=requirements,
         )
 
     @classmethod
@@ -121,13 +124,13 @@ class RewardTerm:
         end: GameTime = GameTime.INFINITE,
         time_factor: Callable[[GameTime], float] | None = None,
         count_factor: Callable[[GameTime], float] | None = None,
-        requires: Iterable[UpgradeId] = (),
+        requirements: Iterable[UpgradeId] = (),
     ) -> Self:
         """The units of `units` are worth what `segments` give their count a second, more of them less each: of one
         unit type, or of several counted together, one unit of each for what the mapping says. From the game time
         `start`, the game's start by default, to `end`, and nothing before or from then, times what `time_factor`
         gives for a game time between them, and with the counts its pieces end at times what `count_factor` gives for
-        it; and only once every upgrade of `requires` is done."""
+        it; and only once every upgrade of `requirements` is done."""
         counted = {units: 1.0} if isinstance(units, UnitTypeId) else units
         return cls(
             groups=[counted],
@@ -136,7 +139,7 @@ class RewardTerm:
             end=end,
             time_factor=time_factor,
             count_factor=count_factor,
-            requires=frozenset(requires),
+            requirements=frozenset(requirements),
         )
 
     @classmethod
@@ -150,7 +153,7 @@ class RewardTerm:
         end: GameTime = GameTime.INFINITE,
         time_factor: Callable[[GameTime], float] | None = None,
         count_factor: Callable[[GameTime], float] | None = None,
-        requires: Iterable[UpgradeId] = (),
+        requirements: Iterable[UpgradeId] = (),
     ) -> Self:
         """Units worth something in combination: each group of `groups` is counted, one unit of each type for what
         the group says, and each unit of the smallest of those counts is worth `weight` a second, so that the
@@ -161,7 +164,7 @@ class RewardTerm:
 
         With an `end_count`, no unit past that count is worth anything. From the game time `start`, the game's start
         by default, to `end`, and nothing before or from then, times what `time_factor` gives for a game time between
-        them, and with `end_count` times what `count_factor` gives for it; and only once every upgrade of `requires`
+        them, and with `end_count` times what `count_factor` gives for it; and only once every upgrade of `requirements`
         is done. Raises `ValueError` for a negative `weight` with several groups."""
         return cls(
             groups=groups,
@@ -170,7 +173,7 @@ class RewardTerm:
             end=end,
             time_factor=time_factor,
             count_factor=count_factor,
-            requires=frozenset(requires),
+            requirements=frozenset(requirements),
         )
 
     @property
@@ -225,6 +228,10 @@ class Reward:
     in."""
 
     def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        """Raise `ValueError` for a field that holds what the class's docstring refuses."""
         if self.half_life is not None and self.half_life <= GameTime.ZERO:
             raise ValueError(f"a half-life must be longer than 0, not {self.half_life}")
         if self.terminal_time < GameTime.ZERO:
@@ -235,7 +242,7 @@ class Reward:
     @classmethod
     def weighted(
         cls,
-        weights: Mapping[UnitTypeId, float | Sequence[CurveSegment]],
+        unit_weights: Mapping[UnitTypeId, float | Sequence[CurveSegment]],
         *,
         terms: Sequence[RewardTerm] = (),
         upgrade_weights: Mapping[UpgradeId, float] | None = None,
@@ -243,17 +250,17 @@ class Reward:
         terminal_time: GameTime = GameTime.ZERO,
         stock_weight: float = 1e-4,
     ) -> Self:
-        """A reward of a term for each unit type of `weights`, at any time: one number for what each unit of it is worth
-        a second, or a curve where more of them are worth less each. `terms` come after them, and the rest is the
+        """A reward of a term for each unit type of `unit_weights`, at any time: one number for what each unit of it is
+        worth a second, or a curve where more of them are worth less each. `terms` come after them, and the rest is the
         reward's own."""
-        of_weights = [
+        terms_of_unit_weights = [
             RewardTerm.weight(unit_type, float(weight))
             if isinstance(weight, (int, float, numbers.Real))
             else RewardTerm.curve(unit_type, weight)
-            for unit_type, weight in weights.items()
+            for unit_type, weight in unit_weights.items()
         ]
         return cls(
-            terms=(*of_weights, *terms),
+            terms=(*terms_of_unit_weights, *terms),
             upgrade_weights={} if upgrade_weights is None else upgrade_weights,
             half_life=half_life,
             terminal_time=terminal_time,
@@ -268,7 +275,7 @@ class Reward:
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
         """Every upgrade it values: those weighted, and those its terms require."""
-        return frozenset(self.upgrade_weights).union(*(term.requires for term in self.terms))
+        return frozenset(self.upgrade_weights).union(*(term.requirements for term in self.terms))
 
 
 def _factor_at(factor_of: Callable[[GameTime], float] | None, time: GameTime, name: str) -> float:

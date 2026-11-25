@@ -48,6 +48,8 @@ codebases read alike. A new rule of style goes here, with an example from the co
   statements, as ruff's `PLR0915` counts them, which `ruff check` enforces; `tests` and `tools` are exempt. In the hot
   loop, extract the rare path, so that the common one makes no extra call: `Unit._update` calls `_update_alliance`
   only for a report whose alliance changed.
+- **A dataclass checks its fields in a `_validate` method, which `__post_init__` calls**, so that `__post_init__`
+  reads as the steps that set the object up, the check being one of them (the owner, review of #239).
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
   `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
   (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.

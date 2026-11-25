@@ -275,7 +275,9 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   on plain gathers and returns and 80 moved at both ends as a miner is, and at the farther, 8.06 from it, 94 and 86;
   three a refinery took 99 on plain gathers, 33 for each inside and changing over, and collected 163 to 164 a minute
   at either, and no move made them faster. Moved at one end only, one SCV gained 2 to 7% (`tools/sweep_gas.py`,
-  `sc2` runs 41837996802 and 41856036606, build 75689).
+  `sc2` runs 41837996802 and 41856036606, build 75689). On plain gathers one SCV a refinery collected 61 vespene a
+  minute at the nearer and 57 at the farther, and two 123 and 115, each as much as one alone, so that a third added 41
+  and 48, about three quarters of what each of the first two brought (`tools/sweep_gas.py`, local games, build 75689).
 - Two workers on moves meet head on and push each other aside, where one on a gather or a return passes through one
   on a move. Two SCVs a refinery moved at both ends of their trips, along the line between the two centers, met once
   every round trip, about 2.5 from the refinery's center: at the nearer refinery the one going in was shoved back,

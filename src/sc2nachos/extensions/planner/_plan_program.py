@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Final, final
 import numpy as np
 from numpy.typing import NDArray
 
-from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanMoment, PlannedItem
+from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
@@ -59,7 +59,7 @@ class PlanProgram:
     a structure granting each tech it needs, and of each upgrade, is done; with 0, in the share that the fractions done
     of them allow. Workers mine, collect or build, pooled over every field and refinery, in the tiers of `economy`'s
     rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a tier than the
-    interval before, or than `state` has, brings in nothing for `economy`'s `reassignment_time` from the interval's
+    interval before, or than `state` has, brings in nothing for `economy`'s `initial_harvest_delay` from the interval's
     start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
     supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type, and a
     number or a `TimeDependent`, read at each game step and summed, so that a peak in it loses its share whatever the
@@ -158,14 +158,16 @@ class PlanProgram:
         """The program, to count its variables and rows."""
         return self._program
 
-    def solve(self, *, time_limit: float | None, node_limit: int | None) -> BuildPlan | None:
-        """The best plan the solver finds within `time_limit` seconds and `node_limit` nodes, or `None` if it finds
-        none."""
-        solution = self._program.maximize(self._objective, time_limit=time_limit, node_limit=node_limit)
+    def solve(self, *, time_limit: float | None, node_limit: int | None, relative_gap: float) -> BuildPlan | None:
+        """The best plan the solver finds within `time_limit` seconds and `node_limit` nodes, proven within
+        `relative_gap` of the best where it gets that far, or `None` if it finds none."""
+        solution = self._program.maximize(
+            self._objective, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
+        )
         if solution.values is None:
             return None
         return BuildPlan(
-            made_at=self._state.time,
+            time=self._state.time,
             items=self._planned_items(solution.values),
             intervals=self._planned_intervals(solution.values),
             objective=solution.objective,
@@ -178,7 +180,7 @@ class PlanProgram:
         """For each item, the intervals its starts are whole in: those that start before its time in
         `fluid_after_seconds`, and every one for an upgrade a term of the reward requires, a share of which would
         unlock that share of all the term could ever be worth, far more than of what its units are."""
-        required = frozenset[UpgradeId]().union(*(term.requires for term in self._reward.terms))
+        required = frozenset[UpgradeId]().union(*(term.requirements for term in self._reward.terms))
         return [
             np.ones(len(self._edges) - 1, dtype=bool)
             if item.upgrade in required
@@ -302,8 +304,8 @@ class PlanProgram:
 
     def _add_work_starts(self) -> tuple[tuple[VariableBlock, ...], tuple[VariableBlock, ...]]:
         """The variables of the workers that start to mine in each interval, a block for each mining tier, and of those
-        that start to collect, one for each collecting tier; none where the economy's `reassignment_time` is 0."""
-        if not self._economy.reassignment_time.seconds:
+        that start to collect, one for each collecting tier; none where the economy's `initial_harvest_delay` is 0."""
+        if not self._economy.initial_harvest_delay.seconds:
             return (), ()
         started_mining = tuple(self._program.add_variables(self._interval_count) for _ in self._mining)
         return started_mining, tuple(self._program.add_variables(self._interval_count) for _ in self._collecting)
@@ -544,12 +546,12 @@ class PlanProgram:
 
     def _income_of(self, tiers: Sequence[_WorkerTier], started: Sequence[VariableBlock]) -> RowExpression:
         """What the workers in `tiers` bring in a second in each interval, less what those `started` in a tier do not
-        yet: nothing for the economy's `reassignment_time` from the start of the interval they start in."""
+        yet: nothing for the economy's `initial_harvest_delay` from the start of the interval they start in."""
         income = RowExpression(self._interval_count)
         for tier in tiers:
             income.add(tier.block, np.eye(self._interval_count) * tier.per_worker_second)
         for tier, started_in_tier in zip(tiers, started, strict=False):
-            income.add(started_in_tier, -tier.per_worker_second * self._reassignment_shares())
+            income.add(started_in_tier, -tier.per_worker_second * self._initial_harvest_delay_shares())
         return income
 
     def _constrain_workers(self) -> None:
@@ -635,12 +637,12 @@ class PlanProgram:
         if back_from_builds is not None:
             self._program.constrain(started_for_nothing.add_expression(back_from_builds, -1.0), upper=0.0)
 
-    def _reassignment_shares(self) -> FloatArray:
-        """The share of each interval, by row, within the economy's `reassignment_time` of each interval's start, by
+    def _initial_harvest_delay_shares(self) -> FloatArray:
+        """The share of each interval, by row, within the economy's `initial_harvest_delay` of each interval's start, by
         column: what a worker that starts work at that start loses of it."""
         started_at = self._edges[:-1][None, :]
         overlap_start = np.maximum(started_at, self._edges[:-1][:, None])
-        overlap_end = np.minimum(started_at + self._economy.reassignment_time.seconds, self._edges[1:][:, None])
+        overlap_end = np.minimum(started_at + self._economy.initial_harvest_delay.seconds, self._edges[1:][:, None])
         return np.maximum(overlap_end - overlap_start, 0.0) / self._widths[:, None]
 
     def _constrain_supply(self) -> None:
@@ -697,9 +699,9 @@ class PlanProgram:
             for lane_type in lane_types:
                 if lane_type is not None:
                     lanes.add_expression(self._count_alive(lane_type, at_end=False))
-        occupations = [
+        producer_activities = [
             occupation
-            for occupation in self._state.occupations
+            for occupation in self._state.producer_activities
             if occupation.producer in producers and (occupation.needs_tech_lab or not on_tech_labs)
         ]
         busy = RowExpression(intervals)
@@ -708,7 +710,7 @@ class PlanProgram:
             busy_seconds = self._busy_seconds(index)
             self._add_starts_to(busy, index, busy_seconds)
             self._add_starts_to(running, index, (busy_seconds > SECONDS_TOLERANCE).astype(float))
-        for occupation in occupations:
+        for occupation in producer_activities:
             seconds = self._busy_seconds_until(
                 occupation.time_left.seconds, start_seconds=occupation.time_until_start.seconds
             )
@@ -865,7 +867,7 @@ class PlanProgram:
             [term.count_factor_at(time) if is_counted else 1.0 for time, is_counted in zip(ends, counted, strict=True)]
         )
         counts = [self._count_of(group) for group in term.groups]
-        if len(counts) == 1 and len(term.segments) == 1 and not term.requires:
+        if len(counts) == 1 and len(term.segments) == 1 and not term.requirements:
             return worth.add_expression(counts[0], factors * term.segments[0].weight)
         values = self._program.add_variables(int(counted.sum()), lower=-math.inf)
         worth.add(values, np.eye(intervals)[:, counted])
@@ -881,12 +883,12 @@ class PlanProgram:
                 ends_at = segment.end_count * count_factors
                 worth_before = worth_before + segment.weight * (ends_at - count_before)
                 count_before = ends_at
-        if term.requires:
+        if term.requirements:
             most_counted = self._most_counted_by(term)
             most_worth = np.array(
                 [_worth_at(term.segments, most_counted, count_factor=factor) for factor in count_factors.tolist()]
             )
-            for upgrade in sorted(term.requires):
+            for upgrade in sorted(term.requirements):
                 not_done = RowExpression(intervals).add_expression(worth)
                 not_done.add_expression(self._upgrade_done(upgrade, at_end=True), -most_worth * factors)
                 self._program.constrain(not_done.selected(counted), upper=0.0)
@@ -913,19 +915,21 @@ class PlanProgram:
 
     # Reading the plan.
 
-    def _planned_items(self, values: FloatArray) -> tuple[PlannedItem, ...]:
+    def _planned_items(self, values: FloatArray) -> tuple[PlanItem, ...]:
         """Each item started, in order of start, those of one interval in the order of the items: of fractional starts,
         one each time their sum reaches a whole number, rounded, and fluid where its interval's starts are."""
-        planned: list[tuple[int, int, PlannedItem]] = []
+        planned: list[tuple[int, int, PlanItem]] = []
         for index, item in enumerate(self._items):
             made = item.made
             if made is None:
                 continue
+            duration = GameTime(seconds=item.build_seconds)
             whole = np.floor(_values_of(self._starts_so_far[index], values) + 0.5)
             for interval, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._state.time + GameTime(seconds=float(self._edges[interval]))
                 is_fluid = not self._whole[index][interval]
-                planned += [(interval, index, PlannedItem(item=made, start=start, is_fluid=is_fluid))] * int(count)
+                entry = PlanItem(item=made, start=start, duration=duration, is_fluid=is_fluid)
+                planned += [(interval, index, entry)] * int(count)
         return tuple(entry for _, _, entry in sorted(planned, key=lambda entry: (entry[0], entry[1])))
 
     def _planned_intervals(self, values: FloatArray) -> tuple[PlanInterval, ...]:
@@ -1060,7 +1064,7 @@ def _falls_of(shares: FloatArray, *, from_share: float) -> FloatArray:
 
 def _values_of(block: VariableBlock, values: FloatArray) -> FloatArray:
     """The values of `block`'s variables."""
-    return values[block.start : block.start + block.size]
+    return values[block.to_slice()]
 
 
 def _count_of(completions: Sequence[tuple[UnitTypeId, float]], unit_type: UnitTypeId) -> int:

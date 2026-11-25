@@ -49,8 +49,9 @@ from sc2nachos.extensions.planner import (
     BuildPlan,
     CurveSegment,
     EconomyModel,
-    Occupation,
+    GridSegment,
     PlannerState,
+    ProducerActivity,
     Reward,
     RewardTerm,
     TimeGrid,
@@ -64,9 +65,9 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.testing import load_game_data
 
 # What the toy planned over, and the cases that keep to it.
-_TOY_HORIZON = GameTime(seconds=600)
+_TOY_HORIZON = GameTime(minutes=10)
 # What `plan_now` plans over by default, and the cases on the planner's defaults.
-_PLANNER_HORIZON = GameTime(seconds=300)
+_PLANNER_HORIZON = GameTime(minutes=5)
 _CASES_ON_THE_PLANNERS_DEFAULTS = frozenset({"reference", "replans", "items"})
 _START_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = {UnitTypeId.COMMAND_CENTER: 3}
 # The planner's default: a whole build running into an interval by less than a quarter of it leaves the interval free.
@@ -183,9 +184,9 @@ _WHOLE_OVER_THE_HORIZON_IN_THE_TOY = frozenset(
 _TOY_GRIDS = {
     "step": TimeGrid(
         segments=[
-            (GameTime(seconds=2), GameTime(seconds=90)),
-            (GameTime(seconds=30), GameTime(seconds=300)),
-            (GameTime(seconds=60), GameTime.INFINITE),
+            GridSegment(interval_length=GameTime(seconds=2), end=GameTime(seconds=90)),
+            GridSegment(interval_length=GameTime(seconds=30), end=GameTime(seconds=300)),
+            GridSegment(interval_length=GameTime(seconds=60), end=GameTime.INFINITE),
         ]
     ),
     "double60": TimeGrid.doubling(
@@ -193,10 +194,10 @@ _TOY_GRIDS = {
     ),
     "double90": TimeGrid(
         segments=[
-            (GameTime(seconds=2), GameTime(seconds=90)),
-            (GameTime(seconds=4), GameTime(seconds=180)),
-            (GameTime(seconds=8), GameTime(seconds=360)),
-            (GameTime(seconds=16), GameTime.INFINITE),
+            GridSegment(interval_length=GameTime(seconds=2), end=GameTime(seconds=90)),
+            GridSegment(interval_length=GameTime(seconds=4), end=GameTime(seconds=180)),
+            GridSegment(interval_length=GameTime(seconds=8), end=GameTime(seconds=360)),
+            GridSegment(interval_length=GameTime(seconds=16), end=GameTime.INFINITE),
         ]
     ),
     "double45": TimeGrid.doubling(
@@ -242,11 +243,11 @@ def _game_start() -> PlannerState:
 
 def _in_production(
     unit_type: UnitTypeId, producer: UnitTypeId, seconds_left: float, *, needs_tech_lab: bool = False
-) -> tuple[UnitCompletion, Occupation]:
+) -> tuple[UnitCompletion, ProducerActivity]:
     """A unit of `unit_type` that `producer` makes, done in `seconds_left`, and what keeps the producer busy until
     then, its tech lab too if the unit `needs_tech_lab`."""
     time_left = GameTime(seconds=seconds_left)
-    occupation = Occupation(
+    occupation = ProducerActivity(
         producer=producer,
         time_until_start=GameTime.ZERO,
         time_left=time_left,
@@ -294,7 +295,7 @@ def _mid_game_states() -> dict[str, PlannerState]:
                 UnitTypeId.MARAUDER: 1,
             },
             unit_completions=tuple(completion for completion, _ in at_3_minutes),
-            occupations=tuple(occupation for _, occupation in at_3_minutes),
+            producer_activities=tuple(occupation for _, occupation in at_3_minutes),
             worker_builds=(
                 WorkerBuild(
                     unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=13), builder_walks_there=False
@@ -324,7 +325,7 @@ def _mid_game_states() -> dict[str, PlannerState]:
                 UnitTypeId.MEDIVAC: 1,
             },
             unit_completions=tuple(completion for completion, _ in at_6_minutes),
-            occupations=tuple(occupation for _, occupation in at_6_minutes),
+            producer_activities=tuple(occupation for _, occupation in at_6_minutes),
             mineral_fields=16,
             refineries_with_vespene=2,
             vespene_collectors=6,
@@ -333,11 +334,13 @@ def _mid_game_states() -> dict[str, PlannerState]:
     }
 
 
-def _economy_walking(walks: Mapping[UnitTypeId, float], *, reassignment_time: GameTime = GameTime.ZERO) -> EconomyModel:
+def _economy_walking(
+    walks: Mapping[UnitTypeId, float], *, initial_harvest_delay: GameTime = GameTime.ZERO
+) -> EconomyModel:
     """The default economy, but with an SCV's walk to each structure in `walks`, and none to the others, and with
-    `reassignment_time`, by default none as in the toy, which moves a worker to or from a refinery for nothing."""
+    `initial_harvest_delay`, by default none as in the toy, which moves a worker to or from a refinery for nothing."""
     return EconomyModel(
-        reassignment_time=reassignment_time,
+        initial_harvest_delay=initial_harvest_delay,
         walk_time=lambda unit_type: GameTime(seconds=walks.get(unit_type, 0.0)),
     )
 
@@ -379,7 +382,7 @@ def _solve_and_print(
         spendable_income_fraction=_SPENDABLE_INCOME_FRACTION,
     )
     built = time.perf_counter() - started
-    plan = program.solve(time_limit=time_limit, node_limit=None)
+    plan = program.solve(time_limit=time_limit, node_limit=None, relative_gap=1e-4)
     intervals = len(grid.edges(horizon)) - 1
     size = (
         f"{len(items)} items, {intervals} intervals, {program.linear_program.integral_count} integers, "
@@ -394,8 +397,8 @@ def _solve_and_print(
         f"{', optimal' if plan.is_optimal else ''}"
     )
     print(f"    counts: {dict(counts)}")
-    first = [planned for planned in plan.items if (planned.start - plan.made_at).seconds < _FIRST_SECONDS_SHOWN]
-    starts = (f"{(planned.start - plan.made_at).seconds:.0f}s {planned.item.name}" for planned in first)
+    first = [planned for planned in plan.items if (planned.start - plan.time).seconds < _FIRST_SECONDS_SHOWN]
+    starts = (f"{(planned.start - plan.time).seconds:.0f}s {planned.item.name}" for planned in first)
     print("    first 90 s: " + ", ".join(starts))
     return plan
 
@@ -458,7 +461,7 @@ def _reference_economy(model: TerranModel) -> EconomyModel:
     """The reference configuration's economy: the default, its reassignment time too, but with a walk of 25 seconds to
     a command center, and of 6 to any other structure."""
     walks = {unit_type: _REFERENCE_WALK_SECONDS for unit_type in model.unit_items} | {UnitTypeId.COMMAND_CENTER: 25.0}
-    return _economy_walking(walks, reassignment_time=EconomyModel().reassignment_time)
+    return _economy_walking(walks, initial_harvest_delay=EconomyModel().initial_harvest_delay)
 
 
 def _half_life_label(half_life: GameTime | None) -> str:
@@ -584,7 +587,7 @@ def _print_starts_by_minute(plan: BuildPlan, unit_types: Sequence[UnitTypeId]) -
     """How many of each of `unit_types` the plan starts in each of its ten minutes."""
     for unit_type in unit_types:
         by_minute = Counter(
-            int((planned.start - plan.made_at).seconds // 60) for planned in plan.items if planned.item == unit_type
+            int((planned.start - plan.time).seconds // 60) for planned in plan.items if planned.item == unit_type
         )
         print(
             f"    {unit_type.name:>9} started a minute: " + " ".join(f"{by_minute[minute]:3d}" for minute in range(10))

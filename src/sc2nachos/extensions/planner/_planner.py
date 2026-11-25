@@ -73,7 +73,7 @@ class Planner:
       refinery, as if each could work anywhere at once.
     - How many workers mine and how many collect vespene is the plan's choice in each interval, which the interval holds
       as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
-      `reassignment_time`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
+      `initial_harvest_delay`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
       interval by interval, is such a start, from the state's collectors and every other SCV that builds nothing mining.
       Nothing but the reward's `stock_weight` keeps a worker at work where what it brings in buys nothing more.
     - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
@@ -111,11 +111,14 @@ class Planner:
       over any horizon. Longer times make a plan exact further ahead, and the solve slower.
 
     The solve stops at `time_limit` seconds of wall-clock time, or after `node_limit` nodes of branching, each
-    unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not.
+    unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not. Before either,
+    it stops once the plan is proven within `relative_gap` of the best there is, relative to what the plan is worth: by
+    default 0.0001, a hundredth of a percent. A larger gap ends the solve sooner with a plan that may be worth that
+    much less.
 
-    Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, or a
-    `max_ignored_overrun`, an `unlock_fraction` or a `spendable_income_fraction` outside 0 to 1; and `NotPlayingError`
-    if built before the game starts.
+    Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, a
+    negative `relative_gap`, or a `max_ignored_overrun`, an `unlock_fraction` or a `spendable_income_fraction` outside
+    0 to 1; and `NotPlayingError` if built before the game starts.
     """
 
     __slots__ = (
@@ -125,6 +128,7 @@ class Planner:
         "_model",
         "_node_limit",
         "_plan",
+        "_relative_gap",
         "_time_limit",
         "_fluid_after",
         "_spendable_income_fraction",
@@ -138,6 +142,7 @@ class Planner:
         grid: TimeGrid | None = None,
         time_limit: float | None = 3.0,
         node_limit: int | None = None,
+        relative_gap: float = 1e-4,
         fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
         max_ignored_overrun: float = 0.25,
         unlock_fraction: float = 1.0,
@@ -149,6 +154,8 @@ class Planner:
             raise ValueError(f"a time limit must be above 0 seconds, not {time_limit}")
         if node_limit is not None and node_limit <= 0:
             raise ValueError(f"a node limit must be above 0, not {node_limit}")
+        if relative_gap < 0:
+            raise ValueError(f"the relative gap must not be negative, not {relative_gap}")
         if not 0 <= max_ignored_overrun <= 1:
             raise ValueError(f"the overrun ignored must be a share of an interval, 0 to 1, not {max_ignored_overrun}")
         if not 0 <= unlock_fraction <= 1:
@@ -159,6 +166,7 @@ class Planner:
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._time_limit = time_limit
         self._node_limit = node_limit
+        self._relative_gap = relative_gap
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
@@ -184,7 +192,7 @@ class Planner:
         self,
         reward: Reward,
         *,
-        horizon: GameTime = GameTime(seconds=300),
+        horizon: GameTime = GameTime(minutes=5),
         state: PlannerState | None = None,
         economy: EconomyModel = EconomyModel(),
         loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]] = _NO_LOSSES,
@@ -238,7 +246,7 @@ class Planner:
             unlock_fraction=self._unlock_fraction,
             spendable_income_fraction=self._spendable_income_fraction,
         )
-        plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit)
+        plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit, relative_gap=self._relative_gap)
         if plan is not None:
             self._plan = plan
         return plan

@@ -14,8 +14,6 @@ from numpy.typing import NDArray
 from scipy.optimize import milp
 from scipy.sparse import coo_array, csr_array
 
-# Where the solver stops: within this of the best plan, relative to its worth.
-RELATIVE_GAP: Final = 1e-4
 _OPTIMAL_STATUS: Final = 0
 
 type FloatArray = NDArray[np.float64]
@@ -30,6 +28,10 @@ class VariableBlock:
     """The index of its first variable."""
     size: int
     """How many variables it holds."""
+
+    def to_slice(self) -> slice:
+        """Where its variables are among the program's, as a slice of them."""
+        return slice(self.start, self.start + self.size)
 
 
 @final
@@ -88,12 +90,12 @@ class RowExpression:
         """Each row's value with the variables at `values`."""
         result = self.constant.copy()
         for block, matrix in self._terms.items():
-            result += matrix @ values[block.start : block.start + block.size]
+            result += matrix @ values[block.to_slice()]
         return result
 
-    def triplets(self, first_row: int) -> tuple[list[FloatArray], list[FloatArray], list[FloatArray]]:
-        """The row index, the variable index and the coefficient of each coefficient but 0, its rows counted from
-        `first_row`."""
+    def nonzero_coefficients(self, first_row: int) -> tuple[list[FloatArray], list[FloatArray], list[FloatArray]]:
+        """Each coefficient but 0 as scipy's sparse matrices take them, in coordinate format: its row index, its
+        variable index and its value, the rows counted from `first_row`."""
         rows: list[FloatArray] = []
         columns: list[FloatArray] = []
         coefficients: list[FloatArray] = []
@@ -117,7 +119,7 @@ class Solution:
     gap: float
     """Its bound on how far the objective may be from the best, relative to it."""
     is_optimal: bool
-    """Whether it proved the values the best, to `RELATIVE_GAP`."""
+    """Whether it proved the values the best, to the relative gap it was asked for."""
     seconds: float
     """The wall-clock seconds it took."""
     message: str
@@ -176,7 +178,7 @@ class LinearProgram:
         self, expression: RowExpression, *, lower: FloatArray | float = -math.inf, upper: FloatArray | float = math.inf
     ) -> None:
         """Hold each row of `expression` between `lower` and `upper`, one value or one a row."""
-        rows, columns, coefficients = expression.triplets(self.row_count)
+        rows, columns, coefficients = expression.nonzero_coefficients(self.row_count)
         self._rows += rows
         self._columns += columns
         self._coefficients += coefficients
@@ -187,15 +189,18 @@ class LinearProgram:
             np.broadcast_to(np.asarray(upper, dtype=float), (expression.rows,)) - expression.constant
         )
 
-    def maximize(self, objective: RowExpression, *, time_limit: float | None, node_limit: int | None) -> Solution:
+    def maximize(
+        self, objective: RowExpression, *, time_limit: float | None, node_limit: int | None, relative_gap: float
+    ) -> Solution:
         """Solve for the greatest `objective`, a single row, within `time_limit` seconds of wall-clock time and
-        `node_limit` nodes of branching, each unlimited if `None`."""
+        `node_limit` nodes of branching, each unlimited if `None`. The solver stops once it has proven its values
+        within `relative_gap` of the best, relative to the objective."""
         size = self.variable_count
         costs = np.zeros(size)
-        _, columns, coefficients = objective.triplets(0)
+        _, columns, coefficients = objective.nonzero_coefficients(0)
         if columns:
             np.add.at(costs, np.concatenate(columns).astype(int), -np.concatenate(coefficients))
-        options: dict[str, float | int | bool] = {"disp": False, "mip_rel_gap": RELATIVE_GAP}
+        options: dict[str, float | int | bool] = {"disp": False, "mip_rel_gap": relative_gap}
         if time_limit is not None:
             options["time_limit"] = time_limit
         if node_limit is not None:
