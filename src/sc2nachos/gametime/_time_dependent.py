@@ -28,18 +28,20 @@ class _NoDefault(Enum):
 NO_DEFAULT: Final = _NoDefault.NO_DEFAULT
 
 
-class TimeDependent[T: float](Protocol):
-    """A value that depends on the game time, such as a supply or a rate of losses: called with a `GameTime` it gives
-    the value at that time, and with many times an array of the values at them, through numpy. `TimeSeries` records a
-    value a step, `TimeCurve` joins a few values given at their times, and `TimeFunction` asks a function.
+class TimeDependent[T](Protocol):
+    """A value that depends on the game time, such as a supply, a rate of losses or the `Resources` a bot expects to
+    have earned: called with a `GameTime` it gives the value at that time, and with many times an array of the values
+    at them, through numpy. `TimeSeries` records a number a step, `TimeCurve` joins a few values given at their times,
+    and `TimeFunction` asks a function.
 
-    Many times are a sequence of `GameTime`s or an array of steps, and their values an array of the same shape. A time
-    it does not cover raises `IndexError`, or reads `default` where the call is given one: any value for one time, and
-    a number for many, each time not covered reading it. Raises `TypeError` for a time that is not a `GameTime`, for
-    many that are neither a sequence of them nor an array of numbers, and for a default of many that is not a number.
+    Many times are a sequence of `GameTime`s or an array of steps, and their values an array of the same shape: of
+    numbers where the values are numbers, and of objects, a value each, where they are anything else. A time it does
+    not cover raises `IndexError`, or reads `default` where the call is given one: any value for one time, and a
+    number for many, each time not covered reading it. Raises `TypeError` for a time that is not a `GameTime`, and for
+    many that are neither a sequence of them nor an array of numbers.
 
-    Being called with a time, it passes wherever a `Callable[[GameTime], float]` is asked for, as a plain function of
-    the game time does.
+    Being called with a time, it passes wherever a `Callable[[GameTime], T]` is asked for, as a plain function of the
+    game time does.
     """
 
     @overload
@@ -48,6 +50,8 @@ class TimeDependent[T: float](Protocol):
     @overload
     def __call__[D](self, time: GameTime, /, *, default: D) -> T | D: ...
 
+    # The default of many times is a number and not a `T`, which would make `T` a type of what it takes as well as
+    # of what it gives, and a series of integers no `TimeDependent[float]`. The kinds of other values cover every time.
     @overload
     def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: float = ...) -> ndarray: ...
 
@@ -88,8 +92,26 @@ def game_times_of_sequence(times: Sequence[GameTime]) -> list[GameTime]:
     return times_given
 
 
+def is_number(value: object) -> bool:
+    """Whether `value` is a number, which a numpy array holds as one, and not a value it holds as an object."""
+    return isinstance(value, _SCALAR_TYPES)
+
+
+def array_of_values(values: Sequence[object]) -> ndarray:
+    """`values`, those of a `TimeDependent` at many times, as an array of their length: of numbers where all are
+    numbers, and else of objects, a value each. Filled a value at a time, since numpy would read a value that is a
+    sequence, as a `Point` is, as a row of numbers."""
+    if all(issubclass(value_type, _SCALAR_TYPES) for value_type in set(map(type, values))):
+        return numpy.array(values)
+    array = numpy.empty(len(values), dtype=object)
+    for index, value in enumerate(values):
+        array[index] = value
+    return array
+
+
 def default_of_many_times(default: object) -> float | None:
-    """`default`, given with many times, or `None` where none was given: raises `TypeError` unless it is a number."""
+    """`default`, given with many times of numbers, or `None` where none was given: raises `TypeError` unless it is a
+    number."""
     if default is NO_DEFAULT:
         return None
     if not isinstance(default, _SCALAR_TYPES):

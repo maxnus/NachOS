@@ -9,8 +9,8 @@ import numpy
 from sc2nachos.gametime._game_time import GameTime
 from sc2nachos.gametime._time_dependent import (
     NO_DEFAULT,
+    array_of_values,
     check_array_holds_steps,
-    default_of_many_times,
     game_times_of_sequence,
 )
 
@@ -21,14 +21,15 @@ if TYPE_CHECKING:
 
 
 @final
-class TimeFunction[T: float]:
+class TimeFunction[T]:
     """A `TimeDependent` that asks a function of the game time, such as a rate of losses from 5:00 on:
     `TimeFunction(lambda time: 0.004 if time >= GameTime(seconds=300) else 0.0)`. It decorates a function too, which
-    is still called with a time as it was.
+    is still called with a time as it was. The function gives a value of any kind.
 
     Called with a time it hands the function that time, as given, and with many times each of them in turn, a step of
-    an array as a `GameTime`. It covers every time, so no read raises `IndexError` or reads a default; what the
-    function raises reaches the caller.
+    an array as a `GameTime`: an array of numbers where the function gave numbers, and of objects where it gave
+    anything else. It covers every time, so no read raises `IndexError` or reads a default; what the function raises
+    reaches the caller.
     """
 
     __slots__ = ("_function",)
@@ -54,20 +55,19 @@ class TimeFunction[T: float]:
     def __call__[D](self, time: GameTime, /, *, default: D) -> T | D: ...
 
     @overload
-    def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: float = ...) -> ndarray: ...
+    def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: object = ...) -> ndarray: ...
 
     def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /, *, default: object = NO_DEFAULT) -> object:
         """What the function gives for `time`, or an array of what it gives for each of many, a sequence of
-        `GameTime`s or an array of steps, in its shape. `default` is never read. Raises `TypeError` as a
-        `TimeDependent` does. @public"""
+        `GameTime`s or an array of steps, in its shape. `default` is never read, whatever it is. Raises `TypeError`
+        as a `TimeDependent` does. @public"""
         if isinstance(time, GameTime):
             return self._function(time)
-        default_of_many_times(default)
         if isinstance(time, numpy.ndarray):
             check_array_holds_steps(time)
             values = [self._function(GameTime._from_steps(step)) for step in time.ravel().tolist()]
-            return numpy.array(values).reshape(time.shape)
-        return numpy.array([self._function(time_given) for time_given in game_times_of_sequence(time)])
+            return array_of_values(values).reshape(time.shape)
+        return array_of_values([self._function(time_given) for time_given in game_times_of_sequence(time)])
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self._function!r})"

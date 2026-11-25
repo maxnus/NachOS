@@ -3,14 +3,17 @@
 A value that changes as the game goes on, such as a supply recorded each step or a rate of losses a bot expects from
 5:00 on, is a `TimeDependent`. There are three kinds, all in `sc2nachos.gametime`, and all read the same way:
 
-- [`TimeSeries`](#a-recorded-series) records a value a step.
+- [`TimeSeries`](#a-recorded-series) records a number a step.
 - [`TimeCurve`](#a-curve) joins a few values, each given at a game time.
 - [`TimeFunction`](#a-function) asks a function of the game time.
+
+The value is most often a number, and a curve and a function take [other values](#values-that-are-no-numbers) too,
+such as `Resources`.
 
 ## Reading one
 
 A `TimeDependent` is called with a `GameTime` and gives the value at that time. Called with many times, it gives a
-numpy array of the values at them, which for a series or a curve is far quicker than a call a time:
+numpy array of the values at them, which for a series or a curve of numbers is far quicker than a call a time:
 
 ```python
 import numpy
@@ -85,10 +88,31 @@ losses(GameTime(seconds=300))  # 0.004
 A curve that rises along a line and then jumps is a linear one with two values a step apart. A curve is not changed
 once made; iterating over it hands its pairs back, to make another from.
 
+### Values that are no numbers
+
+A curve's values are numbers, or anything else that adds, subtracts and multiplies by a number, as `Resources`, a
+`Cost`, a `Point` and a `GameTime` do: a `SupportsInterpolation`, to a type checker. It reads along the line between
+two of them by their own arithmetic:
+
+```python
+income = TimeCurve([(GameTime.ZERO, Resources(0, 0)), (GameTime(seconds=300), Resources(900, 300))])
+
+income(GameTime(seconds=100))  # Resources(minerals=300.0, vespene=100.0)
+income(numpy.arange(6720))  # an array of 6720 Resources, a step each
+income(numpy.arange(6720)).sum()  # the Resources of them all, added up
+```
+
+Many times give a numpy array of objects, a value each, in the shape of the times as an array of numbers is. numpy
+works on it a value at a time, so reading a linear curve of `Resources` at every step of five minutes takes some 3 ms,
+where one of numbers takes 0.015 ms. Where that counts, a curve for the minerals and one for the vespene read as
+quickly as numbers do.
+
+A `TimeFunction` gives values of any kind, whatever its function gives, and many of them the same way.
+
 ## A function
 
-A `TimeFunction` wraps a function of the game time, for anything a curve does not say. It decorates one too, and the
-function is still called with a time as it was:
+A `TimeFunction` wraps a function of the game time, for anything a curve does not say, giving values of any kind. It
+decorates one too, and the function is still called with a time as it was:
 
 ```python
 @TimeFunction

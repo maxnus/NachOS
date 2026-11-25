@@ -433,7 +433,16 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     bot's code breaks, and about half its reads between steps move a step earlier.
   - **A `TimeCurve` holds its first value before its first time and its last after its last** ("A"), so it covers every
     time. Over not covered there: the default is the reader's, and a curve handed to the planner is read by the planner.
-    It is pairs of a `GameTime` and a value, the times strictly rising, floats, not changed once made.
+    It is pairs of a `GameTime` and a value, the times strictly rising, not changed once made.
+  - **A value is of any kind, not a number alone**, the owner's review of #261, 2026-11-25 ("Do we really want to
+    restrict this class to floats? In principle anything that supports addition (and subtraction?) should work, such
+    as `Resources` right?" and "Why does T need to be a float", then "A: any value", over the curve staying floats
+    until a bot needs more). The protocol and `TimeFunction` take any value. A `TimeCurve` takes numbers, held as
+    floats, or values that add, subtract and multiply by a number, the protocol `SupportsInterpolation`: `Resources`,
+    a `Cost`, a `Point`, a `GameTime`. A recorded series stays numbers, being a numpy buffer with a mean, filters and
+    a derivative. Many times of values that are no numbers give an array of objects, a value each. Measured over 6720
+    steps: a linear curve of `Resources` 3.2 ms, of floats 0.015, as before; a function of `Resources` 1.8 ms, of
+    floats 0.98, where it took 0.91.
   - **A curve joins its values by its `interpolation`, an `Interpolation`**: `LINEAR`, the default, or `STEP`, each
     value held from its time until the next ("The advantage with the enum is that we can add more modes in the future.
     E.g. cubic spline interpolation", then "Let's call it STEP", over `HELD`, proposed since a step is a game step
@@ -459,10 +468,13 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   1. Done in #261: the protocol and its three kinds, in `sc2nachos.gametime` with `Interpolation`. A bot changes
      `series.at(time)` to `series(time, default=None)`, `start_time` to `start` and `last_time` to `end`, and about
      half its reads of a series between two steps move a step earlier: for the release's notes. Not decided, and built
-     the plainest way: a curve refuses a value not finite, or further from the one before it than a float holds; many
-     times given as an array with no dimension still give an array; a default is checked
-     for many times of a curve and a function too, which never read it; `GameTime` has no public lower step, the
-     series flooring its `steps`.
+     the plainest way: a curve refuses a number not finite, or further from the one before it than a float holds; many
+     times given as an array with no dimension still give an array; `GameTime` has no public lower step, the series
+     flooring its `steps`. With values of any kind: the default of many times stays a number in the protocol's type,
+     since a default of the value's type would stop a series of integers passing as a `TimeDependent[float]`, and a
+     curve and a function, which never read one, take any; a curve asks its values to add, subtract and multiply in
+     every interpolation, `STEP` too, which needs none of it, and refuses numbers among values that are none; a value
+     that is no number is not checked for being finite; `SupportsInterpolation` is a new public name.
   2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads

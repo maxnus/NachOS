@@ -3,18 +3,19 @@ import math
 import numpy
 import pytest
 
-from sc2nachos import GameTime
-from sc2nachos.gametime import Interpolation, TimeCurve
+from sc2nachos import GameTime, Point
+from sc2nachos.gamedata import Resources
+from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent
 
 
 @pytest.fixture
-def rising_losses() -> TimeCurve:
+def rising_losses() -> TimeCurve[float]:
     """No losses until 5:00, rising to 0.004 by 6:00."""
     return TimeCurve([(GameTime(seconds=300), 0.0), (GameTime(seconds=360), 0.004)])
 
 
 @pytest.fixture
-def losses_from_five_minutes() -> TimeCurve:
+def losses_from_five_minutes() -> TimeCurve[float]:
     """No losses until 5:00, and 0.004 from then on."""
     return TimeCurve([(GameTime.ZERO, 0.0), (GameTime(seconds=300), 0.004)], interpolation=Interpolation.STEP)
 
@@ -117,7 +118,7 @@ class TestMaking:
         assert curve(numpy.array([0, 5000])).tolist() == [0.002, 0.002]
 
     def test_whole_numbers_read_as_floats(self):
-        curve = TimeCurve([(GameTime(steps=0), 1), (GameTime(steps=10), numpy.int64(3))])  # pyright: ignore[reportArgumentType]
+        curve = TimeCurve([(GameTime(steps=0), 1), (GameTime(steps=10), numpy.int64(3))])  # pyright: ignore[reportCallIssue, reportArgumentType]
         assert isinstance(curve(GameTime(steps=0)), float)
         assert curve(GameTime(steps=5)) == 2.0
 
@@ -194,20 +195,23 @@ class TestMaking:
 
     def test_a_plain_time_raises(self):
         with pytest.raises(TypeError, match="a curve's time is a GameTime"):
-            TimeCurve([(300, 0.0)])  # pyright: ignore[reportArgumentType]
+            TimeCurve([(300, 0.0)])  # pyright: ignore[reportCallIssue, reportArgumentType]
 
     @pytest.mark.parametrize("value", [math.inf, math.nan])
     def test_a_value_not_finite_raises(self, value):
         with pytest.raises(ValueError, match="a curve's value is finite"):
             TimeCurve([(GameTime.ZERO, value)])
 
-    def test_a_value_that_is_no_number_raises(self):
-        with pytest.raises(TypeError, match="a curve's value is a number"):
-            TimeCurve([(GameTime.ZERO, "0.004")])  # pyright: ignore[reportArgumentType]
+    @pytest.mark.parametrize("value", ["0.004", None, (0.0, 0.004), {0.004}])
+    def test_a_value_that_neither_is_a_number_nor_adds_subtracts_and_multiplies_by_one_raises(self, value):
+        """In every interpolation, so that a curve that is made can be made with another."""
+        for interpolation in Interpolation:
+            with pytest.raises(TypeError, match="a curve's value is a number, or adds, subtracts and multiplies"):
+                TimeCurve([(GameTime.ZERO, value)], interpolation=interpolation)
 
     def test_an_interpolation_by_its_name_raises(self):
         with pytest.raises(TypeError, match="interpolation is an Interpolation"):
-            TimeCurve([(GameTime.ZERO, 0.0)], interpolation="step")  # pyright: ignore[reportArgumentType]
+            TimeCurve([(GameTime.ZERO, 0.0)], interpolation="step")  # pyright: ignore[reportCallIssue, reportArgumentType]
 
 
 class TestNoTime:
@@ -217,3 +221,138 @@ class TestNoTime:
             rising_losses(no_time)
         with pytest.raises(ValueError, match="no time"):
             rising_losses(numpy.array([0.0, math.nan]))
+
+
+@pytest.fixture
+def income() -> TimeCurve[Resources]:
+    """Nothing earned at the start, 900 minerals and 300 vespene by 5:00, and 1200 and 600 by 10:00."""
+    return TimeCurve(
+        [
+            (GameTime.ZERO, Resources(0, 0)),
+            (GameTime(seconds=300), Resources(900, 300)),
+            (GameTime(seconds=600), Resources(1200, 600)),
+        ]
+    )
+
+
+def test_a_step_curve_of_numbers_keeps_the_shape_of_its_times(losses_from_five_minutes):
+    """It reads many times in one dimension, as a curve of other values does."""
+    assert losses_from_five_minutes(numpy.array([[0, 6719], [6720, 9000]])).tolist() == [[0.0, 0.0], [0.004, 0.004]]
+    value = losses_from_five_minutes(numpy.array(6720))
+    assert isinstance(value, numpy.ndarray)
+    assert (value.shape, value.dtype, value.item()) == ((), numpy.dtype(float), 0.004)
+
+
+class TestValuesThatAreNoNumbers:
+    """The owner, review of #261: anything that adds, subtracts and multiplies by a number, such as `Resources`."""
+
+    def test_reads_along_the_line_between_two_times(self, income):
+        assert income(GameTime(seconds=100)) == Resources(300.0, 100.0)
+        assert income(GameTime(seconds=450)) == Resources(1050.0, 450.0)
+
+    def test_reads_its_values_at_its_times(self, income):
+        assert income(GameTime.ZERO) == Resources(0, 0)
+        assert income(GameTime(seconds=300)) == Resources(900, 300)
+        assert income(GameTime(seconds=600)) == Resources(1200, 600)
+
+    def test_holds_its_first_and_its_last_value_outside_its_times(self):
+        curve = TimeCurve([(GameTime(seconds=60), Resources(50, 0)), (GameTime(seconds=120), Resources(400, 100))])
+        assert curve(GameTime.ZERO) == Resources(50, 0)
+        assert curve(GameTime(seconds=900)) == curve(GameTime.INFINITE) == Resources(400, 100)
+
+    def test_many_times_give_an_array_of_objects_a_value_each(self, income):
+        values = income([GameTime(seconds=100), GameTime.ZERO, GameTime(seconds=900)])
+        assert (values.dtype, values.shape) == (numpy.dtype(object), (3,))
+        assert values.tolist() == [Resources(300.0, 100.0), Resources(0, 0), Resources(1200, 600)]
+
+    @pytest.mark.parametrize("interpolation", list(Interpolation))
+    def test_many_times_read_as_each_of_them_does(self, interpolation):
+        random = numpy.random.default_rng(7)
+        pairs = [
+            (GameTime(steps=step), Resources(minerals, vespene))
+            for step, minerals, vespene in zip(
+                numpy.cumsum(random.uniform(0.5, 400.0, 30)).tolist(),
+                random.uniform(0.0, 2000.0, 30).tolist(),
+                random.uniform(0.0, 900.0, 30).tolist(),
+                strict=True,
+            )
+        ]
+        curve = TimeCurve(pairs, interpolation=interpolation)
+        last_step = pairs[-1][0].steps
+        steps = numpy.concatenate(
+            [random.uniform(-50.0, last_step + 50.0, 2000), [pair[0].steps for pair in pairs], [-1e9, 1e9]]
+        )
+        assert curve(steps).tolist() == [curve(GameTime(steps=step)) for step in steps.tolist()]
+
+    def test_an_array_keeps_its_shape(self, income):
+        steps = numpy.array([[0, 2240], [6720, 20000]])
+        values = income(steps)
+        assert values.shape == (2, 2)
+        assert values[0, 1] == Resources(300.0, 100.0)
+        assert values[1, 1] == Resources(1200, 600)
+
+    def test_an_array_with_no_dimension_gives_one_too(self, income):
+        value = income(numpy.array(2240))
+        assert isinstance(value, numpy.ndarray)
+        assert (value.shape, value.item()) == ((), Resources(300.0, 100.0))
+
+    def test_no_times_give_no_values(self, income):
+        assert income([]).shape == (0,)
+        assert income(numpy.zeros((0, 3))).shape == (0, 3)
+
+    def test_the_values_of_a_range_add_up(self, income):
+        """What an array of objects is for: numpy adds them a value at a time."""
+        assert income(numpy.array([0, 2240, 6720])).sum() == Resources(1200.0, 400.0)
+
+    def test_each_value_is_held_until_the_next_with_step(self):
+        curve = TimeCurve(
+            [(GameTime.ZERO, Resources(0, 0)), (GameTime(seconds=300), Resources(900, 300))],
+            interpolation=Interpolation.STEP,
+        )
+        assert curve(GameTime(seconds=299)) == Resources(0, 0)
+        assert curve(GameTime(seconds=300)) == Resources(900, 300)
+        assert curve(numpy.array([6719, 6720])).tolist() == [Resources(0, 0), Resources(900, 300)]
+
+    @pytest.mark.parametrize("interpolation", list(Interpolation))
+    def test_a_value_that_is_a_sequence_stays_one_value(self, interpolation):
+        """A `Point` is a tuple, which numpy would read as a row of two numbers."""
+        path = TimeCurve(
+            [(GameTime(steps=0), Point((0, 0))), (GameTime(steps=10), Point((20, 10)))], interpolation=interpolation
+        )
+        positions = path(numpy.array([[0, 5], [10, 15]]))
+        assert (positions.dtype, positions.shape) == (numpy.dtype(object), (2, 2))
+        assert all(isinstance(position, Point) for position in positions.ravel().tolist())
+        assert positions[1, 0] == Point((20, 10))
+        halfway = Point((10, 5)) if interpolation is Interpolation.LINEAR else Point((0, 0))
+        assert positions[0, 1] == path(GameTime(steps=5)) == halfway
+        assert path(numpy.array(5)).shape == ()
+
+    def test_a_game_time_is_a_value_too(self):
+        arrival = TimeCurve([(GameTime(steps=0), GameTime(seconds=30)), (GameTime(steps=100), GameTime(seconds=10))])
+        assert arrival(GameTime(steps=50)) == GameTime(seconds=20)
+
+    def test_iterating_hands_its_values_back_as_given(self, income):
+        values = [value for _, value in income]
+        assert values == [Resources(0, 0), Resources(900, 300), Resources(1200, 600)]
+        assert TimeCurve(income)(GameTime(seconds=100)) == Resources(300.0, 100.0)
+        assert "Resources(minerals=900, vespene=300)" in repr(income)
+
+    @pytest.mark.parametrize(
+        "values", [(Resources(0, 0), 100.0), (100.0, Resources(0, 0)), (Resources(0, 0), Resources(5, 5), 1)]
+    )
+    def test_numbers_among_values_that_are_none_raise(self, values):
+        pairs = [(GameTime(steps=step), value) for step, value in enumerate(values)]
+        with pytest.raises(TypeError, match="a curve's values are all numbers or none of them is"):
+            TimeCurve(pairs)
+
+    def test_a_value_is_not_asked_to_be_finite(self):
+        """Only a number is checked; what a value of another kind holds is its own."""
+        curve = TimeCurve([(GameTime.ZERO, Resources(math.inf, 0))])
+        assert curve(GameTime(seconds=5)) == Resources(math.inf, 0)
+
+    def test_is_a_time_dependent_of_its_values_to_the_type_checker(self, income, rising_losses):
+        """Pyright checks these assignments; whole numbers make a curve of floats."""
+        of_resources: TimeDependent[Resources] = income
+        of_floats: TimeDependent[float] = TimeCurve([(GameTime.ZERO, 0), (GameTime(seconds=5), 1)])
+        of_points: TimeCurve[Point] = TimeCurve([(GameTime.ZERO, Point((0, 0)))])
+        assert (of_resources, len(of_floats), len(of_points)) == (income, 2, 1)

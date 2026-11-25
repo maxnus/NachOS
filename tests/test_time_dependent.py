@@ -13,7 +13,7 @@ def _series_of_its_step() -> TimeSeries[float]:
     return TimeSeries(numpy.arange(10.0), GameTime(steps=0), 10)
 
 
-def _curve_of_its_step() -> TimeCurve:
+def _curve_of_its_step() -> TimeCurve[float]:
     return TimeCurve([(GameTime(steps=0), 0.0), (GameTime(steps=9), 9.0)])
 
 
@@ -81,10 +81,13 @@ class TestManyTimes:
         assert its_step(numpy.arange(10), default=-1.0).tolist() == [float(step) for step in range(10)]
 
     @pytest.mark.parametrize("default", [None, "none", [0.0]])
-    def test_a_default_that_is_no_number_raises(self, its_step, default):
-        """An array of numbers holds no `None`, whether or not the default would be read."""
+    def test_a_default_that_is_no_number_raises_for_a_series(self, default):
+        """An array of numbers holds no `None`, whether or not the default would be read. A curve and a function,
+        whose values may be of any kind, never read one, so they take any."""
         with pytest.raises(TypeError, match="the default of many times is a number"):
-            its_step(numpy.arange(3), default=default)
+            _series_of_its_step()(numpy.arange(3), default=default)
+        assert _curve_of_its_step()(numpy.arange(3), default=default).tolist() == [0.0, 1.0, 2.0]
+        assert _function_of_its_step()(numpy.arange(3), default=default).tolist() == [0.0, 1.0, 2.0]
 
     def test_a_default_of_a_numpy_number_is_taken(self, its_step):
         assert its_step(numpy.arange(3), default=numpy.float32(0.5)).tolist() == [0.0, 1.0, 2.0]

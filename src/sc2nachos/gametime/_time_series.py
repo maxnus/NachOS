@@ -180,8 +180,9 @@ class TimeSeries[T: float]:
 
         A step never recorded raises `IndexError`, or reads `default` where one is given: any value for one time,
         `None` among them, and a number for many, each step not recorded reading it. The array is of the series's
-        type, or of what numpy makes of it and a default it reads. Raises `TypeError` as a `TimeDependent` does, and
-        `ValueError` for a time not finite, such as `GameTime.INFINITE`. @public"""
+        type, or of what numpy makes of it and a default it reads. Raises `TypeError` as a `TimeDependent` does and
+        for a default of many times that is no number, and `ValueError` for a time not finite, such as
+        `GameTime.INFINITE`. @public"""
         if not isinstance(time, GameTime):
             return self._values_at_steps(steps_of_many_times(time), default_of_many_times(default))
         step = _step_reached_at(time, "time")
