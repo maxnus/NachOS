@@ -17,12 +17,8 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
-    from sc2nachos.gametime._supports_vector_arithmetic import SupportsVectorArithmetic
+    from sc2nachos._shared.supports_vector_arithmetic import SupportsVectorArithmetic
 
-
-# A curve of a value a step would fill a screen with its repr, so one of more pairs shows all but one of this many
-# from its start, then "..." and its last.
-_MOST_PAIRS_A_REPR_SHOWS = 6
 
 # What a value that is no number has to do for a curve to read between two of them: a `SupportsVectorArithmetic`'s.
 _OPERATIONS_OF_A_VALUE = ("__add__", "__sub__", "__mul__")
@@ -67,7 +63,9 @@ class TimeCurve[T]:
     _value_array: ndarray
     _values_are_numbers: bool
 
-    # Numbers come first, so that a curve given whole numbers is one of floats, which it holds them as.
+    # Numbers have a signature of their own, and first, for whole numbers: a type checker has an `int` multiply by an
+    # `int` alone, so it is no `SupportsVectorArithmetic`, and without this `TimeCurve([(start, 0), (end, 1)])` is an
+    # error to it. With it that is a curve of floats, which it holds them as and gives back.
     @overload
     def __init__(
         self: TimeCurve[float],
@@ -173,13 +171,10 @@ class TimeCurve[T]:
         return values.reshape(steps.shape)
 
     def __repr__(self) -> str:
-        """Its pairs and its interpolation; of more pairs than `_MOST_PAIRS_A_REPR_SHOWS`, the first ones, `...` and
-        the last."""
+        """Its pairs and its interpolation; of more than six pairs the first five, `...` and the last, since a curve
+        of a value a step would fill a screen."""
         pairs = list(self)
-        if len(pairs) > _MOST_PAIRS_A_REPR_SHOWS:
-            pairs_shown = [*map(repr, pairs[: _MOST_PAIRS_A_REPR_SHOWS - 1]), "...", repr(pairs[-1])]
-        else:
-            pairs_shown = [*map(repr, pairs)]
+        pairs_shown = [*map(repr, pairs[:5]), "...", repr(pairs[-1])] if len(pairs) > 6 else [*map(repr, pairs)]
         return f"{type(self).__name__}([{', '.join(pairs_shown)}], interpolation={self._interpolation})"
 
 

@@ -446,10 +446,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     The protocol of those is `SupportsVectorArithmetic` (the owner, 2026-11-25: "SupportsInterpolation is a bad name,
     alternatives that are more descriptive or math motivated?", then "SupportsVectorArithmetic", over
     `VectorArithmetic`, `VectorLike` and `Interpolable`): the three are what a vector space asks, which a later cubic
-    mode needs no more than. A recorded series stays numbers, being a numpy buffer with a mean, filters and a
-    derivative. Many times of values that are no numbers give an array of objects, a value each. Measured over 6720
-    steps: a linear curve of `Resources` 3.2 ms, of floats 0.015, as before; a function of `Resources` 1.6 ms, of
-    floats 0.99, where it took 0.91.
+    mode needs no more than. It is defined in `_shared`, being nothing of the game time's ("should this not go into
+    `_shared` or somewhere more central?"), and public from `sc2nachos.gametime`, where its one user is. A recorded
+    series stays numbers, being a numpy buffer with a mean, filters and a derivative. Many times of values that are no
+    numbers give an array of objects, a value each. Measured over 6720 steps: a linear curve of `Resources` 3.2 ms, of
+    floats 0.015, as before; a function of `Resources` 1.6 ms, of floats 0.99, where it took 0.91.
   - **A curve joins its values by its `interpolation`, an `Interpolation`**: `LINEAR`, the default, or `STEP`, each
     value held from its time until the next ("The advantage with the enum is that we can add more modes in the future.
     E.g. cubic spline interpolation", then "Let's call it STEP", over `HELD`, proposed since a step is a game step
