@@ -134,6 +134,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
   creating units.
 - [Extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md): features a bot opts into, how to use
   one and how to write one.
+- [Values that depend on the game time](https://github.com/maxnus/NachOS/blob/main/docs/time-dependent-values.md): a
+  value recorded each step, a few joined between their times, or a function of the game time, all read the same way.
 - [Running StarCraft II on GitHub Actions](https://github.com/maxnus/NachOS/blob/main/docs/github-actions.md): playing
   matches in a bot repository's workflows.
 - [Playing on the ladder](https://github.com/maxnus/NachOS/blob/main/docs/ladder.md): one script for the ladder and
