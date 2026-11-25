@@ -56,6 +56,7 @@ from sc2nachos.extensions.planner import (
     RewardTerm,
     TimeGrid,
     UnitCompletion,
+    WeightCurve,
     WorkerBuild,
 )
 from sc2nachos.extensions.planner._plan_program import PlanProgram
@@ -80,38 +81,50 @@ _FIRST_SECONDS_SHOWN = 90.0
 _TOY_WEIGHTS = {UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 2.2, UnitTypeId.MEDIVAC: 2.5}
 # The toy's run9: the first 30 marines at full weight, the next 30 at a third, then nothing; the others alike.
 _TOY_CURVES = {
-    UnitTypeId.MARINE: (
-        CurveSegment(weight=1.0, end_count=30),
-        CurveSegment(weight=0.33, end_count=60),
-        CurveSegment(weight=0.0),
+    UnitTypeId.MARINE: WeightCurve(
+        (
+            CurveSegment(weight=1.0, end_count=30),
+            CurveSegment(weight=0.33, end_count=60),
+            CurveSegment(weight=0.0),
+        )
     ),
-    UnitTypeId.MARAUDER: (
-        CurveSegment(weight=2.2, end_count=12),
-        CurveSegment(weight=0.7, end_count=30),
-        CurveSegment(weight=0.0),
+    UnitTypeId.MARAUDER: WeightCurve(
+        (
+            CurveSegment(weight=2.2, end_count=12),
+            CurveSegment(weight=0.7, end_count=30),
+            CurveSegment(weight=0.0),
+        )
     ),
-    UnitTypeId.MEDIVAC: (
-        CurveSegment(weight=2.5, end_count=4),
-        CurveSegment(weight=0.8, end_count=8),
-        CurveSegment(weight=0.0),
+    UnitTypeId.MEDIVAC: WeightCurve(
+        (
+            CurveSegment(weight=2.5, end_count=4),
+            CurveSegment(weight=0.8, end_count=8),
+            CurveSegment(weight=0.0),
+        )
     ),
 }
 # Like the toy's curves, but no count is worth nothing, so that the reward never saturates.
 _GROWING_CURVES = {
-    UnitTypeId.MARINE: (
-        CurveSegment(weight=1.0, end_count=30),
-        CurveSegment(weight=0.5, end_count=80),
-        CurveSegment(weight=0.25),
+    UnitTypeId.MARINE: WeightCurve(
+        (
+            CurveSegment(weight=1.0, end_count=30),
+            CurveSegment(weight=0.5, end_count=80),
+            CurveSegment(weight=0.25),
+        )
     ),
-    UnitTypeId.MARAUDER: (
-        CurveSegment(weight=2.2, end_count=12),
-        CurveSegment(weight=1.1, end_count=40),
-        CurveSegment(weight=0.5),
+    UnitTypeId.MARAUDER: WeightCurve(
+        (
+            CurveSegment(weight=2.2, end_count=12),
+            CurveSegment(weight=1.1, end_count=40),
+            CurveSegment(weight=0.5),
+        )
     ),
-    UnitTypeId.MEDIVAC: (
-        CurveSegment(weight=2.5, end_count=4),
-        CurveSegment(weight=1.2, end_count=10),
-        CurveSegment(weight=0.4),
+    UnitTypeId.MEDIVAC: WeightCurve(
+        (
+            CurveSegment(weight=2.5, end_count=4),
+            CurveSegment(weight=1.2, end_count=10),
+            CurveSegment(weight=0.4),
+        )
     ),
 }
 # The wide reward: what each of the first six units of ten more army types is worth a second, each one after them a
@@ -441,9 +454,9 @@ def _run_replans(
 
 def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The wide reward from the game's start and from each mid-game state, at each half-life."""
-    curves: dict[UnitTypeId, tuple[CurveSegment, ...]] = dict(_GROWING_CURVES)
+    curves: dict[UnitTypeId, WeightCurve] = dict(_GROWING_CURVES)
     for unit_type, weight in _FIRST_SIX_WEIGHTS_OF_THE_WIDE_REWARD.items():
-        curves[unit_type] = (CurveSegment(weight=weight, end_count=6), CurveSegment(weight=weight / 3))
+        curves[unit_type] = WeightCurve([CurveSegment(weight=weight, end_count=6), CurveSegment(weight=weight / 3)])
     for name, state in ({"0:00": _game_start()} | _mid_game_states()).items():
         for half_life in half_lives:
             _solve_and_print(
@@ -472,7 +485,7 @@ def _half_life_label(half_life: GameTime | None) -> str:
 
 def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The toy's grids, every start whole for 90 seconds."""
-    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, stock_weight=0.0)
     for name, grid in _TOY_GRIDS.items():
         _solve_and_print(
             f"grid {name}",
@@ -487,7 +500,7 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """Every start whole for 90 seconds, against the toy's lumpy items whole over the horizon, and the default."""
-    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, stock_weight=0.0)
     for label, fluid_after in (
         ("everything whole for 90 s only", _whole_for_90_seconds),
         ("lumpy whole over the horizon, the rest for 90 s", _whole_as_in_the_toy),
@@ -507,8 +520,8 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
 def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """The linear reward against the concave one."""
     for label, reward in (
-        ("linear", Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)),
-        ("concave", Reward.weighted(_TOY_CURVES, stock_weight=0.0)),
+        ("linear", Reward.weighted(_TOY_WEIGHTS, half_life=None, stock_weight=0.0)),
+        ("concave", Reward.weighted(_TOY_CURVES, half_life=None, stock_weight=0.0)),
     ):
         _solve_and_print(
             f"{label} reward", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
@@ -523,7 +536,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             for kind, counts in scenario.items()
             for start, count in counts
         ]
-        reward = Reward.weighted(_STANDING_WEIGHTS, terms=coverages, stock_weight=0.0)
+        reward = Reward.weighted(_STANDING_WEIGHTS, terms=coverages, half_life=None, stock_weight=0.0)
         plan = _solve_and_print(
             f"enemy {name}", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
         )
@@ -533,7 +546,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """No walks against the toy's Terran walks."""
-    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, stock_weight=0.0)
     for label, walks in (("no walks", _NO_WALKS), ("Terran walks", _TOY_WALKS)):
         _solve_and_print(
             label,
@@ -548,7 +561,7 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
 
 def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
     """Army units lost at 0.002 a second, or workers at 0.001."""
-    reward = Reward.weighted(_TOY_WEIGHTS, stock_weight=0.0)
+    reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, stock_weight=0.0)
     for label, rates in (
         ("army lost at 0.002/s", dict.fromkeys(_TOY_WEIGHTS, 0.002)),
         ("workers lost at 0.001/s", {UnitTypeId.SCV: 0.001}),

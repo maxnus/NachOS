@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
 import math
-import numbers
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Self, final
@@ -25,10 +25,58 @@ class CurveSegment:
 
 
 @final
+@dataclass(frozen=True, slots=True)
+class WeightCurve:
+    """What each further unit of a count is worth a second, less the more of them there are. It is made of pieces, each
+    a weight for every unit up to the count the piece ends at: `WeightCurve([CurveSegment(weight=1.0, end_count=30),
+    CurveSegment(weight=0.3)])` makes each of the first 30 units worth 1.0 a second and each one after worth 0.3.
+    `constant` and `up_to` build the two usual ones.
+
+    Raises `ValueError` for no segments, a weight above the one before it, a count not above the one before it, or a
+    segment but the last that ends at no count above 0.
+    """
+
+    segments: Sequence[CurveSegment]
+    """Its pieces in order, the first from a count of none. The last runs on, whatever count it says it ends at."""
+
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        """Raise `ValueError` for segments that are what the class's docstring refuses."""
+        segments = self.segments
+        if not segments:
+            raise ValueError("a weight curve has no segments")
+        for segment in segments[:-1]:
+            if not 0 < segment.end_count < math.inf:
+                raise ValueError(
+                    f"every segment of a weight curve but the last must end at a count above 0, not {segment.end_count}"
+                )
+        for position, (earlier, later) in enumerate(itertools.pairwise(segments), start=1):
+            if later.weight > earlier.weight:
+                raise ValueError(f"a weight curve's weights must not rise: {later.weight} after {earlier.weight}")
+            if position < len(segments) - 1 and later.end_count <= earlier.end_count:
+                raise ValueError(f"a weight curve's counts must rise: {later.end_count} after {earlier.end_count}")
+
+    @classmethod
+    def constant(cls, weight: float) -> Self:
+        """Every unit worth `weight` a second, however many there are."""
+        return cls([CurveSegment(weight=weight)])
+
+    @classmethod
+    def up_to(cls, weight: float, end_count: float) -> Self:
+        """Each unit up to `end_count` worth `weight` a second, and none past it anything: a count the bot wants,
+        which a plan may fall short of. With an infinite `end_count` it is `constant`."""
+        if math.isinf(end_count):
+            return cls.constant(weight)
+        return cls([CurveSegment(weight=weight, end_count=end_count), CurveSegment(weight=0.0)])
+
+
+@final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RewardTerm:
     """One part of what a plan is worth: the units of a group counted together, each for what the group says, are
-    worth what a concave curve, `segments`, gives their count a second, from the game time `start` to `end`. Of several
+    worth what a `WeightCurve`, `weights`, gives their count a second, from the game time `start` to `end`. Of several
     `groups` the curve is given the smallest count, so that the term is worth only what its scarcest group allows:
     units worth something in combination, as medivacs and the infantry they heal.
 
@@ -44,16 +92,15 @@ class RewardTerm:
     upgrade whole over all its horizon, whatever the planner's `fluid_after` says, since a share of one would count for
     far more than that share of the term's units.
 
-    Raises `ValueError` for no group, an `end` not later than `start`, a curve that is not concave, its weights falling
-    and its counts rising, a piece but the last that ends at no count above 0, or a negative weight in a term of several
-    groups or with requirements. What `time_factor` and `count_factor` give is only seen where a plan is made: see
+    Raises `ValueError` for no group, an `end` not later than `start`, or a negative weight in a term of several groups
+    or with requirements. What `time_factor` and `count_factor` give is only seen where a plan is made: see
     `time_factor_at` and `count_factor_at`.
     """
 
     groups: Sequence[Mapping[UnitTypeId, float]]
     """The units counted, a group to a count: how much one unit of each type counts in it. Most terms have one."""
-    segments: Sequence[CurveSegment]
-    """What the count is worth a second, piece by piece of the count, the first piece from none."""
+    weights: WeightCurve
+    """What the count is worth a second: each further unit of it for less, the more there are."""
     start: GameTime = GameTime.ZERO
     """The game time it is worth something from: the game's start by default."""
     end: GameTime = GameTime.INFINITE
@@ -78,12 +125,12 @@ class RewardTerm:
             raise ValueError("a term must count a group of units at least")
         if self.end <= self.start:
             raise ValueError(f"a term must end later than it starts, not at {self.end} from {self.start}")
-        _check_concave(self.unit_types, self.segments)
-        if any(segment.weight < 0 for segment in self.segments):
+        segments = self.weights.segments
+        if any(segment.weight < 0 for segment in segments):
             if len(self.groups) > 1:
-                raise ValueError(f"a term of several groups may not hold a negative weight: {self.segments}")
+                raise ValueError(f"a term of several groups may not hold a negative weight: {segments}")
             if self.requirements:
-                raise ValueError(f"a term with requirements may not hold a negative weight: {self.segments}")
+                raise ValueError(f"a term with requirements may not hold a negative weight: {segments}")
 
     @classmethod
     def weight(
@@ -106,7 +153,7 @@ class RewardTerm:
         every upgrade of `requirements` is done."""
         return cls.curve(
             units,
-            _segments_of(weight, end_count),
+            WeightCurve.up_to(weight, end_count),
             start=start,
             end=end,
             time_factor=time_factor,
@@ -118,7 +165,7 @@ class RewardTerm:
     def curve(
         cls,
         units: UnitTypeId | Mapping[UnitTypeId, float],
-        segments: Sequence[CurveSegment],
+        weights: WeightCurve,
         *,
         start: GameTime = GameTime.ZERO,
         end: GameTime = GameTime.INFINITE,
@@ -126,7 +173,7 @@ class RewardTerm:
         count_factor: Callable[[GameTime], float] | None = None,
         requirements: Iterable[UpgradeId] = (),
     ) -> Self:
-        """The units of `units` are worth what `segments` give their count a second, more of them less each: of one
+        """The units of `units` are worth what `weights` give their count a second, more of them less each: of one
         unit type, or of several counted together, one unit of each for what the mapping says. From the game time
         `start`, the game's start by default, to `end`, and nothing before or from then, times what `time_factor`
         gives for a game time between them, and with the counts its pieces end at times what `count_factor` gives for
@@ -134,7 +181,7 @@ class RewardTerm:
         counted = {units: 1.0} if isinstance(units, UnitTypeId) else units
         return cls(
             groups=[counted],
-            segments=segments,
+            weights=weights,
             start=start,
             end=end,
             time_factor=time_factor,
@@ -168,7 +215,7 @@ class RewardTerm:
         is done. Raises `ValueError` for a negative `weight` with several groups."""
         return cls(
             groups=groups,
-            segments=_segments_of(weight, end_count),
+            weights=WeightCurve.up_to(weight, end_count),
             start=start,
             end=end,
             time_factor=time_factor,
@@ -215,8 +262,10 @@ class Reward:
     """What the units are worth, each term added to the others."""
     upgrade_weights: Mapping[UpgradeId, float] = field(default_factory=dict)
     """What each upgrade done is worth a second."""
-    half_life: GameTime | None = None
-    """The time over which a second's worth halves, from the plan's start; `None` for no discount."""
+    half_life: GameTime | None = GameTime(minutes=3)
+    """The time over which a second's worth halves, from the plan's start: by default 3 minutes, so that a unit 3
+    minutes into the plan counts half of what one counts now. `None` for no discount, every second of the horizon
+    counting alike. A shorter one makes a plan build its army sooner and less economy first."""
     terminal_time: GameTime = GameTime.ZERO
     """How much longer the state at the horizon counts."""
     stock_weight: float = 1e-4
@@ -242,21 +291,21 @@ class Reward:
     @classmethod
     def weighted(
         cls,
-        unit_weights: Mapping[UnitTypeId, float | Sequence[CurveSegment]],
+        unit_weights: Mapping[UnitTypeId, float | WeightCurve],
         *,
         terms: Sequence[RewardTerm] = (),
         upgrade_weights: Mapping[UpgradeId, float] | None = None,
-        half_life: GameTime | None = None,
+        half_life: GameTime | None = GameTime(minutes=3),
         terminal_time: GameTime = GameTime.ZERO,
         stock_weight: float = 1e-4,
     ) -> Self:
         """A reward of a term for each unit type of `unit_weights`, at any time: one number for what each unit of it is
-        worth a second, or a curve where more of them are worth less each. `terms` come after them, and the rest is the
-        reward's own."""
+        worth a second, or a `WeightCurve` where more of them are worth less each. `terms` come after them, and the rest
+        is the reward's own."""
         terms_of_unit_weights = [
-            RewardTerm.weight(unit_type, float(weight))
-            if isinstance(weight, (int, float, numbers.Real))
-            else RewardTerm.curve(unit_type, weight)
+            RewardTerm.curve(unit_type, weight)
+            if isinstance(weight, WeightCurve)
+            else RewardTerm.weight(unit_type, float(weight))
             for unit_type, weight in unit_weights.items()
         ]
         return cls(
@@ -287,28 +336,3 @@ def _factor_at(factor_of: Callable[[GameTime], float] | None, time: GameTime, na
     if not 0 <= factor < math.inf:
         raise ValueError(f"a term's {name} factor must be a number not below 0, not {factor} at {time}")
     return factor
-
-
-def _segments_of(weight: float, end_count: float) -> Sequence[CurveSegment]:
-    """The curve of `weight` for each unit up to `end_count`, and nothing for any past it."""
-    if math.isinf(end_count):
-        return [CurveSegment(weight=weight)]
-    return [CurveSegment(weight=weight, end_count=end_count), CurveSegment(weight=0.0)]
-
-
-def _check_concave(unit_types: Iterable[UnitTypeId], segments: Sequence[CurveSegment]) -> None:
-    """Raise `ValueError` unless `segments` is concave: weights not rising, and counts rising from above 0 but the
-    last's, each of them finite."""
-    names = ", ".join(sorted(unit_type.name for unit_type in unit_types))
-    if not segments:
-        raise ValueError(f"a curve of {names} has no segments")
-    for segment in segments[:-1]:
-        if not 0 < segment.end_count < math.inf:
-            raise ValueError(
-                f"every piece of a curve of {names} but the last must end at a count above 0, not {segment.end_count}"
-            )
-    for position, (earlier, later) in enumerate(zip(segments, segments[1:], strict=False), start=1):
-        if later.weight > earlier.weight:
-            raise ValueError(f"a curve of {names} is not concave: a weight of {later.weight} after {earlier.weight}")
-        if position < len(segments) - 1 and later.end_count <= earlier.end_count:
-            raise ValueError(f"a curve of {names} must count up: {later.end_count} after {earlier.end_count}")

@@ -863,13 +863,13 @@ class PlanProgram:
             [term.count_factor_at(time) if is_counted else 1.0 for time, is_counted in zip(ends, counted, strict=True)]
         )
         counts = [self._count_of(group) for group in term.groups]
-        if len(counts) == 1 and len(term.segments) == 1 and not term.requirements:
-            return worth.add_expression(counts[0], factors * term.segments[0].weight)
+        if len(counts) == 1 and len(term.weights.segments) == 1 and not term.requirements:
+            return worth.add_expression(counts[0], factors * term.weights.segments[0].weight)
         values = self._program.add_variables(int(counted.sum()), lower=-math.inf)
         worth.add(values, np.eye(intervals)[:, counted])
         worth_before = np.zeros(intervals)
         count_before = np.zeros(intervals)
-        for segment in term.segments:
+        for segment in term.weights.segments:
             for count in counts:
                 under_line = RowExpression(intervals).add_expression(worth)
                 under_line.add_expression(count, -segment.weight * factors)
@@ -882,7 +882,10 @@ class PlanProgram:
         if term.requirements:
             most_counted = self._most_counted_by(term)
             most_worth = np.array(
-                [_worth_at(term.segments, most_counted, count_factor=factor) for factor in count_factors.tolist()]
+                [
+                    _worth_at(term.weights.segments, most_counted, count_factor=factor)
+                    for factor in count_factors.tolist()
+                ]
             )
             for upgrade in sorted(term.requirements):
                 not_done = RowExpression(intervals).add_expression(worth)
