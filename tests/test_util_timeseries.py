@@ -284,6 +284,17 @@ class TestCall:
         assert ramp(GameTime(steps=3), default=None) == 3.0
         assert TimeSeries.empty(float)(GameTime(steps=0), default=7.0) == 7.0
 
+    def test_a_default_changes_no_read_of_a_step_recorded(self, ramp):
+        assert ramp(GameTime(steps=4), default=-1.0) == 4.0
+        assert ramp(numpy.arange(10), default=-1.0).tolist() == [float(step) for step in range(10)]
+        assert ramp(numpy.arange(3), default=numpy.float32(0.5)).tolist() == [0.0, 1.0, 2.0]
+
+    @pytest.mark.parametrize("default", [None, "none", [0.0]])
+    def test_a_default_of_many_times_that_is_no_number_raises(self, ramp, default):
+        """An array of numbers holds no `None`, whether or not the default would be read."""
+        with pytest.raises(TypeError, match="the default of many times is a number"):
+            ramp(numpy.arange(3), default=default)
+
     def test_a_time_between_two_steps_reads_the_step_before(self, ramp):
         """A second back from step 1000 is step 977.6, whose value is step 977's: the game reaches 978 later."""
         assert ramp(GameTime(steps=3.5)) == 3.0

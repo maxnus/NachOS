@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import math
 import numbers
-from typing import TYPE_CHECKING, final, overload
+from typing import TYPE_CHECKING, cast, final, overload
 
 import numpy
 import scipy.ndimage
 
 from sc2nachos.gametime._game_time import GameTime, check_game_time
-from sc2nachos.gametime._time_dependent import NO_DEFAULT, default_of_many_times, steps_of_many_times
+from sc2nachos.gametime._no_default import NO_DEFAULT
+from sc2nachos.gametime._time_dependent import is_number, steps_of_many_times
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -178,13 +179,13 @@ class TimeSeries[T: float]:
         """The value at `time`, or an array of the values at each of many, a sequence of `GameTime`s or an array of
         steps, in its shape; each read at its step, or the step before a time between two.
 
-        A step never recorded raises `IndexError`, or reads `default` where one is given: any value for one time,
-        `None` among them, and a number for many, each step not recorded reading it. The array is of the series's
-        type, or of what numpy makes of it and a default it reads. Raises `TypeError` as a `TimeDependent` does and
-        for a default of many times that is no number, and `ValueError` for a time not finite, such as
-        `GameTime.INFINITE`. @public"""
+        A step never recorded raises `IndexError`, or reads `default` where one is given, a keyword of a series alone,
+        the one `TimeDependent` with times it does not cover: any value for one time, `None` among them, and a number
+        for many, each step not recorded reading it. The array is of the series's type, or of what numpy makes of it
+        and a default it reads. Raises `TypeError` as a `TimeDependent` does and for a default of many times that is
+        no number, and `ValueError` for a time not finite, such as `GameTime.INFINITE`. @public"""
         if not isinstance(time, GameTime):
-            return self._values_at_steps(steps_of_many_times(time), default_of_many_times(default))
+            return self._values_at_steps(steps_of_many_times(time), _default_of_many_times(default))
         step = _step_reached_at(time, "time")
         if self._start is not None and 0 <= step - self._start < self._size:
             return self._buffer.item(step - self._start)
@@ -389,6 +390,18 @@ def _step_reached_at(time: GameTime, argument_name: str) -> int:
         return math.floor(time.steps)
     except (OverflowError, ValueError):
         raise ValueError(f"{time!r} is not finite, so it has no step") from None
+
+
+def _default_of_many_times(default: object) -> float | None:
+    """`default`, given with many times, or `None` where none was given: raises `TypeError` unless it is a number."""
+    if default is NO_DEFAULT:
+        return None
+    if not is_number(default):
+        raise TypeError(
+            f"the default of many times is a number, which an array can hold, not {default!r}; "
+            "math.nan marks a time not covered"
+        )
+    return cast("float", default)
 
 
 # The operands the arithmetic above accepts, as constants: an inline `a | b` union is rebuilt on every call. They

@@ -10,7 +10,7 @@ import numpy
 
 from sc2nachos.gametime._game_time import GameTime, check_game_time
 from sc2nachos.gametime._interpolation import Interpolation
-from sc2nachos.gametime._time_dependent import NO_DEFAULT, array_of_values, is_number, steps_of_many_times
+from sc2nachos.gametime._time_dependent import array_of_values, is_number, steps_of_many_times
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -35,7 +35,7 @@ class TimeCurve[T]:
     times it reads by its `Interpolation`: along the line from the value before to the value after, by default, or
     with `Interpolation.STEP` the value before, held from its time until the next. Before its first time it holds its
     first value, and from its last time on its last, so it covers every time, `GameTime.INFINITE` too, and no read
-    raises `IndexError` or reads a default.
+    raises `IndexError`.
 
     Its values are numbers, which it holds as floats, or all of another kind that adds, subtracts and multiplies by a
     number, as `Resources` and a `Point` do: `TimeCurve([(GameTime.ZERO, Resources(0, 0)), (GameTime(seconds=300),
@@ -123,16 +123,12 @@ class TimeCurve[T]:
     def __call__(self, time: GameTime, /) -> T: ...
 
     @overload
-    def __call__[D](self, time: GameTime, /, *, default: D) -> T | D: ...
+    def __call__(self, time: Sequence[GameTime] | ndarray, /) -> ndarray: ...
 
-    @overload
-    def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: object = ...) -> ndarray: ...
-
-    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /, *, default: object = NO_DEFAULT) -> object:
+    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /) -> object:
         """The value at `time`, or an array of the values at each of many, a sequence of `GameTime`s or an array of
-        steps, in its shape: of floats, or of objects where its values are no numbers. A curve covers every time, so
-        `default` is never read, whatever it is. Raises `TypeError` as a `TimeDependent` does, and `ValueError` for a
-        time of NaN steps. @public"""
+        steps, in its shape: of floats, or of objects where its values are no numbers. Raises `TypeError` as a
+        `TimeDependent` does, and `ValueError` for a time of NaN steps. @public"""
         if not isinstance(time, GameTime):
             return self._values_at_steps(steps_of_many_times(time))
         step = time.steps

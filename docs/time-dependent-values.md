@@ -30,17 +30,8 @@ losses(GameTime(seconds=200).steps + numpy.arange(6720))  # every step of the fi
 Many times are a sequence of `GameTime`s or a numpy array of steps, and the values come back in the array's shape. A
 moment is a whole step, so the values at every step of a range give its sum, its smallest and its largest exactly.
 
-A time a `TimeDependent` does not cover raises `IndexError`. Only a recorded series has such times, those before its
-first step and after its last. A call given a `default` reads that there instead:
-
-```python
-supply(GameTime(steps=8000))  # IndexError: step 8000 outside the recorded range 1000-7719
-supply(GameTime(steps=8000), default=None)  # None
-supply(numpy.arange(7700, 7740), default=0)  # 0 at each step from 7720 on
-```
-
-For many times the default is a number, since an array of numbers holds no `None`; `math.nan` marks the times not
-covered.
+A time a `TimeDependent` does not cover raises `IndexError`. Only a [recorded series](#a-recorded-series) has such
+times, those before its first step and after its last; a curve and a function cover every time.
 
 ## A recorded series
 
@@ -58,6 +49,17 @@ def record_supply(event: TurnEvent) -> None:
 
 A time between two steps reads the step before it, whose value holds until the game reaches the next. So
 `supply(api.time - GameTime(seconds=1))` reads 23 steps back, a second being 22.4 steps.
+
+A step it never recorded raises `IndexError`. A series, and it alone, takes a `default` to read there instead:
+
+```python
+supply(GameTime(steps=8000))  # IndexError: step 8000 outside the recorded range 1000-7719
+supply(GameTime(steps=8000), default=None)  # None
+supply(numpy.arange(7700, 7740), default=0)  # 0 at each step from 7720 on
+```
+
+For many times the default is a number, since an array of numbers holds no `None`; `math.nan` marks the steps not
+recorded. A function handed any `TimeDependent` cannot give one, so it takes a `TimeSeries` where it needs to.
 
 A series is also indexed by time: `supply[time]` reads as the call does, `supply[start:end]` gives a new series of the
 steps from `start` up to `end` and without it, and either is assigned to. `supply.values` is the array of what it

@@ -22,9 +22,6 @@ class TestOneTime:
         assert times_asked == [GameTime(steps=3.7)]
         assert TimeFunction(lambda time: time.seconds)(GameTime.INFINITE) == float("inf")
 
-    def test_a_default_is_never_read(self):
-        assert TimeFunction(_losses_from_five_minutes)(GameTime(seconds=9000), default=None) == 0.004
-
     def test_what_the_function_raises_reaches_the_caller(self):
         def losses_of_no_game(time: GameTime) -> float:
             raise LookupError(f"nothing is known of {time!r}")
@@ -49,11 +46,6 @@ class TestManyTimes:
         assert time_function(numpy.array([[4, 5], [6, 7]])).tolist() == [[4.0, 5.0], [6.0, 7.0]]
         assert times_asked == [GameTime(steps=step) for step in (4, 5, 6, 7)]
         assert all(isinstance(time.steps, int) for time in times_asked)
-
-    def test_a_default_is_never_read_whatever_it_is(self):
-        losses = TimeFunction(_losses_from_five_minutes)
-        assert losses(numpy.arange(2), default=None).tolist() == [0.0, 0.0]
-        assert losses([GameTime.ZERO], default="none").tolist() == [0.0]
 
     def test_every_step_of_five_minutes(self):
         steps = GameTime(seconds=200).steps + numpy.arange(6720)
@@ -119,8 +111,8 @@ class TestValuesThatAreNoNumbers:
         """Pyright checks this assignment."""
         income_function = TimeFunction(_income_of_a_mineral_a_step)
         income: TimeDependent[Resources] = income_function
-        assert income(GameTime(steps=1), default=None) == Resources(1.0, 0.0)
-        assert income_function(numpy.arange(2), default=Resources(0, 0)).shape == (2,)
+        assert income(GameTime(steps=1)) == Resources(1.0, 0.0)
+        assert income(numpy.arange(2)).shape == (2,)
 
 
 class TestMaking:

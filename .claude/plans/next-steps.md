@@ -414,10 +414,14 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
     `TimeSeries.empty`. The planner calls a term's worth by count its curve, so its docs keep the two apart.
   - **A time not covered raises `IndexError`, or reads the `default` the read was given** ("I think it's more elegant to
     give a default or fallback value when reading from the object. E.g. we would add a keyword argument to value_at."),
-    a keyword of the call, on the protocol. A read of many times reads it at each time not covered, and raises
-    `TypeError` for `None`, which an array of numbers cannot hold. `TimeSeries.at` is removed ("A"), being
-    `series(time, default=None)`, which breaks a bot's `series.at(time)`. Over an `outside` value held by the series,
-    as `Grid.with_outside` has, which every copy, slice and sum would carry.
+    a keyword of a recorded series's call alone, the one kind with times it does not cover, and no part of the
+    protocol: first on the protocol, for all three kinds ("A"), then taken off it in the review of #261, 2026-11-25
+    ("Do we really want to have the default in the protocol at all, if not all classes actually use it?", then "Yes,
+    series alone"), a curve and a function having accepted one and never read it. So a consumer of any `TimeDependent`
+    gives no fallback: it meets the `IndexError`, or takes a `TimeSeries`. A read of many times reads it at each time
+    not covered, and raises `TypeError` for `None`, which an array of numbers cannot hold. `TimeSeries.at` is removed
+    ("A"), being `series(time, default=None)`, which breaks a bot's `series.at(time)`. Over an `outside` value held by
+    the series, as `Grid.with_outside` has, which every copy, slice and sum would carry.
   - **A recorded series keeps its indexing** ("Ok let's go with A"): `series[time]`, the one read the call also gives,
     a range as a new `TimeSeries`, and its writes. Over removing `series[time]`, which would leave a container written
     by index and not read by it. Its `start_time` becomes `start`, the constructor's argument too ("Btw the property
@@ -470,12 +474,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      half its reads of a series between two steps move a step earlier: for the release's notes. Not decided, and built
      the plainest way: a curve refuses a number not finite, or further from the one before it than a float holds; many
      times given as an array with no dimension still give an array; `GameTime` has no public lower step, the series
-     flooring its `steps`. With values of any kind: the default of many times stays a number in the protocol's type,
-     since a default of the value's type would stop a series of integers passing as a `TimeDependent[float]`, and a
-     curve and a function, which never read one, take any; a curve asks its values to add, subtract and multiply in
-     every interpolation, `STEP` too, which needs none of it, and works out the value halfway between each two as it
-     is made, refusing two no line joins, as a number and a value that is none; a value that is no number is not
-     checked for being finite; a numpy boolean counts as a number; `SupportsInterpolation` is a new public name.
+     flooring its `steps`. With values of any kind: a curve asks its values to add, subtract and multiply in every
+     interpolation, `STEP` too, which needs none of it, and works out the value halfway between each two as it is
+     made, refusing two no line joins, as a number and a value that is none; a value that is no number is not checked
+     for being finite; a numpy boolean counts as a number; `SupportsInterpolation` is a new public name, which the
+     owner calls a bad one, its next not yet chosen.
   2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads

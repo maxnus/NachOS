@@ -38,10 +38,6 @@ class TestOneTime:
     def test_reads_the_value_at_a_time(self, its_step):
         assert [its_step(GameTime(steps=step)) for step in range(10)] == [float(step) for step in range(10)]
 
-    def test_a_default_changes_no_read_it_covers(self, its_step):
-        assert its_step(GameTime(steps=4), default=None) == 4.0
-        assert its_step(GameTime(steps=4), default=-1.0) == 4.0
-
     def test_passes_as_a_function_of_the_game_time(self, its_step):
         assert _value_read_as_a_function(its_step, GameTime(steps=6)) == 6.0
         assert _value_read_as_a_function(lambda time: float(time.steps), GameTime(steps=6)) == 6.0
@@ -77,21 +73,6 @@ class TestManyTimes:
         assert its_step([]).shape == (0,)
         assert its_step(numpy.zeros((0, 3))).shape == (0, 3)
 
-    def test_a_default_changes_no_read_it_covers(self, its_step):
-        assert its_step(numpy.arange(10), default=-1.0).tolist() == [float(step) for step in range(10)]
-
-    @pytest.mark.parametrize("default", [None, "none", [0.0]])
-    def test_a_default_that_is_no_number_raises_for_a_series(self, default):
-        """An array of numbers holds no `None`, whether or not the default would be read. A curve and a function,
-        whose values may be of any kind, never read one, so they take any."""
-        with pytest.raises(TypeError, match="the default of many times is a number"):
-            _series_of_its_step()(numpy.arange(3), default=default)
-        assert _curve_of_its_step()(numpy.arange(3), default=default).tolist() == [0.0, 1.0, 2.0]
-        assert _function_of_its_step()(numpy.arange(3), default=default).tolist() == [0.0, 1.0, 2.0]
-
-    def test_a_default_of_a_numpy_number_is_taken(self, its_step):
-        assert its_step(numpy.arange(3), default=numpy.float32(0.5)).tolist() == [0.0, 1.0, 2.0]
-
     def test_a_sequence_of_plain_steps_raises(self, its_step):
         with pytest.raises(TypeError, match="each of many times is a GameTime"):
             its_step([1, 2, 3])
@@ -100,6 +81,15 @@ class TestManyTimes:
     def test_an_array_of_anything_but_numbers_raises(self, its_step, times):
         with pytest.raises(TypeError, match="an array of times holds steps"):
             its_step(times)
+
+
+@pytest.mark.parametrize("covers_every_time", [_curve_of_its_step, _function_of_its_step], ids=["curve", "function"])
+@pytest.mark.parametrize("times", [GameTime(steps=4), numpy.arange(3)], ids=["one time", "many times"])
+def test_only_a_series_takes_a_default(covers_every_time, times):
+    """A curve and a function cover every time, so they have no time to read a default at, and no keyword for one."""
+    with pytest.raises(TypeError, match="default"):
+        covers_every_time()(times, default=0.0)
+    assert _series_of_its_step()(GameTime(steps=40), default=0.0) == 0.0
 
 
 def test_each_kind_is_a_time_dependent_to_the_type_checker():

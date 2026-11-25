@@ -107,9 +107,9 @@ class TestManyTimes:
         assert rates.max() == 0.004
         assert rates[int(GameTime(seconds=130).steps)] == pytest.approx(0.002)
 
-    def test_a_default_is_never_read(self, rising_losses):
-        assert rising_losses(numpy.array([-1e9, 1e9]), default=7.0).tolist() == [0.0, 0.004]
-        assert rising_losses(GameTime(seconds=9000), default=None) == 0.004
+    def test_covers_times_far_outside_its_own(self, rising_losses):
+        assert rising_losses(numpy.array([-1e9, 1e9])).tolist() == [0.0, 0.004]
+        assert rising_losses(GameTime(seconds=9000)) == 0.004
 
 
 class TestMaking:

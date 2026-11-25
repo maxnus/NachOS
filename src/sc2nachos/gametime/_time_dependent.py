@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import TYPE_CHECKING, Final, Protocol, cast, overload
+from typing import TYPE_CHECKING, Protocol, overload
 
 import numpy
 
@@ -15,19 +14,6 @@ if TYPE_CHECKING:
     from numpy import ndarray
 
 
-class _NoDefault(Enum):
-    """What a call's `default` holds where it was given none, `None` being a default a bot gives."""
-
-    NO_DEFAULT = "no default"
-
-    def __repr__(self) -> str:
-        """How a call's signature shows a default not given."""
-        return self.name
-
-
-NO_DEFAULT: Final = _NoDefault.NO_DEFAULT
-
-
 class TimeDependent[T](Protocol):
     """A value that depends on the game time, such as a supply, a rate of losses or the `Resources` a bot expects to
     have earned: called with a `GameTime` it gives the value at that time, and with many times an array of the values
@@ -36,9 +22,9 @@ class TimeDependent[T](Protocol):
 
     Many times are a sequence of `GameTime`s or an array of steps, and their values an array of the same shape: of
     numbers where the values are numbers, and of objects, a value each, where they are anything else. A time it does
-    not cover raises `IndexError`, or reads `default` where the call is given one: any value for one time, and a
-    number for many, each time not covered reading it. Raises `TypeError` for a time that is not a `GameTime`, and for
-    many that are neither a sequence of them nor an array of numbers.
+    not cover raises `IndexError`: only a `TimeSeries` has such times, and its own call takes a `default` to read
+    there. Raises `TypeError` for a time that is not a `GameTime`, and for many that are neither a sequence of them
+    nor an array of numbers.
 
     Being called with a time, it passes wherever a `Callable[[GameTime], T]` is asked for, as a plain function of the
     game time does.
@@ -48,17 +34,11 @@ class TimeDependent[T](Protocol):
     def __call__(self, time: GameTime, /) -> T: ...
 
     @overload
-    def __call__[D](self, time: GameTime, /, *, default: D) -> T | D: ...
+    def __call__(self, time: Sequence[GameTime] | ndarray, /) -> ndarray: ...
 
-    # The default of many times is a number and not a `T`, which would make `T` a type of what it takes as well as
-    # of what it gives, and a series of integers no `TimeDependent[float]`. The kinds of other values cover every time.
-    @overload
-    def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: float = ...) -> ndarray: ...
-
-    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /, *, default: object = NO_DEFAULT) -> object:
+    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /) -> object:
         """The value at `time`, or an array of the values at each of many, a sequence of `GameTime`s or an array of
-        steps, in its shape; a time not covered raises `IndexError`, or reads `default` where one is given.
-        @public"""
+        steps, in its shape; a time not covered raises `IndexError`. @public"""
         ...
 
 
@@ -109,16 +89,3 @@ def array_of_values(values: Sequence[object]) -> ndarray:
     if all(issubclass(value_type, _NUMBER_TYPES) for value_type in set(map(type, values))):
         return numpy.array(values)
     return numpy.fromiter(values, dtype=object, count=len(values))
-
-
-def default_of_many_times(default: object) -> float | None:
-    """`default`, given with many times of numbers, or `None` where none was given: raises `TypeError` unless it is a
-    number."""
-    if default is NO_DEFAULT:
-        return None
-    if not is_number(default):
-        raise TypeError(
-            f"the default of many times is a number, which an array can hold, not {default!r}; "
-            "math.nan marks a time not covered"
-        )
-    return cast("float", default)

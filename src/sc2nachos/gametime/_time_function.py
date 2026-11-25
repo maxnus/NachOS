@@ -7,12 +7,7 @@ from typing import TYPE_CHECKING, final, overload
 import numpy
 
 from sc2nachos.gametime._game_time import GameTime
-from sc2nachos.gametime._time_dependent import (
-    NO_DEFAULT,
-    array_of_values,
-    check_array_holds_steps,
-    game_times_of_sequence,
-)
+from sc2nachos.gametime._time_dependent import array_of_values, check_array_holds_steps, game_times_of_sequence
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -28,8 +23,8 @@ class TimeFunction[T]:
 
     Called with a time it hands the function that time, as given, and with many times each of them in turn, a step of
     an array as a `GameTime`: an array of numbers where the function gave numbers, and of objects where it gave
-    anything else. It covers every time, so no read raises `IndexError` or reads a default; what the function raises
-    reaches the caller.
+    anything else. It covers every time, so no read raises `IndexError` of its own; what the function raises reaches
+    the caller.
     """
 
     __slots__ = ("_function",)
@@ -52,15 +47,11 @@ class TimeFunction[T]:
     def __call__(self, time: GameTime, /) -> T: ...
 
     @overload
-    def __call__[D](self, time: GameTime, /, *, default: D) -> T | D: ...
+    def __call__(self, time: Sequence[GameTime] | ndarray, /) -> ndarray: ...
 
-    @overload
-    def __call__(self, time: Sequence[GameTime] | ndarray, /, *, default: object = ...) -> ndarray: ...
-
-    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /, *, default: object = NO_DEFAULT) -> object:
+    def __call__(self, time: GameTime | Sequence[GameTime] | ndarray, /) -> object:
         """What the function gives for `time`, or an array of what it gives for each of many, a sequence of
-        `GameTime`s or an array of steps, in its shape. `default` is never read, whatever it is. Raises `TypeError`
-        as a `TimeDependent` does. @public"""
+        `GameTime`s or an array of steps, in its shape. Raises `TypeError` as a `TimeDependent` does. @public"""
         if isinstance(time, GameTime):
             return self._function(time)
         if isinstance(time, numpy.ndarray):
