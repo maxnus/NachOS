@@ -773,23 +773,49 @@ class TestKnownPlans:
         assert "a function of one game time goes in a TimeFunction" in said
 
     def test_a_loss_rate_that_gives_no_numbers_raises(self) -> None:
-        with pytest.raises(TypeError, match="it gave an array of object"):
+        """Its function is in a `TimeFunction`, so the error does not say to put it in one."""
+        with pytest.raises(TypeError, match="the loss rate of MARINE .* gave an array of object") as raised:
             _best_plan(
                 _game_start(),
                 Reward.weighted({UnitTypeId.MARINE: 1.0}),
                 horizon_seconds=10,
                 loss_rates={UnitTypeId.MARINE: TimeFunction(lambda _: "none")},  # pyright: ignore[reportArgumentType]
             )
+        assert "goes in a TimeFunction" not in str(raised.value)
+
+    def test_a_function_in_a_time_function_is_handed_whole_steps_from_a_state_at_a_whole_step(self) -> None:
+        """As a function handed over as it is was, before a rate became a `TimeDependent`: one that indexes a list by
+        its time's steps still does."""
+        steps_handed: list[object] = []
+
+        def rate_of(time: GameTime) -> float:
+            steps_handed.append(time.steps)
+            return 0.01
+
+        state = _game_start(time=GameTime(steps=224), units={UnitTypeId.MARINE: 10})
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}),
+            horizon_seconds=10,
+            loss_rates={UnitTypeId.MARINE: TimeFunction(rate_of)},
+        )
+        assert steps_handed == list(range(224, 448))
+        assert all(isinstance(steps, int | np.integer) for steps in steps_handed)
+        assert plan.intervals[-1].end.units[UnitTypeId.MARINE] == pytest.approx(10 * math.exp(-0.1))
 
     def test_a_recorded_series_that_covers_fewer_steps_than_the_plan_raises(self) -> None:
-        """A plan over 10 seconds reads 224 game steps, and the series holds 200."""
-        with pytest.raises(IndexError, match="outside the recorded range"):
+        """A plan over 10 seconds reads 224 game steps, and the series holds 200. The series's own error, with a note
+        of the unit type it was read for."""
+        with pytest.raises(IndexError, match="outside the recorded range") as raised:
             _best_plan(
                 _game_start(),
                 Reward.weighted({UnitTypeId.MARINE: 1.0}),
                 horizon_seconds=10,
                 loss_rates={UnitTypeId.MARINE: TimeSeries(np.zeros(200), GameTime.ZERO, 200)},
             )
+        assert raised.value.__notes__ == [
+            "the loss rate of MARINE is asked for every game step of the plan by one call"
+        ]
 
     def test_a_weight_on_types_counted_together_buys_those_that_count(self) -> None:
         """Ten wanted against air, where a marine counts for one and a marauder, which cannot shoot up, for none. Two

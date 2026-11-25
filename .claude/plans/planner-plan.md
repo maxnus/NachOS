@@ -797,7 +797,8 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     A function not in a `TimeFunction` is refused, by pyright and by a `TypeError` that names `TimeFunction`: where it
     gives one number for the steps, and as a note on its own error where it raises for them, as one that compares its
     time does. A rate gives no fallback, the protocol having no default: a recorded series that covers fewer steps
-    than the plan raises its `IndexError`. A term's `time_factor` and `count_factor` stay a function of the game time,
+    than the plan raises its `IndexError`, noted with the unit type. A function is handed whole steps where the state's
+    time is a whole step, as it was. A term's `time_factor` and `count_factor` stay a function of the game time,
     read once an interval, which a `TimeDependent` passes as. A function in a `TimeFunction` gives the program the bare
     function gave, to the last bit, and so do a step curve and a recorded series of the same rates: 0.004 a second
     from 60 seconds on for marines, marauders and medivacs, from both mid-game states of `tools/benchmark_planner.py`.

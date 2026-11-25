@@ -16,7 +16,7 @@ from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgr
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
 from sc2nachos.gamedata import Resources
-from sc2nachos.gametime import GameTime
+from sc2nachos.gametime import GameTime, TimeFunction
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
@@ -1008,22 +1008,27 @@ def _limits_by_counted_type(
 
 
 def _loss_rates_from(rate: TimeDependent[float], start: GameTime, step_count: int, unit_type: UnitTypeId) -> FloatArray:
-    """What `rate` gives for each of `step_count` game steps from `start`, asked for all of them by one call. Raises
-    `TypeError` unless that is a number for each, which a function of one game time does not give, and `ValueError` for
-    a number below 0 or not finite, each naming `unit_type`; a `TypeError` of the call's own is noted with the same."""
-    steps = start.steps + np.arange(step_count, dtype=float)
-    asked_as = (
-        f"the loss rate of {unit_type.name} is asked for every game step of the plan by one call, as a TimeDependent "
-        f"is; a function of one game time goes in a TimeFunction"
+    """What `rate` gives for each of `step_count` game steps from `start`, asked for all of them by one call, the steps
+    whole numbers where `start`'s are. Raises `TypeError` unless that is a number for each, which a function of one
+    game time does not give, and `ValueError` for a number below 0 or not finite, each naming `unit_type`; an
+    `IndexError` or a `TypeError` of the call's own is noted with it."""
+    steps = start.steps + np.arange(step_count)
+    asked_as = f"the loss rate of {unit_type.name} is asked for every game step of the plan by one call"
+    # What a function handed over as it is needs, which one in a `TimeFunction` already has.
+    advice_for_a_function = (
+        "" if isinstance(rate, TimeFunction) else "; a function of one game time goes in a TimeFunction"
     )
     try:
         rates: object = rate(steps)
-    except TypeError as error:
+    except IndexError as error:
         error.add_note(asked_as)
+        raise
+    except TypeError as error:
+        error.add_note(asked_as + advice_for_a_function)
         raise
     if not (isinstance(rates, np.ndarray) and rates.shape == steps.shape and rates.dtype.kind in "iuf"):
         given = f"an array of {rates.dtype}, {rates.shape}" if isinstance(rates, np.ndarray) else repr(rates)
-        raise TypeError(f"{asked_as}, and it gave {given} for {step_count} steps")
+        raise TypeError(f"{asked_as}, and gave {given} for {step_count} steps{advice_for_a_function}")
     is_refused = ~((rates >= 0) & (rates < math.inf))
     if is_refused.any():
         first_refused = int(np.argmax(is_refused))
@@ -1031,7 +1036,7 @@ def _loss_rates_from(rate: TimeDependent[float], start: GameTime, step_count: in
             f"a loss rate must be a number not below 0, not {float(rates[first_refused])} for {unit_type.name} at "
             f"{start + GameTime(steps=first_refused)}"
         )
-    return rates.astype(float)
+    return rates.astype(float, copy=False)
 
 
 def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:
