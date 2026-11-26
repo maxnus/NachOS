@@ -417,6 +417,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
   storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit
   and the ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
+- When a build is about to go down, the game puts a move ahead of the orders of a unit of this player's standing on
+  its site, so that they read `MOVE` and then its own, and the unit steps off. An order given to the unit then replaces
+  that move, as any order does, and if the unit is still on the site about 3.6 seconds later, the game gives the build
+  up with `CantBuildLocationInvalid`. In the planner example bot's games, a marine or a marauder trained beside its
+  barracks stood on a depot's or a tech lab's site while the bot gave it its attack every 4 steps: its orders went from
+  `MOVE`, `ATTACK` to `ATTACK` each time, 5 times in 63 games, two depots and three tech labs. On PylonAIE_v4 a marine
+  went back and forth between (164.25, 80.45) and (164.77, 80.24), inside the depot's footprint, while the SCV waited
+  from 6:14.6. With the bot leaving alone a unit already attacking near its target, the same 63 games had none (#264,
+  replays of local games played back with the fog off, build 75689).
 - A builder killed before the game gives up on its build is reported dead and nothing more. An SCV whose site one of
   this player's marines held position on was given up on 108 steps after the order, with `CantBuildLocationInvalid`;
   one sent to another such site and killed on the way got no error at all, then or twelve steps later (tool
