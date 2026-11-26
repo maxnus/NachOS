@@ -838,12 +838,20 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     - **New bases** ("This is not always true. I think we should let the user specify a series of next expansions...",
       then "Actually we should let the user just pass a list of expansions to the planner, and then the planner can look
       up the number of mineral fields and geysers, right?", and to a list in `plan_now` with today's behavior as its
-      default: "Yes, but required"). `plan_now(expansions=...)` takes `Expansion`s in the order the bot takes them; with
-      none a plan starts no command center; a command center in production takes the first, and fewer expansions than
-      those raise. Where a base brings more than the one before it, a whole variable an interval holds the earlier taken
-      whole first: without it the solver took half of each, which a test caught. Three bases alike are proven in 1.2,
-      2.8 and 1.1 s from the start and the two mid-game states, a smaller one last in 1.1, 2.4 and 1.5, and one in the
-      middle, 45 whole variables more, in 1.1, 2.5 and 1.6.
+      default: "Yes, but required"). `plan_now(expansions=...)` takes `Expansion`s in the order the bot takes them, and
+      with none a plan starts no command center. A command center in production first took the first of the list, and
+      fewer expansions than those raised, which he questioned (2026-11-26: "So not every townhall will be built as an
+      expansion, so throwing an error could be a problem. Why do you throw it?", and to a lookup of where each stands:
+      "Yes replace the error"). The state now holds what each brings, a worker build's `mineral_fields` and `geysers`:
+      those of the expansion whose center it covers, standing or aimed at by its SCV's order, and none for one built
+      anywhere else. The list is of the expansions not built on yet, and nothing raises. Where a base brings more than
+      the one before it, a whole variable an interval holds the earlier taken whole first: without it the solver took
+      half of each, which a test caught. More of either counts, fields or geysers (the owner: "what happens if one
+      expansion has fewer fields but more geysers?"), which a test holds too. Plans that take three bases over 10
+      minutes are proven in 3.2, 1.8 and 0.1 s with bases alike, 2.7, 1.9 and 0.1 with a small one last, and 2.3, 1.9
+      and 0.1 with it first, 57 whole variables more. Three bases alike are proven in 1.2, 2.8 and 1.1 s from the start
+      and the two mid-game states, a smaller one last in 1.1, 2.4 and 1.5, and one in the middle, 45 whole variables
+      more, in 1.1, 2.5 and 1.6.
     - **A term's weights** ("I think we should name things after the concept that they hold, not how it's implemented...
       maybe the sequence of weight segments deserves a class on its own?"): he chose "WeightCurve class, field weights".
     - **A default half-life** ("I think we want to use some `half_life` by default, what do you think?"): he typed "3

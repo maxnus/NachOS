@@ -208,20 +208,21 @@ class Planner:
         upgrade in `start_limits` the plan starts at most that many, none for 0, beside what the state holds in
         production: a reactor the bot does not build, or an orbital command it does not morph. A unit type's limit is
         that of the type it counts as, the lowest of those of one type, and one on what the plan would not make anyway
-        does nothing. `expansions` are the expansions the bot means to take next, in that order, from `api.expansions`:
-        a plan finishes at most that many more command centers, the first bringing the mineral fields left and the
-        geysers of the first, and so on, and with none, the default, it starts no command center. A command center going
-        up, or one an SCV is on its way to build, takes the first of them, so its expansion stays in the list until it
-        is finished. It solves within the planner's limits, before it returns, and returns `None` if the solver finds no
-        plan within them, which leaves `plan` the one before.
+        does nothing. `expansions` are the expansions the bot means to take next, in that order, from `api.expansions`,
+        those not built on yet: a plan starts at most that many command centers, the first bringing the mineral fields
+        left and the geysers of the first, and so on, and with none, the default, it starts no command center. A command
+        center going up, or one an SCV is on its way to build, is not among them: the state holds what it brings, the
+        fields and geysers of the expansion it stands at, or is aimed at, and nothing for one at no expansion. It solves
+        within the planner's limits, before it returns, and returns `None` if the solver finds no plan within them,
+        which leaves `plan` the one before.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
         than 0, a negative loss rate or start limit, a loss rate from a `TimeDependent` that is negative or not finite,
         a negative time from `fluid_after` or from `economy`'s `builder_walk_time`, a factor from a term's `time_factor`
-        or `count_factor` that is negative or not finite, a `state` holding a unit in production that Terran does not
-        make, or fewer `expansions` than it holds command centers in production; `TypeError` for a loss rate that is
-        neither a number nor gives one for each of many game steps, as a function not in a `TimeFunction`; and
-        `IndexError` from a loss rate that does not cover a step of the plan, as a `TimeSeries` recorded for fewer.
+        or `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does not
+        make; `TypeError` for a loss rate that is neither a number nor gives one for each of many game steps, as a
+        function not in a `TimeFunction`; and `IndexError` from a loss rate that does not cover a step of the plan, as a
+        `TimeSeries` recorded for fewer.
         """
         if any(not callable(rate) and rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")

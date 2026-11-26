@@ -8,12 +8,14 @@ from typing import TYPE_CHECKING, Any, final
 
 from sc2nachos.gamedata import Resources
 from sc2nachos.gametime import GameTime
+from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
     from sc2nachos import Api
     from sc2nachos.extensions.planner._terran_model import TerranModel
+    from sc2nachos.ids import AbilityId
     from sc2nachos.state import InProduction
     from sc2nachos.units import OwnUnit
 
@@ -55,6 +57,13 @@ class WorkerBuild:
     """The building it has left: its whole build time if not begun."""
     builder_walks_there: bool
     """Whether an SCV has yet to walk there: for a build not begun, and for a structure going up whose SCV has left."""
+    mineral_fields: int = 0
+    """The mineral fields it brings once done. For a command center at an expansion, the fields the expansion has
+    left; none for a command center anywhere else, and for any other structure."""
+    geysers: int = 0
+    """The geysers it brings once done, each free for a refinery. For a command center at an expansion, the
+    expansion's geysers with no gas building on them; none for a command center anywhere else, and for any other
+    structure."""
 
 
 @final
@@ -179,7 +188,14 @@ def _production_of(
         producer = in_production.producer
         if model.unit_items[unit_type].is_built_by_worker:
             walks_there = in_production.unit is None or producer is None
-            build = WorkerBuild(unit_type=unit_type, time_left=in_production.time_left, builder_walks_there=walks_there)
+            mineral_fields, geysers = _fields_and_geysers_brought_by(api, in_production)
+            build = WorkerBuild(
+                unit_type=unit_type,
+                time_left=in_production.time_left,
+                builder_walks_there=walks_there,
+                mineral_fields=mineral_fields,
+                geysers=geysers,
+            )
             worker_builds.append((build, in_production))
         elif producer is None:
             completions.append(UnitCompletion(unit_type=unit_type, time_left=in_production.time_left))
@@ -205,6 +221,40 @@ def _production_of(
                 )
             )
     return completions, producer_activities, worker_builds
+
+
+def _fields_and_geysers_brought_by(api: Api[object], in_production: InProduction) -> tuple[int, int]:
+    """The mineral fields left and the geysers with no gas building at the expansion a townhall `in_production` stands
+    at, or is to stand at: the expansion whose center the townhall covers. None of either for a townhall anywhere
+    else, and for anything but a townhall."""
+    data = api.data.units[in_production.product]
+    footprint = data.footprint
+    if in_production.product not in UnitType.Townhall.type_ids or footprint is None:
+        return 0, 0
+    built_at = _point_built_at(in_production, data.creation_ability)
+    if built_at is None:
+        return 0, 0
+    covered = footprint.bounding_box(at=built_at)
+    gas_building_positions = {building.position for building in api.units.gas_buildings}
+    for expansion in api.expansions:
+        if expansion.center in covered:
+            free_geysers = sum(geyser.position not in gas_building_positions for geyser in expansion.geysers)
+            return len(expansion.mineral_fields.alive), free_geysers
+    return 0, 0
+
+
+def _point_built_at(in_production: InProduction, creation_ability: AbilityId | None) -> Point | None:
+    """Where the structure `in_production` stands, or for a build not begun, the point its worker's order of
+    `creation_ability` is aimed at. `None` where neither says."""
+    if in_production.unit is not None:
+        return in_production.unit.position
+    if in_production.producer is None:
+        return None
+    for order in in_production.producer.orders:
+        target = order.known_target
+        if order.ability == creation_ability and isinstance(target, Point):
+            return target
+    return None
 
 
 def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId, GameTime], list[ProducerActivity]]:

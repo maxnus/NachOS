@@ -19,7 +19,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
     from sc2nachos.extensions.planner._economy_model import EconomyModel
-    from sc2nachos.extensions.planner._planner_state import PlannerState
+    from sc2nachos.extensions.planner._planner_state import PlannerState, WorkerBuild
     from sc2nachos.extensions.planner._reward import Reward
     from sc2nachos.extensions.planner._terran_model import Item, TerranModel
     from sc2nachos.gametime import TimeDependent
@@ -28,7 +28,8 @@ if TYPE_CHECKING:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NewBase:
-    """What a townhall a plan may still finish brings: the mineral fields and the geysers of the expansion it goes to.
+    """What a townhall a plan may start brings once done: the mineral fields and the geysers of the expansion it goes
+    to.
 
     Raises `ValueError` for a negative count.
     """
@@ -131,7 +132,7 @@ class PlanVariables:
             economy, (unit_type for unit_type, item in model.unit_items.items() if item.is_built_by_worker)
         )
         self._completions, self._builders_free_after = self._completions_and_builders()
-        self._new_bases = self._new_bases_checked(new_bases)
+        self._new_bases = tuple(new_bases)
         self._edges: FloatArray = np.asarray(edges, dtype=float)
         self._widths: FloatArray = np.diff(self._edges)
         self._survival = SurvivalShares(
@@ -191,11 +192,15 @@ class PlanVariables:
         ]
         builders_free_after: list[float] = []
         for build in self._state.worker_builds:
-            walk = self._walk_seconds.get(build.unit_type, 0.0)
-            done_after = build.time_left.seconds + (walk if build.builder_walks_there else 0.0)
+            done_after = self._seconds_until_built(build)
             completions.append((build.unit_type, done_after))
-            builders_free_after.append(done_after + walk)
+            builders_free_after.append(done_after + self._walk_seconds.get(build.unit_type, 0.0))
         return tuple(completions), tuple(builders_free_after)
+
+    def _seconds_until_built(self, build: WorkerBuild) -> float:
+        """The seconds until a structure an SCV builds is done, after the SCV's walk there if it has yet to walk."""
+        walk = self._walk_seconds.get(build.unit_type, 0.0)
+        return build.time_left.seconds + (walk if build.builder_walks_there else 0.0)
 
     def _add_starts_so_far(self, item: Item, whole: NDArray[np.bool_]) -> None:
         """Add the variables of the next item, `item`: its starts so far by each interval's end, whole in the intervals
@@ -246,33 +251,19 @@ class PlanVariables:
             working.add(tier.block, np.eye(self._interval_count))
         return working
 
-    def _new_bases_checked(self, new_bases: Sequence[NewBase]) -> tuple[NewBase, ...]:
-        """`new_bases`, the first of them for the townhalls the state has in production.
-
-        Raises `ValueError` for fewer of them than those townhalls."""
-        in_production = count_of(self._completions, UnitTypeId.COMMAND_CENTER)
-        if in_production > len(new_bases):
-            raise ValueError(
-                f"the state has {in_production} command centers in production, and only {len(new_bases)} expansions "
-                "to take were named: name the expansion of each townhall going up or on its way first"
-            )
-        return tuple(new_bases)
-
-    def _most_new_townhall_starts(self) -> int:
-        """The most command centers the plan may start: one for each new base no townhall in production takes."""
-        return len(self._new_bases) - count_of(self._completions, UnitTypeId.COMMAND_CENTER)
-
     def _most_starts_in_an_interval(self, item: Item) -> float:
         """The most of `item` that can start in one interval."""
         state = self._state
         if item.upgrade is not None:
             most = 1.0
         elif item.unit_type is UnitTypeId.COMMAND_CENTER:
-            most = float(self._most_new_townhall_starts())
+            most = float(len(self._new_bases))
         elif item.unit_type is UnitTypeId.REFINERY:
-            most = float(state.free_geysers + sum(base.geysers for base in self._new_bases))
+            geysers_coming = sum(base.geysers for base in (*self._new_bases, *state.worker_builds))
+            most = float(state.free_geysers + geysers_coming)
         elif item.morphed_from is not None:
-            most = float(state.units.get(item.morphed_from, 0) + len(self._new_bases))
+            townhalls_coming = len(self._new_bases) + count_of(self._completions, UnitTypeId.COMMAND_CENTER)
+            most = float(state.units.get(item.morphed_from, 0) + townhalls_coming)
         elif item.supply_used > 0:
             most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
         else:

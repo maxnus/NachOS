@@ -273,12 +273,13 @@ class ThreatMap:
   start of a unit type or an upgrade, none of it for 0. A plan makes only what the reward values and what that needs,
   with SCVs, supply depots, command centers, orbital commands, refineries and add-ons, so the limits are for those the
   bot will not make itself, a reactor or an orbital command. `plan_now(expansions=...)` takes the expansions the bot
-  means to take next, from `api.expansions`, in the order it means to take them. A plan finishes at most that many more
-  command centers, the first bringing the mineral fields left and the geysers of the first expansion, and so on, and
-  with none, the default, it starts no command center. A command center going up, or one an SCV is on its way to build,
-  takes the first of the list, so its expansion stays in it until the command center is finished; with fewer expansions
-  than command centers in production `plan_now` raises `ValueError`. A base about to fall, with no refinery yet, left
-  out, the MULEs' energy spent on scans, the natural to take and no reactor on a starport:
+  means to take next, from `api.expansions`, those not built on yet, in the order it means to take them. A plan starts
+  at most that many command centers, the first bringing the mineral fields left and the geysers of the first expansion,
+  and so on, and with none, the default, it starts no command center. A command center already going up, or one an SCV
+  is on its way to build, needs no entry: the state holds what it brings, as its worker build's `mineral_fields` and
+  `geysers`, those of the expansion it stands at or is aimed at, and none for one built anywhere else, a command center
+  in the main to morph, say. A base about to fall, with no refinery yet, left out, the MULEs' energy spent on scans, the
+  natural to take and no reactor on a starport:
 
   ```python
   import dataclasses

@@ -2132,21 +2132,17 @@ class TestNewBases:
         )
         assert len(_start_seconds(plan, UnitTypeId.COMMAND_CENTER)) == base_count
 
-    @pytest.mark.parametrize(
-        ("new_bases", "miners_at_the_end"),
-        [
-            ([NewBase(mineral_fields=2, geysers=0), NewBase(mineral_fields=8, geysers=0)], 4.0),
-            ([NewBase(mineral_fields=8, geysers=0), NewBase(mineral_fields=2, geysers=0)], 16.0),
-        ],
-        ids=["the small base first", "the full base first"],
-    )
-    def test_a_command_center_in_production_brings_the_first_new_bases_fields(
-        self, new_bases: list[NewBase], miners_at_the_end: float
+    @pytest.mark.parametrize(("mineral_fields", "miners_at_the_end"), [(0, 0.0), (2, 4.0), (8, 16.0)])
+    def test_a_command_center_in_production_brings_the_fields_the_state_says_and_takes_no_new_base(
+        self, mineral_fields: int, miners_at_the_end: float
     ) -> None:
-        """No field to mine, sixteen SCVs and a command center done in 10 seconds, with nothing to pay for another:
-        until it is done no SCV mines, and from then two a field of the first new base, whatever the second holds."""
+        """No field to mine, sixteen SCVs and a command center done in 10 seconds, with no expansion handed over: until
+        it is done no SCV mines, and from then two a field it brings, none for one that stands at no expansion."""
         going_up = WorkerBuild(
-            unit_type=UnitTypeId.COMMAND_CENTER, time_left=GameTime(seconds=10), builder_walks_there=False
+            unit_type=UnitTypeId.COMMAND_CENTER,
+            time_left=GameTime(seconds=10),
+            builder_walks_there=False,
+            mineral_fields=mineral_fields,
         )
         state = _game_start(
             minerals=0.0,
@@ -2156,18 +2152,71 @@ class TestNewBases:
             free_geysers=0,
             worker_builds=(going_up,),
         )
-        plan = _best_plan(state, Reward(half_life=None), horizon_seconds=30, new_bases=new_bases)
+        plan = _best_plan(state, Reward(half_life=None), horizon_seconds=30)
 
         assert plan.intervals[0].miners == pytest.approx(0.0)
         assert plan.intervals[-1].miners == pytest.approx(miners_at_the_end)
 
-    def test_fewer_new_bases_than_command_centers_in_production_raises(self) -> None:
+    @pytest.mark.parametrize(
+        ("new_bases", "miners_at_the_end"),
+        [
+            ([NewBase(mineral_fields=2, geysers=0), NewBase(mineral_fields=8, geysers=0)], 4.0),
+            ([NewBase(mineral_fields=8, geysers=0), NewBase(mineral_fields=2, geysers=0)], 16.0),
+        ],
+        ids=["the small base first", "the full base first"],
+    )
+    def test_the_first_command_center_a_plan_starts_brings_the_first_new_bases_fields(
+        self, new_bases: list[NewBase], miners_at_the_end: float
+    ) -> None:
+        """No field to mine, sixteen SCVs, the minerals for one command center, and another going up at no expansion,
+        which takes no new base: once the plan's own is done, two SCVs mine at each field of the first new base,
+        whatever the second holds."""
         going_up = WorkerBuild(
             unit_type=UnitTypeId.COMMAND_CENTER, time_left=GameTime(seconds=10), builder_walks_there=False
         )
-        state = _game_start(worker_builds=(going_up,))
-        with pytest.raises(ValueError, match="1 command centers in production, and only 0 expansions"):
-            _best_plan(state, Reward(half_life=None), horizon_seconds=30)
+        state = _game_start(
+            minerals=400.0,
+            units={UnitTypeId.SCV: 16, UnitTypeId.COMMAND_CENTER: 1},
+            supply_used=16.0,
+            mineral_fields=0,
+            free_geysers=0,
+            worker_builds=(going_up,),
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.COMMAND_CENTER: 1.0}, half_life=None),
+            horizon_seconds=100,
+            fluid_after=_whole_over_any_horizon,
+            new_bases=new_bases,
+        )
+
+        assert len(_start_seconds(plan, UnitTypeId.COMMAND_CENTER)) == 1
+        assert plan.intervals[-1].miners == pytest.approx(miners_at_the_end)
+
+    @pytest.mark.parametrize(
+        ("new_bases", "refineries"),
+        [
+            ([NewBase(mineral_fields=8, geysers=0), NewBase(mineral_fields=2, geysers=2)], 0),
+            ([NewBase(mineral_fields=2, geysers=2), NewBase(mineral_fields=8, geysers=0)], 2),
+        ],
+        ids=["the base without geysers first", "the base with geysers first"],
+    )
+    def test_a_base_of_fewer_fields_and_more_geysers_is_taken_after_the_one_before_it(
+        self, new_bases: list[NewBase], refineries: int
+    ) -> None:
+        """Refineries worth something, no free geyser, and one command center to start: it brings the first new base's
+        geysers alone, none where that base has none, though the second has two."""
+        state = _game_start(minerals=1000.0, free_geysers=0)
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.REFINERY: 1.0}, half_life=None),
+            horizon_seconds=130,
+            fluid_after=_whole_over_any_horizon,
+            start_limits={UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.SCV: 0},
+            new_bases=new_bases,
+        )
+
+        assert len(_start_seconds(plan, UnitTypeId.REFINERY)) == refineries
 
     @pytest.mark.parametrize("counts", [{"mineral_fields": -1, "geysers": 2}, {"mineral_fields": 8, "geysers": -1}])
     def test_a_new_base_of_a_negative_count_raises(self, counts: dict[str, int]) -> None:
@@ -2636,6 +2685,49 @@ class TestGameState:
         (state,) = _states_of(observation)
 
         assert (UnitTypeId.COMMAND_CENTER, 71.43, True) in _worker_builds_in_seconds(state)
+
+    @pytest.mark.parametrize(
+        ("built_at", "brought"),
+        [(_NATURAL_CENTER, (8, 2)), ((40.5, 38.5), (0, 0))],
+        ids=["at the natural", "at no expansion"],
+    )
+    def test_a_command_center_an_scv_walks_to_build_brings_what_the_expansion_it_is_aimed_at_holds(
+        self, built_at: tuple[float, float], brought: tuple[int, int]
+    ) -> None:
+        observation = _main_base_at(0)
+        observation.observation.raw_data.units.append(
+            make_unit(
+                11,
+                UnitTypeId.SCV,
+                at=(24.0, 40.0),
+                build_progress=1.0,
+                orders=[_unit_order(RawAbilityId.TerranBuild_CommandCenter, at=built_at)],
+            )
+        )
+        (state,) = _states_of(observation)
+
+        (command_center,) = (build for build in state.worker_builds if build.unit_type is UnitTypeId.COMMAND_CENTER)
+        assert (command_center.mineral_fields, command_center.geysers) == brought
+        (depot,) = (build for build in state.worker_builds if build.unit_type is UnitTypeId.SUPPLY_DEPOT)
+        assert (depot.mineral_fields, depot.geysers) == (0, 0)
+
+    @pytest.mark.parametrize(
+        ("built_at", "brought"),
+        [(_NATURAL_CENTER, (8, 2)), ((40.5, 38.5), (0, 0))],
+        ids=["at the natural", "at no expansion"],
+    )
+    def test_a_command_center_going_up_brings_what_the_expansion_it_stands_at_holds(
+        self, built_at: tuple[float, float], brought: tuple[int, int]
+    ) -> None:
+        observation = _main_base_at(0)
+        observation.observation.raw_data.units.append(
+            make_unit(12, UnitTypeId.COMMAND_CENTER, at=built_at, build_progress=0.5)
+        )
+        (state,) = _states_of(observation)
+
+        (command_center,) = (build for build in state.worker_builds if build.unit_type is UnitTypeId.COMMAND_CENTER)
+        assert (command_center.mineral_fields, command_center.geysers) == brought
+        assert state.mineral_fields == 8
 
     def test_a_command_centers_morph_counts_down_from_the_observation_before_the_first_showing_it(self) -> None:
         """Given after the observation at 0 and seen at 10 and 20 seconds, it has 5 of its 25 left at the last."""
