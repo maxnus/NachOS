@@ -119,7 +119,8 @@ class SolveReport:
     gap: float
     """The solver's bound on how far the plan's `reward` may fall short of the best plan's, relative to it."""
     is_optimal: bool
-    """Whether the solver proved the plan the best, to the planner's `relative_gap`, rather than stopping at a limit."""
+    """Whether the solver proved the plan the best, to the `relative_gap` its `plan_now` was given, rather than stopping
+    at a limit."""
     seconds: float
     """The wall-clock seconds the solve took."""
 

@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, final
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
-from sc2nachos.extensions.planner._planner_state import PlannerState, read_planner_state
+from sc2nachos.extensions.planner._planner_state import (
+    PlannerState,
+    fields_and_free_geysers_of,
+    read_planner_state,
+)
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import TimeGrid, edge_seconds_of
 from sc2nachos.gametime import GameTime
@@ -201,9 +205,10 @@ class Planner:
 
         `expansions` are the expansions the bot means to take next, from `api.expansions`, in the order it means to take
         them, without those already being built on. A plan starts at most that many command centers: the first brings
-        the mineral fields left and the geysers of the first expansion, and so on. With none, the default, a plan starts
-        no command center. A command center already going up, or one a worker is on its way to build, needs no entry:
-        the state holds what it brings, which is nothing for one built at no expansion.
+        the mineral fields left and the free geysers of the first expansion, and so on. An expansion with a townhall on
+        it already, anyone's, is left out. With none, the default, a plan starts no command center. A command center
+        already going up, or one a worker is on its way to build, needs no entry: the state holds what it brings, which
+        is nothing for one built at no expansion.
 
         `time_limit`, `node_limit` and `relative_gap` say when the solve may stop. `plan_now` solves before it returns,
         so a turn that plans is that much longer. `time_limit` is the most seconds of wall-clock time the solve may
@@ -237,10 +242,7 @@ class Planner:
             economy=economy,
             loss_rates=loss_rates,
             start_limits=start_limits,
-            new_bases=[
-                NewBase(mineral_fields=len(expansion.mineral_fields.alive), geysers=len(expansion.geysers))
-                for expansion in expansions
-            ],
+            new_bases=new_bases_of(self._api, expansions),
             fluid_after_seconds=fluid_after_seconds_of(
                 items, fluid_after=self._fluid_after, state=planned_from, economy=economy
             ),
@@ -252,6 +254,18 @@ class Planner:
         if plan is not None:
             self._plan = plan
         return plan
+
+
+def new_bases_of(api: Api[object], expansions: Sequence[Expansion]) -> list[NewBase]:
+    """What a townhall at each of `expansions` would bring, in their order: the mineral fields the expansion has left
+    and its geysers with no gas building on them. An expansion with a townhall on it already, this player's or
+    another's, finished or going up, is left out, since none can be built there."""
+    new_bases: list[NewBase] = []
+    for expansion in expansions:
+        if expansion.townhall is None:
+            mineral_fields, free_geysers = fields_and_free_geysers_of(api, expansion)
+            new_bases.append(NewBase(mineral_fields=mineral_fields, geysers=free_geysers))
+    return new_bases
 
 
 def _check_solve_limits(*, time_limit: float | None, node_limit: int | None, relative_gap: float) -> None:

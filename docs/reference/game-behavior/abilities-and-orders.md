@@ -278,6 +278,10 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   `sc2` runs 41837996802 and 41856036606, build 75689). On plain gathers one SCV a refinery collected 61 vespene a
   minute at the nearer and 57 at the farther, and two 123 and 115, each as much as one alone, so that a third added 41
   and 48, about three quarters of what each of the first two brought (`tools/sweep_gas.py`, local games, build 75689).
+  Speed collected, the sweep's `collect` variant, one SCV a refinery took 204 and 188 vespene in three minutes, two 404
+  and 376, and three 492 and 492, what three take on plain gathers, 492 and 488: a third then adds about half of what
+  each of the first two brings (the same games). An SCV walks 8.0 to 10.9 seconds from a main's mineral line to its
+  natural on the maps of the pool, by the pathing distance and its speed (corpus).
 - Two workers on moves meet head on and push each other aside, where one on a gather or a return passes through one
   on a move. Two SCVs a refinery moved at both ends of their trips, along the line between the two centers, met once
   every round trip, about 2.5 from the refinery's center: at the nearer refinery the one going in was shoved back,

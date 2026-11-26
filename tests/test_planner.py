@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
-from sc2nachos import Api, GameTime, Resources
+from sc2nachos import Api, Expansion, GameTime, Resources
 from sc2nachos.events import TurnEvent
 from sc2nachos.extensions.planner import (
     BuildPlan,
@@ -33,7 +33,7 @@ from sc2nachos.extensions.planner import (
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
-from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
+from sc2nachos.extensions.planner._planner import fluid_after_seconds_of, new_bases_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import edge_seconds_of
 from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent, TimeFunction, TimeSeries
@@ -168,6 +168,7 @@ class TestTimeGrid:
         widths = [later - earlier for earlier, later in itertools.pairwise(edges)]
 
         assert len(widths) == 57
+        assert all(float(edge).is_integer() for edge in edges)
         assert edges[:3] == pytest.approx([0, 34, 68])
         assert edges[15:18] == pytest.approx([510, 544, 612])
         assert [edges[index] for index in (24, 32, 40)] == pytest.approx([1088, 2176, 4352])
@@ -944,6 +945,25 @@ class TestKnownPlans:
         plan = _best_plan(state, reward, horizon_seconds=30, grid=TimeGrid.doubling())
 
         assert plan.reward == pytest.approx(10 * GameTime(steps=worth_steps).seconds)
+
+    def test_a_plan_items_duration_is_its_build_time_in_whole_game_steps(self) -> None:
+        """A siege tank's 720 steps come back from the seconds the program counts in as 720.0000000000001."""
+        state = _game_start(
+            minerals=1000.0,
+            vespene=1000.0,
+            supply_cap=50.0,
+            units={
+                UnitTypeId.SCV: 12,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.FACTORY: 1,
+                UnitTypeId.TECH_LAB_FACTORY: 1,
+            },
+        )
+        plan = _best_plan(state, Reward.weighted({UnitTypeId.SIEGE_TANK: 1.0}, half_life=None), horizon_seconds=40)
+
+        tanks = [planned for planned in plan.items if planned.product == UnitTypeId.SIEGE_TANK]
+        assert tanks
+        assert {planned.duration for planned in tanks} == {GameTime(steps=720)}
 
     def test_on_the_default_grid_a_plans_times_are_whole_game_steps(self) -> None:
         plan = _best_plan(
@@ -2342,6 +2362,17 @@ class TestReward:
     def test_the_last_segments_count_is_ignored(self) -> None:
         WeightCurve([WeightSegment(weight=1.0, end_count=30), WeightSegment(weight=0.0, end_count=0)])
 
+    def test_two_curves_of_the_same_segments_are_equal_whatever_they_were_handed(self) -> None:
+        segments = [WeightSegment(weight=1.0, end_count=3), WeightSegment(weight=0.5)]
+
+        assert WeightCurve(segments) == WeightCurve(tuple(segments))
+        assert hash(WeightCurve(segments)) == hash(WeightCurve(tuple(segments)))
+
+    def test_a_weight_that_is_neither_a_number_nor_a_curve_raises(self) -> None:
+        segments = [WeightSegment(weight=1.0, end_count=3), WeightSegment(weight=0.5)]
+        with pytest.raises(TypeError, match="a number or a WeightCurve"):
+            Reward.weighted({UnitTypeId.MARINE: segments})  # pyright: ignore[reportArgumentType]
+
     def test_a_constant_curve_is_one_weight_and_one_up_to_a_count_nothing_past_it(self) -> None:
         assert WeightCurve.constant(2.0) == WeightCurve([WeightSegment(weight=2.0)])
         assert WeightCurve.up_to(2.0, 8) == WeightCurve(
@@ -2423,7 +2454,7 @@ class TestReward:
         [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}, {"resource_weight": -1e-4}],
         ids=["a half-life of 0", "a negative terminal time", "a negative weight on the stock"],
     )
-    def test_a_bad_discount_tail_or_stock_weight_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_bad_discount_tail_or_resource_weight_raises(self, arguments: dict[str, Any]) -> None:
         with pytest.raises(ValueError):
             Reward(**arguments)
 
@@ -2600,6 +2631,11 @@ def _states_of(*observations: sc2api_pb2.ResponseObservation) -> list[PlannerSta
     return states[: len(observations)]
 
 
+def _free_expansions_of(api: Api[Planner]) -> list[Expansion]:
+    """The expansions of `api`'s map with no townhall on them."""
+    return [expansion for expansion in api.expansions if expansion.townhall is None]
+
+
 def _unit_completions_in_seconds(state: PlannerState) -> list[tuple[UnitTypeId, float]]:
     """`state`'s unit completions, each as its type and its seconds left."""
     return [(completion.unit_type, completion.time_left.seconds) for completion in state.unit_completions]
@@ -2753,6 +2789,31 @@ class TestGameState:
         (depot,) = (build for build in state.worker_builds if build.unit_type is UnitTypeId.SUPPLY_DEPOT)
         assert (depot.mineral_fields, depot.geysers) == (0, 0)
 
+    def test_an_scvs_second_command_center_queued_reads_its_second_order(self) -> None:
+        """One SCV sent to build a command center at the natural and, queued behind it, one at no expansion: each
+        brings what its own order is aimed at, not both the natural's."""
+        observation = _main_base_at(0)
+        observation.observation.raw_data.units.append(
+            make_unit(
+                11,
+                UnitTypeId.SCV,
+                at=(24.0, 40.0),
+                build_progress=1.0,
+                orders=[
+                    _unit_order(RawAbilityId.TerranBuild_CommandCenter, at=_NATURAL_CENTER),
+                    _unit_order(RawAbilityId.TerranBuild_CommandCenter, at=(40.5, 38.5)),
+                ],
+            )
+        )
+        (state,) = _states_of(observation)
+
+        brought = [
+            (build.mineral_fields, build.geysers)
+            for build in state.worker_builds
+            if build.unit_type is UnitTypeId.COMMAND_CENTER
+        ]
+        assert brought == [(8, 2), (0, 0)]
+
     @pytest.mark.parametrize(
         ("built_at", "brought"),
         [(_NATURAL_CENTER, (8, 2)), ((40.5, 38.5), (0, 0))],
@@ -2901,7 +2962,7 @@ class TestPlanner:
             horizon = GameTime(minutes=2)
             plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon)))
             plans.append(
-                _plan_found(api.extensions.plan_now(reward, horizon=horizon, expansions=list(api.expansions)[:1]))
+                _plan_found(api.extensions.plan_now(reward, horizon=horizon, expansions=_free_expansions_of(api)))
             )
 
         api.play(game.joined())
@@ -2909,6 +2970,71 @@ class TestPlanner:
         without, with_one = plans[:2]
         assert [planned.product for planned in without.items].count(UnitTypeId.COMMAND_CENTER) == 0
         assert [planned.product for planned in with_one.items].count(UnitTypeId.COMMAND_CENTER) == 1
+
+    def test_an_expansion_brings_its_fields_left_and_its_free_geysers_and_one_built_on_is_left_out(self) -> None:
+        """The main, with its command center, and the natural, with a refinery on one of its two geysers: of the two
+        handed over, the natural alone is a new base, of eight fields and one geyser."""
+        observation = _main_base_at(0)
+        geyser_x, geyser_y = _GEYSER_OFFSETS[0]
+        refinery_at = (_NATURAL_CENTER[0] + geyser_x, _NATURAL_CENTER[1] + geyser_y)
+        observation.observation.raw_data.units.append(
+            make_unit(13, UnitTypeId.REFINERY, at=refinery_at, build_progress=1.0, vespene_contents=2250)
+        )
+        game = ScriptedGame(
+            [observation, _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=Planner)
+        new_bases: list[list[NewBase]] = []
+
+        @api.on(TurnEvent)
+        def read_the_new_bases(_: TurnEvent) -> None:
+            new_bases.append(new_bases_of(api, list(api.expansions)))
+
+        api.play(game.joined())
+
+        assert new_bases[0] == [NewBase(mineral_fields=8, geysers=1)]
+
+    def test_an_expansion_with_a_command_center_going_up_is_no_new_base(self) -> None:
+        observation = _main_base_at(0)
+        observation.observation.raw_data.units.append(
+            make_unit(12, UnitTypeId.COMMAND_CENTER, at=_NATURAL_CENTER, build_progress=0.5)
+        )
+        game = ScriptedGame(
+            [observation, _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=Planner)
+        new_bases: list[list[NewBase]] = []
+
+        @api.on(TurnEvent)
+        def read_the_new_bases(_: TurnEvent) -> None:
+            new_bases.append(new_bases_of(api, list(api.expansions)))
+
+        api.play(game.joined())
+
+        assert new_bases[0] == []
+
+    def test_a_plans_relative_gap_reaches_the_solver(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=Planner)
+        gaps: list[float] = []
+
+        def note_the_gap(
+            _: PlanProgram, *, time_limit: float | None, node_limit: int | None, relative_gap: float
+        ) -> None:
+            gaps.append(relative_gap)
+
+        monkeypatch.setattr(PlanProgram, "solve", note_the_gap)
+
+        @api.on(TurnEvent)
+        def plan_with_a_gap_and_without(_: TurnEvent) -> None:
+            api.extensions.plan_now(Reward(half_life=None), relative_gap=0.05)
+            api.extensions.plan_now(Reward(half_life=None))
+
+        api.play(game.joined())
+
+        assert gaps[:2] == [0.05, 1e-4]
 
     def test_it_plans_over_5_minutes_unless_handed_a_horizon(self) -> None:
         game = ScriptedGame(

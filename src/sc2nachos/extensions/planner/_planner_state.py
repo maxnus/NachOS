@@ -13,7 +13,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
-    from sc2nachos import Api
+    from sc2nachos import Api, Expansion
     from sc2nachos.extensions.planner._terran_model import TerranModel
     from sc2nachos.ids import AbilityId
     from sc2nachos.state import InProduction
@@ -162,15 +162,22 @@ def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[Uni
 
 def _bases_of(api: Api[object]) -> tuple[int, int]:
     """The mineral fields left and the geysers free at bases with a finished townhall of this player's."""
-    gas_building_positions = {building.position for building in api.units.gas_buildings}
     fields = 0
     free_geysers = 0
     for expansion in api.expansions:
         townhall = expansion.townhall
         if townhall is not None and townhall.is_own and townhall.is_complete:
-            fields += len(expansion.mineral_fields.alive)
-            free_geysers += sum(geyser.position not in gas_building_positions for geyser in expansion.geysers)
+            fields_of_it, free_geysers_of_it = fields_and_free_geysers_of(api, expansion)
+            fields += fields_of_it
+            free_geysers += free_geysers_of_it
     return fields, free_geysers
+
+
+def fields_and_free_geysers_of(api: Api[object], expansion: Expansion) -> tuple[int, int]:
+    """The mineral fields `expansion` has left, and its geysers with no gas building on them."""
+    gas_building_positions = {building.position for building in api.units.gas_buildings}
+    free_geysers = sum(geyser.position not in gas_building_positions for geyser in expansion.geysers)
+    return len(expansion.mineral_fields.alive), free_geysers
 
 
 def _production_of(
@@ -181,6 +188,7 @@ def _production_of(
     with no SCV building it, waits for an SCV's walk there."""
     completions: list[UnitCompletion] = []
     worker_builds: list[tuple[WorkerBuild, InProduction]] = []
+    builds_not_begun: dict[int, int] = {}
     by_producer: dict[int, list[InProduction]] = {}
     producers: dict[int, OwnUnit[Any]] = {}
     for in_production in api.in_production(model.types_counted_as_items):
@@ -188,7 +196,7 @@ def _production_of(
         producer = in_production.producer
         if model.unit_items[unit_type].is_built_by_worker:
             walks_there = in_production.unit is None or producer is None
-            mineral_fields, geysers = _fields_and_geysers_brought_by(api, in_production)
+            mineral_fields, geysers = _fields_and_geysers_brought_by(api, in_production, builds_not_begun)
             build = WorkerBuild(
                 unit_type=unit_type,
                 time_left=in_production.time_left,
@@ -223,38 +231,46 @@ def _production_of(
     return completions, producer_activities, worker_builds
 
 
-def _fields_and_geysers_brought_by(api: Api[object], in_production: InProduction) -> tuple[int, int]:
+def _fields_and_geysers_brought_by(
+    api: Api[object], in_production: InProduction, builds_not_begun: dict[int, int]
+) -> tuple[int, int]:
     """The mineral fields left and the geysers with no gas building at the expansion a townhall `in_production` stands
     at, or is to stand at: the expansion whose center the townhall covers. None of either for a townhall anywhere
-    else, and for anything but a townhall."""
+    else, and for anything but a townhall. `builds_not_begun` counts the townhalls not begun read so far of each
+    worker, by its id, and is counted up, so that a worker's second one reads its second order."""
     data = api.data.units[in_production.product]
     footprint = data.footprint
     if in_production.product not in UnitType.Townhall.type_ids or footprint is None:
         return 0, 0
-    built_at = _point_built_at(in_production, data.creation_ability)
+    built_at = _point_built_at(in_production, data.creation_ability, builds_not_begun)
     if built_at is None:
         return 0, 0
     covered = footprint.bounding_box(at=built_at)
-    gas_building_positions = {building.position for building in api.units.gas_buildings}
     for expansion in api.expansions:
         if expansion.center in covered:
-            free_geysers = sum(geyser.position not in gas_building_positions for geyser in expansion.geysers)
-            return len(expansion.mineral_fields.alive), free_geysers
+            return fields_and_free_geysers_of(api, expansion)
     return 0, 0
 
 
-def _point_built_at(in_production: InProduction, creation_ability: AbilityId | None) -> Point | None:
+def _point_built_at(
+    in_production: InProduction, creation_ability: AbilityId | None, builds_not_begun: dict[int, int]
+) -> Point | None:
     """Where the structure `in_production` stands, or for a build not begun, the point its worker's order of
-    `creation_ability` is aimed at. `None` where neither says."""
+    `creation_ability` is aimed at: the worker's first such order for the first of its builds read, as
+    `builds_not_begun` counts them, the second for the second. `None` where neither says."""
     if in_production.unit is not None:
         return in_production.unit.position
-    if in_production.producer is None:
+    worker = in_production.producer
+    if worker is None:
         return None
-    for order in in_production.producer.orders:
-        target = order.known_target
-        if order.ability == creation_ability and isinstance(target, Point):
-            return target
-    return None
+    read_before = builds_not_begun.get(worker.id, 0)
+    builds_not_begun[worker.id] = read_before + 1
+    points = [
+        target
+        for order in worker.orders
+        if order.ability == creation_ability and isinstance(target := order.known_target, Point)
+    ]
+    return points[read_before] if read_before < len(points) else None
 
 
 def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId, GameTime], list[ProducerActivity]]:

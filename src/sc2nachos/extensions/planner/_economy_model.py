@@ -21,22 +21,23 @@ class EconomyModel:
     there is, as if each could work anywhere at once. So a new worker mines from when it is done, even one that has to
     walk to another base first, and a new base's fields count from when its townhall is done.
 
-    Raises `ValueError` for a negative rate or count, or a rate above the one before it.
+    Raises `ValueError` for a negative rate or delay, or a rate above the one before it.
     """
 
+    # 2315 minerals in 180 seconds from 12 SCVs.
     minerals_per_miner_second: Sequence[float] = (2315 / 180 / 12,) * 2
     """The minerals each worker at a mineral field mines a second, one number for each worker a field takes, the first
     worker's first. The plan puts no more workers at a field than there are numbers. By default two workers a field,
-    each at the rate twelve SCVs speed mined the eight fields of Pylon's main: 2315 minerals in three minutes (in game,
-    build 75689)."""
+    each at the rate twelve SCVs speed mined a main's eight fields (in game)."""
+    # 780 vespene in 180 seconds from 4 SCVs, two a refinery, and 984 from 6, three a refinery.
     vespene_per_collector_second: Sequence[float] = (780 / 180 / 4, 780 / 180 / 4, (984 - 780) / 180 / 2)
     """The vespene each worker at a gas building collects a second, one number for each worker it takes, the first
-    worker's first. By default three workers, as SCVs speed collected at the two refineries of Pylon's main: two at each
-    took 780 vespene in three minutes, and three at each 984, so that a third adds about half of what each of the first
-    two brings (in game, build 75689)."""
+    worker's first. By default three workers: the first two each at the rate two SCVs a refinery speed collected, and
+    the third at what a third added, about half of that (in game)."""
+    # A MULE's 225 minerals for each 50 energy, at 0.7875 energy a second.
     mule_minerals_per_orbital_second: float = 225 / (50 / 0.7875)
-    """The minerals each orbital command's MULEs mine a second, by default a MULE's 225 for each 50 energy, an orbital
-    command gaining 0.7875 a second, the game's stated figures; 0 for a bot that spends the energy otherwise."""
+    """The minerals each orbital command's MULEs mine a second, by default a MULE's whole haul for each 50 energy an
+    orbital command gains (stated); 0 for a bot that spends the energy otherwise."""
     initial_harvest_delay: GameTime = GameTime(seconds=3)
     """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
     applies to a new worker on its first walk and to a worker moved between minerals and vespene, and not to a builder
@@ -91,8 +92,7 @@ def minerals_mined_a_second(
 
 def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
     """The seconds a worker walks to build each of `unit_types`, by `economy`: by default 10 to a townhall, about the
-    walk from a main's mineral line to its natural on every map of the pool, 8.0 to 10.9 seconds by the pathing
-    distance and an SCV's speed (corpus), and 6 to any other structure.
+    walk from a main's mineral line to its natural on the maps of the pool (corpus), and 6 to any other structure.
 
     Raises `ValueError` for a negative time from its `builder_walk_time`.
     """

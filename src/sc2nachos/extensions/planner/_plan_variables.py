@@ -259,7 +259,8 @@ class PlanVariables:
         elif item.unit_type is UnitTypeId.COMMAND_CENTER:
             most = float(len(self._new_bases))
         elif item.unit_type is UnitTypeId.REFINERY:
-            geysers_coming = sum(base.geysers for base in (*self._new_bases, *state.worker_builds))
+            geysers_of_new_bases = sum(base.geysers for base in self._new_bases)
+            geysers_coming = geysers_of_new_bases + sum(build.geysers for build in state.worker_builds)
             most = float(state.free_geysers + geysers_coming)
         elif item.morphed_from is not None:
             in_production = sum(build.unit_type is UnitTypeId.COMMAND_CENTER for build in state.worker_builds)

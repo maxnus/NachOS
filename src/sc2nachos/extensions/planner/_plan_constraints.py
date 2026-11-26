@@ -325,27 +325,28 @@ class PlanConstraints(PlanVariables):
             taken_in_all.add(taken_of_it, each_interval)
         self._program.constrain(taken_in_all.add_expression(done, -1.0), lower=0.0, upper=0.0)
         for position in range(1, len(bases)):
-            self._take_a_base_after_the_one_before(bases, taken, position)
+            self._take_a_base_after_the_one_before(
+                bases[position], taken[position], base_before=bases[position - 1], taken_before=taken[position - 1]
+            )
         return fields, geysers
 
     def _take_a_base_after_the_one_before(
-        self, bases: Sequence[NewBase], taken: Sequence[VariableBlock], position: int
+        self, base: NewBase, taken: VariableBlock, *, base_before: NewBase, taken_before: VariableBlock
     ) -> None:
-        """Hold the base at `position` no more taken than the one before it, in each interval. Where it brings more
-        fields or geysers than the one before, the solver would rather take a share of each than the earlier whole:
-        a whole variable an interval then holds that none of it is taken before all of the one before."""
+        """Hold `base`, of which `taken` is taken in each interval, no more taken than `base_before`, of which
+        `taken_before` is. Where it brings more fields or geysers than the one before, the solver would rather take a
+        share of each than the earlier whole: a whole variable an interval then holds that none of it is taken before
+        all of the one before."""
         intervals = self._interval_count
         each_interval = np.eye(intervals)
-        base, base_before = bases[position], bases[position - 1]
-        of_it, of_the_one_before = taken[position], taken[position - 1]
         if base.mineral_fields <= base_before.mineral_fields and base.geysers <= base_before.geysers:
-            more_of_it = RowExpression(intervals).add(of_it, each_interval).add(of_the_one_before, -each_interval)
+            more_of_it = RowExpression(intervals).add(taken, each_interval).add(taken_before, -each_interval)
             self._program.constrain(more_of_it, upper=0.0)
             return
         is_before_whole = self._program.add_variables(intervals, upper=1.0, integral=True)
-        any_of_it = RowExpression(intervals).add(of_it, each_interval).add(is_before_whole, -each_interval)
+        any_of_it = RowExpression(intervals).add(taken, each_interval).add(is_before_whole, -each_interval)
         self._program.constrain(any_of_it, upper=0.0)
-        not_whole = RowExpression(intervals).add(is_before_whole, each_interval).add(of_the_one_before, -each_interval)
+        not_whole = RowExpression(intervals).add(is_before_whole, each_interval).add(taken_before, -each_interval)
         self._program.constrain(not_whole, upper=0.0)
 
     def _constrain_add_ons_and_morphs(self) -> None:

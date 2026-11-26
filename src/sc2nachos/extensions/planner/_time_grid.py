@@ -113,7 +113,14 @@ class TimeGrid:
 
         Raises `ValueError` for a horizon not longer than 0, or infinite.
         """
-        return tuple(GameTime(seconds=seconds) for seconds in edge_seconds_of(self, horizon))
+        return tuple(on_a_whole_step(GameTime(seconds=seconds)) for seconds in edge_seconds_of(self, horizon))
+
+
+def on_a_whole_step(time: GameTime) -> GameTime:
+    """`time`, on a whole game step where it is within a millionth of one: a time counted in seconds lands a hair
+    beside the step it is meant for, 720.0000000000001 for 720."""
+    nearest_step = round(time.steps)
+    return GameTime(steps=nearest_step) if abs(time.steps - nearest_step) < 1e-6 else time
 
 
 def edge_seconds_of(grid: TimeGrid, horizon: GameTime) -> tuple[float, ...]:

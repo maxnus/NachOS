@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import numbers
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Self, final
@@ -40,6 +41,8 @@ class WeightCurve:
     """Its pieces in order, the first from a count of none. The last runs on, whatever count it says it ends at."""
 
     def __post_init__(self) -> None:
+        # A tuple, so that two curves of the same segments are equal and hash alike, whatever they were handed.
+        object.__setattr__(self, "segments", tuple(self.segments))
         self._validate()
 
     def _validate(self) -> None:
@@ -298,8 +301,14 @@ class Reward:
 
 
 def _weight_curve_of(weights: float | WeightCurve) -> WeightCurve:
-    """`weights` as a curve: itself, or for a number, every unit worth that much."""
-    return weights if isinstance(weights, WeightCurve) else WeightCurve.constant(float(weights))
+    """`weights` as a curve: itself, or for a number, every unit worth that much.
+
+    Raises `TypeError` for anything else, a list of segments among it."""
+    if isinstance(weights, WeightCurve):
+        return weights
+    if not isinstance(weights, (int, float, numbers.Real)):
+        raise TypeError(f"what units are worth is a number or a WeightCurve, not {weights!r}")
+    return WeightCurve.constant(float(weights))
 
 
 def _factor_at(factor_of: Callable[[GameTime], float] | None, time: GameTime, name: str) -> float:

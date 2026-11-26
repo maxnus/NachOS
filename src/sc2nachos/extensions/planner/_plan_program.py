@@ -13,6 +13,7 @@ from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgr
 from sc2nachos.extensions.planner._plan_constraints import PlanConstraints
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
+from sc2nachos.extensions.planner._time_grid import on_a_whole_step
 from sc2nachos.gamedata import Resources
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
@@ -211,11 +212,8 @@ class PlanProgram(PlanConstraints):
         )
 
     def _time_after(self, seconds: float) -> GameTime:
-        """The game time `seconds` after the plan's start: a whole game step where it is within a millionth of one,
-        since edges summed in seconds land a hair beside the step they are meant for."""
-        time = self._state.time + GameTime(seconds=seconds)
-        nearest_step = round(time.steps)
-        return GameTime(steps=nearest_step) if abs(time.steps - nearest_step) < 1e-6 else time
+        """The game time `seconds` after the plan's start, on a whole game step where it is meant for one."""
+        return on_a_whole_step(self._state.time + GameTime(seconds=seconds))
 
     def _planned_items(self, values: FloatArray) -> tuple[PlanItem, ...]:
         """Each item started, in order of start, those of one interval in the order of the items: of fractional starts,
@@ -225,7 +223,7 @@ class PlanProgram(PlanConstraints):
             made = item.made
             if made is None:
                 continue
-            duration = GameTime(seconds=item.build_seconds)
+            duration = on_a_whole_step(GameTime(seconds=item.build_seconds))
             whole = np.floor(values[self._starts_so_far[index].to_slice()] + 0.5)
             for interval, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._time_after(float(self._edges[interval]))
