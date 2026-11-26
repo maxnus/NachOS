@@ -262,7 +262,8 @@ class PlanVariables:
             geysers_coming = sum(base.geysers for base in (*self._new_bases, *state.worker_builds))
             most = float(state.free_geysers + geysers_coming)
         elif item.morphed_from is not None:
-            townhalls_coming = len(self._new_bases) + count_of(self._completions, UnitTypeId.COMMAND_CENTER)
+            in_production = sum(build.unit_type is UnitTypeId.COMMAND_CENTER for build in state.worker_builds)
+            townhalls_coming = len(self._new_bases) + in_production
             most = float(state.units.get(item.morphed_from, 0) + townhalls_coming)
         elif item.supply_used > 0:
             most = float(math.floor(SUPPLY_LIMIT / item.supply_used))
@@ -419,13 +420,3 @@ def _limits_by_counted_type(
         counted = model.counted_as(made) if isinstance(made, UnitTypeId) else made
         limits[counted] = min(float(limit), limits.get(counted, math.inf))
     return limits
-
-
-def values_of(block: VariableBlock, values: FloatArray) -> FloatArray:
-    """The values of `block`'s variables."""
-    return values[block.to_slice()]
-
-
-def count_of(completions: Sequence[tuple[UnitTypeId, float]], unit_type: UnitTypeId) -> int:
-    """How many of `completions` make `unit_type`."""
-    return sum(completion_type == unit_type for completion_type, _ in completions)

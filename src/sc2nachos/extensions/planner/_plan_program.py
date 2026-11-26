@@ -11,7 +11,7 @@ import numpy as np
 from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment, SolveReport
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression
 from sc2nachos.extensions.planner._plan_constraints import PlanConstraints
-from sc2nachos.extensions.planner._plan_variables import NewBase, values_of
+from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.gamedata import Resources
 from sc2nachos.gametime import GameTime
@@ -219,7 +219,7 @@ class PlanProgram(PlanConstraints):
             if made is None:
                 continue
             duration = GameTime(seconds=item.build_seconds)
-            whole = np.floor(values_of(self._starts_so_far[index], values) + 0.5)
+            whole = np.floor(values[self._starts_so_far[index].to_slice()] + 0.5)
             for interval, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._state.time + GameTime(seconds=float(self._edges[interval]))
                 is_fluid = not self._whole[index][interval]
@@ -246,7 +246,8 @@ class PlanProgram(PlanConstraints):
     def _planned_moments(self, values: FloatArray) -> list[PlanMoment]:
         """What the plan expects at each edge of the grid: the state's at the first, and at each other what the
         interval before it comes to at its end."""
-        minerals, vespene = values_of(self._minerals, values), values_of(self._vespene, values)
+        minerals = values[self._minerals.to_slice()]
+        vespene = values[self._vespene.to_slice()]
         state = self._state
         # What is collected by each edge: nothing more at the first, then each interval's income over its length.
         minerals_collected, vespene_collected = (

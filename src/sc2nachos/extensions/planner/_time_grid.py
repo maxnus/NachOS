@@ -98,9 +98,9 @@ class TimeGrid:
         return cls(segments=segments)
 
     @classmethod
-    def uniform(cls, interval: GameTime) -> Self:
-        """A grid of intervals all `interval` long."""
-        return cls(segments=[GridSegment(interval_length=interval, end=GameTime.INFINITE)])
+    def uniform(cls, interval_length: GameTime) -> Self:
+        """A grid of intervals all `interval_length` long."""
+        return cls(segments=[GridSegment(interval_length=interval_length, end=GameTime.INFINITE)])
 
     @property
     def segments(self) -> tuple[GridSegment, ...]:

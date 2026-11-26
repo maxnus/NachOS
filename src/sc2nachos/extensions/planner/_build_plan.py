@@ -100,10 +100,10 @@ class PlanDeviation:
 
     time: GameTime
     """The game time compared at."""
-    collected: Resources
-    """The minerals and vespene collected by then, the game's less the plan's."""
     resources: Resources
-    """The minerals and vespene in stock, the game's less the plan's."""
+    """The minerals and vespene in the bank, the game's less the plan's."""
+    collected: Resources
+    """The minerals and vespene collected from the game's start to `time`, the game's less the plan's."""
     units: Mapping[UnitTypeId, float]
     """The number of each unit type done and alive, the game's less the plan's: every type either counts."""
     upgrades: Mapping[UpgradeId, float]
@@ -200,8 +200,8 @@ class BuildPlan:
         upgrades = sorted(expected.upgrades.keys() | state.upgrades)
         return PlanDeviation(
             time=state.time,
-            collected=state.collected - expected.collected,
             resources=state.resources - expected.resources,
+            collected=state.collected - expected.collected,
             units={
                 unit_type: state.units.get(unit_type, 0) - expected.units.get(unit_type, 0.0)
                 for unit_type in unit_types
