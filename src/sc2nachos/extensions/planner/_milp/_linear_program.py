@@ -184,7 +184,7 @@ class LinearProgram:
         time and `node_limit` nodes of branching, each unlimited if `None`. The solver stops once it has proven its
         values within `relative_gap` of the best, relative to the objective. A program Gurobi refuses, as one larger
         than its licence allows, HiGHS solves within what is left of `time_limit`."""
-        form = self._matrix_form(objective)
+        form = self.to_matrix_form(objective)
         started = time.perf_counter()
         match solver:
             case Solver.GUROBI:
@@ -205,7 +205,7 @@ class LinearProgram:
         solution = maximize_with_highs(form, time_limit=remaining, node_limit=node_limit, relative_gap=relative_gap)
         return dataclasses.replace(solution, seconds=time.perf_counter() - started)
 
-    def _matrix_form(self, objective: RowExpression) -> MatrixForm:
+    def to_matrix_form(self, objective: RowExpression) -> MatrixForm:
         """The program as matrices, to maximize `objective`, a single row."""
         size = self.variable_count
         coefficients = np.zeros(size)

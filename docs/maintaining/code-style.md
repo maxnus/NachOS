@@ -22,6 +22,10 @@ codebases read alike. A new rule of style goes here, with an example from the co
   what it builds: `Footprint.square`, `Grid.zeros`. One that finds the instance at a position is named `at`:
   `Tile.at(point)`, the tile a point falls in. `of` names what selects part of a whole, `Units.of_type` and
   `AnyAreaEvent.of(area)`, or what reads something of a value, `_key_of`.
+- **A function that turns one kind of value into another names both**: `_highs_lp_to_matrix_form`, never
+  `_matrix_form_of`, and a method `to_` what it makes, `LinearProgram.to_matrix_form` as `BuildPlan.to_string`; a
+  classmethod of the kind it makes is `from_` the other, `PresolveOutcome.from_highs_status` (the owner, review of
+  #262).
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 
 ## Signatures

@@ -12,7 +12,7 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
-    from sc2nachos.extensions.planner._milp._solver import Solver
+    from sc2nachos.extensions.planner._milp import Solver
     from sc2nachos.extensions.planner._planner_state import PlannerState
 
 

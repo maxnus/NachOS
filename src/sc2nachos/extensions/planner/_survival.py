@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, final
 
 import numpy as np
 
-from sc2nachos.extensions.planner._milp._linear_program import FloatArray
+from sc2nachos.extensions.planner._milp import FloatArray
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
 from sc2nachos.gametime import GameTime, TimeFunction
 from sc2nachos.ids import UnitTypeId

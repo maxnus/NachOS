@@ -48,7 +48,7 @@ def maximize_with_gurobi(
     import gurobipy as gp
 
     started = time.perf_counter()
-    presolve = HighsPresolve(form, time_limit=time_limit)
+    presolve = HighsPresolve.run(form, time_limit=time_limit)
     presolved = presolve.presolved
     if presolved is None:
         message = f"HiGHS's presolve ended {presolve.outcome.value}"
@@ -100,7 +100,7 @@ def _maximize(form: MatrixForm, *, time_limit: float | None, node_limit: int | N
         model.setObjective(form.objective_coefficients @ variables + form.objective_constant, GRB.MAXIMIZE)
         _add_rows(model, variables, form.matrix, lower=form.row_lower, upper=form.row_upper)
         model.optimize()
-        message = _status_name_of(model.Status)
+        message = _gurobi_status_to_name(model.Status)
         if model.SolCount == 0:
             return Solution.none_found(seconds=model.Runtime, message=message, solver=Solver.GUROBI)
         return Solution(
@@ -132,7 +132,7 @@ def _add_rows(model: gp.Model, variables: gp.MVar, matrix: csr_array, *, lower: 
         model.addConstr(matrix[ranged] @ variables - ranges == 0)
 
 
-def _status_name_of(status: int) -> str:
+def _gurobi_status_to_name(status: int) -> str:
     """The name of Gurobi's status code `status`, as `OPTIMAL` or `TIME_LIMIT`."""
     from gurobipy import GRB
 

@@ -7,8 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
-from sc2nachos.extensions.planner._milp._gurobi import check_gurobi_starts
-from sc2nachos.extensions.planner._milp._solver import Solver
+from sc2nachos.extensions.planner._milp import Solver, check_gurobi_starts
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner_state import (

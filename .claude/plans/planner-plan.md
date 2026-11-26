@@ -469,7 +469,9 @@ file as it was at `807304c`.
     - **An enum, not solver classes** ("OK agreed"): settings, when one is needed, as a dictionary of the solver's own
       parameters beside it, `plan_now`'s limits winning. The dispatch is a `match` that ends in `assert_never`.
     - **HiGHS's presolve is a class, `HighsPresolve`**, and Gurobi a function on a `MatrixForm`, presolved or not; the
-      solver layer is a package of its own, `planner/_milp/`, the rest of the planner flat.
+      solver layer is a package of its own, `planner/_milp/`, the rest of the planner flat. From the second round:
+      `HighsPresolve.run` presolves and its constructor stores; `_milp` lists what the planner takes in its
+      `__init__`; and a conversion names both kinds, a rule of the code style now.
 
 ## Risks
 

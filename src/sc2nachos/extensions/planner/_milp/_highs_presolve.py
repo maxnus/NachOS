@@ -29,26 +29,51 @@ class PresolveOutcome(Enum):
     FAILED = "failed"
     """It failed otherwise."""
 
+    @classmethod
+    def from_highs_status(cls, status: highspy.HighsPresolveStatus) -> PresolveOutcome:
+        """The outcome HiGHS's presolve status says. Its enums are compared by value, not with `is`: highspy hands back
+        a new object for each."""
+        import highspy
+
+        outcomes = {
+            highspy.HighsPresolveStatus.kReduced: cls.REDUCED,
+            highspy.HighsPresolveStatus.kNotReduced: cls.REDUCED,
+            highspy.HighsPresolveStatus.kReducedToEmpty: cls.SOLVED,
+            highspy.HighsPresolveStatus.kInfeasible: cls.INFEASIBLE,
+            highspy.HighsPresolveStatus.kUnboundedOrInfeasible: cls.INFEASIBLE,
+            highspy.HighsPresolveStatus.kTimeout: cls.TIMED_OUT,
+        }
+        return next((outcome for kind, outcome in outcomes.items() if kind == status), cls.FAILED)
+
 
 @final
 class HighsPresolve:
-    """HiGHS's presolve of a program, done within `time_limit` seconds, `None` for no limit: the program it leaves, and
-    the postsolve that maps values of that program back to values of the program handed in."""
+    """HiGHS's presolve of a program, which `run` does: the program it leaves, and the postsolve that maps values of
+    that program back to values of the program handed in. `highs` is HiGHS as the presolve left it, which the
+    postsolve needs."""
 
     __slots__ = ("_highs", "_outcome", "_presolved")
 
-    def __init__(self, form: MatrixForm, *, time_limit: float | None) -> None:
+    def __init__(self, highs: highspy.Highs, *, outcome: PresolveOutcome, presolved: MatrixForm | None) -> None:
+        self._highs = highs
+        self._outcome = outcome
+        self._presolved = presolved
+
+    @classmethod
+    def run(cls, form: MatrixForm, *, time_limit: float | None) -> HighsPresolve:
+        """HiGHS's presolve of `form`, done within `time_limit` seconds, `None` for no limit."""
         import highspy
 
-        self._highs = highspy.Highs()
-        self._highs.setOptionValue("output_flag", False)
+        highs = highspy.Highs()
+        highs.setOptionValue("output_flag", False)
         if time_limit is not None:
-            self._highs.setOptionValue("time_limit", float(time_limit))
-        self._highs.passModel(_highs_program_of(form))
-        self._highs.presolve()
-        self._outcome = _outcome_of(self._highs.getModelPresolveStatus())
-        left_to_solve = self._outcome in (PresolveOutcome.REDUCED, PresolveOutcome.SOLVED)
-        self._presolved = _form_of(self._highs.getPresolvedLp()) if left_to_solve else None
+            highs.setOptionValue("time_limit", float(time_limit))
+        highs.passModel(_matrix_form_to_highs_lp(form))
+        highs.presolve()
+        outcome = PresolveOutcome.from_highs_status(highs.getModelPresolveStatus())
+        left_to_solve = outcome in (PresolveOutcome.REDUCED, PresolveOutcome.SOLVED)
+        presolved = _highs_lp_to_matrix_form(highs.getPresolvedLp()) if left_to_solve else None
+        return cls(highs, outcome=outcome, presolved=presolved)
 
     @property
     def outcome(self) -> PresolveOutcome:
@@ -80,7 +105,7 @@ class HighsPresolve:
         return np.asarray(postsolved.col_value, dtype=float)
 
 
-def _highs_program_of(form: MatrixForm) -> highspy.HighsLp:
+def _matrix_form_to_highs_lp(form: MatrixForm) -> highspy.HighsLp:
     """`form` as HiGHS takes a program, to minimize its objective's negative without its constant."""
     import highspy
 
@@ -106,23 +131,7 @@ def _highs_program_of(form: MatrixForm) -> highspy.HighsLp:
     return program
 
 
-def _outcome_of(status: highspy.HighsPresolveStatus) -> PresolveOutcome:
-    """The outcome HiGHS's presolve status says. Its enums are compared by value, not with `is`: highspy hands back a
-    new object for each."""
-    import highspy
-
-    outcomes = {
-        highspy.HighsPresolveStatus.kReduced: PresolveOutcome.REDUCED,
-        highspy.HighsPresolveStatus.kNotReduced: PresolveOutcome.REDUCED,
-        highspy.HighsPresolveStatus.kReducedToEmpty: PresolveOutcome.SOLVED,
-        highspy.HighsPresolveStatus.kInfeasible: PresolveOutcome.INFEASIBLE,
-        highspy.HighsPresolveStatus.kUnboundedOrInfeasible: PresolveOutcome.INFEASIBLE,
-        highspy.HighsPresolveStatus.kTimeout: PresolveOutcome.TIMED_OUT,
-    }
-    return next((outcome for kind, outcome in outcomes.items() if kind == status), PresolveOutcome.FAILED)
-
-
-def _form_of(program: highspy.HighsLp) -> MatrixForm:
+def _highs_lp_to_matrix_form(program: highspy.HighsLp) -> MatrixForm:
     """`program`, which minimizes, as a `MatrixForm` to maximize the negative of its objective."""
     import highspy
 
@@ -130,7 +139,7 @@ def _form_of(program: highspy.HighsLp) -> MatrixForm:
     return MatrixForm(
         objective_coefficients=-np.asarray(program.col_cost_, dtype=float),
         objective_constant=-float(program.offset_),
-        matrix=_matrix_of(program),
+        matrix=_highs_lp_to_csr_matrix(program),
         row_lower=np.asarray(program.row_lower_, dtype=float),
         row_upper=np.asarray(program.row_upper_, dtype=float),
         lower=np.asarray(program.col_lower_, dtype=float),
@@ -139,7 +148,7 @@ def _form_of(program: highspy.HighsLp) -> MatrixForm:
     )
 
 
-def _matrix_of(program: highspy.HighsLp) -> csr_array:
+def _highs_lp_to_csr_matrix(program: highspy.HighsLp) -> csr_array:
     """`program`'s rows' coefficients, a column to each variable."""
     import highspy
 
