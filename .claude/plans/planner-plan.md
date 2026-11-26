@@ -884,6 +884,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       where a grid of whole seconds gives 238. A plan's times are now on a whole step where they are within a millionth
       of one. Looked at and left: internal helpers returning two or three values as a tuple, `Planner.grid` being the
       one setting with a property, and `plan_now` returning `None` without the solver's reason.
+    - **My own review of the round** (the owner, 2026-11-26: "Ok do your review first"): the code-review skill at high
+      effort over the 16 commits since his first round found ten things, all in the round's own changes, and all are
+      fixed. `TimeGrid.edges` and a `PlanItem`'s `duration` were a hair beside their game steps, 720.0000000000001 for a
+      siege tank, and go through one helper with the plan's times. A `WeightCurve` of a list and one of a tuple were
+      unequal. `plan_now` counted taken geysers and built-on expansions: an expansion with a townhall on it, anyone's,
+      is now left out of `expansions`, and its free geysers alone count. A worker's second command center queued read
+      its first order. The economy's docstrings retold measurements that stood nowhere else, now in the game-behavior
+      page. The rest was a pair of values assigned at once, a bare `float()` error for a list of segments, overtaken
+      wording and two gaps in the tests.
     - **Answered with no change:** `deviation_of` stays on the plan, which holds what was expected, the state being
       plain values; `read_planner_state` stays a function behind `Planner.state()`, since it needs the planner's model;
       `LinearProgram` stays private until a second user shows what it should offer, and a maximum or an absolute value
