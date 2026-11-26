@@ -118,11 +118,11 @@ rows of the table below and a few sentences of the decisions, can be run again f
     `new_command_center_limit`, now one entry of it): a plan makes only what the reward values and what that needs, so
     the limits are for what the model adds itself, add-ons, the orbital command and expansions, and a bot that opts out
     by situation hands another mapping to that plan. The constructor keeps only how to solve: the grid, the limits and
-    the windows; the limits have since moved to `plan_now` (Open 18). Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to and the bonus
-    for it were `plan_now`'s `previous_plan` and `hysteresis_bonus` too (the owner, 2026-11-18, over the reward holding
-    them, and over the planner keeping to its own last plan, an input the bot would not see): they say how plans follow
-    one another, not what the bot wants, so a reward is built once and handed to every plan. Both are taken out
-    (decision 9), and go there again if they come back.
+    the windows; the limits have since moved to `plan_now` (Open 18). Workers stay pooled over every field and refinery
+    (Open 10). The plan a new one keeps to and the bonus for it were `plan_now`'s `previous_plan` and `hysteresis_bonus`
+    too (the owner, 2026-11-18, over the reward holding them, and over the planner keeping to its own last plan, an
+    input the bot would not see): they say how plans follow one another, not what the bot wants, so a reward is built
+    once and handed to every plan. Both are taken out (decision 9), and go there again if they come back.
 
 ## Measurements
 
