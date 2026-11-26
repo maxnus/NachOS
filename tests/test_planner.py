@@ -2762,7 +2762,7 @@ class TestPlanner:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        api = Api(extensions=Planner)
         plans: list[tuple[BuildPlan | None, BuildPlan]] = []
 
         @api.on(TurnEvent)
@@ -2773,7 +2773,10 @@ class TestPlanner:
                     before,
                     _plan_found(
                         api.extensions.plan_now(
-                            Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None), horizon=GameTime(seconds=60)
+                            Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None),
+                            horizon=GameTime(seconds=60),
+                            time_limit=None,
+                            node_limit=_NODE_LIMIT,
                         )
                     ),
                 )
@@ -2793,14 +2796,16 @@ class TestPlanner:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=lambda api: Planner(api, time_limit=1e-9))
+        api = Api(extensions=Planner)
         plans: list[BuildPlan | None] = []
 
         @api.on(TurnEvent)
         def plan_marines(_: TurnEvent) -> None:
             plans.append(
                 api.extensions.plan_now(
-                    Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None), horizon=GameTime(seconds=60)
+                    Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None),
+                    horizon=GameTime(seconds=60),
+                    time_limit=1e-9,
                 )
             )
 
@@ -2813,7 +2818,7 @@ class TestPlanner:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        api = Api(extensions=Planner)
         plans: list[BuildPlan | None] = []
 
         def find_no_plan(
@@ -2824,9 +2829,13 @@ class TestPlanner:
         @api.on(TurnEvent)
         def plan_marines_twice(_: TurnEvent) -> None:
             reward = Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None)
-            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60)))
+            plans.append(
+                api.extensions.plan_now(reward, horizon=GameTime(seconds=60), time_limit=None, node_limit=_NODE_LIMIT)
+            )
             monkeypatch.setattr(PlanProgram, "solve", find_no_plan)
-            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60)))
+            plans.append(
+                api.extensions.plan_now(reward, horizon=GameTime(seconds=60), time_limit=None, node_limit=_NODE_LIMIT)
+            )
 
         api.play(game.joined())
 
@@ -2896,9 +2905,6 @@ class TestPlanner:
     @pytest.mark.parametrize(
         "arguments",
         [
-            {"time_limit": 0.0},
-            {"node_limit": 0},
-            {"relative_gap": -1e-4},
             {"max_ignored_overrun": -0.1},
             {"max_ignored_overrun": 1.1},
             {"unlock_fraction": -0.1},
@@ -2907,9 +2913,6 @@ class TestPlanner:
             {"spendable_income_fraction": 1.1},
         ],
         ids=[
-            "a time limit of 0",
-            "a node limit of 0",
-            "a relative gap below 0",
             "an overrun ignored below 0",
             "an overrun ignored above 1",
             "an unlock fraction below 0",
@@ -2918,10 +2921,51 @@ class TestPlanner:
             "a spendable income fraction above 1",
         ],
     )
-    def test_a_limit_of_0_or_a_share_outside_0_to_1_raises(self, arguments: dict[str, Any]) -> None:
+    def test_a_share_outside_0_to_1_raises(self, arguments: dict[str, Any]) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)])
         with pytest.raises(ValueError):
             Api(extensions=lambda api: Planner(api, **arguments)).play(game.joined())
+
+    @pytest.mark.parametrize(
+        ("limits", "refused"),
+        [
+            ({"time_limit": 0.0}, "time limit"),
+            ({"node_limit": 0}, "node limit"),
+            ({"relative_gap": -1e-4}, "relative gap"),
+        ],
+        ids=["a time limit of 0", "a node limit of 0", "a relative gap below 0"],
+    )
+    def test_a_plan_asked_for_with_a_limit_of_0_or_a_negative_gap_raises(
+        self, limits: dict[str, Any], refused: str
+    ) -> None:
+        game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
+        api = Api(extensions=Planner)
+
+        @api.on(TurnEvent)
+        def plan_within_limits_it_refuses(_: TurnEvent) -> None:
+            api.extensions.plan_now(Reward(half_life=None), **limits)
+
+        with pytest.raises(ValueError, match=refused):
+            api.play(game.joined())
+
+    def test_a_plan_takes_its_own_time_limit(self) -> None:
+        """A billionth of a second finds no plan, and the default 3 seconds one, from the same planner."""
+        game = ScriptedGame(
+            [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
+        )
+        api = Api(extensions=Planner)
+        plans: list[BuildPlan | None] = []
+
+        @api.on(TurnEvent)
+        def plan_with_no_time_and_with_some(_: TurnEvent) -> None:
+            reward = Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None)
+            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), time_limit=1e-9))
+            plans.append(api.extensions.plan_now(reward, horizon=GameTime(seconds=60)))
+
+        api.play(game.joined())
+
+        assert plans[0] is None
+        assert plans[1] is not None
 
     def test_a_negative_loss_rate_raises(self) -> None:
         game = ScriptedGame([make_observation(0), make_observation(1)], data=shipped_game_data())
@@ -2941,7 +2985,7 @@ class TestPlanner:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        api = Api(extensions=Planner)
         plans: list[BuildPlan] = []
 
         @api.on(TurnEvent)
@@ -2949,7 +2993,9 @@ class TestPlanner:
             reward = Reward.weighted({UnitTypeId.SCV: 1.0}, half_life=None)
             constant_rate = TimeFunction(lambda _: 0.01)
             for loss_rates in ({}, {UnitTypeId.SCV: 0.01}, {UnitTypeId.SCV: constant_rate}):
-                plan = api.extensions.plan_now(reward, horizon=GameTime(seconds=10), loss_rates=loss_rates)
+                plan = api.extensions.plan_now(
+                    reward, horizon=GameTime(seconds=10), loss_rates=loss_rates, time_limit=None, node_limit=_NODE_LIMIT
+                )
                 plans.append(_plan_found(plan))
 
         api.play(game.joined())
@@ -2977,14 +3023,20 @@ class TestPlanner:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        api = Api(extensions=Planner)
         plans: list[BuildPlan] = []
 
         @api.on(TurnEvent)
         def plan_from_a_later_time(_: TurnEvent) -> None:
             state = dataclasses.replace(api.extensions.state(), time=GameTime(seconds=90))
             reward = Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None)
-            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=GameTime(seconds=60), state=state)))
+            plans.append(
+                _plan_found(
+                    api.extensions.plan_now(
+                        reward, horizon=GameTime(seconds=60), state=state, time_limit=None, node_limit=_NODE_LIMIT
+                    )
+                )
+            )
 
         api.play(game.joined())
 
@@ -2995,15 +3047,19 @@ class TestPlanner:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=lambda api: Planner(api, time_limit=None, node_limit=_NODE_LIMIT))
+        api = Api(extensions=Planner)
         plans: list[BuildPlan] = []
 
         @api.on(TurnEvent)
         def plan_scvs_twice(_: TurnEvent) -> None:
             reward = Reward.weighted({UnitTypeId.SCV: 1.0}, half_life=None)
             horizon = GameTime(seconds=40)
-            plans.append(_plan_found(api.extensions.plan_now(reward, horizon=horizon)))
-            limited_to_one_scv = api.extensions.plan_now(reward, horizon=horizon, start_limits={UnitTypeId.SCV: 1})
+            plans.append(
+                _plan_found(api.extensions.plan_now(reward, horizon=horizon, time_limit=None, node_limit=_NODE_LIMIT))
+            )
+            limited_to_one_scv = api.extensions.plan_now(
+                reward, horizon=horizon, start_limits={UnitTypeId.SCV: 1}, time_limit=None, node_limit=_NODE_LIMIT
+            )
             plans.append(_plan_found(limited_to_one_scv))
 
         api.play(game.joined())

@@ -106,15 +106,10 @@ class Planner:
       mine by the economy if every one mines, with its orbital commands' MULEs. `GameTime.INFINITE` keeps an item whole
       over any horizon. Longer times make a plan exact further ahead, and the solve slower.
 
-    The solve stops at `time_limit` seconds of wall-clock time, or after `node_limit` nodes of branching, each
-    unlimited if `None`: a node limit makes the plan the same on every machine, a time limit does not. Before either,
-    it stops once the plan is proven within `relative_gap` of the best there is, relative to what the plan is worth: by
-    default 0.0001, a hundredth of a percent. A larger gap ends the solve sooner with a plan that may be worth that
-    much less.
+    How long a solve may take is each `plan_now`'s to say.
 
-    Raises `ValueError` for a player of a race other than Terran, a `time_limit` or `node_limit` not above 0, a
-    negative `relative_gap`, or a `max_ignored_overrun`, an `unlock_fraction` or a `spendable_income_fraction` outside
-    0 to 1; and `NotPlayingError` if built before the game starts.
+    Raises `ValueError` for a player of a race other than Terran, or a `max_ignored_overrun`, an `unlock_fraction` or a
+    `spendable_income_fraction` outside 0 to 1; and `NotPlayingError` if built before the game starts.
     """
 
     __slots__ = (
@@ -122,10 +117,7 @@ class Planner:
         "_grid",
         "_max_ignored_overrun",
         "_model",
-        "_node_limit",
         "_plan",
-        "_relative_gap",
-        "_time_limit",
         "_fluid_after",
         "_spendable_income_fraction",
         "_unlock_fraction",
@@ -136,9 +128,6 @@ class Planner:
         api: Api[object],
         *,
         grid: TimeGrid | None = None,
-        time_limit: float | None = 3.0,
-        node_limit: int | None = None,
-        relative_gap: float = 1e-4,
         fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
         max_ignored_overrun: float = 0.25,
         unlock_fraction: float = 1.0,
@@ -146,12 +135,6 @@ class Planner:
     ) -> None:
         if api.player.race is not Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
-        if time_limit is not None and time_limit <= 0:
-            raise ValueError(f"a time limit must be above 0 seconds, not {time_limit}")
-        if node_limit is not None and node_limit <= 0:
-            raise ValueError(f"a node limit must be above 0, not {node_limit}")
-        if relative_gap < 0:
-            raise ValueError(f"the relative gap must not be negative, not {relative_gap}")
         if not 0 <= max_ignored_overrun <= 1:
             raise ValueError(f"the overrun ignored must be a share of an interval, 0 to 1, not {max_ignored_overrun}")
         if not 0 <= unlock_fraction <= 1:
@@ -160,9 +143,6 @@ class Planner:
             raise ValueError(f"the spendable income fraction must be 0 to 1, not {spendable_income_fraction}")
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
-        self._time_limit = time_limit
-        self._node_limit = node_limit
-        self._relative_gap = relative_gap
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
@@ -194,6 +174,9 @@ class Planner:
         loss_rates: Mapping[UnitTypeId, float | TimeDependent[float]] = _NO_LOSSES,
         start_limits: Mapping[UnitTypeId | UpgradeId, int] = _NO_LIMITS,
         expansions: Sequence[Expansion] = (),
+        time_limit: float | None = 3.0,
+        node_limit: int | None = None,
+        relative_gap: float = 1e-4,
     ) -> BuildPlan | None:
         """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
         `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing that
@@ -213,21 +196,26 @@ class Planner:
         left and the geysers of the first, and so on, and with none, the default, it starts no command center. A command
         center going up, or one an SCV is on its way to build, is not among them: the state holds what it brings, the
         fields and geysers of the expansion it stands at, or is aimed at, and nothing for one at no expansion. It solves
-        within the planner's limits, before it returns, and returns `None` if the solver finds no plan within them,
-        which leaves `plan` the one before.
+        before it returns, so a turn that plans is that much longer: for at most `time_limit` seconds of wall-clock
+        time, 3 by default, or `node_limit` nodes of branching, each unlimited if `None`. A node limit makes the plan
+        the same on every machine, a time limit does not. Before either, the solve stops once the plan is proven within
+        `relative_gap` of the best there is, relative to what the plan is worth: by default 0.0001, a hundredth of a
+        percent, and a larger gap ends the solve sooner with a plan that may be worth that much less. It returns `None`
+        if the solver finds no plan within its limits, which leaves `plan` the one before.
 
         Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a negative loss rate or start limit, a loss rate from a `TimeDependent` that is negative or not finite,
-        a negative time from `fluid_after` or from `economy`'s `builder_walk_time`, a factor from a term's `time_factor`
-        or `count_factor` that is negative or not finite, or a `state` holding a unit in production that Terran does not
-        make; `TypeError` for a loss rate that is neither a number nor gives one for each of many game steps, as a
-        function not in a `TimeFunction`; and `IndexError` from a loss rate that does not cover a step of the plan, as a
-        `TimeSeries` recorded for fewer.
+        than 0, a `time_limit` or `node_limit` not above 0, a negative `relative_gap`, loss rate or start limit, a loss
+        rate from a `TimeDependent` that is negative or not finite, a negative time from `fluid_after` or from
+        `economy`'s `builder_walk_time`, a factor from a term's `time_factor` or `count_factor` that is negative or not
+        finite, or a `state` holding a unit in production that Terran does not make; `TypeError` for a loss rate that is
+        neither a number nor gives one for each of many game steps, as a function not in a `TimeFunction`; and
+        `IndexError` from a loss rate that does not cover a step of the plan, as a `TimeSeries` recorded for fewer.
         """
         if any(not callable(rate) and rate < 0 for rate in loss_rates.values()):
             raise ValueError(f"loss rates must not be negative: {dict(loss_rates)}")
         if any(limit < 0 for limit in start_limits.values()):
             raise ValueError(f"start limits must not be negative: {dict(start_limits)}")
+        _check_solve_limits(time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
         edges = self._grid.edges(horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
         planned_from = self.state() if state is None else state
@@ -251,10 +239,20 @@ class Planner:
             unlock_fraction=self._unlock_fraction,
             spendable_income_fraction=self._spendable_income_fraction,
         )
-        plan = program.solve(time_limit=self._time_limit, node_limit=self._node_limit, relative_gap=self._relative_gap)
+        plan = program.solve(time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
         if plan is not None:
             self._plan = plan
         return plan
+
+
+def _check_solve_limits(*, time_limit: float | None, node_limit: int | None, relative_gap: float) -> None:
+    """Raise `ValueError` for a `time_limit` or a `node_limit` not above 0, or a negative `relative_gap`."""
+    if time_limit is not None and time_limit <= 0:
+        raise ValueError(f"a time limit must be above 0 seconds, not {time_limit}")
+    if node_limit is not None and node_limit <= 0:
+        raise ValueError(f"a node limit must be above 0, not {node_limit}")
+    if relative_gap < 0:
+        raise ValueError(f"the relative gap must not be negative, not {relative_gap}")
 
 
 def fluid_after_seconds_of(

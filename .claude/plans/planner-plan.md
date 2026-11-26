@@ -118,7 +118,7 @@ rows of the table below and a few sentences of the decisions, can be run again f
     `new_command_center_limit`, now one entry of it): a plan makes only what the reward values and what that needs, so
     the limits are for what the model adds itself, add-ons, the orbital command and expansions, and a bot that opts out
     by situation hands another mapping to that plan. The constructor keeps only how to solve: the grid, the limits and
-    the windows. Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to and the bonus
+    the windows; the limits have since moved to `plan_now` (Open 18). Workers stay pooled over every field and refinery (Open 10). The plan a new one keeps to and the bonus
     for it were `plan_now`'s `previous_plan` and `hysteresis_bonus` too (the owner, 2026-11-18, over the reward holding
     them, and over the planner keeping to its own last plan, an input the bot would not see): they say how plans follow
     one another, not what the bot wants, so a reward is built once and handed to every plan. Both are taken out
@@ -859,6 +859,15 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
     - **The long file** ("This file is quite long - can it be logically be broken down?"): he chose "Yes, four modules":
       `_survival.py`, `_plan_variables.py`, `_plan_constraints.py` and `_plan_program.py`, every method moved as it is,
       54 programs the same to the last bit before and after.
+    - **The solve's limits** (the owner, 2026-11-26: "Do you think we should allow the planner more time? E.g. 5 seconds
+      instead of 3? And should this be linked to the time at which we request a new plan?", then "Do you recommend
+      moving the time limit to the call?", and to moving `time_limit`, `node_limit` and `relative_gap`: "Yes all 3").
+      The three are `plan_now`'s, with the defaults they had, since they say when one solve may stop and a bot can
+      afford more at one call than at another; the constructor keeps what models the game. The default stays 3 seconds:
+      on the default grid over 5 minutes from a game's start and the two mid-game states, one run each, a reward of
+      three unit types is within 0.03% of the proven best after 1 s, and a wide one of 38 items is 1.8, 1.6 and 2.5%
+      short after 1 s, 1.7, 1.1 and 0.6% after 3, 0, 1.1 and 0.6% after 5 and 0, 0.9 and 0.1% after 8, proven in 3.5,
+      17.2 and 9.6 s. Linking the limit to the time between plans waits for phase 3, where the planner knows that time.
     - **Answered with no change:** `deviation_of` stays on the plan, which holds what was expected, the state being
       plain values; `read_planner_state` stays a function behind `Planner.state()`, since it needs the planner's model;
       `LinearProgram` stays private until a second user shows what it should offer, and a maximum or an absolute value

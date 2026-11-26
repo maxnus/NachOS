@@ -348,17 +348,18 @@ class ThreatMap:
   builds nothing mining, so a plan that keeps them pays nothing.
 
   `plan_now` solves before it returns, within 3 seconds of wall-clock time by default, so a turn that plans is that much
-  longer. `Planner(api, node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan
-  the same on every machine, for tests and recorded games. Before either limit the solver stops once the plan is proven
-  within `relative_gap` of the best, 0.0001 of what it is worth by default, and `Planner(api, relative_gap=...)` takes a
-  larger one for a faster solve. `Planner`'s docstring says what the model holds: the items from the game's data, pruned
-  to what the reward needs, the workers pooled over every field and refinery, the SCV away from the walk to a structure
-  through the build to the walk back, and starts on the first second of an interval of its `TimeGrid`, by default 34
-  game steps long at first, 1.5 seconds, and doubling every time the time from the plan's start doubles from 544 steps,
-  24 seconds. A worker's 272 steps are eight of the first intervals, so workers trained one after another start as far
-  apart as in the game. A build no interval divides is planned to the interval where one follows another: one that runs
-  into an interval by less than a quarter of it leaves the interval free, so marauders follow each other every 476 steps
-  for their 480, and one that runs further takes all of it, marines every 408 for their 400. `Planner(api,
+  longer. `plan_now(time_limit=...)` takes another limit for that one solve, a short one where a bot plans often.
+  `plan_now(node_limit=...)` stops the solver after so many nodes of branching instead, which makes a plan the same on
+  every machine, for tests and recorded games. Before either limit the solver stops once the plan is proven within
+  `relative_gap` of the best, 0.0001 of what it is worth by default, and `plan_now(relative_gap=...)` takes a larger one
+  for a faster solve. `Planner`'s docstring says what the model holds: the items from the game's data, pruned to what
+  the reward needs, the workers pooled over every field and refinery, the SCV away from the walk to a structure through
+  the build to the walk back, and starts on the first second of an interval of its `TimeGrid`, by default 34 game steps
+  long at first, 1.5 seconds, and doubling every time the time from the plan's start doubles from 544 steps, 24 seconds.
+  A worker's 272 steps are eight of the first intervals, so workers trained one after another start as far apart as in
+  the game. A build no interval divides is planned to the interval where one follows another: one that runs into an
+  interval by less than a quarter of it leaves the interval free, so marauders follow each other every 476 steps for
+  their 480, and one that runs further takes all of it, marines every 408 for their 400. `Planner(api,
   max_ignored_overrun=...)` takes another share of an interval, 0 for none: a higher one lets a plan start the next
   build up to that much of an interval before the game could.
 
