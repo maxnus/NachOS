@@ -442,12 +442,12 @@ class EnemyUnitLeftAreaEvent(AnyAreaEvent):
 
 
 class OwnUnitBecameIdleEvent(AnyUnitEvent):
-    """A finished unit of this player's has no orders, and none NachOS sent it that the observations may not show yet,
-    having had orders or such an order in the observation before, been unfinished or another side's, or not been
-    listed: a unit trained with no rally, a structure just finished, a worker whose mineral field ran out, a unit whose
-    order the game dropped, a unit a neural parasite just took over. One that holds no order, a larva, or a depot even
-    as it lowers (in game), gets it once. A sieged tank and a burrowed lurker hold the order that made the form, so
-    neither is idle in it (in game)."""
+    """A finished unit of this player's has no orders, and none NachOS sent it that the observations may not show yet
+    but what it carries out at once, a rally or a MULE, having had orders or such an order in the observation before,
+    been unfinished or another side's, or not been listed: a unit trained with no rally, a structure just finished, a
+    worker whose mineral field ran out, a unit whose order the game dropped, a unit a neural parasite just took over.
+    One that holds no order, a larva, or a depot even as it lowers (in game), gets it once. A sieged tank and a burrowed
+    lurker hold the order that made the form, so neither is idle in it (in game)."""
 
     unit: OwnUnit[Any]
 

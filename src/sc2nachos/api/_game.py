@@ -481,13 +481,17 @@ class _Game:
     def _units_become_idle(self) -> list[OwnUnit[Any]]:
         """The units of this player's that are idle now and were not at the update before, by
         `OwnUnitBecameIdleEvent`'s reckoning, in the order the tracker lists them. Every idle unit counts as newly so
-        when the update before was not looked at. Keeps the idle units for the next update: call it once an update."""
+        when the update before was not looked at. What a unit carries out at once, a rally or a MULE, leaves it idle.
+        Keeps the idle units for the next update: call it once an update."""
         update = self.tracker.last_changes.update
         before = self._idle_unit_ids.at(update - 1, default=frozenset())
+        orders = self.orders
         idle = [
             unit
             for unit in self.tracker.unit_tracker.present.own
-            if unit.is_complete and unit.is_idle and not self.orders.issued_to(unit, include_sent=True)
+            if unit.is_complete
+            and unit.is_idle
+            and all(orders._is_carried_out_at_once(order, unit) for order in orders.issued_to(unit, include_sent=True))
         ]
         self._idle_unit_ids = _Snapshot(frozenset(unit.id for unit in idle), update)
         return [unit for unit in idle if unit.id not in before]

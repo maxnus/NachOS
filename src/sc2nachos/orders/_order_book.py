@@ -32,8 +32,9 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
     from sc2nachos.units import Target
 
-# The observations after the one a turn read by which its orders show in a unit's orders: the next in a stepped game,
-# and the one after that on the ladder or in realtime (docs/reference/game-behavior/protocol.md).
+# The observations after the one a turn read by which its orders show in a unit's orders, and what it carries out at
+# once in its effect: the next in a stepped game, and the one after that on the ladder or in realtime
+# (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
 # The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
 # `UNLOAD`.
@@ -64,6 +65,7 @@ class OrderBook:
         "_issued_by_unit",
         "_last_sent",
         "_observations",
+        "_sent_at_once",
         "_sent_not_replacing",
         "_refusals",
         "_time",
@@ -85,6 +87,10 @@ class OrderBook:
         # research, an add-on or a morph, with the number of the observation its turn read, until the observations must
         # show it or an order replaces the unit's orders.
         self._sent_not_replacing: dict[int, list[tuple[IssuedOrder, int]]] = {}
+        # By unit id, each unqueued order the game took that the unit carries out at once, a stim, a rally or a MULE,
+        # with the number of the observation its turn read, until the observations must show its effect. An order
+        # that replaces the unit's orders leaves these, since the unit did both.
+        self._sent_at_once: dict[int, list[tuple[IssuedOrder, int]]] = {}
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
@@ -266,8 +272,9 @@ class OrderBook:
     def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[IssuedOrder, ...]:
         """The orders issued to `unit` so far this turn, in the order they were issued. Withdrawn orders are left out.
         With `include_sent`, first come the orders that went out to it lately and that the observations may not show
-        yet: the last one sent that replaced its orders, and those sent since that did not, queued ones, trains,
-        researches, add-ons and morphs, but not what it carries out at once.
+        yet: the last one sent that replaced its orders, those sent since that did not, queued ones, trains,
+        researches, add-ons and morphs, and then what it carries out at once, a stim, a rally or a MULE, whose effect
+        the observations may not show yet either, a stim's buff say.
 
         A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
         order a unit is given goes out.
@@ -325,12 +332,14 @@ class OrderBook:
         for unit in lost:
             self._last_sent.pop(unit.id, None)
             self._sent_not_replacing.pop(unit.id, None)
+            self._sent_at_once.pop(unit.id, None)
         recent = self._observations - _SHOWN_WITHIN + 1
-        for unit_id, sent in list(self._sent_not_replacing.items()):
-            if not (sent := [(order, sent_at) for order, sent_at in sent if sent_at >= recent]):
-                del self._sent_not_replacing[unit_id]
-            else:
-                self._sent_not_replacing[unit_id] = sent
+        for sent_by_unit in (self._sent_not_replacing, self._sent_at_once):
+            for unit_id, sent in list(sent_by_unit.items()):
+                if not (sent := [(order, sent_at) for order, sent_at in sent if sent_at >= recent]):
+                    del sent_by_unit[unit_id]
+                else:
+                    sent_by_unit[unit_id] = sent
 
     def _orders_to_send(
         self, issued: Sequence[IssuedOrder], forced: Collection[IssuedOrder]
@@ -378,16 +387,19 @@ class OrderBook:
 
     def _remember_sent(self, order: IssuedOrder, units: Sequence[OwnUnit[Any]]) -> None:
         """Record `order`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
-        replaces, unqueued, and otherwise one sent that does not replace them, unless the unit carries it out at
-        once."""
+        replaces, unqueued, one sent that the unit carries out at once, unqueued, and otherwise one sent that does not
+        replace them."""
         row = self._game_data.abilities.get(order.ability)
         for unit in units:
             behavior = _behavior_for(row, unit)
+            sent = (order, self._observations)
             if not order.queued and behavior is OrderBehavior.REPLACES:
-                self._last_sent[unit.id] = (order, self._observations)
+                self._last_sent[unit.id] = sent
                 self._sent_not_replacing.pop(unit.id, None)
-            elif order.queued or behavior is not OrderBehavior.KEEPS_ORDERS:
-                self._sent_not_replacing.setdefault(unit.id, []).append((order, self._observations))
+            elif not order.queued and behavior is OrderBehavior.KEEPS_ORDERS:
+                self._sent_at_once.setdefault(unit.id, []).append(sent)
+            else:
+                self._sent_not_replacing.setdefault(unit.id, []).append(sent)
 
     def _units_not_carrying_it_out(
         self, order: IssuedOrder, units: tuple[OwnUnit[Any], ...]
@@ -421,13 +433,22 @@ class OrderBook:
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[IssuedOrder]:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
-        replaced its orders, and those sent since that did not."""
+        replaced its orders, those sent since that did not, and those it carries out at once, whose effect may not
+        show yet."""
         orders = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
             orders.append(sent)
         recent = self._observations - _SHOWN_WITHIN + 1
         orders += [order for order, sent_at in self._sent_not_replacing.get(unit.id, ()) if sent_at >= recent]
+        orders += [order for order, sent_at in self._sent_at_once.get(unit.id, ()) if sent_at >= recent]
         return orders
+
+    def _is_carried_out_at_once(self, order: IssuedOrder, unit: OwnUnit[Any]) -> bool:
+        """Whether `unit` carries `order` out at once, leaving its orders as they were: unqueued, an ability its type
+        keeps its orders through."""
+        return not order.queued and _behavior_for(self._game_data.abilities.get(order.ability), unit) is (
+            OrderBehavior.KEEPS_ORDERS
+        )
 
     def _unit_is_at(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
         """Whether `unit`'s first order runs `ability` at `target`. A unit the last observation left out, in a

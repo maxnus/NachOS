@@ -149,7 +149,16 @@ def keep_the_rest_together(event: TurnEvent) -> None:
 A bot that ranks its orders keeps the rank of each unit's order itself, in a `UnitDict` say, and empties it at each
 turn's start: `issued_to` holds the turn's orders alone, but a `UnitDict` keeps a value until its unit dies.
 `issued_to(unit, include_sent=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
-in its orders yet: on the ladder an order can show two observations after it went out.
+in its orders yet: on the ladder an order can show two observations after it went out. That holds what the unit
+carries out at once too, a stim, a rally or a MULE, whose effect may not show yet either, so a bot that stims a
+marine without the buff stims it once:
+
+```python
+for marine in marines:
+    sent = api.orders.issued_to(marine, include_sent=True)
+    if not marine.has_buff(BuffId.MARINE_STIMMED) and not any(order.ability is AbilityId.STIM for order in sent):
+        marine.issue(AbilityId.STIM)
+```
 
 **An order a unit is already carrying out is not sent to it.** In game, an unqueued order equal to a unit's first
 is answered `SUCCESS` and carries nothing out, but drops what the unit had queued behind it. So when the turn is sent,
@@ -168,9 +177,10 @@ which goes out regardless.
 **What a structure makes is not left out that way.** A train or a research goes behind what the structure is making
 (in game), so one given every turn goes out every turn, and the game queues each and charges it then, up to 5, or 8
 with a reactor, answering the rest `QueueIsFull`. A bot that wants one at a time trains at a structure that is idle
-and that `issued_to(unit, include_sent=True)` shows nothing sent to. A morph or an add-on given to a structure making
-something is refused `NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in
-game): give it again once the structure is idle on the ground.
+and that `issued_to(unit, include_sent=True)` shows no train sent to: a rally or a MULE sent lately shows there too,
+and the structure is idle all the same. A morph or an add-on given to a structure making something is refused
+`NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in game): give it again once
+the structure is idle on the ground.
 
 ## Orders sent together
 

@@ -628,14 +628,33 @@ class TestOneOrderAUnitATurn:
 
         assert game.book.issued_to(game.own(1), include_sent=True) == ()
 
-    def test_include_sent_leaves_out_what_a_unit_carries_out_at_once(self) -> None:
+    def test_include_sent_keeps_what_a_unit_carries_out_at_once_while_its_effect_may_not_show(self) -> None:
+        """A stim's buff, like an order, may show an observation late, so a handler that stims a marine while
+        `issued_to` and its buffs show nothing would stim it twice on the ladder."""
         game = _Game([ActionResult.SUCCESS])
-        game.observe(0, _barracks(1))
-        game.book.issue(game.own(1), _RALLY, target=(20.0, 21.0))
+        game.observe(0, _marine(1))
+        order = game.book.issue(game.own(1), _STIM)
         game.flush()
-        game.observe(16, _barracks(1))
+        game.observe(16, _marine(1))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+
+        game.observe(32, _marine(1))
 
         assert game.book.issued_to(game.own(1), include_sent=True) == ()
+
+    def test_include_sent_keeps_what_a_unit_carried_out_at_once_through_an_order_that_replaces_its_orders(
+        self,
+    ) -> None:
+        """A marine given a stim and a move does both, and the move replaces neither the stim nor its buff."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        stim = game.book.issue(game.own(1), _STIM)
+        move = game.book.issue(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1))
+
+        assert game.book.issued_to(game.own(1), include_sent=True) == (move, stim)
 
 
 class TestAnOrderAUnitIsAlreadyCarryingOut:
