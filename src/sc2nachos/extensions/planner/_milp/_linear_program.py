@@ -14,10 +14,10 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import coo_array, csr_array
 
-from sc2nachos.extensions.planner._gurobi import maximize_with_gurobi
-from sc2nachos.extensions.planner._highs import maximize_with_highs
-from sc2nachos.extensions.planner._matrix_form import FloatArray, MatrixForm, Solution
-from sc2nachos.extensions.planner._solver import Solver
+from sc2nachos.extensions.planner._milp._gurobi import maximize_with_gurobi
+from sc2nachos.extensions.planner._milp._highs import maximize_with_highs
+from sc2nachos.extensions.planner._milp._matrix_form import FloatArray, MatrixForm, Solution
+from sc2nachos.extensions.planner._milp._solver import Solver
 
 
 @final

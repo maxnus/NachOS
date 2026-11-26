@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, final
 import numpy as np
 from scipy.sparse import csc_array, csr_array
 
-from sc2nachos.extensions.planner._matrix_form import FloatArray, MatrixForm
+from sc2nachos.extensions.planner._milp._matrix_form import FloatArray, MatrixForm
 
 if TYPE_CHECKING:
     import highspy

@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import csr_array
 
-from sc2nachos.extensions.planner._solver import Solver
+from sc2nachos.extensions.planner._milp._solver import Solver
 
 type FloatArray = NDArray[np.float64]
 

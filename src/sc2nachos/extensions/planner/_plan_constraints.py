@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from sc2nachos.extensions.planner._linear_program import FloatArray, RowExpression, VariableBlock
+from sc2nachos.extensions.planner._milp._linear_program import FloatArray, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._plan_variables import NewBase, PlanVariables, WorkerTier
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE

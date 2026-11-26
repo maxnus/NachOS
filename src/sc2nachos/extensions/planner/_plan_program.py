@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, final
 import numpy as np
 
 from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment, SolveReport
-from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression
+from sc2nachos.extensions.planner._milp._linear_program import FloatArray, LinearProgram, RowExpression
+from sc2nachos.extensions.planner._milp._solver import Solver
 from sc2nachos.extensions.planner._plan_constraints import PlanConstraints
 from sc2nachos.extensions.planner._plan_variables import NewBase
-from sc2nachos.extensions.planner._solver import Solver
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import on_a_whole_step
 from sc2nachos.gamedata import Resources

@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 from loguru import logger
 
-from sc2nachos.extensions.planner._highs_presolve import HighsPresolve
-from sc2nachos.extensions.planner._matrix_form import FloatArray, MatrixForm, Solution
-from sc2nachos.extensions.planner._solver import Solver
+from sc2nachos.extensions.planner._milp._highs_presolve import HighsPresolve
+from sc2nachos.extensions.planner._milp._matrix_form import FloatArray, MatrixForm, Solution
+from sc2nachos.extensions.planner._milp._solver import Solver
 
 if TYPE_CHECKING:
     import gurobipy as gp

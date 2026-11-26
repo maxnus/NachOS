@@ -7,8 +7,8 @@ import time
 import numpy as np
 from scipy.optimize import milp
 
-from sc2nachos.extensions.planner._matrix_form import MatrixForm, Solution
-from sc2nachos.extensions.planner._solver import Solver
+from sc2nachos.extensions.planner._milp._matrix_form import MatrixForm, Solution
+from sc2nachos.extensions.planner._milp._solver import Solver
 
 
 def maximize_with_highs(

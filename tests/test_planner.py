@@ -36,13 +36,13 @@ from sc2nachos.extensions.planner import (
     WeightCurve,
     WeightSegment,
     WorkerBuild,
-    _gurobi,
 )
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
-from sc2nachos.extensions.planner._highs import maximize_with_highs
-from sc2nachos.extensions.planner._highs_presolve import HighsPresolve, PresolveOutcome
-from sc2nachos.extensions.planner._linear_program import LinearProgram, RowExpression
-from sc2nachos.extensions.planner._matrix_form import Solution
+from sc2nachos.extensions.planner._milp import _gurobi
+from sc2nachos.extensions.planner._milp._highs import maximize_with_highs
+from sc2nachos.extensions.planner._milp._highs_presolve import HighsPresolve, PresolveOutcome
+from sc2nachos.extensions.planner._milp._linear_program import LinearProgram, RowExpression
+from sc2nachos.extensions.planner._milp._matrix_form import Solution
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of, new_bases_of
@@ -2732,7 +2732,7 @@ class TestSolvers:
         def refuse_late(*_: object, **__: object) -> None:
             time.sleep(0.02)
 
-        monkeypatch.setattr("sc2nachos.extensions.planner._linear_program.maximize_with_gurobi", refuse_late)
+        monkeypatch.setattr("sc2nachos.extensions.planner._milp._linear_program.maximize_with_gurobi", refuse_late)
         program, worth = _dense_program(10)
         solution = program.maximize(worth, solver=Solver.GUROBI, time_limit=0.01, node_limit=None, relative_gap=1e-4)
 
