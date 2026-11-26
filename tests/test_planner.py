@@ -35,6 +35,7 @@ from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
+from sc2nachos.extensions.planner._time_grid import edge_seconds_of
 from sc2nachos.gametime import Interpolation, TimeCurve, TimeDependent, TimeFunction, TimeSeries
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
@@ -94,7 +95,7 @@ def _best_plan(
     program = PlanProgram(
         items=items,
         model=_TERRAN_MODEL,
-        edges=grid.edges(GameTime(seconds=horizon_seconds)),
+        edges=edge_seconds_of(grid, GameTime(seconds=horizon_seconds)),
         state=state,
         reward=reward,
         economy=economy,
@@ -163,7 +164,7 @@ def _start_seconds_of_units_done_in_time(plan: BuildPlan, unit_type: UnitTypeId)
 
 class TestTimeGrid:
     def test_the_doubling_grid_runs_34_step_intervals_to_544_steps_doubling_to_544_steps_57_to_10_minutes(self) -> None:
-        edges = [GameTime(seconds=edge).steps for edge in TimeGrid.doubling().edges(GameTime(seconds=600))]
+        edges = [edge.steps for edge in TimeGrid.doubling().edges(GameTime(seconds=600))]
         widths = [later - earlier for earlier, later in itertools.pairwise(edges)]
 
         assert len(widths) == 57
@@ -175,7 +176,7 @@ class TestTimeGrid:
 
     def test_a_worker_takes_a_whole_number_of_the_doubling_grids_intervals_while_they_are_shorter_than_it(self) -> None:
         worker_steps = GameTime(seconds=_TERRAN_MODEL.unit_items[UnitTypeId.SCV].build_seconds).steps
-        edges = [GameTime(seconds=edge).steps for edge in TimeGrid.doubling().edges(GameTime(seconds=600))]
+        edges = [edge.steps for edge in TimeGrid.doubling().edges(GameTime(seconds=600))]
 
         assert worker_steps == pytest.approx(272)
         for one_after_another in range(17):
@@ -185,14 +186,14 @@ class TestTimeGrid:
         grid = TimeGrid.doubling(
             initial_interval_length=GameTime(seconds=2), initial_interval_count=22, max_interval_doublings=4
         )
-        edges = grid.edges(GameTime(seconds=600))
+        edges = [edge.seconds for edge in grid.edges(GameTime(seconds=600))]
         widths = [later - earlier for earlier, later in itertools.pairwise(edges)]
 
         assert len(widths) == 63
-        assert edges[:3] == (0.0, 2.0, 4.0)
-        assert edges[22:24] == (44.0, 48.0)
-        assert edges[-3:] == (544.0, 576.0, 600.0)
-        assert sorted(set(widths)) == [2.0, 4.0, 8.0, 16.0, 24.0, 32.0]
+        assert edges[:3] == pytest.approx([0.0, 2.0, 4.0])
+        assert edges[22:24] == pytest.approx([44.0, 48.0])
+        assert edges[-3:] == pytest.approx([544.0, 576.0, 600.0])
+        assert sorted({round(width, 6) for width in widths}) == [2.0, 4.0, 8.0, 16.0, 24.0, 32.0]
 
     def test_a_doubling_grid_of_no_doublings_is_uniform(self) -> None:
         grid = TimeGrid.doubling(initial_interval_length=GameTime(seconds=5), max_interval_doublings=0)
@@ -221,11 +222,13 @@ class TestTimeGrid:
                 GridSegment(interval_length=GameTime(seconds=4), end=GameTime.INFINITE),
             ]
         )
-        assert grid.edges(GameTime(seconds=33)) == (0.0, 10.0, 20.0, 24.0, 28.0, 32.0, 33.0)
+        edges = [edge.seconds for edge in grid.edges(GameTime(seconds=33))]
+        assert edges == pytest.approx([0.0, 10.0, 20.0, 24.0, 28.0, 32.0, 33.0])
 
     def test_past_the_last_segment_one_interval_runs_to_the_horizon(self) -> None:
         grid = TimeGrid(segments=[GridSegment(interval_length=GameTime(seconds=10), end=GameTime(seconds=20))])
-        assert grid.edges(GameTime(seconds=50)) == (0.0, 10.0, 20.0, 50.0)
+        edges = [edge.seconds for edge in grid.edges(GameTime(seconds=50))]
+        assert edges == pytest.approx([0.0, 10.0, 20.0, 50.0])
 
     @pytest.mark.parametrize(
         "segments",
@@ -874,7 +877,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 2, UnitTypeId.TECH_LAB_BARRACKS: 2},
             mineral_fields=0,
         )
-        air = RewardTerm.weight({UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 0.0}, 1.0, end_count=10.0)
+        air = RewardTerm.weighted({UnitTypeId.MARINE: 1.0, UnitTypeId.MARAUDER: 0.0}, WeightCurve.up_to(1.0, 10.0))
         plan = _best_plan(
             state, Reward.weighted({UnitTypeId.MARAUDER: 0.01}, terms=[air], half_life=None), horizon_seconds=40
         )
@@ -885,7 +888,7 @@ class TestKnownPlans:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        floor = RewardTerm.weight(UnitTypeId.MARINE, 10.0, end_count=2.0, start=GameTime(seconds=36))
+        floor = RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(10.0, 2.0), start=GameTime(seconds=36))
 
         without = _best_plan(state, Reward.weighted({UnitTypeId.SUPPLY_DEPOT: 1.0}, half_life=None), horizon_seconds=40)
         held = _best_plan(
@@ -925,6 +928,35 @@ class TestKnownPlans:
         assert curved.reward == pytest.approx(weighted.reward)
         assert len(_start_seconds_of_units_done_in_time(curved, UnitTypeId.MARINE)) > 3
 
+    @pytest.mark.parametrize(("end_steps", "worth_steps"), [(238, 204), (272, 238), (290, 272)])
+    def test_on_the_default_grid_a_term_that_ends_on_an_edge_is_worth_nothing_in_the_interval_ending_there(
+        self, end_steps: int, worth_steps: int
+    ) -> None:
+        """Ten marines worth 1 a second until a game step, on intervals of 34 steps: each interval counts what its end
+        holds, so one that ends as the term does counts nothing, as on a grid of whole seconds. The edges, summed in
+        seconds, fall a hair short of their steps, which must not let that interval in."""
+        state = _game_start(minerals=0.0, units={UnitTypeId.MARINE: 10}, mineral_fields=0, supply_used=10.0)
+        reward = Reward(
+            terms=[RewardTerm.weighted(UnitTypeId.MARINE, 1.0, end=GameTime(steps=end_steps))],
+            half_life=None,
+            resource_weight=0.0,
+        )
+        plan = _best_plan(state, reward, horizon_seconds=30, grid=TimeGrid.doubling())
+
+        assert plan.reward == pytest.approx(10 * GameTime(steps=worth_steps).seconds)
+
+    def test_on_the_default_grid_a_plans_times_are_whole_game_steps(self) -> None:
+        plan = _best_plan(
+            _game_start(),
+            Reward.weighted({UnitTypeId.SCV: 1.0}, half_life=None),
+            horizon_seconds=60,
+            grid=TimeGrid.doubling(),
+        )
+
+        assert all(interval.start.time.is_integer() for interval in plan.intervals)
+        assert all(planned.start.is_integer() for planned in plan.items)
+        assert plan.intervals[8].start.time == GameTime(steps=272)
+
     def test_a_term_that_ends_where_another_starts_buys_for_that_time(self) -> None:
         """One marine to afford, which costs while it is alive before 20 seconds and is worth having from then: it
         starts at 2, to be done at 20, where one worth the same throughout starts at once."""
@@ -932,8 +964,8 @@ class TestKnownPlans:
             minerals=50.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
         from_20_seconds = [
-            RewardTerm.weight(UnitTypeId.MARINE, -1.0, end=GameTime(seconds=20)),
-            RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=20)),
+            RewardTerm.weighted(UnitTypeId.MARINE, -1.0, end=GameTime(seconds=20)),
+            RewardTerm.weighted(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=20)),
         ]
         throughout = _best_plan(state, Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None), horizon_seconds=40)
         late = _best_plan(state, Reward(terms=from_20_seconds, half_life=None), horizon_seconds=40)
@@ -947,7 +979,7 @@ class TestKnownPlans:
         state = _game_start(
             minerals=50.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        up_to_40_seconds = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end=GameTime(seconds=40))
+        up_to_40_seconds = RewardTerm.weighted(UnitTypeId.MARINE, 1.0, end=GameTime(seconds=40))
         plan = _best_plan(state, Reward(terms=[up_to_40_seconds], half_life=None), horizon_seconds=80)
 
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
@@ -964,8 +996,8 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
             mineral_fields=0,
         )
-        one_marine = RewardTerm.weight(
-            UnitTypeId.MARINE, 1.0, end_count=1.0, start=GameTime(seconds=20), end=GameTime(seconds=30)
+        one_marine = RewardTerm.weighted(
+            UnitTypeId.MARINE, WeightCurve.up_to(1.0, 1.0), start=GameTime(seconds=20), end=GameTime(seconds=30)
         )
         plan = _best_plan(state, Reward(terms=[one_marine], half_life=None), horizon_seconds=40)
 
@@ -976,7 +1008,7 @@ class TestKnownPlans:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        too_late = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, start=GameTime(seconds=60))
+        too_late = RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0), start=GameTime(seconds=60))
         plan = _best_plan(state, Reward(terms=[too_late], half_life=None), horizon_seconds=40)
 
         assert plan.items == ()
@@ -1004,7 +1036,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1},
             mineral_fields=0,
         )
-        rising = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=a_tenth_of_the_seconds_since_100)
+        rising = RewardTerm.weighted(UnitTypeId.MARINE, 1.0, time_factor=a_tenth_of_the_seconds_since_100)
         plan = _best_plan(state, Reward(terms=[rising], half_life=None), horizon_seconds=40)
 
         assert _start_seconds(plan, UnitTypeId.MARINE) == [0.0]
@@ -1019,10 +1051,9 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
             mineral_fields=0,
         )
-        one_marine = RewardTerm.weight(
+        one_marine = RewardTerm.weighted(
             UnitTypeId.MARINE,
-            1.0,
-            end_count=1.0,
+            WeightCurve.up_to(1.0, 1.0),
             start=GameTime(seconds=20),
             end=GameTime(seconds=30),
             time_factor=lambda _: 3.0,
@@ -1036,7 +1067,7 @@ class TestKnownPlans:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        never = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, time_factor=lambda _: 0.0)
+        never = RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0), time_factor=lambda _: 0.0)
         plan = _best_plan(state, Reward(terms=[never], half_life=None), horizon_seconds=40)
 
         assert plan.items == ()
@@ -1046,7 +1077,7 @@ class TestKnownPlans:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        falling = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda time: 1 - time.seconds / 20)
+        falling = RewardTerm.weighted(UnitTypeId.MARINE, 1.0, time_factor=lambda time: 1 - time.seconds / 20)
         with pytest.raises(ValueError, match="time factor"):
             _best_plan(state, Reward(terms=[falling], half_life=None), horizon_seconds=40)
 
@@ -1055,8 +1086,8 @@ class TestKnownPlans:
         ends of the intervals of 2 seconds, that is 0.4, 0.8 and so on to 6 at 30 seconds, 48 in all, and all 6 at
         each of the five ends after, each over its 2 seconds."""
         state = _game_start(minerals=0.0, supply_used=6.0, units={UnitTypeId.MARINE: 6}, mineral_fields=0)
-        more_wanted = RewardTerm.weight(
-            UnitTypeId.MARINE, 1.0, end_count=1.0, count_factor=lambda time: time.seconds / 5
+        more_wanted = RewardTerm.weighted(
+            UnitTypeId.MARINE, WeightCurve.up_to(1.0, 1.0), count_factor=lambda time: time.seconds / 5
         )
         plan = _best_plan(state, Reward(terms=[more_wanted], half_life=None), horizon_seconds=40)
 
@@ -1071,8 +1102,8 @@ class TestKnownPlans:
         one, two = (
             _best_plan(state, Reward(terms=[wanted], half_life=None), horizon_seconds=40)
             for wanted in (
-                RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=1.0),
-                RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=1.0, count_factor=lambda _: 2.0),
+                RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 1.0)),
+                RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 1.0), count_factor=lambda _: 2.0),
             )
         )
 
@@ -1086,8 +1117,8 @@ class TestKnownPlans:
         with_one, without = (
             _best_plan(state, Reward(terms=[each_worth_one], half_life=None), horizon_seconds=40)
             for each_worth_one in (
-                RewardTerm.weight(UnitTypeId.MARINE, 1.0, count_factor=lambda _: 3.0),
-                RewardTerm.weight(UnitTypeId.MARINE, 1.0),
+                RewardTerm.weighted(UnitTypeId.MARINE, 1.0, count_factor=lambda _: 3.0),
+                RewardTerm.weighted(UnitTypeId.MARINE, 1.0),
             )
         )
 
@@ -1107,14 +1138,13 @@ class TestKnownPlans:
         required, without = (
             _best_plan(state, Reward(terms=[wanted], half_life=None), horizon_seconds=40)
             for wanted in (
-                RewardTerm.weight(
+                RewardTerm.weighted(
                     UnitTypeId.MARINE,
-                    1.0,
-                    end_count=2.0,
+                    WeightCurve.up_to(1.0, 2.0),
                     count_factor=lambda _: 4.0,
                     requirements=[UpgradeId.COMBAT_SHIELD],
                 ),
-                RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=8.0),
+                RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 8.0)),
             )
         )
 
@@ -1125,8 +1155,8 @@ class TestKnownPlans:
         state = _game_start(
             minerals=500.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
-        fewer_wanted = RewardTerm.weight(
-            UnitTypeId.MARINE, 1.0, end_count=4.0, count_factor=lambda time: 1 - time.seconds / 20
+        fewer_wanted = RewardTerm.weighted(
+            UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0), count_factor=lambda time: 1 - time.seconds / 20
         )
         with pytest.raises(ValueError, match="count factor"):
             _best_plan(state, Reward(terms=[fewer_wanted], half_life=None), horizon_seconds=40)
@@ -1137,7 +1167,8 @@ class TestKnownPlans:
             minerals=1000.0, supply_used=0.0, supply_cap=100.0, units={UnitTypeId.BARRACKS: 1}, mineral_fields=0
         )
         halves = Reward(
-            terms=[RewardTerm.weight(UnitTypeId.MARINE, 0.5), RewardTerm.weight(UnitTypeId.MARINE, 0.5)], half_life=None
+            terms=[RewardTerm.weighted(UnitTypeId.MARINE, 0.5), RewardTerm.weighted(UnitTypeId.MARINE, 0.5)],
+            half_life=None,
         )
         in_two, in_one = (
             _best_plan(state, reward, horizon_seconds=40)
@@ -1160,7 +1191,7 @@ class TestKnownPlans:
             mineral_fields=0,
         )
         with_the_shield = Reward(
-            terms=[RewardTerm.weight(UnitTypeId.MARINE, 1.0, requirements=[UpgradeId.COMBAT_SHIELD])],
+            terms=[RewardTerm.weighted(UnitTypeId.MARINE, 1.0, requirements=[UpgradeId.COMBAT_SHIELD])],
             half_life=None,
         )
         plan = _best_plan(state, with_the_shield, horizon_seconds=120, fluid_after=_whole_over_any_horizon)
@@ -1181,7 +1212,7 @@ class TestKnownPlans:
             mineral_fields=0,
         )
         with_the_shield = Reward(
-            terms=[RewardTerm.weight(UnitTypeId.MARINE, 1.0, requirements=[UpgradeId.COMBAT_SHIELD])],
+            terms=[RewardTerm.weighted(UnitTypeId.MARINE, 1.0, requirements=[UpgradeId.COMBAT_SHIELD])],
             half_life=None,
         )
         plan = _best_plan(state, with_the_shield, horizon_seconds=120, fluid_after=lambda _: GameTime.ZERO)
@@ -1202,7 +1233,7 @@ class TestKnownPlans:
             upgrades=frozenset({UpgradeId.COMBAT_SHIELD}),
         )
         with_the_shield = Reward(
-            terms=[RewardTerm.weight(UnitTypeId.MARINE, 1.0, requirements=[UpgradeId.COMBAT_SHIELD])],
+            terms=[RewardTerm.weighted(UnitTypeId.MARINE, 1.0, requirements=[UpgradeId.COMBAT_SHIELD])],
             half_life=None,
         )
         required, weighted = (
@@ -1258,7 +1289,9 @@ class TestKnownPlans:
             units={UnitTypeId.STARPORT: 1, UnitTypeId.MARINE: 24},
             mineral_fields=0,
         )
-        healed = RewardTerm.combination([{UnitTypeId.MEDIVAC: 8.0}, {UnitTypeId.MARINE: 1.0}], 1.0, end_count=16.0)
+        healed = RewardTerm.combination(
+            [{UnitTypeId.MEDIVAC: 8.0}, {UnitTypeId.MARINE: 1.0}], WeightCurve.up_to(1.0, 16.0)
+        )
         plan = _best_plan(state, Reward(terms=[healed], half_life=None), horizon_seconds=100)
 
         assert _start_seconds(plan, UnitTypeId.MEDIVAC) == [0.0, 30.0]
@@ -1616,7 +1649,7 @@ class TestFluidAfter:
             program = PlanProgram(
                 items=items,
                 model=_TERRAN_MODEL,
-                edges=_TWO_SECOND_INTERVALS.edges(GameTime(seconds=60)),
+                edges=edge_seconds_of(_TWO_SECOND_INTERVALS, GameTime(seconds=60)),
                 state=_game_start(),
                 reward=reward,
                 economy=EconomyModel(),
@@ -1736,7 +1769,7 @@ class TestUnlockFraction:
             program = PlanProgram(
                 items=items,
                 model=_TERRAN_MODEL,
-                edges=TimeGrid.uniform(GameTime(seconds=10)).edges(GameTime(seconds=100)),
+                edges=edge_seconds_of(TimeGrid.uniform(GameTime(seconds=10)), GameTime(seconds=100)),
                 state=state,
                 reward=reward,
                 economy=_WALKING_6_SECONDS_TO_EVERY_STRUCTURE,
@@ -2332,17 +2365,17 @@ class TestReward:
     @pytest.mark.parametrize("end_seconds", [30, 60], ids=["before its start", "at its start"])
     def test_a_term_that_ends_no_later_than_it_starts_raises(self, end_seconds: int) -> None:
         with pytest.raises(ValueError, match="later than it starts"):
-            RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=60), end=GameTime(seconds=end_seconds))
+            RewardTerm.weighted(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=60), end=GameTime(seconds=end_seconds))
 
     def test_a_terms_factor_is_1_from_its_start_and_0_from_its_end(self) -> None:
-        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=30), end=GameTime(seconds=60))
+        term = RewardTerm.weighted(UnitTypeId.MARINE, 1.0, start=GameTime(seconds=30), end=GameTime(seconds=60))
         factors = [term.time_factor_at(GameTime(seconds=seconds)) for seconds in (28, 30, 58, 60)]
         assert factors == [0.0, 1.0, 1.0, 0.0]
-        assert RewardTerm.weight(UnitTypeId.MARINE, 1.0).time_factor_at(GameTime(seconds=10_000)) == 1.0
+        assert RewardTerm.weighted(UnitTypeId.MARINE, 1.0).time_factor_at(GameTime(seconds=10_000)) == 1.0
 
     def test_a_terms_factor_is_what_its_time_factor_gives_between_its_start_and_end(self) -> None:
         """The function is not asked outside them, where it would give a negative factor here."""
-        term = RewardTerm.weight(
+        term = RewardTerm.weighted(
             UnitTypeId.MARINE,
             1.0,
             start=GameTime(seconds=30),
@@ -2356,25 +2389,32 @@ class TestReward:
         """Pyright checks that it does. A curve from none at 30 seconds to 3 at 60, and a series of 2 a step."""
         rising = TimeCurve([(GameTime(seconds=30), 0.0), (GameTime(seconds=60), 3.0)])
         recorded = TimeSeries(np.full(2000, 2.0), GameTime.ZERO, 2000)
-        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, time_factor=rising, count_factor=recorded)
+        term = RewardTerm.weighted(
+            UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0), time_factor=rising, count_factor=recorded
+        )
         assert term.time_factor_at(GameTime(seconds=50)) == pytest.approx(2.0)
         assert term.count_factor_at(GameTime(seconds=50)) == 2.0
 
     @pytest.mark.parametrize("factor", [-0.5, math.inf, math.nan], ids=["negative", "infinite", "not a number"])
     def test_a_time_factor_that_is_negative_or_not_finite_raises(self, factor: float) -> None:
-        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, time_factor=lambda _: factor)
+        term = RewardTerm.weighted(UnitTypeId.MARINE, 1.0, time_factor=lambda _: factor)
         with pytest.raises(ValueError, match="time factor"):
             term.time_factor_at(GameTime(seconds=10))
 
     def test_a_terms_count_factor_is_what_its_function_gives_and_1_without_one(self) -> None:
-        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, count_factor=lambda time: time.seconds / 60)
+        term = RewardTerm.weighted(
+            UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0), count_factor=lambda time: time.seconds / 60
+        )
         assert term.count_factor_at(GameTime(seconds=90)) == pytest.approx(1.5)
         assert term.count_factor_at(GameTime.ZERO) == 0.0
-        assert RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0).count_factor_at(GameTime(seconds=90)) == 1.0
+        assert (
+            RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0)).count_factor_at(GameTime(seconds=90))
+            == 1.0
+        )
 
     @pytest.mark.parametrize("factor", [-0.5, math.inf, math.nan], ids=["negative", "infinite", "not a number"])
     def test_a_count_factor_that_is_negative_or_not_finite_raises(self, factor: float) -> None:
-        term = RewardTerm.weight(UnitTypeId.MARINE, 1.0, end_count=4.0, count_factor=lambda _: factor)
+        term = RewardTerm.weighted(UnitTypeId.MARINE, WeightCurve.up_to(1.0, 4.0), count_factor=lambda _: factor)
         with pytest.raises(ValueError, match="count factor"):
             term.count_factor_at(GameTime(seconds=10))
 
@@ -2395,8 +2435,8 @@ class TestReward:
         reward = Reward.weighted(
             {UnitTypeId.MARINE: 1.0, UnitTypeId.MEDIVAC: WeightCurve.constant(1.0)},
             terms=[
-                RewardTerm.weight({UnitTypeId.VIKING: 1.0, UnitTypeId.THOR: 2.0}, 1.0, end_count=8.0),
-                RewardTerm.weight(UnitTypeId.BUNKER, 1.0, end_count=2.0),
+                RewardTerm.weighted({UnitTypeId.VIKING: 1.0, UnitTypeId.THOR: 2.0}, WeightCurve.up_to(1.0, 8.0)),
+                RewardTerm.weighted(UnitTypeId.BUNKER, WeightCurve.up_to(1.0, 2.0)),
             ],
             half_life=None,
         )
@@ -2410,7 +2450,7 @@ class TestReward:
 
     def test_the_upgrades_it_values_are_those_weighted_and_those_its_terms_require(self) -> None:
         reward = Reward(
-            terms=[RewardTerm.weight(UnitTypeId.MARINE, 0.3, requirements=[UpgradeId.COMBAT_SHIELD])],
+            terms=[RewardTerm.weighted(UnitTypeId.MARINE, 0.3, requirements=[UpgradeId.COMBAT_SHIELD])],
             upgrade_weights={UpgradeId.STIMPACK: 1.0},
             half_life=None,
         )
@@ -2418,7 +2458,7 @@ class TestReward:
 
     def test_a_negative_weight_in_a_term_that_requires_an_upgrade_raises(self) -> None:
         with pytest.raises(ValueError, match="negative"):
-            RewardTerm.weight(UnitTypeId.MARINE, -1.0, requirements=[UpgradeId.COMBAT_SHIELD])
+            RewardTerm.weighted(UnitTypeId.MARINE, -1.0, requirements=[UpgradeId.COMBAT_SHIELD])
 
     def test_the_unit_types_a_combination_counts_are_those_of_all_its_groups(self) -> None:
         healed = RewardTerm.combination(

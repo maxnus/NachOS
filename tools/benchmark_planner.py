@@ -63,6 +63,7 @@ from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of
 from sc2nachos.extensions.planner._terran_model import TerranModel
+from sc2nachos.extensions.planner._time_grid import edge_seconds_of
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.testing import load_game_data
 
@@ -384,7 +385,7 @@ def _solve_and_print(
     program = PlanProgram(
         items=items,
         model=model,
-        edges=grid.edges(horizon),
+        edges=edge_seconds_of(grid, horizon),
         state=planned_from,
         reward=reward,
         economy=planned_by,
@@ -536,7 +537,7 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
     """Covering each of the toy's enemies."""
     for name, scenario in _ENEMY_SCENARIOS.items():
         coverages = [
-            RewardTerm.weight(_EFFECTIVENESS_AGAINST[kind], 1.0, end_count=count, start=start)
+            RewardTerm.weighted(_EFFECTIVENESS_AGAINST[kind], WeightCurve.up_to(1.0, count), start=start)
             for kind, counts in scenario.items()
             for start, count in counts
         ]

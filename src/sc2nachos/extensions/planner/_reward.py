@@ -75,17 +75,17 @@ class WeightCurve:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RewardTerm:
-    """One part of what a plan is worth: the units of a group counted together, each for what the group says, are
-    worth what a `WeightCurve`, `weights`, gives their count a second, from the game time `start` to `end`. Of several
-    `groups` the curve is given the smallest count, so that the term is worth only what its scarcest group allows:
-    units worth something in combination, as medivacs and the infantry they heal.
+    """One part of what a plan is worth: the units of a group counted together, each for what the group says, are worth
+    what a `WeightCurve`, `weights`, gives their count a second, from the game time `start` to `end`. Of several
+    `groups` the curve is given the smallest count, so that the term is worth only what its scarcest group allows: units
+    worth something in combination, as medivacs and the infantry they heal.
 
-    Every part of a reward on units is one of these, and `weight`, `curve` and `combination` build the usual ones.
-    The terms of a reward add up, each with its own curve and times, so a unit type may count in several: for what it
-    is worth by itself, with others towards a count the bot wants of them together, and for something else from a game
-    time on, where one term ends and another starts. A `time_factor` makes a term worth more or less as the game goes
-    on, its whole curve times what the function gives for a game time, and a `count_factor` makes it want more or
-    fewer units, the counts its curve's pieces end at times what that function gives.
+    Every part of a reward on units is one of these, and `weighted` and `combination` build the usual ones. The terms of
+    a reward add up, each with its own curve and times, so a unit type may count in several: for what it is worth by
+    itself, with others towards a count the bot wants of them together, and for something else from a game time on,
+    where one term ends and another starts. A `time_factor` makes a term worth more or less as the game goes on, its
+    whole curve times what the function gives for a game time, and a `count_factor` makes it want more or fewer units,
+    the counts its curve's pieces end at times what that function gives.
 
     A term with `requirements` is worth nothing until each of those upgrades is done: what marines are worth more with
     combat shield than without is such a term, beside the one for what they are worth anyway. A plan starts such an
@@ -133,55 +133,32 @@ class RewardTerm:
                 raise ValueError(f"a term with requirements may not hold a negative weight: {segments}")
 
     @classmethod
-    def weight(
+    def weighted(
         cls,
         units: UnitTypeId | Mapping[UnitTypeId, float],
-        weight: float,
+        weights: float | WeightCurve,
         *,
-        end_count: float = math.inf,
         start: GameTime = GameTime.ZERO,
         end: GameTime = GameTime.INFINITE,
         time_factor: Callable[[GameTime], float] | None = None,
         count_factor: Callable[[GameTime], float] | None = None,
         requirements: Iterable[UpgradeId] = (),
     ) -> Self:
-        """Each unit of `units` is worth `weight` a second, however many there are: of one unit type, or of several
-        counted together, one unit of each for what the mapping says. With an `end_count`, each unit up to that count
-        is, and none past it anything: a count the bot wants, which a plan may fall short of. From the game time
-        `start`, the game's start by default, to `end`, and nothing before or from then, times what `time_factor`
-        gives for a game time between them, and with `end_count` times what `count_factor` gives for it; and only once
-        every upgrade of `requirements` is done."""
-        return cls.curve(
-            units,
-            WeightCurve.up_to(weight, end_count),
-            start=start,
-            end=end,
-            time_factor=time_factor,
-            count_factor=count_factor,
-            requirements=requirements,
-        )
+        """A term for the units of `units`: one unit type, or several counted together, as a mapping of how much one
+        unit of each type counts.
 
-    @classmethod
-    def curve(
-        cls,
-        units: UnitTypeId | Mapping[UnitTypeId, float],
-        weights: WeightCurve,
-        *,
-        start: GameTime = GameTime.ZERO,
-        end: GameTime = GameTime.INFINITE,
-        time_factor: Callable[[GameTime], float] | None = None,
-        count_factor: Callable[[GameTime], float] | None = None,
-        requirements: Iterable[UpgradeId] = (),
-    ) -> Self:
-        """The units of `units` are worth what `weights` give their count a second, more of them less each: of one
-        unit type, or of several counted together, one unit of each for what the mapping says. From the game time
-        `start`, the game's start by default, to `end`, and nothing before or from then, times what `time_factor`
-        gives for a game time between them, and with the counts its pieces end at times what `count_factor` gives for
-        it; and only once every upgrade of `requirements` is done."""
+        `weights` is what their count is worth a second. A number makes every unit worth that much, however many there
+        are. A `WeightCurve` makes more of them worth less each: `WeightCurve.up_to(1.0, 8)` is a count of 8 the bot
+        wants, each unit up to it worth 1.0 and none past it anything.
+
+        The term counts from the game time `start`, the game's start by default, to `end`, and is worth nothing before
+        or from then. `time_factor` gives what its worth is multiplied by at a game time between them, and
+        `count_factor` what the counts its curve's segments end at are multiplied by. It is worth something only once
+        every upgrade of `requirements` is done."""
         counted = {units: 1.0} if isinstance(units, UnitTypeId) else units
         return cls(
             groups=[counted],
-            weights=weights,
+            weights=_weight_curve_of(weights),
             start=start,
             end=end,
             time_factor=time_factor,
@@ -193,29 +170,27 @@ class RewardTerm:
     def combination(
         cls,
         groups: Sequence[Mapping[UnitTypeId, float]],
-        weight: float,
+        weights: float | WeightCurve,
         *,
-        end_count: float = math.inf,
         start: GameTime = GameTime.ZERO,
         end: GameTime = GameTime.INFINITE,
         time_factor: Callable[[GameTime], float] | None = None,
         count_factor: Callable[[GameTime], float] | None = None,
         requirements: Iterable[UpgradeId] = (),
     ) -> Self:
-        """Units worth something in combination: each group of `groups` is counted, one unit of each type for what
-        the group says, and each unit of the smallest of those counts is worth `weight` a second, so that the
-        scarcest group limits what the others are worth. `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER: 2}]` with 0.3 is 0.3
-        for each marine a medivac heals, of which it heals 8, a marauder for two: 24 marines with 2 medivacs are
-        worth 0.3 times 16, and a third medivac makes it 24. What each unit is worth without the others is another
-        term's.
+        """A term for units worth something in combination. Each group of `groups` is counted, one unit of each type
+        for what the group says, and `weights` is what the smallest of those counts is worth a second, so that the
+        scarcest group limits what the others are worth.
 
-        With an `end_count`, no unit past that count is worth anything. From the game time `start`, the game's start
-        by default, to `end`, and nothing before or from then, times what `time_factor` gives for a game time between
-        them, and with `end_count` times what `count_factor` gives for it; and only once every upgrade of `requirements`
-        is done. Raises `ValueError` for a negative `weight` with several groups."""
+        `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER: 2}]` with 0.3 is 0.3 for each marine a medivac heals, of which it heals
+        8, a marauder for two: 24 marines with 2 medivacs are worth 0.3 times 16, and a third medivac makes it 24.
+        What each unit is worth without the others is another term's.
+
+        `weights`, `start`, `end`, `time_factor`, `count_factor` and `requirements` are as `weighted` takes them.
+        Raises `ValueError` for a negative weight with several groups."""
         return cls(
             groups=groups,
-            weights=WeightCurve.up_to(weight, end_count),
+            weights=_weight_curve_of(weights),
             start=start,
             end=end,
             time_factor=time_factor,
@@ -302,12 +277,7 @@ class Reward:
         """A reward of a term for each unit type of `unit_weights`, at any time: one number for what each unit of it is
         worth a second, or a `WeightCurve` where more of them are worth less each. `terms` come after them, and the rest
         is the reward's own."""
-        terms_of_unit_weights = [
-            RewardTerm.curve(unit_type, weight)
-            if isinstance(weight, WeightCurve)
-            else RewardTerm.weight(unit_type, float(weight))
-            for unit_type, weight in unit_weights.items()
-        ]
+        terms_of_unit_weights = [RewardTerm.weighted(unit_type, weight) for unit_type, weight in unit_weights.items()]
         return cls(
             terms=(*terms_of_unit_weights, *terms),
             upgrade_weights={} if upgrade_weights is None else upgrade_weights,
@@ -325,6 +295,11 @@ class Reward:
     def upgrades(self) -> frozenset[UpgradeId]:
         """Every upgrade it values: those weighted, and those its terms require."""
         return frozenset(self.upgrade_weights).union(*(term.requirements for term in self.terms))
+
+
+def _weight_curve_of(weights: float | WeightCurve) -> WeightCurve:
+    """`weights` as a curve: itself, or for a number, every unit worth that much."""
+    return weights if isinstance(weights, WeightCurve) else WeightCurve.constant(float(weights))
 
 
 def _factor_at(factor_of: Callable[[GameTime], float] | None, time: GameTime, name: str) -> float:

@@ -107,24 +107,34 @@ class TimeGrid:
         """Its segments, in order."""
         return self._segments
 
-    def edges(self, horizon: GameTime) -> tuple[float, ...]:
-        """The intervals' edges to `horizon`, in seconds from the plan's start, 0 first and the horizon last.
+    def edges(self, horizon: GameTime) -> tuple[GameTime, ...]:
+        """The times the grid's intervals start and end at, up to `horizon`, each counted from the plan's start: zero
+        first and the horizon last.
 
         Raises `ValueError` for a horizon not longer than 0, or infinite.
         """
-        if horizon <= GameTime.ZERO or not math.isfinite(horizon.seconds):
-            raise ValueError(f"a horizon must be longer than 0 and finite, not {horizon}")
-        end_of_plan = horizon.seconds
-        edges = [0.0]
-        for segment in self._segments:
-            interval_seconds = segment.interval_length.seconds
-            segment_end = min(segment.end.seconds, end_of_plan)
-            while edges[-1] + interval_seconds <= segment_end + SECONDS_TOLERANCE:
-                edges.append(edges[-1] + interval_seconds)
-            if segment_end >= end_of_plan:
-                break
-        if end_of_plan - edges[-1] > SECONDS_TOLERANCE:
-            edges.append(end_of_plan)
-        else:
-            edges[-1] = end_of_plan
-        return tuple(edges)
+        return tuple(GameTime(seconds=seconds) for seconds in edge_seconds_of(self, horizon))
+
+
+def edge_seconds_of(grid: TimeGrid, horizon: GameTime) -> tuple[float, ...]:
+    """`grid`'s edges to `horizon` in seconds from the plan's start, 0 first and the horizon last, as the planner's
+    program counts time: summed in seconds, so that a grid of whole seconds has its edges on them exactly.
+
+    Raises `ValueError` for a horizon not longer than 0, or infinite.
+    """
+    if horizon <= GameTime.ZERO or not math.isfinite(horizon.seconds):
+        raise ValueError(f"a horizon must be longer than 0 and finite, not {horizon}")
+    end_of_plan = horizon.seconds
+    edges = [0.0]
+    for segment in grid.segments:
+        interval_seconds = segment.interval_length.seconds
+        segment_end = min(segment.end.seconds, end_of_plan)
+        while edges[-1] + interval_seconds <= segment_end + SECONDS_TOLERANCE:
+            edges.append(edges[-1] + interval_seconds)
+        if segment_end >= end_of_plan:
+            break
+    if end_of_plan - edges[-1] > SECONDS_TOLERANCE:
+        edges.append(end_of_plan)
+    else:
+        edges[-1] = end_of_plan
+    return tuple(edges)

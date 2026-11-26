@@ -11,7 +11,7 @@ from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner_state import PlannerState, read_planner_state
 from sc2nachos.extensions.planner._terran_model import TerranModel
-from sc2nachos.extensions.planner._time_grid import TimeGrid
+from sc2nachos.extensions.planner._time_grid import TimeGrid, edge_seconds_of
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Race
@@ -216,7 +216,7 @@ class Planner:
         if any(limit < 0 for limit in start_limits.values()):
             raise ValueError(f"start limits must not be negative: {dict(start_limits)}")
         _check_solve_limits(time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
-        edges = self._grid.edges(horizon)
+        edges = edge_seconds_of(self._grid, horizon)
         items = self._model.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
         planned_from = self.state() if state is None else state
         program = PlanProgram(

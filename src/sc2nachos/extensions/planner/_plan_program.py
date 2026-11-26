@@ -151,7 +151,7 @@ class PlanProgram(PlanConstraints):
         a time factor above 0 under each piece's line of each group's count, which the reward raises to the lowest.
         That is the curve of the smallest count, since no piece of a term of several groups falls."""
         intervals = self._interval_count
-        ends = [self._state.time + GameTime(seconds=edge) for edge in self._edges[1:].tolist()]
+        ends = [self._time_after(edge) for edge in self._edges[1:].tolist()]
         factors = np.array([term.time_factor_at(time) for time in ends])
         counted = factors > 0
         worth = RowExpression(intervals)
@@ -210,6 +210,13 @@ class PlanProgram(PlanConstraints):
             for group in term.groups
         )
 
+    def _time_after(self, seconds: float) -> GameTime:
+        """The game time `seconds` after the plan's start: a whole game step where it is within a millionth of one,
+        since edges summed in seconds land a hair beside the step they are meant for."""
+        time = self._state.time + GameTime(seconds=seconds)
+        nearest_step = round(time.steps)
+        return GameTime(steps=nearest_step) if abs(time.steps - nearest_step) < 1e-6 else time
+
     def _planned_items(self, values: FloatArray) -> tuple[PlanItem, ...]:
         """Each item started, in order of start, those of one interval in the order of the items: of fractional starts,
         one each time their sum reaches a whole number, rounded, and fluid where its interval's starts are."""
@@ -221,7 +228,7 @@ class PlanProgram(PlanConstraints):
             duration = GameTime(seconds=item.build_seconds)
             whole = np.floor(values[self._starts_so_far[index].to_slice()] + 0.5)
             for interval, count in enumerate(np.diff(whole, prepend=0.0)):
-                start = self._state.time + GameTime(seconds=float(self._edges[interval]))
+                start = self._time_after(float(self._edges[interval]))
                 is_fluid = not self._whole[index][interval]
                 entry = PlanItem(product=made, start=start, duration=duration, is_fluid=is_fluid)
                 planned += [(interval, index, entry)] * int(count)
@@ -278,7 +285,7 @@ class PlanProgram(PlanConstraints):
         }
         return [
             PlanMoment(
-                time=state.time + GameTime(seconds=seconds),
+                time=self._time_after(seconds),
                 resources=Resources(float(minerals[edge]), float(vespene[edge])),
                 collected=state.collected + Resources(float(minerals_collected[edge]), float(vespene_collected[edge])),
                 units={unit_type: float(counts[edge]) for unit_type, counts in at_edges.items()},
