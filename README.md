@@ -72,7 +72,7 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 - **Testing**: `sc2nachos.testing` makes units for a bot's unit tests
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/testing.md)).
 - **Extensions**: features a bot opts into, NachOS's or anyone's, which the api builds once the game starts and holds
-  as `api.extensions`. NachOS's own are speed mining and upgrade inference
+  as `api.extensions`. NachOS's own are speed mining, upgrade inference and a build planner
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md)).
 
 ## Design
@@ -134,6 +134,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
   creating units.
 - [Extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md): features a bot opts into, how to use
   one and how to write one.
+- [The build planner](https://github.com/maxnus/NachOS/blob/main/docs/build-planner.md): a plan of what to make and
+  when, from what units and upgrades are worth to the bot.
 - [Values that depend on the game time](https://github.com/maxnus/NachOS/blob/main/docs/time-dependent-values.md): a
   value recorded each step, a few joined between their times, or a function of the game time, all read the same way.
 - [Running StarCraft II on GitHub Actions](https://github.com/maxnus/NachOS/blob/main/docs/github-actions.md): playing
