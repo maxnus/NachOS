@@ -65,6 +65,8 @@ minutes a plan's first steps get worse.
   many at its refineries and has every other worker mine.
 - **What the plan expects.** Each interval's `start` and `end` hold the stock, what was collected, and the units and
   upgrades expected then, so `plan.intervals[-1].end.units` is what the plan comes to.
+- **In a log.** `plan.to_string()` is the whole plan as text, a line an item, and `item.to_string()` one such line,
+  `"3:12 SUPPLY_DEPOT"`.
 
 ## What a plan rests on
 

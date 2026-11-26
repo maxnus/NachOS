@@ -37,6 +37,11 @@ class PlanItem:
         first edge of its grid at or after that."""
         return self.start + self.duration
 
+    def to_string(self) -> str:
+        """Its start as minutes and seconds and what it makes, for a log or an overlay: `"3:12 SUPPLY_DEPOT"`, and
+        `"5:40 MARINE (fluid)"` for one planned in fractions."""
+        return f"{self.start.to_string(0)} {self.product.name}{' (fluid)' if self.is_fluid else ''}"
+
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -152,6 +157,41 @@ class BuildPlan:
     """What the plan is worth by the `Reward` it was planned for: what the solver made as large as it could."""
     solve_report: SolveReport
     """What the solver says of the solve: how near the best the plan is proven, and how long it took."""
+
+    def to_string(self) -> str:
+        """The plan as text, for a log: a line that says from when to when it runs, what it is worth and how the solve
+        ended, a line for each item as `PlanItem.to_string` writes it, and a line with the units expected at the
+        horizon, those of none left out.
+
+        ```
+        plan from 0:00 to 5:00, reward 2981.9, proven the best in 1.62 s
+        0:00 SCV
+        0:07 SUPPLY_DEPOT
+        4:38 MARINE (fluid)
+        at 5:00: 31.4 SCV, 3 SUPPLY_DEPOT, 22.5 MARINE
+        ```
+
+        A plan the solver did not prove the best reads `within 1.2% of the best after 3.00 s`, by the solver's gap.
+        """
+        report = self.solve_report
+        solve = (
+            f"proven the best in {report.seconds:.2f} s"
+            if report.is_optimal
+            else f"within {report.gap:.1%} of the best after {report.seconds:.2f} s"
+        )
+        if not self.intervals:
+            return f"plan from {self.time.to_string(0)}, reward {self.reward:.1f}, {solve}"
+        horizon = self.intervals[-1].end
+        units = ", ".join(
+            f"{count:.3g} {unit_type.name}" for unit_type, count in horizon.units.items() if count >= 0.05
+        )
+        return "\n".join(
+            (
+                f"plan from {self.time.to_string(0)} to {horizon.time.to_string(0)}, reward {self.reward:.1f}, {solve}",
+                *(item.to_string() for item in self.items),
+                f"at {horizon.time.to_string(0)}: {units}",
+            )
+        )
 
     def interval_at(self, time: GameTime) -> PlanInterval | None:
         """The interval `time` is in, from its start to before its end, or `None` for a time before the plan starts or

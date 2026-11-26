@@ -450,6 +450,10 @@ file as it was at `807304c`.
       Can we check if we can make it more concise?", and to cutting both: "Guide and plan file"). The planner's guide is
       a page of its own, `docs/build-planner.md`, which says how to use it and leaves each argument to its docstring;
       this section keeps each decision, its date and his words.
+    - **A plan as text** (2026-11-26, of what AvocaDOS will still need, to a printout and a helper for the items left:
+      "Two the two smaller things first I think?"). `BuildPlan.to_string()` and `PlanItem.to_string()`, named as
+      `GameTime`'s is. The helper for which items of a plan are still to do waits for his word: counting by the state is
+      wrong where a unit died or a command center morphed, and a bot that ticks off what it starts needs none.
 
 ## Risks
 

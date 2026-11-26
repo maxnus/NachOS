@@ -17,7 +17,9 @@ from sc2nachos.extensions.planner import (
     BuildPlan,
     EconomyModel,
     GridSegment,
+    PlanInterval,
     PlanItem,
+    PlanMoment,
     Planner,
     PlannerState,
     ProducerActivity,
@@ -1357,6 +1359,66 @@ class TestPlan:
 
     def test_no_interval_is_at_any_time_of_a_plan_with_none(self) -> None:
         assert _A_PLAN_OF_ONE_BARRACKS.interval_at(GameTime.ZERO) is None
+
+    @pytest.mark.parametrize(
+        ("is_fluid", "text"),
+        [(False, "3:12 SUPPLY_DEPOT"), (True, "3:12 SUPPLY_DEPOT (fluid)")],
+        ids=["whole", "fluid"],
+    )
+    def test_an_item_reads_as_its_start_and_what_it_makes(self, is_fluid: bool, text: str) -> None:
+        item = PlanItem(
+            product=UnitTypeId.SUPPLY_DEPOT,
+            start=GameTime(seconds=192.9),
+            duration=GameTime(steps=480),
+            is_fluid=is_fluid,
+        )
+
+        assert item.to_string() == text
+
+    @pytest.mark.parametrize(
+        ("solve_report", "solve"),
+        [
+            (SolveReport(gap=0.0, is_optimal=True, seconds=1.618), "proven the best in 1.62 s"),
+            (SolveReport(gap=0.0123, is_optimal=False, seconds=3.0), "within 1.2% of the best after 3.00 s"),
+        ],
+        ids=["proven", "stopped at a limit"],
+    )
+    def test_a_plan_reads_as_a_line_for_the_solve_one_for_each_item_and_one_for_the_horizon(
+        self, solve_report: SolveReport, solve: str
+    ) -> None:
+        """A unit type the plan expects none of at its horizon is left out of the last line."""
+
+        def moment(seconds: float, units: dict[UnitTypeId, float]) -> PlanMoment:
+            none = Resources(0.0, 0.0)
+            return PlanMoment(time=GameTime(seconds=seconds), resources=none, collected=none, units=units, upgrades={})
+
+        start = moment(30, {UnitTypeId.SCV: 12})
+        end = moment(330, {UnitTypeId.SCV: 31.42, UnitTypeId.MARINE: 22.5, UnitTypeId.REAPER: 0.0})
+        plan = BuildPlan(
+            time=start.time,
+            items=(
+                PlanItem(product=UnitTypeId.SCV, start=start.time, duration=GameTime(steps=272), is_fluid=False),
+                PlanItem(
+                    product=UpgradeId.STIMPACK,
+                    start=GameTime(seconds=278),
+                    duration=GameTime(steps=2240),
+                    is_fluid=True,
+                ),
+            ),
+            intervals=(PlanInterval(start=start, end=end, miners=12.0, collectors=0.0),),
+            reward=2981.94,
+            solve_report=solve_report,
+        )
+
+        assert plan.to_string().splitlines() == [
+            f"plan from 0:30 to 5:30, reward 2981.9, {solve}",
+            "0:30 SCV",
+            "4:38 STIMPACK (fluid)",
+            "at 5:30: 31.4 SCV, 22.5 MARINE",
+        ]
+
+    def test_a_plan_with_no_intervals_reads_as_its_first_line_alone(self) -> None:
+        assert _A_PLAN_OF_ONE_BARRACKS.to_string() == "plan from 0:00, reward 0.0, proven the best in 0.00 s"
 
     def test_its_first_moment_is_the_state_and_each_intervals_end_is_the_next_ones_start(self) -> None:
         """Ten marines the plan cannot make more of count in every moment, as the state's own."""
