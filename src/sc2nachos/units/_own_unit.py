@@ -250,7 +250,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         game's tables give as a maker of a unit, and 0 for anything else, an SCV and a larva among them, which make no
         unit from a queue. A warp gate reads 1, though it warps in without one. Whether the structure is finished is
         left out. A reactor counts once finished, since the game names a structure's add-on only then (in game): a
-        barracks building its reactor reads 1."""
+        barracks building its reactor reads 1. In the observation where its tech lab or reactor first reads finished, a
+        barracks still shows the order that built it and refuses a train until a step later, though it reads 2 there
+        with a reactor (in game)."""
         if self.type_id not in self._tracker.game_data._unit_trainers:
             return 0
         return 2 if self._has_add_on_of(UnitType.AnyReactor) else 1
