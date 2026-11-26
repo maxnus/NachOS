@@ -139,7 +139,10 @@ class PlanConstraints(PlanVariables):
         building_now = len(self._builders_free_after)
         mining_now = max(state.units.get(UnitTypeId.SCV, 0) - collecting_now - building_now, 0.0)
         self._hold_starts_at_rises(
-            self._collecting, self._started_collecting, working_now=collecting_now, sites=state.refineries_with_vespene
+            self._collecting,
+            self._started_collecting,
+            working_now=collecting_now,
+            sites=state.gas_buildings_with_vespene,
         )
         self._hold_starts_at_rises(
             self._mining,
@@ -269,7 +272,7 @@ class PlanConstraints(PlanVariables):
         fields, geysers = self._fields_and_geysers_of_new_bases()
         fields.constant += self._state.mineral_fields
         refineries = self._made_since_start(UnitTypeId.REFINERY)
-        refineries.constant += self._state.refineries_with_vespene
+        refineries.constant += self._state.gas_buildings_with_vespene
         for tiers, sites in ((self._mining, fields), (self._collecting, refineries)):
             for tier in tiers:
                 working = RowExpression(intervals).add(tier.block, np.eye(intervals))

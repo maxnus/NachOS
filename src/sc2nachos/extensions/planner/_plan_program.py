@@ -20,8 +20,8 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 if TYPE_CHECKING:
     from sc2nachos.extensions.planner._economy_model import EconomyModel
     from sc2nachos.extensions.planner._planner_state import PlannerState
-    from sc2nachos.extensions.planner._reward import CurveSegment, Reward, RewardTerm
-    from sc2nachos.extensions.planner._terran_model import Item, TerranModel
+    from sc2nachos.extensions.planner._reward import Reward, RewardTerm, WeightSegment
+    from sc2nachos.extensions.planner._terran_model import ProductionItem, TerranModel
     from sc2nachos.gametime import TimeDependent
 
 
@@ -62,7 +62,7 @@ class PlanProgram(PlanConstraints):
     def __init__(
         self,
         *,
-        items: Sequence[Item],
+        items: Sequence[ProductionItem],
         model: TerranModel,
         edges: Sequence[float],
         state: PlannerState,
@@ -139,8 +139,8 @@ class PlanProgram(PlanConstraints):
         for upgrade, weight in reward.upgrade_weights.items():
             worth.add_expression(self._upgrade_done(upgrade, at_end=True), weight)
         objective = worth.summed(self._discounts)
-        if reward.stock_weight:
-            at_the_horizon = np.eye(1, self._interval_count + 1, k=self._interval_count) * reward.stock_weight
+        if reward.resource_weight:
+            at_the_horizon = np.eye(1, self._interval_count + 1, k=self._interval_count) * reward.resource_weight
             objective.add(self._minerals, at_the_horizon).add(self._vespene, at_the_horizon)
         return objective
 
@@ -223,7 +223,7 @@ class PlanProgram(PlanConstraints):
             for interval, count in enumerate(np.diff(whole, prepend=0.0)):
                 start = self._state.time + GameTime(seconds=float(self._edges[interval]))
                 is_fluid = not self._whole[index][interval]
-                entry = PlanItem(item=made, start=start, duration=duration, is_fluid=is_fluid)
+                entry = PlanItem(product=made, start=start, duration=duration, is_fluid=is_fluid)
                 planned += [(interval, index, entry)] * int(count)
         return tuple(entry for _, _, entry in sorted(planned, key=lambda entry: (entry[0], entry[1])))
 
@@ -288,7 +288,7 @@ class PlanProgram(PlanConstraints):
         ]
 
 
-def _worth_at(segments: Sequence[CurveSegment], count: float, *, count_factor: float) -> float:
+def _worth_at(segments: Sequence[WeightSegment], count: float, *, count_factor: float) -> float:
     """What `segments` give `count` a second, each piece ending at its count times `count_factor`."""
     worth = 0.0
     count_before = 0.0

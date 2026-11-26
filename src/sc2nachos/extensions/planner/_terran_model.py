@@ -31,7 +31,7 @@ _REACTOR_TYPES: Final = UnitType.AnyReactor.type_ids
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Item:
+class ProductionItem:
     """Something the planner can start: a unit, a structure, a townhall's morph, an add-on or an upgrade."""
 
     unit_type: UnitTypeId | None
@@ -94,12 +94,12 @@ class TerranModel:
             if self._counted_types.get(unit_type) == unit_type and _is_made_by_an_order(row)
         ]
         items_by_type = {row.id: self._unit_item(row) for row in item_rows}
-        self._items_by_type: Mapping[UnitTypeId, Item] = MappingProxyType(items_by_type)
-        items_by_upgrade: dict[UpgradeId, Item] = {}
+        self._items_by_type: Mapping[UnitTypeId, ProductionItem] = MappingProxyType(items_by_type)
+        items_by_upgrade: dict[UpgradeId, ProductionItem] = {}
         for upgrade, upgrade_row in game_data.upgrades.items():
             researchers = frozenset(self.counted_as(researcher) for researcher in upgrade_row.researchers)
             if researchers and researchers <= items_by_type.keys():
-                items_by_upgrade[upgrade] = Item(
+                items_by_upgrade[upgrade] = ProductionItem(
                     unit_type=None,
                     upgrade=upgrade,
                     minerals=upgrade_row.cost.minerals,
@@ -114,7 +114,7 @@ class TerranModel:
                     morphed_from=None,
                     is_built_by_worker=False,
                 )
-        self._items_by_upgrade: Mapping[UpgradeId, Item] = MappingProxyType(items_by_upgrade)
+        self._items_by_upgrade: Mapping[UpgradeId, ProductionItem] = MappingProxyType(items_by_upgrade)
 
     @property
     def game_data(self) -> GameData:
@@ -122,12 +122,12 @@ class TerranModel:
         return self._game_data
 
     @property
-    def unit_items(self) -> Mapping[UnitTypeId, Item]:
+    def unit_items(self) -> Mapping[UnitTypeId, ProductionItem]:
         """The item making each unit type that is one."""
         return self._items_by_type
 
     @property
-    def upgrade_items(self) -> Mapping[UpgradeId, Item]:
+    def upgrade_items(self) -> Mapping[UpgradeId, ProductionItem]:
         """The item researching each upgrade Terran researches."""
         return self._items_by_upgrade
 
@@ -158,7 +158,9 @@ class TerranModel:
         """Whether `unit_type` is a tech lab or a reactor."""
         return unit_type in _TECH_LAB_TYPES or unit_type in _REACTOR_TYPES
 
-    def items_for(self, *, unit_types: Iterable[UnitTypeId], upgrades: Iterable[UpgradeId]) -> tuple[Item, ...]:
+    def items_for(
+        self, *, unit_types: Iterable[UnitTypeId], upgrades: Iterable[UpgradeId]
+    ) -> tuple[ProductionItem, ...]:
         """The items a plan valuing `unit_types` and `upgrades` needs: those, what makes each, what each needs first, a
         tech lab where one is needed, a reactor for a producer of units that need none, and the economy, workers, supply
         depots, command centers, orbital commands and refineries. In the order the game's data lists the unit types,
@@ -194,7 +196,7 @@ class TerranModel:
             raise ValueError(f"the planner cannot make {unit_type.name} for Terran")
         return counted
 
-    def _needs_of(self, item: Item, wanted_types: set[UnitTypeId]) -> list[Item]:
+    def _needs_of(self, item: ProductionItem, wanted_types: set[UnitTypeId]) -> list[ProductionItem]:
         """The items `item` cannot be made without, beside `wanted_types`: a producer, the cheapest of its producers if
         none is wanted; what it morphs from; the type each tech it needs is named after; its producers' tech lab if it
         needs one, or their reactor for a unit that needs none; and the upgrades it needs."""
@@ -215,12 +217,12 @@ class TerranModel:
         ]
         return needed + [self._items_by_upgrade[upgrade] for upgrade in sorted(item.upgrades_needed)]
 
-    def _unit_item(self, row: UnitTypeData) -> Item:
+    def _unit_item(self, row: UnitTypeData) -> ProductionItem:
         """The item making the unit type of `row`."""
         producers = frozenset(self.counted_as(producer) for producer in row.producers)
         morphed_from = None if row.morphed_from is None else self.counted_as(row.morphed_from)
         provided_before = 0.0 if morphed_from is None else self._game_data.units[morphed_from].supply_provided
-        return Item(
+        return ProductionItem(
             unit_type=row.id,
             upgrade=None,
             minerals=row.cost.minerals,
@@ -277,7 +279,7 @@ def _made_by_its_order(game_data: GameData, row: UnitTypeData) -> UnitTypeId:
 
 
 def _add_on_of(
-    host: UnitTypeId, add_on_types: frozenset[UnitTypeId], items: Mapping[UnitTypeId, Item]
+    host: UnitTypeId, add_on_types: frozenset[UnitTypeId], items: Mapping[UnitTypeId, ProductionItem]
 ) -> UnitTypeId | None:
     """The add-on of `add_on_types` that `host` builds, or `None`."""
     for add_on_type in sorted(add_on_types):

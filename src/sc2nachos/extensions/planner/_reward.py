@@ -14,7 +14,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CurveSegment:
+class WeightSegment:
     """One piece of a concave curve over a count: each unit up to the count it ends at is worth `weight` a second."""
 
     weight: float
@@ -28,15 +28,15 @@ class CurveSegment:
 @dataclass(frozen=True, slots=True)
 class WeightCurve:
     """What each further unit of a count is worth a second, less the more of them there are. It is made of pieces, each
-    a weight for every unit up to the count the piece ends at: `WeightCurve([CurveSegment(weight=1.0, end_count=30),
-    CurveSegment(weight=0.3)])` makes each of the first 30 units worth 1.0 a second and each one after worth 0.3.
+    a weight for every unit up to the count the piece ends at: `WeightCurve([WeightSegment(weight=1.0, end_count=30),
+    WeightSegment(weight=0.3)])` makes each of the first 30 units worth 1.0 a second and each one after worth 0.3.
     `constant` and `up_to` build the two usual ones.
 
     Raises `ValueError` for no segments, a weight above the one before it, a count not above the one before it, or a
     segment but the last that ends at no count above 0.
     """
 
-    segments: Sequence[CurveSegment]
+    segments: Sequence[WeightSegment]
     """Its pieces in order, the first from a count of none. The last runs on, whatever count it says it ends at."""
 
     def __post_init__(self) -> None:
@@ -61,7 +61,7 @@ class WeightCurve:
     @classmethod
     def constant(cls, weight: float) -> Self:
         """Every unit worth `weight` a second, however many there are."""
-        return cls([CurveSegment(weight=weight)])
+        return cls([WeightSegment(weight=weight)])
 
     @classmethod
     def up_to(cls, weight: float, end_count: float) -> Self:
@@ -69,7 +69,7 @@ class WeightCurve:
         which a plan may fall short of. With an infinite `end_count` it is `constant`."""
         if math.isinf(end_count):
             return cls.constant(weight)
-        return cls([CurveSegment(weight=weight, end_count=end_count), CurveSegment(weight=0.0)])
+        return cls([WeightSegment(weight=weight, end_count=end_count), WeightSegment(weight=0.0)])
 
 
 @final
@@ -253,9 +253,9 @@ class Reward:
     Only what is expected to survive counts, by the loss rates handed to `Planner.plan_now`.
 
     `terminal_time` counts the state at the horizon for that much longer, as if it lasted, discounted alike. The stock
-    left at the horizon is worth `stock_weight` a mineral and a vespene besides.
+    left at the horizon is worth `resource_weight` a mineral and a vespene besides.
 
-    Raises `ValueError` for a `half_life` not longer than 0, or a negative `terminal_time` or `stock_weight`.
+    Raises `ValueError` for a `half_life` not longer than 0, or a negative `terminal_time` or `resource_weight`.
     """
 
     terms: Sequence[RewardTerm] = ()
@@ -268,7 +268,7 @@ class Reward:
     counting alike. A shorter one makes a plan build its army sooner and less economy first."""
     terminal_time: GameTime = GameTime.ZERO
     """How much longer the state at the horizon counts."""
-    stock_weight: float = 1e-4
+    resource_weight: float = 1e-4
     """What each mineral and each vespene left in stock at the horizon is worth, once and not discounted: by default
     0.0001, far less than what it could have bought under weights around 1, so that it decides only between plans
     worth the same otherwise, and a reward of much smaller weights wants it smaller in proportion. With it, a plan's
@@ -285,8 +285,8 @@ class Reward:
             raise ValueError(f"a half-life must be longer than 0, not {self.half_life}")
         if self.terminal_time < GameTime.ZERO:
             raise ValueError(f"terminal_time must not be negative, not {self.terminal_time}")
-        if self.stock_weight < 0:
-            raise ValueError(f"stock_weight must not be negative, not {self.stock_weight}")
+        if self.resource_weight < 0:
+            raise ValueError(f"resource_weight must not be negative, not {self.resource_weight}")
 
     @classmethod
     def weighted(
@@ -297,7 +297,7 @@ class Reward:
         upgrade_weights: Mapping[UpgradeId, float] | None = None,
         half_life: GameTime | None = GameTime(minutes=3),
         terminal_time: GameTime = GameTime.ZERO,
-        stock_weight: float = 1e-4,
+        resource_weight: float = 1e-4,
     ) -> Self:
         """A reward of a term for each unit type of `unit_weights`, at any time: one number for what each unit of it is
         worth a second, or a `WeightCurve` where more of them are worth less each. `terms` come after them, and the rest
@@ -313,7 +313,7 @@ class Reward:
             upgrade_weights={} if upgrade_weights is None else upgrade_weights,
             half_life=half_life,
             terminal_time=terminal_time,
-            stock_weight=stock_weight,
+            resource_weight=resource_weight,
         )
 
     @property

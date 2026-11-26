@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from sc2nachos import Api, Expansion
     from sc2nachos.extensions.planner._build_plan import BuildPlan
     from sc2nachos.extensions.planner._reward import Reward
-    from sc2nachos.extensions.planner._terran_model import Item
+    from sc2nachos.extensions.planner._terran_model import ProductionItem
     from sc2nachos.gametime import TimeDependent
     from sc2nachos.ids import UpgradeId
 
@@ -71,7 +71,7 @@ class Planner:
       as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
       `initial_harvest_delay`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
       interval by interval, is such a start, from the state's collectors and every other SCV that builds nothing mining.
-      Nothing but the reward's `stock_weight` keeps a worker at work where what it brings in buys nothing more.
+      Nothing but the reward's `resource_weight` keeps a worker at work where what it brings in buys nothing more.
     - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
       each way.
     - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a
@@ -256,7 +256,7 @@ def _check_solve_limits(*, time_limit: float | None, node_limit: int | None, rel
 
 
 def fluid_after_seconds_of(
-    items: Sequence[Item],
+    items: Sequence[ProductionItem],
     *,
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None,
     state: PlannerState,

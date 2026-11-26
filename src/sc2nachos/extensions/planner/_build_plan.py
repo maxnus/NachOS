@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 class PlanItem:
     """One item of a plan: what to make or research, when the planner expects it to start, and how long it takes."""
 
-    item: UnitTypeId | UpgradeId
-    """The unit type to make, or the upgrade to research."""
+    product: UnitTypeId | UpgradeId
+    """What to make: the unit type, or the upgrade to research."""
     start: GameTime
     """The game time the planner expects it to start at: the start of an interval of its grid."""
     duration: GameTime
@@ -77,8 +77,8 @@ class PlanInterval:
     miners: float
     """The workers the plan has at mineral fields in it."""
     collectors: float
-    """The workers the plan has at refineries in it. A bot keeps as many of its own collecting vespene: now, the first
-    interval's."""
+    """The workers the plan has at gas buildings in it. A bot keeps as many of its own collecting vespene: now, the
+    first interval's."""
 
     @property
     def duration(self) -> GameTime:

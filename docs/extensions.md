@@ -204,7 +204,7 @@ class ThreatMap:
   `Reward` and never the other way round.
 
   ```python
-  from sc2nachos.extensions.planner import CurveSegment, Planner, Reward, WeightCurve
+  from sc2nachos.extensions.planner import WeightSegment, Planner, Reward, WeightCurve
 
 
   class Extensions:
@@ -215,7 +215,7 @@ class ThreatMap:
   @api.on(TurnEvent)
   def replan(event: TurnEvent) -> None:
       if api.step % 448 == 0:
-          marines = WeightCurve([CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.3)])
+          marines = WeightCurve([WeightSegment(weight=1.0, end_count=30), WeightSegment(weight=0.3)])
           reward = Reward.weighted({UnitTypeId.MARINE: marines, UnitTypeId.MEDIVAC: 2.0})
           plan = api.extensions.planner.plan_now(reward)
   ```
@@ -223,7 +223,7 @@ class ThreatMap:
   What the bot supplies is the reward, summed a second at a time over the horizon and discounted by its `half_life`, 3
   minutes by default, so that a unit 3 minutes into the plan counts half of one now, and `None` for no discount. What
   units are worth is a list of `terms`, which add up. A `RewardTerm` counts a group of unit types together, each unit
-  for what the group says, and gives their count a `WeightCurve`: a list of `CurveSegment`, each a `weight` for every
+  for what the group says, and gives their count a `WeightCurve`: a list of `WeightSegment`, each a `weight` for every
   unit up to its `end_count`, the weights never rising, so that more of them are worth less each and a plan buys a mix
   rather than only the best type for its cost. A term counts from a game time, its `start`, to its `end`, the whole game
   by default. Three classmethods build the usual terms. `RewardTerm.weight(units, weight)` is one worth for every unit,
@@ -247,7 +247,7 @@ class ThreatMap:
   each type, a number or a curve, and takes more `terms` beside. A weight may be negative, for a unit a plan should make
   only where something else needs it, and a curve's weights may not rise from piece to piece. Beside its terms a reward
   holds what each upgrade done is worth, and how long the state at the horizon counts for after it. Each mineral and
-  each vespene left in stock at the horizon is worth the reward's `stock_weight` besides, 0.0001 by default: far less
+  each vespene left in stock at the horizon is worth the reward's `resource_weight` besides, 0.0001 by default: far less
   than what it could have bought under weights around 1, and enough that a plan's workers bring in what they can where
   it buys nothing more. A reward of much smaller weights wants it smaller in proportion. `plan_now` takes the horizon, 5
   minutes by default, and the share of each unit type the bot expects lost a second, so that only what is expected to
@@ -339,7 +339,7 @@ class ThreatMap:
   holds them as its `miners` and `collectors`. A bot holds its collectors at the first interval's,
   `plan.intervals[0].collectors`, moving a worker when the next plan says another number, and has every worker it needs
   nowhere else mine. Where a plan needs no more vespene, its workers mine rather than collect it while a field brings in
-  more than a refinery. With a `stock_weight` of 0 a plan may leave workers idle where what they would bring in buys
+  more than a refinery. With a `resource_weight` of 0 a plan may leave workers idle where what they would bring in buys
   nothing before its horizon, as in its last intervals, and its stocks may read less than its workers would bring in. A
   plan moves no worker for nothing. One that starts to mine or to collect brings in nothing for the economy's
   `initial_harvest_delay`, 3 seconds by default, whatever the interval's length: a worker moved between minerals and

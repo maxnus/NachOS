@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.planner._economy_model import EconomyModel
     from sc2nachos.extensions.planner._planner_state import PlannerState, WorkerBuild
     from sc2nachos.extensions.planner._reward import Reward
-    from sc2nachos.extensions.planner._terran_model import Item, TerranModel
+    from sc2nachos.extensions.planner._terran_model import ProductionItem, TerranModel
     from sc2nachos.gametime import TimeDependent
 
 
@@ -103,7 +103,7 @@ class PlanVariables:
     def __init__(
         self,
         *,
-        items: Sequence[Item],
+        items: Sequence[ProductionItem],
         model: TerranModel,
         edges: Sequence[float],
         state: PlannerState,
@@ -202,7 +202,7 @@ class PlanVariables:
         walk = self._walk_seconds.get(build.unit_type, 0.0)
         return build.time_left.seconds + (walk if build.builder_walks_there else 0.0)
 
-    def _add_starts_so_far(self, item: Item, whole: NDArray[np.bool_]) -> None:
+    def _add_starts_so_far(self, item: ProductionItem, whole: NDArray[np.bool_]) -> None:
         """Add the variables of the next item, `item`: its starts so far by each interval's end, whole in the intervals
         `whole` marks, which run from the first, so that each of those intervals' starts is whole too. An interval's
         starts are held between none and the most the interval takes: none before an SCV could walk there, and none of
@@ -251,7 +251,7 @@ class PlanVariables:
             working.add(tier.block, np.eye(self._interval_count))
         return working
 
-    def _most_starts_in_an_interval(self, item: Item) -> float:
+    def _most_starts_in_an_interval(self, item: ProductionItem) -> float:
         """The most of `item` that can start in one interval."""
         state = self._state
         if item.upgrade is not None:
@@ -406,7 +406,7 @@ class PlanVariables:
         whole = np.logical_and.reduce([self._whole[index] for index in indices])
         return (self._widths <= shortest + SECONDS_TOLERANCE) & whole
 
-    def _walk_seconds_of(self, item: Item) -> float:
+    def _walk_seconds_of(self, item: ProductionItem) -> float:
         """The seconds an SCV walks to build `item`, and back."""
         return 0.0 if item.unit_type is None else self._walk_seconds.get(item.unit_type, 0.0)
 

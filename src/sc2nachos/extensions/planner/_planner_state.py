@@ -38,7 +38,7 @@ class ProducerActivity:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class UnitCompletion:
-    """A unit in production but a structure an SCV builds: a train, a morph or an add-on."""
+    """A unit in production but a structure a worker builds: a train, a morph or an add-on."""
 
     unit_type: UnitTypeId
     """The type it counts as."""
@@ -49,29 +49,29 @@ class UnitCompletion:
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorkerBuild:
-    """A structure an SCV builds, going up or on its way."""
+    """A structure a worker builds, going up or with the worker on its way."""
 
     unit_type: UnitTypeId
     """The type it counts as."""
     time_left: GameTime
     """The building it has left: its whole build time if not begun."""
     builder_walks_there: bool
-    """Whether an SCV has yet to walk there: for a build not begun, and for a structure going up whose SCV has left."""
+    """Whether a worker has yet to walk there: for a build not begun, and for a structure going up whose worker has
+    left."""
     mineral_fields: int = 0
-    """The mineral fields it brings once done. For a command center at an expansion, the fields the expansion has
-    left; none for a command center anywhere else, and for any other structure."""
+    """The mineral fields it brings once done. For a townhall at an expansion, the fields the expansion has left; none
+    for a townhall anywhere else, and for any other structure."""
     geysers: int = 0
-    """The geysers it brings once done, each free for a refinery. For a command center at an expansion, the
-    expansion's geysers with no gas building on them; none for a command center anywhere else, and for any other
-    structure."""
+    """The geysers it brings once done, each free for a gas building. For a townhall at an expansion, the expansion's
+    geysers with no gas building on them; none for a townhall anywhere else, and for any other structure."""
 
 
 @final
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PlannerState:
-    """The state of the game a plan starts from, as plain values: what `Planner.state` reads, which a bot may
-    change with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The
-    planner pools what it holds: it never knows which base a field, a refinery or a worker is at.
+    """The state of the game a plan starts from, as plain values: what `Planner.state` reads, which a bot may change
+    with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The planner pools
+    what it holds: it never knows which base a field, a gas building or a worker is at.
 
     It holds each unit as the type it counts as, as `Planner` says: a barracks for a flying one, a siege tank for a
     sieged one, a hellion for a hellbat, a refinery for a rich one."""
@@ -95,28 +95,28 @@ class PlannerState:
     upgrades: frozenset[UpgradeId] = frozenset()
     """The upgrades done."""
     unit_completions: tuple[UnitCompletion, ...] = ()
-    """Each unit in production but a structure an SCV builds."""
+    """Each unit in production but a structure a worker builds."""
     upgrade_completions: Mapping[UpgradeId, GameTime] = field(default_factory=dict)
     """Each upgrade being researched, with the time until it is done."""
     producer_activities: tuple[ProducerActivity, ...] = ()
     """What keeps each producer busy now."""
     worker_builds: tuple[WorkerBuild, ...] = ()
-    """Each structure an SCV builds, going up or on its way."""
+    """Each structure a worker builds, going up or with the worker on its way."""
     mineral_fields: int = 0
     """The mineral fields left at bases with a finished townhall of this player's."""
-    refineries_with_vespene: int = 0
-    """This player's finished refineries with vespene left."""
+    gas_buildings_with_vespene: int = 0
+    """This player's finished gas buildings with vespene left."""
     vespene_collectors: int = 0
-    """The workers collecting vespene now: those the game counts as assigned to those refineries. The planner takes
-    every other SCV that builds nothing to be mining."""
+    """The workers collecting vespene now: those the game counts as assigned to those gas buildings. The planner takes
+    every other worker that builds nothing to be mining."""
     free_geysers: int = 0
-    """The geysers without a gas building at bases with a finished townhall of this player's, less one for each refinery
-    an SCV is on its way to build."""
+    """The geysers without a gas building at bases with a finished townhall of this player's, less one for each gas
+    building a worker is on its way to build."""
 
 
 def read_planner_state(api: Api[object], *, model: TerranModel) -> PlannerState:
     """The state of the game `api` plays now, its unit types read by `model`."""
-    counts, refineries_with_vespene, vespene_collectors = _counts_of_own_units(api, model)
+    counts, gas_buildings_with_vespene, vespene_collectors = _counts_of_own_units(api, model)
     fields, free_geysers = _bases_of(api)
     unit_completions, producer_activities, worker_builds = _production_of(api, model)
     refineries_not_begun = sum(
@@ -136,7 +136,7 @@ def read_planner_state(api: Api[object], *, model: TerranModel) -> PlannerState:
         producer_activities=tuple(producer_activities + research_activities),
         worker_builds=tuple(build for build, _ in worker_builds),
         mineral_fields=fields,
-        refineries_with_vespene=refineries_with_vespene,
+        gas_buildings_with_vespene=gas_buildings_with_vespene,
         vespene_collectors=vespene_collectors,
         free_geysers=max(free_geysers - refineries_not_begun, 0),
     )
@@ -147,7 +147,7 @@ def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[Uni
     and of the workers assigned to those. Those known alive count, an SCV inside a refinery and a marine in a bunker
     among them, which the last observation leaves out (in game)."""
     counts: dict[UnitTypeId, int] = {}
-    refineries_with_vespene = 0
+    gas_buildings_with_vespene = 0
     vespene_collectors = 0
     for unit in api.known_units.own:
         if not unit.is_complete:
@@ -155,9 +155,9 @@ def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[Uni
         counted = model.counted_as(unit.type_id)
         counts[counted] = counts.get(counted, 0) + 1
         if UnitType.GasBuilding.includes(unit) and unit.vespene_contents > 0:
-            refineries_with_vespene += 1
+            gas_buildings_with_vespene += 1
             vespene_collectors += unit.assigned_harvesters
-    return counts, refineries_with_vespene, vespene_collectors
+    return counts, gas_buildings_with_vespene, vespene_collectors
 
 
 def _bases_of(api: Api[object]) -> tuple[int, int]:

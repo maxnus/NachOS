@@ -15,7 +15,6 @@ from sc2nachos import Api, GameTime, Resources
 from sc2nachos.events import TurnEvent
 from sc2nachos.extensions.planner import (
     BuildPlan,
-    CurveSegment,
     EconomyModel,
     GridSegment,
     PlanItem,
@@ -28,6 +27,7 @@ from sc2nachos.extensions.planner import (
     TimeGrid,
     UnitCompletion,
     WeightCurve,
+    WeightSegment,
     WorkerBuild,
 )
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
@@ -118,7 +118,9 @@ _A_FULL_BASE = NewBase(mineral_fields=8, geysers=2)
 _A_PLAN_OF_ONE_BARRACKS = BuildPlan(
     time=GameTime.ZERO,
     items=(
-        PlanItem(item=UnitTypeId.BARRACKS, start=GameTime(seconds=30), duration=GameTime(steps=1040), is_fluid=False),
+        PlanItem(
+            product=UnitTypeId.BARRACKS, start=GameTime(seconds=30), duration=GameTime(steps=1040), is_fluid=False
+        ),
     ),
     intervals=(),
     reward=0.0,
@@ -148,7 +150,7 @@ def _plan_found(plan: BuildPlan | None) -> BuildPlan:
 
 def _start_seconds(plan: BuildPlan, item: UnitTypeId | UpgradeId) -> list[float]:
     """The seconds after the plan's start at which it starts each `item`, to a millionth."""
-    return [round((planned.start - plan.time).seconds, 6) for planned in plan.items if planned.item == item]
+    return [round((planned.start - plan.time).seconds, 6) for planned in plan.items if planned.product == item]
 
 
 def _start_seconds_of_units_done_in_time(plan: BuildPlan, unit_type: UnitTypeId) -> list[float]:
@@ -473,7 +475,7 @@ class TestKnownPlans:
             horizon_seconds=180,
             fluid_after=_whole_over_any_horizon,
         )
-        assert [planned.item for planned in plan.items].count(UnitTypeId.REACTOR_BARRACKS) == reactors_started
+        assert [planned.product for planned in plan.items].count(UnitTypeId.REACTOR_BARRACKS) == reactors_started
 
     @pytest.mark.parametrize(("supply_used", "depots_started"), [(15.0, 1), (20.0, 2)], ids=["at the cap", "over it"])
     def test_supply_over_the_cap_is_made_up_before_a_unit_starts(self, supply_used: float, depots_started: int) -> None:
@@ -604,7 +606,7 @@ class TestKnownPlans:
         assert [interval.end.time for interval in plan.intervals] == [
             GameTime(seconds=seconds) for seconds in range(32, 46, 2)
         ]
-        scv = PlanItem(item=UnitTypeId.SCV, start=GameTime(seconds=30), duration=GameTime(steps=272), is_fluid=False)
+        scv = PlanItem(product=UnitTypeId.SCV, start=GameTime(seconds=30), duration=GameTime(steps=272), is_fluid=False)
         assert plan.items == (scv,)
         assert scv.end == GameTime(seconds=30) + GameTime(steps=272)
         assert [interval.duration.seconds for interval in plan.intervals] == pytest.approx([2.0] * 7)
@@ -901,7 +903,7 @@ class TestKnownPlans:
             units={UnitTypeId.BARRACKS: 1, UnitTypeId.REACTOR_BARRACKS: 1},
             mineral_fields=0,
         )
-        curve = WeightCurve([CurveSegment(weight=1.0, end_count=3), CurveSegment(weight=-0.1)])
+        curve = WeightCurve([WeightSegment(weight=1.0, end_count=3), WeightSegment(weight=-0.1)])
         plan = _best_plan(state, Reward.weighted({UnitTypeId.MARINE: curve}, half_life=None), horizon_seconds=40)
         assert len(_start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE)) == 3
 
@@ -916,7 +918,7 @@ class TestKnownPlans:
         )
         by_weight = Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None)
         by_curve = Reward.weighted(
-            {UnitTypeId.MARINE: WeightCurve([CurveSegment(weight=1.0, end_count=3)])}, half_life=None
+            {UnitTypeId.MARINE: WeightCurve([WeightSegment(weight=1.0, end_count=3)])}, half_life=None
         )
         weighted, curved = (_best_plan(state, reward, horizon_seconds=40) for reward in (by_weight, by_curve))
 
@@ -1185,10 +1187,10 @@ class TestKnownPlans:
         plan = _best_plan(state, with_the_shield, horizon_seconds=120, fluid_after=lambda _: GameTime.ZERO)
 
         shield = PlanItem(
-            item=UpgradeId.COMBAT_SHIELD, start=GameTime.ZERO, duration=GameTime(steps=1760), is_fluid=False
+            product=UpgradeId.COMBAT_SHIELD, start=GameTime.ZERO, duration=GameTime(steps=1760), is_fluid=False
         )
-        assert [planned for planned in plan.items if planned.item == UpgradeId.COMBAT_SHIELD] == [shield]
-        assert all(planned.is_fluid for planned in plan.items if planned.item == UnitTypeId.MARINE)
+        assert [planned for planned in plan.items if planned.product == UpgradeId.COMBAT_SHIELD] == [shield]
+        assert all(planned.is_fluid for planned in plan.items if planned.product == UnitTypeId.MARINE)
 
     def test_a_term_that_requires_an_upgrade_the_state_has_is_worth_what_its_weight_is(self) -> None:
         state = _game_start(
@@ -1331,7 +1333,7 @@ class TestPlan:
 
         first, last = plan.intervals[0].start, plan.intervals[-1].end
         spent = 50.0 * len(plan.items)
-        assert {planned.item for planned in plan.items} == {UnitTypeId.SCV}
+        assert {planned.product for planned in plan.items} == {UnitTypeId.SCV}
         assert first.collected == state.collected
         assert last.collected.minerals - 600.0 == pytest.approx(last.resources.minerals - 50.0 + spent)
         assert last.collected.minerals > 600.0
@@ -1842,7 +1844,7 @@ class TestEconomy:
                 UnitTypeId.TECH_LAB_BARRACKS: 1,
                 UnitTypeId.REFINERY: 1,
             },
-            refineries_with_vespene=1,
+            gas_buildings_with_vespene=1,
             vespene_collectors=3,
             free_geysers=1,
         )
@@ -1872,7 +1874,7 @@ class TestEconomy:
                 UnitTypeId.TECH_LAB_BARRACKS: 1,
                 UnitTypeId.REFINERY: 1,
             },
-            refineries_with_vespene=1,
+            gas_buildings_with_vespene=1,
             free_geysers=1,
         )
         plan = _best_plan(
@@ -1899,7 +1901,7 @@ class TestEconomy:
                 UnitTypeId.BARRACKS: 1,
                 UnitTypeId.REFINERY: 1,
             },
-            refineries_with_vespene=1,
+            gas_buildings_with_vespene=1,
             vespene_collectors=3,
             free_geysers=1,
         )
@@ -1997,7 +1999,7 @@ class TestEconomy:
                 UnitTypeId.TECH_LAB_BARRACKS: 1,
                 UnitTypeId.REFINERY: 1,
             },
-            refineries_with_vespene=1,
+            gas_buildings_with_vespene=1,
             free_geysers=1,
         )
         plan = _best_plan(
@@ -2026,7 +2028,7 @@ class TestEconomy:
                 UnitTypeId.TECH_LAB_BARRACKS: 1,
                 UnitTypeId.REFINERY: 1,
             },
-            refineries_with_vespene=1,
+            gas_buildings_with_vespene=1,
             free_geysers=1,
         )
         plan = _best_plan(
@@ -2070,7 +2072,7 @@ class TestEconomy:
                 ),
             ),
             mineral_fields=0,
-            refineries_with_vespene=1,
+            gas_buildings_with_vespene=1,
             vespene_collectors=6,
         )
         plan = _best_plan(
@@ -2291,32 +2293,32 @@ class TestReward:
         "segments",
         [
             [],
-            [CurveSegment(weight=1.0, end_count=10), CurveSegment(weight=2.0)],
+            [WeightSegment(weight=1.0, end_count=10), WeightSegment(weight=2.0)],
             [
-                CurveSegment(weight=1.0, end_count=10),
-                CurveSegment(weight=0.5, end_count=5),
-                CurveSegment(weight=0.0),
+                WeightSegment(weight=1.0, end_count=10),
+                WeightSegment(weight=0.5, end_count=5),
+                WeightSegment(weight=0.0),
             ],
         ],
         ids=["no segments", "a weight rising", "a count falling"],
     )
-    def test_a_curve_that_is_not_concave_raises(self, segments: list[CurveSegment]) -> None:
+    def test_a_curve_that_is_not_concave_raises(self, segments: list[WeightSegment]) -> None:
         with pytest.raises(ValueError, match="weight curve"):
             WeightCurve(segments)
 
     def test_the_last_segments_count_is_ignored(self) -> None:
-        WeightCurve([CurveSegment(weight=1.0, end_count=30), CurveSegment(weight=0.0, end_count=0)])
+        WeightCurve([WeightSegment(weight=1.0, end_count=30), WeightSegment(weight=0.0, end_count=0)])
 
     def test_a_constant_curve_is_one_weight_and_one_up_to_a_count_nothing_past_it(self) -> None:
-        assert WeightCurve.constant(2.0) == WeightCurve([CurveSegment(weight=2.0)])
+        assert WeightCurve.constant(2.0) == WeightCurve([WeightSegment(weight=2.0)])
         assert WeightCurve.up_to(2.0, 8) == WeightCurve(
-            [CurveSegment(weight=2.0, end_count=8), CurveSegment(weight=0.0)]
+            [WeightSegment(weight=2.0, end_count=8), WeightSegment(weight=0.0)]
         )
         assert WeightCurve.up_to(2.0, math.inf) == WeightCurve.constant(2.0)
 
     @pytest.mark.parametrize("end_count", [math.inf, 0.0, -1.0], ids=["none", "0", "below 0"])
     def test_a_piece_but_the_last_that_ends_at_no_count_above_0_raises(self, end_count: float) -> None:
-        segments = [CurveSegment(weight=1.0, end_count=end_count), CurveSegment(weight=0.5)]
+        segments = [WeightSegment(weight=1.0, end_count=end_count), WeightSegment(weight=0.5)]
         with pytest.raises(ValueError, match="must end at a count above 0"):
             WeightCurve(segments)
 
@@ -2378,7 +2380,7 @@ class TestReward:
 
     @pytest.mark.parametrize(
         "arguments",
-        [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}, {"stock_weight": -1e-4}],
+        [{"half_life": GameTime.ZERO}, {"terminal_time": GameTime(seconds=-1)}, {"resource_weight": -1e-4}],
         ids=["a half-life of 0", "a negative terminal time", "a negative weight on the stock"],
     )
     def test_a_bad_discount_tail_or_stock_weight_raises(self, arguments: dict[str, Any]) -> None:
@@ -2651,7 +2653,7 @@ class TestGameState:
     def test_it_reads_the_fields_and_free_geysers_of_its_bases_but_not_of_a_free_expansion(self) -> None:
         (state,) = _states_of(_main_base_at(0))
 
-        assert (state.mineral_fields, state.free_geysers, state.refineries_with_vespene) == (8, 1, 1)
+        assert (state.mineral_fields, state.free_geysers, state.gas_buildings_with_vespene) == (8, 1, 1)
 
     def test_it_reads_the_workers_assigned_to_its_refineries_as_those_collecting(self) -> None:
         (state,) = _states_of(_main_base_at(0))
@@ -2789,7 +2791,7 @@ class TestPlanner:
         assert api.extensions.plan is plan
         assert plan.time == GameTime.ZERO
         assert plan.intervals[0].start.units[UnitTypeId.BARRACKS] == 1.0
-        assert UnitTypeId.MARINE in {planned.item for planned in plan.items}
+        assert UnitTypeId.MARINE in {planned.product for planned in plan.items}
 
     def test_it_returns_none_and_holds_no_plan_if_the_solver_finds_none_within_its_limits(self) -> None:
         """A billionth of a second ends the solve before it has begun."""
@@ -2865,8 +2867,8 @@ class TestPlanner:
         api.play(game.joined())
 
         without, with_one = plans[:2]
-        assert [planned.item for planned in without.items].count(UnitTypeId.COMMAND_CENTER) == 0
-        assert [planned.item for planned in with_one.items].count(UnitTypeId.COMMAND_CENTER) == 1
+        assert [planned.product for planned in without.items].count(UnitTypeId.COMMAND_CENTER) == 0
+        assert [planned.product for planned in with_one.items].count(UnitTypeId.COMMAND_CENTER) == 1
 
     def test_it_plans_over_5_minutes_unless_handed_a_horizon(self) -> None:
         game = ScriptedGame(
