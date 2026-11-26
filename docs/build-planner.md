@@ -68,6 +68,11 @@ minutes a plan's first steps get worse.
 - **In a log.** `plan.to_string()` is the whole plan as text, a line an item, and `item.to_string()` one such line,
   `"3:12 SUPPLY_DEPOT"`.
 
+[`examples/terran_planner_bot.py`](../examples/terran_planner_bot.py) is a whole bot that carries plans out so, for a
+reward on SCVs, marines, marauders and five upgrades. It plans every 20 seconds and starts the items due in the plan's
+order, each as soon as a unit can make it, setting aside the cost of one it cannot pay for yet so that nothing after it
+spends that money first. It keeps as many SCVs at its refineries as the plan has collecting now.
+
 ## What a plan rests on
 
 Everything the planner assumes of the game is the bot's to read and change, as arguments of `plan_now`:
