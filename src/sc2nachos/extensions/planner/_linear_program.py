@@ -8,14 +8,15 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import final
+from typing import assert_never, final
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.sparse import coo_array, csr_array
 
+from sc2nachos.extensions.planner._gurobi import maximize_with_gurobi
 from sc2nachos.extensions.planner._highs import maximize_with_highs
-from sc2nachos.extensions.planner._matrix_form import FloatArray, MatrixForm, Solution, no_solution
+from sc2nachos.extensions.planner._matrix_form import FloatArray, MatrixForm, Solution
 from sc2nachos.extensions.planner._solver import Solver
 
 
@@ -184,19 +185,23 @@ class LinearProgram:
         values within `relative_gap` of the best, relative to the objective. A program Gurobi refuses, as one larger
         than its licence allows, HiGHS solves within what is left of `time_limit`."""
         form = self._matrix_form(objective)
-        if solver is Solver.HIGHS:
-            return maximize_with_highs(form, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
-        # Imported here alone: gurobipy and highspy are an optional install.
-        from sc2nachos.extensions.planner._gurobi import maximize_with_gurobi
-
         started = time.perf_counter()
-        solution = maximize_with_gurobi(form, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
+        match solver:
+            case Solver.GUROBI:
+                solution = maximize_with_gurobi(
+                    form, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
+                )
+            case Solver.HIGHS:
+                # HiGHS solves it below, as it does a program Gurobi refuses.
+                solution = None
+            case _:
+                assert_never(solver)
         if solution is not None:
             return solution
         remaining = None if time_limit is None else time_limit - (time.perf_counter() - started)
         if remaining is not None and remaining <= 0:
-            message = "the time limit was reached before HiGHS could take over from Gurobi"
-            return no_solution(seconds=time.perf_counter() - started, message=message, solver=Solver.HIGHS)
+            message = "the time limit was reached before HiGHS could start"
+            return Solution.none_found(seconds=time.perf_counter() - started, message=message, solver=Solver.HIGHS)
         solution = maximize_with_highs(form, time_limit=remaining, node_limit=node_limit, relative_gap=relative_gap)
         return dataclasses.replace(solution, seconds=time.perf_counter() - started)
 
@@ -209,7 +214,7 @@ class LinearProgram:
             np.add.at(coefficients, np.concatenate(columns).astype(int), np.concatenate(values))
         matrix, row_lower, row_upper = self._constraint_matrix_and_bounds(size)
         return MatrixForm(
-            objective=coefficients,
+            objective_coefficients=coefficients,
             objective_constant=float(objective.constant[0]),
             matrix=matrix,
             row_lower=row_lower,

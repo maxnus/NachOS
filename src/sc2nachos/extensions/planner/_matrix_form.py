@@ -20,10 +20,10 @@ type FloatArray = NDArray[np.float64]
 class MatrixForm:
     """A mixed-integer linear program to maximize, as matrices."""
 
-    objective: FloatArray
+    objective_coefficients: FloatArray
     """The objective's coefficient on each variable."""
     objective_constant: float
-    """What the objective adds to its coefficients times the variables."""
+    """The objective's constant term, which no variable multiplies."""
     matrix: csr_array
     """Each row's coefficients, a column to each variable."""
     row_lower: FloatArray
@@ -58,7 +58,7 @@ class Solution:
     solver: Solver
     """The solver that found it."""
 
-
-def no_solution(*, seconds: float, message: str, solver: Solver) -> Solution:
-    """A `Solution` of no values, from a solve by `solver` that took `seconds` and ended with `message`."""
-    return Solution(None, math.nan, math.inf, False, seconds, message, solver)
+    @classmethod
+    def none_found(cls, *, seconds: float, message: str, solver: Solver) -> Solution:
+        """A solve by `solver` that found no values in `seconds`, and ended with `message`."""
+        return cls(None, math.nan, math.inf, False, seconds, message, solver)

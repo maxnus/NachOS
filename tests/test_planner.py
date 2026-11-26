@@ -39,6 +39,8 @@ from sc2nachos.extensions.planner import (
     _gurobi,
 )
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
+from sc2nachos.extensions.planner._highs import maximize_with_highs
+from sc2nachos.extensions.planner._highs_presolve import HighsPresolve, PresolveOutcome
 from sc2nachos.extensions.planner._linear_program import LinearProgram, RowExpression
 from sc2nachos.extensions.planner._matrix_form import Solution
 from sc2nachos.extensions.planner._plan_program import PlanProgram
@@ -2644,6 +2646,48 @@ _STIMPACK_ALONE = Reward(upgrade_weights={UpgradeId.STIMPACK: 1.0}, half_life=No
 
 
 class TestSolvers:
+    def test_highs_presolve_maps_the_best_of_what_it_leaves_back_to_the_programs_best(self) -> None:
+        """Five shares fixed at 1, which the presolve removes, beside fifty it leaves."""
+        program, worth = _dense_program(50)
+        worth.add(program.add_variables(5, lower=1.0, upper=1.0), 2.0)
+        form = program._matrix_form(worth)
+
+        presolve = HighsPresolve(form, time_limit=None)
+        assert presolve.outcome is PresolveOutcome.REDUCED
+        assert presolve.presolved is not None
+        assert len(presolve.presolved.objective_coefficients) == 50
+        left = maximize_with_highs(presolve.presolved, time_limit=None, node_limit=None, relative_gap=1e-9)
+        assert left.values is not None
+        values = presolve.postsolved(left.values)
+        whole = maximize_with_highs(form, time_limit=None, node_limit=None, relative_gap=1e-9)
+
+        assert values is not None
+        assert float(form.objective_coefficients @ values) + form.objective_constant == pytest.approx(whole.objective)
+
+    def test_highs_presolve_that_fixes_every_variable_leaves_a_program_of_none(self) -> None:
+        program = LinearProgram()
+        count = program.add_variables(1, upper=3.5, integral=True)
+        form = program._matrix_form(RowExpression(1).add(count, 1.0))
+
+        presolve = HighsPresolve(form, time_limit=None)
+
+        assert presolve.outcome is PresolveOutcome.SOLVED
+        assert presolve.presolved is not None
+        assert len(presolve.presolved.objective_coefficients) == 0
+        assert presolve.postsolved(np.zeros(0)) == pytest.approx([3.0])
+
+    def test_highs_presolve_of_a_program_no_values_satisfy_leaves_none(self) -> None:
+        program = LinearProgram()
+        count = program.add_variables(1, lower=0.2, upper=0.8, integral=True)
+        form = program._matrix_form(RowExpression(1).add(count, 1.0))
+
+        presolve = HighsPresolve(form, time_limit=None)
+
+        assert presolve.outcome is PresolveOutcome.INFEASIBLE
+        assert presolve.presolved is None
+        with pytest.raises(ValueError, match="ended infeasible"):
+            presolve.postsolved(np.zeros(0))
+
     def test_gurobi_solves_a_program_presolve_leaves_whole_to_what_highs_finds(self) -> None:
         program, worth = _dense_program(1900)
         solutions = [
@@ -2672,7 +2716,7 @@ class TestSolvers:
             raise gurobipy.GurobiError(GRB.Error.NO_LICENSE, "no Gurobi license found")
 
         by_highs = _best_plan(_READY_FOR_STIMPACK, _STIMPACK_ALONE, horizon_seconds=120)
-        monkeypatch.setattr(_gurobi, "_minimize_presolved", refuse)
+        monkeypatch.setattr(_gurobi, "_maximize", refuse)
         refused = _best_plan(
             _READY_FOR_STIMPACK, _STIMPACK_ALONE, horizon_seconds=120, solver=Solver.GUROBI, found_by=Solver.HIGHS
         )
@@ -2688,7 +2732,7 @@ class TestSolvers:
         def refuse_late(*_: object, **__: object) -> None:
             time.sleep(0.02)
 
-        monkeypatch.setattr(_gurobi, "maximize_with_gurobi", refuse_late)
+        monkeypatch.setattr("sc2nachos.extensions.planner._linear_program.maximize_with_gurobi", refuse_late)
         program, worth = _dense_program(10)
         solution = program.maximize(worth, solver=Solver.GUROBI, time_limit=0.01, node_limit=None, relative_gap=1e-4)
 
@@ -3276,7 +3320,6 @@ class TestPlanner:
 
     def test_a_planner_for_gurobi_without_gurobipy_installed_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setitem(sys.modules, "gurobipy", None)
-        monkeypatch.delitem(sys.modules, "sc2nachos.extensions.planner._gurobi")
         game = ScriptedGame([make_observation(0), make_observation(1)])
         with pytest.raises(ImportError, match=r"pip install sc2nachos\[gurobi\]"):
             Api(extensions=lambda api: Planner(api, solver=Solver.GUROBI)).play(game.joined())

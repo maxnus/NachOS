@@ -462,7 +462,14 @@ file as it was at `807304c`.
     rows, and 13 of 14 fit after the presolve, 990 to 1998, the 10-minute `double90` grid's 2896 not. On those 13
     Gurobi proves the plan 5.6 times sooner in the median, 1.6 to 10.7. A program Gurobi refuses is solved by HiGHS
     within the time left, and `SolveReport.solver` says which. highspy comes in for this alone; Open 2 stands for
-    HiGHS's own solve.
+    HiGHS's own solve. Settled with the owner the same day, in #262:
+    - **Always the presolve** ("OK agreed"), also for a program that fits as built: on 32 programs of 2 to 3 minutes
+      that do, Gurobi alone was faster by 1.11 times in the median, 0.76 to 1.61. Worth building only with a licence of
+      no limit, and measured then.
+    - **An enum, not solver classes** ("OK agreed"): settings, when one is needed, as a dictionary of the solver's own
+      parameters beside it, `plan_now`'s limits winning. The dispatch is a `match` that ends in `assert_never`.
+    - **HiGHS's presolve is a class, `HighsPresolve`**, and Gurobi a function on a `MatrixForm`, presolved or not; the
+      solver layer is a package of its own, `planner/_milp/`, the rest of the planner flat.
 
 ## Risks
 

@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
+from sc2nachos.extensions.planner._gurobi import check_gurobi_starts
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner_state import (
@@ -151,7 +152,7 @@ class Planner:
         if not 0 <= spendable_income_fraction <= 1:
             raise ValueError(f"the spendable income fraction must be 0 to 1, not {spendable_income_fraction}")
         if solver is Solver.GUROBI:
-            _check_gurobi_starts()
+            check_gurobi_starts()
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._fluid_after = fluid_after
@@ -278,18 +279,6 @@ def new_bases_of(api: Api[object], expansions: Sequence[Expansion]) -> list[NewB
             mineral_fields, free_geysers = fields_and_free_geysers_of(api, expansion)
             new_bases.append(NewBase(mineral_fields=mineral_fields, geysers=free_geysers))
     return new_bases
-
-
-def _check_gurobi_starts() -> None:
-    """Raise `ImportError` if gurobipy or highspy is not installed, and `RuntimeError` if Gurobi cannot start, as
-    without a licence."""
-    try:
-        # Imported here alone: gurobipy and highspy are an optional install.
-        from sc2nachos.extensions.planner._gurobi import start_gurobi
-    except ImportError as error:
-        message = "Solver.GUROBI needs gurobipy and highspy, which `pip install sc2nachos[gurobi]` installs"
-        raise ImportError(message) from error
-    start_gurobi()
 
 
 def _check_solve_limits(*, time_limit: float | None, node_limit: int | None, relative_gap: float) -> None:
