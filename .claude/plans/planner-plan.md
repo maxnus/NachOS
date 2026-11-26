@@ -868,6 +868,22 @@ strategy stays the bot's. The quality bar is NachOS's from the first line, met w
       three unit types is within 0.03% of the proven best after 1 s, and a wide one of 38 items is 1.8, 1.6 and 2.5%
       short after 1 s, 1.7, 1.1 and 0.6% after 3, 0, 1.1 and 0.6% after 5 and 0, 0.9 and 0.1% after 8, proven in 3.5,
       17.2 and 9.6 s. Linking the limit to the time between plans waits for phase 3, where the planner knows that time.
+    - **What he would say of the rest** (the owner, 2026-11-26: "can you go over this PR again and anticipate any other
+      similar comments or suggestions I may have? Please also resolve all of my comments that have been addressed", and
+      to the eight I listed: "All of them"). 38 of the 48 threads are resolved on GitHub, and the 10 answered with no
+      change stay open. Built: the docstrings of `Planner` and `plan_now` in plain paragraphs, one for each argument;
+      `PlanItem.item` as `product`, the core's word; `Reward.stock_weight` as `resource_weight`; `CurveSegment` as
+      `WeightSegment`; one constructor, `RewardTerm.weighted`, for `weight` and `curve`, a count the bot wants being
+      `WeightCurve.up_to`; worker, townhall and gas building in the state's docstrings, and
+      `gas_buildings_with_vespene`; `TimeGrid.edges` giving `GameTime`s, the program still counting in seconds through
+      `edge_seconds_of`; and the model's `Item` as `ProductionItem`. Smaller ones a stated rule settled went in unasked:
+      `__all__` in order, `PlanDeviation`'s fields in `PlanMoment`'s order, `uniform(interval_length)`, two helpers of
+      one line written where they are read. Counting the edges in game time showed a fault already there: the default
+      grid's edges, summed in seconds, fell a hair short of their steps, 50 of 58 over 10 minutes, so a plan's times
+      read 271.99999999999994 steps and a term ending on an edge counted the interval ending there, worth 272 steps
+      where a grid of whole seconds gives 238. A plan's times are now on a whole step where they are within a millionth
+      of one. Looked at and left: internal helpers returning two or three values as a tuple, `Planner.grid` being the
+      one setting with a property, and `plan_now` returning `None` without the solver's reason.
     - **Answered with no change:** `deviation_of` stays on the plan, which holds what was expected, the state being
       plain values; `read_planner_state` stays a function behind `Planner.state()`, since it needs the planner's model;
       `LinearProgram` stays private until a second user shows what it should offer, and a maximum or an absolute value

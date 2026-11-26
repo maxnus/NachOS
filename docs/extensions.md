@@ -204,7 +204,7 @@ class ThreatMap:
   `Reward` and never the other way round.
 
   ```python
-  from sc2nachos.extensions.planner import WeightSegment, Planner, Reward, WeightCurve
+  from sc2nachos.extensions.planner import Planner, Reward, WeightCurve, WeightSegment
 
 
   class Extensions:
@@ -220,45 +220,54 @@ class ThreatMap:
           plan = api.extensions.planner.plan_now(reward)
   ```
 
-  What the bot supplies is the reward, summed a second at a time over the horizon and discounted by its `half_life`, 3
-  minutes by default, so that a unit 3 minutes into the plan counts half of one now, and `None` for no discount. What
-  units are worth is a list of `terms`, which add up. A `RewardTerm` counts a group of unit types together, each unit
-  for what the group says, and gives their count a `WeightCurve`: a list of `WeightSegment`, each a `weight` for every
-  unit up to its `end_count`, the weights never rising, so that more of them are worth less each and a plan buys a mix
-  rather than only the best type for its cost. A term counts from a game time, its `start`, to its `end`, the whole game
-  by default. Three classmethods build the usual terms. `RewardTerm.weight(units, weight)` is one worth for every unit,
-  of one unit type or of several counted together, a mapping of how much one unit of each counts: with `end_count=...`
-  for each unit up to a count the bot wants and none past it, such as one detector from a raven or a missile turret, or
-  as many as the enemy's air units from marines and vikings; with `start=...` and `end=...` for the game times it counts
-  between; with `time_factor=...` for a function of the game time that gives what its worth is multiplied by then, never
-  negative, such as `lambda time: 1 + time.seconds / 600` for a worth that doubles over 10 minutes, which a plan asks at
-  the end of each of its intervals; with `count_factor=...` for such a function that `end_count` is multiplied by, for
-  more units wanted as the game goes on where `time_factor` makes the same units worth more, such as `lambda time:
-  time.seconds / 60` with `end_count=1` for a viking to each minute gone; and with `requirements=[...]` for upgrades it
-  counts only once done, such as what marines are worth more with combat shield, which a plan then starts whole wherever
-  in its horizon. `RewardTerm.curve(units, weights)` takes the same for a `WeightCurve`. `RewardTerm.combination(groups,
-  weight)` is for units worth something in combination: each group is counted, and each unit of the smallest count is
-  worth the weight, so that the scarcest group limits what the others are worth. `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER:
-  2}]` with 0.3 is 0.3 for each marine a medivac heals, of which it heals 8, a marauder for two, beside the terms for
-  what each is worth without the other: a plan with 24 marines finds a third medivac worth making and a fourth not. It
-  takes `end_count`, `start`, `end`, `time_factor`, `count_factor` and `requirements` as `weight` does, and no negative
-  weight. What units are worth changes at a game time where one term ends and another starts, the time in both: a term
-  counts from its `start` and no longer at its `end`. `Reward.weighted({unit_type: weight})` is a reward of a term for
-  each type, a number or a curve, and takes more `terms` beside. A weight may be negative, for a unit a plan should make
-  only where something else needs it, and a curve's weights may not rise from piece to piece. Beside its terms a reward
-  holds what each upgrade done is worth, and how long the state at the horizon counts for after it. Each mineral and
-  each vespene left in stock at the horizon is worth the reward's `resource_weight` besides, 0.0001 by default: far less
-  than what it could have bought under weights around 1, and enough that a plan's workers bring in what they can where
-  it buys nothing more. A reward of much smaller weights wants it smaller in proportion. `plan_now` takes the horizon, 5
-  minutes by default, and the share of each unit type the bot expects lost a second, so that only what is expected to
-  survive counts: a number, or a [value that depends on the game time](time-dependent-values.md) for losses that start
-  later or come at once, a `TimeCurve`, a `TimeSeries` that covers the plan, or a function in a `TimeFunction`, which a
-  plan reads at each game step of its horizon, and which passes as a term's `time_factor` too. A plan makes nothing that
-  pays back only past its horizon: over 5 minutes from a game's start, a reward on army units alone takes no expansion,
-  and one that also values SCVs, or command centers, takes one it is handed. A longer horizon weighs such things itself
-  and solves slower, half again to twice as long over 10 minutes; under 4 minutes a plan's first steps get worse. A unit
-  counts as one type of its `equivalent_types`, the one an order makes: a flying barracks as a barracks, and a hellbat
-  as a hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
+  What the bot supplies is the reward: what units and upgrades are worth to it, counted for every second of the plan.
+  Later seconds count less: a second's worth halves over the reward's `half_life`, 3 minutes by default, and `None` is
+  no discount.
+
+  What units are worth is a list of `terms`, which add up. A `RewardTerm` counts some unit types together and says what
+  their count is worth a second. `RewardTerm.weighted(units, weights)` builds one:
+
+  - `units` is one unit type, or a mapping of several counted together, with how much one unit of each counts.
+  - `weights` is a number, which makes every unit worth that much, or a `WeightCurve`, where more units are worth less
+    each, so that a plan buys a mix rather than only the best type for its cost. `WeightCurve.up_to(1.0, 8)` is a count
+    the bot wants and nothing past it: one detector from a raven or a missile turret, or as many as the enemy's air
+    units from marines and vikings. A longer curve is a list of `WeightSegment`, each a `weight` for every unit up to
+    its `end_count`, the weights never rising.
+  - `start=...` and `end=...` are the game times the term counts between, the whole game by default. What units are
+    worth changes at a game time where one term ends and another starts.
+  - `time_factor=...` is a function of the game time that gives what the term's worth is multiplied by then, never
+    negative: `lambda time: 1 + time.seconds / 600` for a worth that doubles over 10 minutes. A plan asks it at the end
+    of each of its intervals.
+  - `count_factor=...` is such a function for the counts a curve's segments end at, for more units wanted as the game
+    goes on: `lambda time: time.seconds / 60` with `WeightCurve.up_to(1.0, 1)` is a viking for each minute gone.
+  - `requirements=[...]` are upgrades the term counts only once they are done, such as what marines are worth more with
+    combat shield. A plan starts such an upgrade whole wherever in its horizon.
+
+  `RewardTerm.combination(groups, weights)` is for units worth something in combination: each group is counted, and
+  `weights` is what the smallest count is worth, so that the scarcest group limits what the others are worth.
+  `[{MEDIVAC: 8}, {MARINE: 1, MARAUDER: 2}]` with 0.3 is 0.3 for each marine a medivac heals, of which it heals 8, a
+  marauder for two, beside the terms for what each is worth without the other: a plan with 24 marines finds a third
+  medivac worth making and a fourth not. It takes the arguments `weighted` takes, and no negative weight.
+
+  `Reward.weighted({unit_type: weights})` is a reward of one term for each type, a number or a curve, and takes more
+  `terms` beside. A weight may be negative, for a unit a plan should make only where something else needs it. Beside its
+  terms a reward holds what each upgrade done is worth, its `upgrade_weights`, and how long the state at the horizon
+  counts for after it, its `terminal_time`. Each mineral and each vespene left in the bank at the horizon is worth the
+  reward's `resource_weight` besides, 0.0001 by default: far less than what it could have bought under weights around 1,
+  and enough that a plan's workers bring in what they can where it buys nothing more. A reward of much smaller weights
+  wants it smaller in proportion.
+
+  `plan_now` takes the horizon, 5 minutes by default, and `loss_rates`, the share of each unit type the bot expects lost
+  a second, so that only what is expected to survive counts: a number, or a [value that depends on the game
+  time](time-dependent-values.md) for losses that start later or come at once, a `TimeCurve`, a `TimeSeries` that covers
+  the plan, or a function in a `TimeFunction`. A plan reads it at each game step of its horizon, and such a value passes
+  as a term's `time_factor` too. A plan makes nothing that pays back only past its horizon: over 5 minutes from a game's
+  start, a reward on army units alone takes no expansion, and one that also values SCVs, or command centers, takes one
+  it is handed. A longer horizon weighs such things itself and solves slower, half again to twice as long over 10
+  minutes; under 4 minutes a plan's first steps get worse.
+
+  A unit counts as one type whatever form it is in: a flying barracks as a barracks, and a hellbat as a hellion, which
+  needs no armory, so a plan makes hellions, and an armory only if the reward values one.
 
   Everything else a plan rests on is the bot's to read and change. `planner.state()` returns the `PlannerState`
   `plan_now` plans from, plain values read off the game: stock, supply, finished units, what is in production and when

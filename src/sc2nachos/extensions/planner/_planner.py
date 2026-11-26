@@ -30,12 +30,13 @@ _NO_LIMITS: Mapping[UnitTypeId | UpgradeId, int] = MappingProxyType({})
 
 @final
 class Planner:
-    """The build planner, for Terran: given a reward, a horizon and the state of the game, what to make and when.
+    """The build planner, for Terran: it works out what to make and when.
 
-    `plan_now` solves a mixed-integer linear program over a grid of time intervals for the plan worth the most by the
-    reward, and returns it as a `BuildPlan`: the items to make in order, each with the time it is expected to start. A
-    bot carries it out in order, each item as soon as it can be afforded, and asks for a new plan as the game goes on.
-    The planner orders nothing and holds no unit; where structures go and which SCV builds each stay the bot's.
+    A bot hands `plan_now` a `Reward`, which says what units and upgrades are worth to it. The planner finds the plan
+    worth the most and returns it as a `BuildPlan`: the things to make, in order, each with the time it is expected to
+    start. A bot carries the plan out in that order, starting each thing as soon as it can pay for it, and asks for a
+    new plan as the game goes on. The planner gives no orders and holds no unit: where a structure goes and which worker
+    builds it stay the bot's.
 
     Build it once the game has started, in the bot's own object an api is given as `extensions`:
 
@@ -52,61 +53,58 @@ class Planner:
     api = Api(extensions=Extensions)
     ```
 
-    It plans from the `PlannerState` that `state()` reads as `plan_now` is called, unless handed another. The model
-    of the game:
+    Its arguments say how the planner lays a plan out in time. Each has a default that suits a normal game.
 
-    - What each item costs, how long it takes, the supply it takes and gives, what makes it and what it needs first,
-      from the game's data; an item is pruned unless the reward values it or it is needed for one that does, or it is
-      the economy: SCVs, supply depots, command centers, orbital commands and refineries.
-    - A unit counts as one type of its `equivalent_types`, in the reward, the loss rates and the state alike: the one an
-      order makes rather than one morphed from another, and of two, the one needing fewer techs. So a flying barracks
-      counts as a barracks, and a hellbat as a hellion, which needs no armory: a plan makes hellions, and an armory
-      only if the reward values one. A rich refinery counts as a refinery, which its order makes.
-    - What workers mine and collect, what each orbital command's MULEs add, and how far an SCV walks to build: the
-      `EconomyModel` handed to `plan_now`. The workers are pooled over every field and refinery, as if each could work
-      anywhere at once.
+    `grid` is the grid of time intervals a plan is laid out on, by default `TimeGrid.doubling()`: short intervals at
+    first and longer ones later. Whatever a plan starts, it starts at the beginning of an interval, and a build counts
+    as done from the first boundary between intervals at or after its end.
+
+    `fluid_after` says for how long each thing is planned in whole numbers. The planner plans the near future exactly:
+    one barracks, then another. Further ahead it plans in fractions, 0.4 of a barracks, say, which is far faster to
+    solve and loses little, since the bot carries out only the first steps before it plans again. `fluid_after` is a
+    function that takes a unit type or an upgrade and returns the time from the plan's start after which it may be
+    planned in fractions, or `None` for the default; `GameTime.INFINITE` keeps it whole throughout. The default grows
+    with what the thing costs and shrinks as the income grows. At the income a game starts with, it is 60 seconds for
+    each 100 minerals and vespene: 4:00 for a command center, 2:30 for a factory or a starport, 2:00 for an upgrade of
+    100 and 100, 1:30 for a barracks or an orbital command, and 1:00 for a supply depot. At three times that income it
+    is a third of each, and it is never under 30 seconds. A longer time makes a plan exact further ahead, and the solve
+    slower.
+
+    `max_ignored_overrun` is how far a build may run into the next interval and still leave that interval free for the
+    next build of the same producer, as a share of the interval: by default a quarter. It matters where a build time is
+    not a whole number of intervals. On the default grid, SCVs then follow each other every 272 game steps, as in the
+    game, marauders every 476 for their 480, and marines every 408 for their 400. With 0 no overrun is ignored, and with
+    1 every one is.
+
+    `unlock_fraction` is how much of a requirement must be done before what needs it may start, by default 1: no
+    starport before a whole factory. It matters only far ahead, where structures are planned in fractions. A lower value
+    lets that share of a factory unlock a starport. With 0 any fraction does: the solve is faster, but a plan may then
+    make units on a structure it never lists.
+
+    `spendable_income_fraction` is how much of an interval's income may pay for what starts in that interval, beside
+    what is in the bank at its start: by default a half. A thing the bot can afford in the first half of an interval
+    then counts as started at the interval's start, and one it can afford only later waits for the next, so a start is
+    at most half an interval early or late. With 0 every start waits until the bank alone pays for it, up to an interval
+    late, and with 1 every start is as early as it could be. It matters most where intervals are long.
+
+    What the planner assumes of the game:
+
+    - What each thing costs, how long it takes, the supply it takes and gives, what makes it and what it needs first
+      come from the game's data.
+    - A plan considers only what the reward values, what that needs, and the economy: SCVs, supply depots, command
+      centers, orbital commands and refineries.
+    - A unit counts as one type whatever form it is in, in the reward, the loss rates and the state alike: a flying
+      barracks as a barracks, a sieged tank as a siege tank, a rich refinery as a refinery. A hellbat counts as a
+      hellion, which needs no armory, so a plan makes hellions, and an armory only if the reward values one.
+    - Workers are pooled: the planner does not know which base a worker, a mineral field or a refinery is at, and takes
+      every worker to be able to work anywhere. How many mine and how many collect vespene is the plan's choice in each
+      interval, which the interval holds as its `miners` and `collectors`.
+    - What workers bring in, and how long a worker walks to build, is the `EconomyModel` handed to `plan_now`. A worker
+      that builds is away from its work from the walk to the structure, through the build, to the walk back.
+    - A command center that morphs trains no SCV meanwhile. A reactor lets its host make two units at a time. A tech lab
+      makes the units that need one, and researches by itself.
     - A new command center brings the mineral fields and the geysers of the next of the `expansions` handed to
-      `plan_now`, and a plan starts none without them.
-    - How many workers mine and how many collect vespene is the plan's choice in each interval, which the interval holds
-      as its `miners` and `collectors`. A worker that starts to mine or to collect brings in nothing for the economy's
-      `initial_harvest_delay`, a new SCV too, but a builder back from its walk: every rise of the miners or collectors,
-      interval by interval, is such a start, from the state's collectors and every other SCV that builds nothing mining.
-      Nothing but the reward's `resource_weight` keeps a worker at work where what it brings in buys nothing more.
-    - An SCV is away from its work from the walk to a structure through the build to the walk back, the economy's walk
-      each way.
-    - A command center's morph keeps it from training SCVs, a reactor lets its host make two units at a time, and a
-      tech lab makes the units that need one and researches on its own.
-    - Nothing starts before `unlock_fraction` of what it needs first is done, a structure granting its tech or the
-      upgrade before it: by default 1, no starport before a whole factory, though a factory's starts be fluid. A
-      lower one unlocks on that share of one; under a half, on less of a structure than a plan lists as an item. With
-      0 the fractions done count as they are, a hundredth of a factory unlocking a starport: the solve is faster, and
-      a plan then makes its far units on a structure it never lists.
-    - What starts in an interval is paid from the stock at the interval's start and `spendable_income_fraction` of
-      what comes in during it, by default a half. An item that can be afforded in an interval's first half then counts
-      as started at its start, and one that can only later waits for the next: a start is rounded to the nearer edge
-      of the grid, at most half an interval early or late. With 0 every start waits for the stock, up to an interval
-      late; with 1 every one is as early. It counts for most where intervals are long: a lower fraction makes a
-      plan's far end more cautious, by several percent of its army over the default grid.
-    - Starts sit on the first second of an interval of `grid`, by default `TimeGrid.doubling()`, and builds count as
-      done from the first edge at or after their end. So production chained on one producer starts a whole number of
-      intervals apart while its starts are whole. A build that runs into an interval by less than `max_ignored_overrun`
-      of it, by default a quarter, leaves the interval free, and one that runs further into it takes all of it: on the
-      default grid SCVs start every 272 game steps, as in the game, marauders every 476 for their 480, and marines every
-      408 for their 400. With 0 no overrun is ignored; with 1 every one is. Fluid starts keep their producer busy for
-      their build time alone.
-    - An item starts in whole numbers until a time from the plan's start and is fluid after it, starting in fractions,
-      so that the solver weighs the far term without branching over it; the bot carries out the near term and plans
-      again before the rest. The time is what `fluid_after` returns for the unit type the item makes or the upgrade it
-      researches, or where it returns `None`, or is `None`, a default by what the item costs and what the state brings
-      in. At the income a game starts with, twelve workers on eight mineral fields, it is 60 seconds for each 100
-      minerals and vespene: a command center 4:00, a factory or a starport 2:30, an upgrade of 100 and 100 2:00, a
-      barracks or an orbital command 1:30, a supply depot 1:00. At a higher income it is shorter in proportion, a
-      command center 1:12 at 3.3 times the income, since an item is then less of what comes in; at a lower one it is no
-      longer. It is never under 30 seconds, an SCV's or a marine's at any income. The income is what the state's SCVs
-      mine by the economy if every one mines, with its orbital commands' MULEs. `GameTime.INFINITE` keeps an item whole
-      over any horizon. Longer times make a plan exact further ahead, and the solve slower.
-
-    How long a solve may take is each `plan_now`'s to say.
+      `plan_now`. With none, a plan starts no command center.
 
     Raises `ValueError` for a player of a race other than Terran, or a `max_ignored_overrun`, an `unlock_fraction` or a
     `spendable_income_fraction` outside 0 to 1; and `NotPlayingError` if built before the game starts.
@@ -178,37 +176,48 @@ class Planner:
         node_limit: int | None = None,
         relative_gap: float = 1e-4,
     ) -> BuildPlan | None:
-        """The plan worth the most by `reward` over `horizon` from `state`, which `plan` holds from then on. `state` is
-        `state()` now if `None`, and its time is the plan's start. The horizon is 5 minutes by default: nothing that
-        pays back only later is planned unless the reward values it itself, an expansion for one, and a longer horizon
-        is a slower solve. The plan's workers mine, collect and walk as `economy` says. A unit of a type in `loss_rates`
-        is expected lost at that share a second, those alive now and those the plan makes, so that only the share
-        expected alive counts. A unit type's rate is that of the type it counts as, the highest of those of one type:
-        the higher of a hellion's and a hellbat's. A rate is a number, or a `TimeDependent` that gives it for a game
-        time, a `TimeCurve`, a `TimeSeries` or a function in a `TimeFunction`, read at each game step from the plan's
-        start to its horizon by one call: none before an attack is expected, say, or a peak for a loss at once, as
-        `-math.log(0.7)` for one second loses 30% of the units alive then, whatever the grid. Of a unit type or an
-        upgrade in `start_limits` the plan starts at most that many, none for 0, beside what the state holds in
-        production: a reactor the bot does not build, or an orbital command it does not morph. A unit type's limit is
-        that of the type it counts as, the lowest of those of one type, and one on what the plan would not make anyway
-        does nothing. `expansions` are the expansions the bot means to take next, in that order, from `api.expansions`,
-        those not built on yet: a plan starts at most that many command centers, the first bringing the mineral fields
-        left and the geysers of the first, and so on, and with none, the default, it starts no command center. A command
-        center going up, or one an SCV is on its way to build, is not among them: the state holds what it brings, the
-        fields and geysers of the expansion it stands at, or is aimed at, and nothing for one at no expansion. It solves
-        before it returns, so a turn that plans is that much longer: for at most `time_limit` seconds of wall-clock
-        time, 3 by default, or `node_limit` nodes of branching, each unlimited if `None`. A node limit makes the plan
-        the same on every machine, a time limit does not. Before either, the solve stops once the plan is proven within
-        `relative_gap` of the best there is, relative to what the plan is worth: by default 0.0001, a hundredth of a
-        percent, and a larger gap ends the solve sooner with a plan that may be worth that much less. It returns `None`
-        if the solver finds no plan within its limits, which leaves `plan` the one before.
+        """The plan worth the most by `reward`, or `None` if the solver finds no plan within its limits. `plan` holds
+        the last plan found, so a call that finds none leaves it as it was.
 
-        Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make, a horizon not longer
-        than 0, a `time_limit` or `node_limit` not above 0, a negative `relative_gap`, loss rate or start limit, a loss
-        rate from a `TimeDependent` that is negative or not finite, a negative time from `fluid_after` or from
-        `economy`'s `builder_walk_time`, a factor from a term's `time_factor` or `count_factor` that is negative or not
-        finite, or a `state` holding a unit in production that Terran does not make; `TypeError` for a loss rate that is
-        neither a number nor gives one for each of many game steps, as a function not in a `TimeFunction`; and
+        `horizon` is how far ahead the plan looks, 5 minutes by default. Nothing that pays back only after the horizon
+        is planned unless the reward values it directly, an expansion for one. A longer horizon takes longer to solve.
+
+        `state` is the state of the game the plan starts from: by default what `state()` reads now. Its time is the
+        plan's start.
+
+        `economy` says what workers bring in and how long they walk to build.
+
+        `loss_rates` says how fast the bot expects to lose units of each type: the share of them lost each second. The
+        plan then counts only the units it expects to still be alive, of those alive now and of those it makes. A rate
+        is a number, or a `TimeDependent` for a rate that changes during the game: a `TimeCurve`, a `TimeSeries` that
+        covers the plan, or a function in a `TimeFunction`. It is read at every game step of the plan, so a short peak
+        works as a loss all at once: `-math.log(0.7)` for one second loses 30% of the units alive then. Two types that
+        count as one unit, a hellion and a hellbat, take the higher of their rates.
+
+        `start_limits` is the most a plan may start of a unit type or an upgrade, none for 0, not counting what is
+        already in production. It is for what the bot will not make: a reactor it does not build, or an orbital command
+        it does not morph. Two types that count as one unit take the lower of their limits, and a limit on something the
+        plan would not make anyway does nothing.
+
+        `expansions` are the expansions the bot means to take next, from `api.expansions`, in the order it means to take
+        them, without those already being built on. A plan starts at most that many command centers: the first brings
+        the mineral fields left and the geysers of the first expansion, and so on. With none, the default, a plan starts
+        no command center. A command center already going up, or one a worker is on its way to build, needs no entry:
+        the state holds what it brings, which is nothing for one built at no expansion.
+
+        `time_limit`, `node_limit` and `relative_gap` say when the solve may stop. `plan_now` solves before it returns,
+        so a turn that plans is that much longer. `time_limit` is the most seconds of wall-clock time the solve may
+        take, 3 by default, and `node_limit` the most nodes of branching; `None` for either is no limit. A node limit
+        gives the same plan on every machine, and a time limit does not. Before either, the solve stops once the plan is
+        proven within `relative_gap` of the best there is, as a share of what the plan is worth: 0.0001 by default. A
+        larger gap ends the solve sooner, with a plan that may be worth that much less.
+
+        Raises `ValueError` for a unit type or an upgrade in the reward that Terran does not make; a horizon not longer
+        than 0; a `time_limit` or `node_limit` not above 0; a negative `relative_gap`, loss rate or start limit; a loss
+        rate from a `TimeDependent` that is negative or not finite; a negative time from `fluid_after` or from
+        `economy`'s `builder_walk_time`; a factor from a term's `time_factor` or `count_factor` that is negative or not
+        finite; or a `state` holding a unit in production that Terran does not make. Raises `TypeError` for a loss rate
+        that is neither a number nor gives one for each of many game steps, as a function not in a `TimeFunction`, and
         `IndexError` from a loss rate that does not cover a step of the plan, as a `TimeSeries` recorded for fewer.
         """
         if any(not callable(rate) and rate < 0 for rate in loss_rates.values()):
