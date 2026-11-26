@@ -14,6 +14,7 @@ from sc2nachos.extensions.planner._planner_state import (
     fields_and_free_geysers_of,
     read_planner_state,
 )
+from sc2nachos.extensions.planner._solver import Solver
 from sc2nachos.extensions.planner._terran_model import TerranModel
 from sc2nachos.extensions.planner._time_grid import TimeGrid, edge_seconds_of
 from sc2nachos.gametime import GameTime
@@ -91,6 +92,8 @@ class Planner:
     at most half an interval early or late. With 0 every start waits until the bank alone pays for it, up to an interval
     late, and with 1 every start is as early as it could be. It matters most where intervals are long.
 
+    `solver` is the `Solver` that finds a plan, HiGHS by default.
+
     What the planner assumes of the game:
 
     - What each thing costs, how long it takes, the supply it takes and gives, what makes it and what it needs first
@@ -111,7 +114,9 @@ class Planner:
       `plan_now`. With none, a plan starts no command center.
 
     Raises `ValueError` for a player of a race other than Terran, or a `max_ignored_overrun`, an `unlock_fraction` or a
-    `spendable_income_fraction` outside 0 to 1; and `NotPlayingError` if built before the game starts.
+    `spendable_income_fraction` outside 0 to 1; `NotPlayingError` if built before the game starts; and, for
+    `Solver.GUROBI`, `ImportError` without gurobipy and highspy installed and `RuntimeError` where Gurobi cannot start,
+    as without a licence.
     """
 
     __slots__ = (
@@ -121,6 +126,7 @@ class Planner:
         "_model",
         "_plan",
         "_fluid_after",
+        "_solver",
         "_spendable_income_fraction",
         "_unlock_fraction",
     )
@@ -134,6 +140,7 @@ class Planner:
         max_ignored_overrun: float = 0.25,
         unlock_fraction: float = 1.0,
         spendable_income_fraction: float = 0.5,
+        solver: Solver = Solver.HIGHS,
     ) -> None:
         if api.player.race is not Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -143,12 +150,15 @@ class Planner:
             raise ValueError(f"the unlock fraction must be 0 to 1, not {unlock_fraction}")
         if not 0 <= spendable_income_fraction <= 1:
             raise ValueError(f"the spendable income fraction must be 0 to 1, not {spendable_income_fraction}")
+        if solver is Solver.GUROBI:
+            _check_gurobi_starts()
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
         self._spendable_income_fraction = spendable_income_fraction
+        self._solver = solver
         self._model = TerranModel(api.data)
         self._plan: BuildPlan | None = None
 
@@ -250,7 +260,9 @@ class Planner:
             unlock_fraction=self._unlock_fraction,
             spendable_income_fraction=self._spendable_income_fraction,
         )
-        plan = program.solve(time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
+        plan = program.solve(
+            solver=self._solver, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
+        )
         if plan is not None:
             self._plan = plan
         return plan
@@ -266,6 +278,18 @@ def new_bases_of(api: Api[object], expansions: Sequence[Expansion]) -> list[NewB
             mineral_fields, free_geysers = fields_and_free_geysers_of(api, expansion)
             new_bases.append(NewBase(mineral_fields=mineral_fields, geysers=free_geysers))
     return new_bases
+
+
+def _check_gurobi_starts() -> None:
+    """Raise `ImportError` if gurobipy or highspy is not installed, and `RuntimeError` if Gurobi cannot start, as
+    without a licence."""
+    try:
+        # Imported here alone: gurobipy and highspy are an optional install.
+        from sc2nachos.extensions.planner._gurobi import start_gurobi
+    except ImportError as error:
+        message = "Solver.GUROBI needs gurobipy and highspy, which `pip install sc2nachos[gurobi]` installs"
+        raise ImportError(message) from error
+    start_gurobi()
 
 
 def _check_solve_limits(*, time_limit: float | None, node_limit: int | None, relative_gap: float) -> None:

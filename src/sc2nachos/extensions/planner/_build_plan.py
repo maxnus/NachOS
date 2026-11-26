@@ -13,6 +13,7 @@ from sc2nachos.ids import UnitTypeId, UpgradeId
 
 if TYPE_CHECKING:
     from sc2nachos.extensions.planner._planner_state import PlannerState
+    from sc2nachos.extensions.planner._solver import Solver
 
 
 @final
@@ -128,6 +129,9 @@ class SolveReport:
     at a limit."""
     seconds: float
     """The wall-clock seconds the solve took."""
+    solver: Solver
+    """The solver that found the plan: `Solver.HIGHS` where the planner was built with `Solver.GUROBI` but Gurobi
+    refused the program, as one larger than its licence allows."""
 
 
 @final

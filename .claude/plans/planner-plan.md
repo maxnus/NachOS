@@ -454,6 +454,15 @@ file as it was at `807304c`.
       "Two the two smaller things first I think?"). `BuildPlan.to_string()` and `PlanItem.to_string()`, named as
       `GameTime`'s is. The helper for which items of a plan are still to do waits for his word: counting by the state is
       wrong where a unit died or a command center morphed, and a bot that ticks off what it starts needs none.
+19. **Gurobi, optional, on its size-limited licence** (the owner, 2026-11-26: "I think we want to support gurobi via the
+    free license, making use of highs pre and post solve abilities", "mostly contained to the LinearProgram class", and
+    "We would only be running with a single thread"). `Planner(solver=Solver.GUROBI)`, behind `pip install
+    sc2nachos[gurobi]`: HiGHS's presolve, Gurobi on one thread, HiGHS's postsolve. The licence counts the program as it
+    is handed over, 2000 variables and 2000 rows at most; every benchmark program is over that as built, 2508 to 4471
+    rows, and 13 of 14 fit after the presolve, 990 to 1998, the 10-minute `double90` grid's 2896 not. On those 13
+    Gurobi proves the plan 5.6 times sooner in the median, 1.6 to 10.7. A program Gurobi refuses is solved by HiGHS
+    within the time left, and `SolveReport.solver` says which. highspy comes in for this alone; Open 2 stands for
+    HiGHS's own solve.
 
 ## Risks
 

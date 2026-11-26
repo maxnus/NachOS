@@ -1,7 +1,8 @@
-"""A mixed-integer linear program built a run of rows at a time, solved by HiGHS through scipy."""
+"""A mixed-integer linear program built a run of rows at a time, solved by HiGHS or Gurobi."""
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import time
 from collections.abc import Mapping
@@ -11,10 +12,11 @@ from typing import final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import milp
 from scipy.sparse import coo_array, csr_array
 
-type FloatArray = NDArray[np.float64]
+from sc2nachos.extensions.planner._highs import maximize_with_highs
+from sc2nachos.extensions.planner._matrix_form import FloatArray, MatrixForm, Solution, no_solution
+from sc2nachos.extensions.planner._solver import Solver
 
 
 @final
@@ -106,25 +108,6 @@ class RowExpression:
 
 
 @final
-@dataclass(frozen=True, slots=True)
-class Solution:
-    """What the solver found."""
-
-    values: FloatArray | None
-    """Each variable's value, or `None` if it found none within its limits."""
-    objective: float
-    """The objective's value, `nan` without values."""
-    gap: float
-    """Its bound on how far the objective may be from the best, relative to it."""
-    is_optimal: bool
-    """Whether it proved the values the best, to the relative gap it was asked for."""
-    seconds: float
-    """The wall-clock seconds it took."""
-    message: str
-    """What it said of the solve."""
-
-
-@final
 class LinearProgram:
     """A mixed-integer linear program: blocks of variables, each bounded and integral or not, and runs of rows, each
     a linear expression held between bounds."""
@@ -188,45 +171,56 @@ class LinearProgram:
         )
 
     def maximize(
-        self, objective: RowExpression, *, time_limit: float | None, node_limit: int | None, relative_gap: float
+        self,
+        objective: RowExpression,
+        *,
+        solver: Solver,
+        time_limit: float | None,
+        node_limit: int | None,
+        relative_gap: float,
     ) -> Solution:
-        """Solve for the greatest `objective`, a single row, within `time_limit` seconds of wall-clock time and
-        `node_limit` nodes of branching, each unlimited if `None`. The solver stops once it has proven its values
-        within `relative_gap` of the best, relative to the objective."""
-        size = self.variable_count
-        costs = np.zeros(size)
-        _, columns, coefficients = objective.nonzero_coefficients(0)
-        if columns:
-            np.add.at(costs, np.concatenate(columns).astype(int), -np.concatenate(coefficients))
-        options: dict[str, float | int | bool] = {"disp": False, "mip_rel_gap": relative_gap}
-        if time_limit is not None:
-            options["time_limit"] = time_limit
-        if node_limit is not None:
-            options["node_limit"] = node_limit
+        """Solve for the greatest `objective`, a single row, with `solver`, within `time_limit` seconds of wall-clock
+        time and `node_limit` nodes of branching, each unlimited if `None`. The solver stops once it has proven its
+        values within `relative_gap` of the best, relative to the objective. A program Gurobi refuses, as one larger
+        than its licence allows, HiGHS solves within what is left of `time_limit`."""
+        form = self._matrix_form(objective)
+        if solver is Solver.HIGHS:
+            return maximize_with_highs(form, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
+        # Imported here alone: gurobipy and highspy are an optional install.
+        from sc2nachos.extensions.planner._gurobi import maximize_with_gurobi
+
         started = time.perf_counter()
-        result = milp(
-            costs,
-            constraints=self._constraint_matrix_and_bounds(size),
-            bounds=(np.concatenate(self._lower), np.concatenate(self._upper)),
-            integrality=np.concatenate(self._integral),
-            options=options,
-        )
-        seconds = time.perf_counter() - started
-        if result.x is None:
-            return Solution(None, math.nan, math.inf, False, seconds, str(result.message))
-        gap = getattr(result, "mip_gap", None)
-        return Solution(
-            values=np.asarray(result.x, dtype=float),
-            objective=-float(result.fun) + float(objective.constant[0]),
-            gap=0.0 if gap is None else float(gap),
-            # Scipy's status 0: the solver proved its values the best, to the gap asked for.
-            is_optimal=result.status == 0,
-            seconds=seconds,
-            message=str(result.message),
+        solution = maximize_with_gurobi(form, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
+        if solution is not None:
+            return solution
+        remaining = None if time_limit is None else time_limit - (time.perf_counter() - started)
+        if remaining is not None and remaining <= 0:
+            message = "the time limit was reached before HiGHS could take over from Gurobi"
+            return no_solution(seconds=time.perf_counter() - started, message=message, solver=Solver.HIGHS)
+        solution = maximize_with_highs(form, time_limit=remaining, node_limit=node_limit, relative_gap=relative_gap)
+        return dataclasses.replace(solution, seconds=time.perf_counter() - started)
+
+    def _matrix_form(self, objective: RowExpression) -> MatrixForm:
+        """The program as matrices, to maximize `objective`, a single row."""
+        size = self.variable_count
+        coefficients = np.zeros(size)
+        _, columns, values = objective.nonzero_coefficients(0)
+        if columns:
+            np.add.at(coefficients, np.concatenate(columns).astype(int), np.concatenate(values))
+        matrix, row_lower, row_upper = self._constraint_matrix_and_bounds(size)
+        return MatrixForm(
+            objective=coefficients,
+            objective_constant=float(objective.constant[0]),
+            matrix=matrix,
+            row_lower=row_lower,
+            row_upper=row_upper,
+            lower=np.concatenate(self._lower),
+            upper=np.concatenate(self._upper),
+            integral=np.concatenate(self._integral),
         )
 
     def _constraint_matrix_and_bounds(self, size: int) -> tuple[csr_array, FloatArray, FloatArray]:
-        """Every row, as scipy takes them: the matrix, and each row's lower and upper bound."""
+        """Every row: the matrix, and each row's lower and upper bound."""
         if not self._rows:
             return csr_array((0, size)), np.zeros(0), np.zeros(0)
         matrix = coo_array(

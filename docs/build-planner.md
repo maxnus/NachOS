@@ -99,6 +99,27 @@ plan = planner.plan_now(
 `Planner(api, ...)` takes how a plan is laid out in time: the grid of intervals, for how long each item is planned in
 whole numbers, and how the model rounds a start and a build to the grid. The defaults suit a normal game.
 
+## Solving with Gurobi
+
+Gurobi, a commercial solver, finds the same plans faster than HiGHS, which comes with SciPy:
+
+```python
+# pip install sc2nachos[gurobi]
+from sc2nachos.extensions.planner import Planner, Solver
+
+self.planner = Planner(api, solver=Solver.GUROBI)
+```
+
+Gurobi runs on one thread, on what HiGHS's presolve leaves of a plan's program, about half its rows.
+
+- **The licence gurobipy comes with** is free, size-limited, for non-production, non-commercial use only, as
+  [Gurobi says](https://support.gurobi.com/hc/en-us/articles/29682074018833), and expires with its release, gurobipy
+  14's on 2028-11-29. Its limit, 2000 variables and 2000 rows after the presolve, fits a plan on the default grid over 5
+  minutes, and may not fit a finer grid, a longer horizon or a reward on many types. A licence bought from Gurobi, or an
+  academic one, has no limit.
+- **A plan Gurobi refuses** is found by HiGHS within what is left of the time limit, with a warning in the log, and
+  `plan.solve_report.solver` says which solver found it. HiGHS prints its banner once, the first time it presolves.
+
 ## How far a plan was off
 
 `plan.deviation_of(planner.state())`, some seconds after the plan was made, is the game's numbers less what the plan

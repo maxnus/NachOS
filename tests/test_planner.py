@@ -1,14 +1,18 @@
-"""The build planner: its grid, its model of Terran, plans on tiny games whose best plan is known, the state it reads
-off a made-up game, and the extension itself."""
+"""The build planner: its grid, its model of Terran, plans on tiny games whose best plan is known, its solvers, the
+state it reads off a made-up game, and the extension itself."""
 
 import dataclasses
 import itertools
 import math
+import sys
+import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+import gurobipy
 import numpy as np
 import pytest
+from gurobipy import GRB
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, Expansion, GameTime, Resources
@@ -25,14 +29,18 @@ from sc2nachos.extensions.planner import (
     ProducerActivity,
     Reward,
     RewardTerm,
+    Solver,
     SolveReport,
     TimeGrid,
     UnitCompletion,
     WeightCurve,
     WeightSegment,
     WorkerBuild,
+    _gurobi,
 )
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
+from sc2nachos.extensions.planner._linear_program import LinearProgram, RowExpression
+from sc2nachos.extensions.planner._matrix_form import Solution
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner import fluid_after_seconds_of, new_bases_of
@@ -90,9 +98,12 @@ def _best_plan(
     max_ignored_overrun: float = 0.25,
     unlock_fraction: float = 1.0,
     spendable_income_fraction: float = 0.5,
+    solver: Solver = Solver.HIGHS,
+    found_by: Solver | None = None,
 ) -> BuildPlan:
     """The best plan for `reward` from `state`, over `horizon_seconds` on `grid` with the windows of `fluid_after`, by
-    `economy`, with `loss_rates`, `start_limits`, `max_ignored_overrun` and `unlock_fraction`, proven best."""
+    `economy`, with `loss_rates`, `start_limits`, `max_ignored_overrun` and `unlock_fraction`, solved by `solver` and
+    proven best by `found_by`, `solver` unless given."""
     items = _TERRAN_MODEL.items_for(unit_types=reward.unit_types, upgrades=reward.upgrades)
     program = PlanProgram(
         items=items,
@@ -109,9 +120,10 @@ def _best_plan(
         unlock_fraction=unlock_fraction,
         spendable_income_fraction=spendable_income_fraction,
     )
-    plan = program.solve(time_limit=None, node_limit=_NODE_LIMIT, relative_gap=1e-4)
+    plan = program.solve(solver=solver, time_limit=None, node_limit=_NODE_LIMIT, relative_gap=1e-4)
     assert plan is not None
     assert plan.solve_report.is_optimal
+    assert plan.solve_report.solver is (solver if found_by is None else found_by)
     return plan
 
 
@@ -127,7 +139,7 @@ _A_PLAN_OF_ONE_BARRACKS = BuildPlan(
     ),
     intervals=(),
     reward=0.0,
-    solve_report=SolveReport(gap=0.0, is_optimal=True, seconds=0.0),
+    solve_report=SolveReport(gap=0.0, is_optimal=True, seconds=0.0, solver=Solver.HIGHS),
 )
 
 
@@ -330,11 +342,12 @@ class TestTerranModel:
 
 
 class TestKnownPlans:
-    def test_from_50_minerals_and_twelve_scvs_the_first_depot_starts_at_8_seconds(self) -> None:
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
+    def test_from_50_minerals_and_twelve_scvs_the_first_depot_starts_at_8_seconds(self, solver: Solver) -> None:
         """The first SCV takes the 50 minerals at once, and the depot's SCV, walking 6 seconds, leaves at 2; a depot
         worth a little gets built as soon as it can be paid."""
         reward = Reward.weighted({UnitTypeId.SCV: 1.0, UnitTypeId.SUPPLY_DEPOT: 0.01}, half_life=None)
-        plan = _best_plan(_game_start(), reward, horizon_seconds=40)
+        plan = _best_plan(_game_start(), reward, horizon_seconds=40, solver=solver)
 
         assert _start_seconds(plan, UnitTypeId.SCV)[:2] == [0.0, 12.0]
         assert _start_seconds(plan, UnitTypeId.SUPPLY_DEPOT)[0] == 8.0
@@ -620,14 +633,16 @@ class TestKnownPlans:
         assert [interval.miners for interval in plan.intervals] == pytest.approx([0.0] * 7, abs=1e-9)
         assert [interval.end.units[UnitTypeId.SCV] for interval in plan.intervals] == [12, 12, 12, 12, 12, 12, 13]
 
-    def test_a_unit_counts_as_it_survives_its_loss_rate(self) -> None:
-        """No barracks, so no marine is made."""
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
+    def test_a_unit_counts_as_it_survives_its_loss_rate(self, solver: Solver) -> None:
+        """No barracks, so no marine is made: a program HiGHS's presolve solves whole, so Gurobi gets none."""
         state = _game_start(units={UnitTypeId.MARINE: 10})
         plan = _best_plan(
             state,
             Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None),
             horizon_seconds=10,
             loss_rates={UnitTypeId.MARINE: 0.01},
+            solver=solver,
         )
         marines = [interval.end.units[UnitTypeId.MARINE] for interval in plan.intervals]
         assert marines == pytest.approx([10 * math.exp(-0.01 * 2 * k) for k in range(1, 6)])
@@ -1378,8 +1393,11 @@ class TestPlan:
     @pytest.mark.parametrize(
         ("solve_report", "solve"),
         [
-            (SolveReport(gap=0.0, is_optimal=True, seconds=1.618), "proven the best in 1.62 s"),
-            (SolveReport(gap=0.0123, is_optimal=False, seconds=3.0), "within 1.2% of the best after 3.00 s"),
+            (SolveReport(gap=0.0, is_optimal=True, seconds=1.618, solver=Solver.HIGHS), "proven the best in 1.62 s"),
+            (
+                SolveReport(gap=0.0123, is_optimal=False, seconds=3.0, solver=Solver.HIGHS),
+                "within 1.2% of the best after 3.00 s",
+            ),
         ],
         ids=["proven", "stopped at a limit"],
     )
@@ -1975,8 +1993,9 @@ class TestEconomy:
     @pytest.mark.parametrize(
         ("reassignment_seconds", "marauder_start"), [(3.0, 12.0), (2.0, 11.0), (0.0, 9.0)], ids=["3 s", "2 s", "none"]
     )
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
     def test_a_worker_moved_to_a_refinery_collects_nothing_for_the_initial_harvest_delay(
-        self, reassignment_seconds: float, marauder_start: float
+        self, reassignment_seconds: float, marauder_start: float, solver: Solver
     ) -> None:
         """No vespene and one refinery with no SCV at it, on 1-second intervals: the marauder's 25 vespene, 9 seconds'
         collecting of three SCVs, come that long after they got there."""
@@ -1998,6 +2017,7 @@ class TestEconomy:
             horizon_seconds=40,
             grid=TimeGrid.uniform(GameTime(seconds=1)),
             economy=EconomyModel(initial_harvest_delay=GameTime(seconds=reassignment_seconds)),
+            solver=solver,
         )
         assert _start_seconds(plan, UnitTypeId.MARAUDER) == [marauder_start]
 
@@ -2238,7 +2258,8 @@ class TestEconomy:
 
 class TestNewBases:
     @pytest.mark.parametrize("base_count", [0, 1, 2])
-    def test_a_plan_starts_at_most_a_command_center_for_each_new_base(self, base_count: int) -> None:
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
+    def test_a_plan_starts_at_most_a_command_center_for_each_new_base(self, base_count: int, solver: Solver) -> None:
         """Minerals for three command centers, each worth something once done, and time for all of them."""
         plan = _best_plan(
             _game_start(minerals=1500.0),
@@ -2246,6 +2267,7 @@ class TestNewBases:
             horizon_seconds=100,
             fluid_after=_whole_over_any_horizon,
             new_bases=[_A_FULL_BASE] * base_count,
+            solver=solver,
         )
         assert len(_start_seconds(plan, UnitTypeId.COMMAND_CENTER)) == base_count
 
@@ -2358,7 +2380,8 @@ class TestStartLimits:
         assert len(_start_seconds(without, UnitTypeId.SCV)) > 2
         assert len(_start_seconds(limited, UnitTypeId.SCV)) == 2
 
-    def test_an_upgrade_with_a_limit_of_none_is_not_researched(self) -> None:
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
+    def test_an_upgrade_with_a_limit_of_none_is_not_researched(self, solver: Solver) -> None:
         state = _game_start(
             minerals=100.0,
             vespene=100.0,
@@ -2366,8 +2389,8 @@ class TestStartLimits:
         )
         reward = Reward(upgrade_weights={UpgradeId.STIMPACK: 1.0}, half_life=None)
 
-        without = _best_plan(state, reward, horizon_seconds=120)
-        limited = _best_plan(state, reward, horizon_seconds=120, start_limits={UpgradeId.STIMPACK: 0})
+        without = _best_plan(state, reward, horizon_seconds=120, solver=solver)
+        limited = _best_plan(state, reward, horizon_seconds=120, start_limits={UpgradeId.STIMPACK: 0}, solver=solver)
 
         assert _start_seconds(without, UpgradeId.STIMPACK) == [0.0]
         assert _start_seconds(limited, UpgradeId.STIMPACK) == []
@@ -2589,6 +2612,89 @@ _BARRACKS_TAG = 2
 _TECH_LAB_TAG = 3
 _REFINERY_TAG = 4
 _BUILDING_SCV_TAG = 10
+
+
+def _dense_program(size: int) -> tuple[LinearProgram, RowExpression]:
+    """A linear program of `size` shares, each 0 to 1 and worth 0 to 1, under 20 rows of random coefficients, each at
+    most 5, which HiGHS's presolve leaves whole, and the objective of their worth."""
+    generator = np.random.default_rng(0)
+    program = LinearProgram()
+    shares = program.add_variables(size, upper=1.0)
+    program.constrain(RowExpression(20).add(shares, generator.normal(size=(20, size))), upper=5.0)
+    return program, RowExpression(1).add(shares, generator.uniform(size=(1, size)))
+
+
+def _gurobis_licence_is_size_limited() -> bool:
+    """Whether Gurobi's licence refuses a program of 2001 variables, as the size-limited one of gurobipy does."""
+    with gurobipy.Env(params={"OutputFlag": 0}) as environment, gurobipy.Model(env=environment) as model:
+        model.addMVar(2001)
+        try:
+            model.optimize()
+        except gurobipy.GurobiError as error:
+            return error.errno == GRB.Error.SIZE_LIMIT_EXCEEDED
+    return False
+
+
+# A barracks with a tech lab and stimpack's 100 minerals and 100 vespene: a program HiGHS's presolve leaves Gurobi
+# hundreds of variables of.
+_READY_FOR_STIMPACK = _game_start(
+    minerals=100.0, vespene=100.0, units={UnitTypeId.SCV: 12, UnitTypeId.BARRACKS: 1, UnitTypeId.TECH_LAB_BARRACKS: 1}
+)
+_STIMPACK_ALONE = Reward(upgrade_weights={UpgradeId.STIMPACK: 1.0}, half_life=None)
+
+
+class TestSolvers:
+    def test_gurobi_solves_a_program_presolve_leaves_whole_to_what_highs_finds(self) -> None:
+        program, worth = _dense_program(1900)
+        solutions = [
+            program.maximize(worth, solver=solver, time_limit=None, node_limit=None, relative_gap=1e-6)
+            for solver in Solver
+        ]
+
+        assert [solution.solver for solution in solutions] == list(Solver)
+        assert all(solution.is_optimal for solution in solutions)
+        by_highs, by_gurobi = solutions
+        assert by_gurobi.objective == pytest.approx(by_highs.objective, rel=1e-6)
+
+    def test_a_program_too_large_for_the_size_limited_licence_is_solved_by_highs(self) -> None:
+        if not _gurobis_licence_is_size_limited():
+            pytest.skip("Gurobi's licence here is not size-limited")
+        program, worth = _dense_program(2100)
+
+        by_highs = program.maximize(worth, solver=Solver.HIGHS, time_limit=None, node_limit=None, relative_gap=1e-6)
+        refused = program.maximize(worth, solver=Solver.GUROBI, time_limit=None, node_limit=None, relative_gap=1e-6)
+
+        assert refused.solver is Solver.HIGHS
+        assert refused.objective == pytest.approx(by_highs.objective)
+
+    def test_a_plan_gurobi_refuses_is_highs_s_and_the_one_it_finds_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def refuse(*_: object, **__: object) -> Solution:
+            raise gurobipy.GurobiError(GRB.Error.NO_LICENSE, "no Gurobi license found")
+
+        by_highs = _best_plan(_READY_FOR_STIMPACK, _STIMPACK_ALONE, horizon_seconds=120)
+        monkeypatch.setattr(_gurobi, "_minimize_presolved", refuse)
+        refused = _best_plan(
+            _READY_FOR_STIMPACK, _STIMPACK_ALONE, horizon_seconds=120, solver=Solver.GUROBI, found_by=Solver.HIGHS
+        )
+
+        assert refused.items == by_highs.items
+        assert refused.reward == pytest.approx(by_highs.reward)
+
+    def test_highs_taking_over_from_gurobi_has_what_is_left_of_the_time_limit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gurobi refusing a program after the time limit leaves HiGHS no time, and the solve no values."""
+
+        def refuse_late(*_: object, **__: object) -> None:
+            time.sleep(0.02)
+
+        monkeypatch.setattr(_gurobi, "maximize_with_gurobi", refuse_late)
+        program, worth = _dense_program(10)
+        solution = program.maximize(worth, solver=Solver.GUROBI, time_limit=0.01, node_limit=None, relative_gap=1e-4)
+
+        assert solution.values is None
+        assert solution.solver is Solver.HIGHS
+        assert solution.seconds >= 0.02
 
 
 def _base_resources(center: tuple[float, float], tags_from: int) -> list[raw_pb2.Unit]:
@@ -2923,11 +3029,12 @@ class TestGameState:
 
 
 class TestPlanner:
-    def test_it_plans_from_the_game_when_asked_and_holds_the_plan(self) -> None:
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
+    def test_it_plans_from_the_game_when_asked_and_holds_the_plan(self, solver: Solver) -> None:
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=Planner)
+        api = Api(extensions=lambda api: Planner(api, solver=solver))
         plans: list[tuple[BuildPlan | None, BuildPlan]] = []
 
         @api.on(TurnEvent)
@@ -2952,6 +3059,7 @@ class TestPlanner:
         ((before, plan),) = plans
         assert before is None
         assert api.extensions.plan is plan
+        assert plan.solve_report.solver is solver
         assert plan.time == GameTime.ZERO
         assert plan.intervals[0].start.units[UnitTypeId.BARRACKS] == 1.0
         assert UnitTypeId.MARINE in {planned.product for planned in plan.items}
@@ -2987,7 +3095,12 @@ class TestPlanner:
         plans: list[BuildPlan | None] = []
 
         def find_no_plan(
-            _: PlanProgram, *, time_limit: float | None, node_limit: int | None, relative_gap: float
+            _: PlanProgram,
+            *,
+            solver: Solver,
+            time_limit: float | None,
+            node_limit: int | None,
+            relative_gap: float,
         ) -> None:
             return None
 
@@ -3083,7 +3196,12 @@ class TestPlanner:
         gaps: list[float] = []
 
         def note_the_gap(
-            _: PlanProgram, *, time_limit: float | None, node_limit: int | None, relative_gap: float
+            _: PlanProgram,
+            *,
+            solver: Solver,
+            time_limit: float | None,
+            node_limit: int | None,
+            relative_gap: float,
         ) -> None:
             gaps.append(relative_gap)
 
@@ -3156,6 +3274,22 @@ class TestPlanner:
         with pytest.raises(ValueError):
             Api(extensions=lambda api: Planner(api, **arguments)).play(game.joined())
 
+    def test_a_planner_for_gurobi_without_gurobipy_installed_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setitem(sys.modules, "gurobipy", None)
+        monkeypatch.delitem(sys.modules, "sc2nachos.extensions.planner._gurobi")
+        game = ScriptedGame([make_observation(0), make_observation(1)])
+        with pytest.raises(ImportError, match=r"pip install sc2nachos\[gurobi\]"):
+            Api(extensions=lambda api: Planner(api, solver=Solver.GUROBI)).play(game.joined())
+
+    def test_a_planner_for_gurobi_where_gurobi_cannot_start_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def no_licence(*_: object, **__: object) -> None:
+            raise gurobipy.GurobiError(GRB.Error.NO_LICENSE, "no Gurobi license found")
+
+        monkeypatch.setattr(gurobipy, "Env", no_licence)
+        game = ScriptedGame([make_observation(0), make_observation(1)])
+        with pytest.raises(RuntimeError, match="Gurobi cannot start: no Gurobi license found"):
+            Api(extensions=lambda api: Planner(api, solver=Solver.GUROBI)).play(game.joined())
+
     @pytest.mark.parametrize(
         ("limits", "refused"),
         [
@@ -3178,12 +3312,13 @@ class TestPlanner:
         with pytest.raises(ValueError, match=refused):
             api.play(game.joined())
 
-    def test_a_plan_takes_its_own_time_limit(self) -> None:
+    @pytest.mark.parametrize("solver", list(Solver), ids=lambda solver: solver.value)
+    def test_a_plan_takes_its_own_time_limit(self, solver: Solver) -> None:
         """A billionth of a second finds no plan, and the default 3 seconds one, from the same planner."""
         game = ScriptedGame(
             [_main_base_at(0), _main_base_at(1)], game_info=make_game_info(*["#" * 48] * 64), data=shipped_game_data()
         )
-        api = Api(extensions=Planner)
+        api = Api(extensions=lambda api: Planner(api, solver=solver))
         plans: list[BuildPlan | None] = []
 
         @api.on(TurnEvent)

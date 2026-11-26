@@ -34,6 +34,7 @@ toy's cases do not, as the toy did not:
     uv run python tools/benchmark_planner.py reference --time-limit 3
     uv run python tools/benchmark_planner.py reference --time-limit 3 --horizon 600
     uv run python tools/benchmark_planner.py grids --time-limit 10
+    uv run python tools/benchmark_planner.py reference --time-limit 3 --solver gurobi
 """
 
 from __future__ import annotations
@@ -53,6 +54,7 @@ from sc2nachos.extensions.planner import (
     ProducerActivity,
     Reward,
     RewardTerm,
+    Solver,
     TimeGrid,
     UnitCompletion,
     WeightCurve,
@@ -230,6 +232,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("case", choices=sorted(_CASE_RUNNERS))
     parser.add_argument("--time-limit", type=float, default=10.0, help="seconds of wall-clock time for each solve")
+    parser.add_argument(
+        "--solver",
+        choices=[solver.value for solver in Solver],
+        default=Solver.HIGHS.value,
+        help="the solver of each plan",
+    )
     parser.add_argument("--half-lives", default="none,120,240,480", help="the half-lives in seconds, or none")
     parser.add_argument(
         "--horizon",
@@ -242,7 +250,7 @@ def main() -> None:
     half_lives = [None if text == "none" else GameTime(seconds=float(text)) for text in arguments.half_lives.split(",")]
     default_horizon = _PLANNER_HORIZON if arguments.case in _CASES_ON_THE_PLANNERS_DEFAULTS else _TOY_HORIZON
     horizon = default_horizon if arguments.horizon is None else GameTime(seconds=arguments.horizon)
-    _CASE_RUNNERS[arguments.case](model, arguments.time_limit, half_lives, horizon)
+    _CASE_RUNNERS[arguments.case](model, arguments.time_limit, Solver(arguments.solver), half_lives, horizon)
 
 
 def _game_start() -> PlannerState:
@@ -369,6 +377,7 @@ def _solve_and_print(
     *,
     grid: TimeGrid,
     time_limit: float,
+    solver: Solver,
     horizon: GameTime,
     fluid_after: Callable[[UnitTypeId | UpgradeId], GameTime | None] | None = None,
     economy: EconomyModel | None = None,
@@ -400,7 +409,7 @@ def _solve_and_print(
         spendable_income_fraction=_SPENDABLE_INCOME_FRACTION,
     )
     built = time.perf_counter() - started
-    plan = program.solve(time_limit=time_limit, node_limit=None, relative_gap=1e-4)
+    plan = program.solve(time_limit=time_limit, solver=solver, node_limit=None, relative_gap=1e-4)
     intervals = len(grid.edges(horizon)) - 1
     size = (
         f"{len(items)} items, {intervals} intervals, {program.linear_program.integral_count} integers, "
@@ -412,7 +421,8 @@ def _solve_and_print(
     counts = Counter(planned.product.name for planned in plan.items)
     report = plan.solve_report
     print(
-        f"{label}: {size}, {report.seconds:.2f} s, reward {plan.reward:.1f}, gap {report.gap:.1e}"
+        f"{label}: {size}, {report.seconds:.2f} s by {report.solver.value}, reward {plan.reward:.1f}, "
+        f"gap {report.gap:.1e}"
         f"{', optimal' if report.is_optimal else ''}"
     )
     print(f"    counts: {dict(counts)}")
@@ -423,7 +433,7 @@ def _solve_and_print(
 
 
 def _run_reference(
-    model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None], horizon: GameTime
+    model: TerranModel, time_limit: float, solver: Solver, half_lives: Sequence[GameTime | None], horizon: GameTime
 ) -> None:
     """The reference configuration at each half-life."""
     for half_life in half_lives:
@@ -434,13 +444,14 @@ def _run_reference(
             reward,
             grid=TimeGrid.doubling(),
             time_limit=time_limit,
+            solver=solver,
             horizon=horizon,
             economy=_reference_economy(model),
         )
 
 
 def _run_replans(
-    model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None], horizon: GameTime
+    model: TerranModel, time_limit: float, solver: Solver, half_lives: Sequence[GameTime | None], horizon: GameTime
 ) -> None:
     """The growing reward from each mid-game state, at each half-life."""
     for name, state in _mid_game_states().items():
@@ -451,13 +462,16 @@ def _run_replans(
                 Reward.weighted(_GROWING_CURVES, half_life=half_life),
                 grid=TimeGrid.doubling(),
                 time_limit=time_limit,
+                solver=solver,
                 horizon=horizon,
                 economy=_reference_economy(model),
                 state=state,
             )
 
 
-def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_items(
+    model: TerranModel, time_limit: float, solver: Solver, half_lives: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """The wide reward from the game's start and from each mid-game state, at each half-life."""
     curves: dict[UnitTypeId, WeightCurve] = dict(_GROWING_CURVES)
     for unit_type, weight in _FIRST_SIX_WEIGHTS_OF_THE_WIDE_REWARD.items():
@@ -470,6 +484,7 @@ def _run_items(model: TerranModel, time_limit: float, half_lives: Sequence[GameT
                 Reward.weighted(curves, upgrade_weights=_UPGRADE_WEIGHTS_OF_THE_WIDE_REWARD, half_life=half_life),
                 grid=TimeGrid.doubling(),
                 time_limit=time_limit,
+                solver=solver,
                 horizon=horizon,
                 economy=_reference_economy(model),
                 state=state,
@@ -488,7 +503,9 @@ def _half_life_label(half_life: GameTime | None) -> str:
     return f"half-life {'none' if half_life is None else f'{half_life.seconds:.0f} s'}"
 
 
-def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_grids(
+    model: TerranModel, time_limit: float, solver: Solver, _: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """The toy's grids, every start whole for 90 seconds."""
     reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, resource_weight=0.0)
     for name, grid in _TOY_GRIDS.items():
@@ -498,12 +515,15 @@ def _run_grids(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             reward,
             grid=grid,
             time_limit=time_limit,
+            solver=solver,
             horizon=horizon,
             fluid_after=_whole_for_90_seconds,
         )
 
 
-def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_windows(
+    model: TerranModel, time_limit: float, solver: Solver, _: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """Every start whole for 90 seconds, against the toy's lumpy items whole over the horizon, and the default."""
     reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, resource_weight=0.0)
     for label, fluid_after in (
@@ -517,23 +537,34 @@ def _run_windows(model: TerranModel, time_limit: float, _: Sequence[GameTime | N
             reward,
             grid=_TOY_DOUBLING_GRID,
             time_limit=time_limit,
+            solver=solver,
             horizon=horizon,
             fluid_after=fluid_after,
         )
 
 
-def _run_rewards(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_rewards(
+    model: TerranModel, time_limit: float, solver: Solver, _: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """The linear reward against the concave one."""
     for label, reward in (
         ("linear", Reward.weighted(_TOY_WEIGHTS, half_life=None, resource_weight=0.0)),
         ("concave", Reward.weighted(_TOY_CURVES, half_life=None, resource_weight=0.0)),
     ):
         _solve_and_print(
-            f"{label} reward", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
+            f"{label} reward",
+            model,
+            reward,
+            grid=_TOY_DOUBLING_GRID,
+            time_limit=time_limit,
+            solver=solver,
+            horizon=horizon,
         )
 
 
-def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_enemy(
+    model: TerranModel, time_limit: float, solver: Solver, _: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """Covering each of the toy's enemies."""
     for name, scenario in _ENEMY_SCENARIOS.items():
         coverages = [
@@ -543,13 +574,21 @@ def _run_enemy(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
         ]
         reward = Reward.weighted(_STANDING_WEIGHTS, terms=coverages, half_life=None, resource_weight=0.0)
         plan = _solve_and_print(
-            f"enemy {name}", model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
+            f"enemy {name}",
+            model,
+            reward,
+            grid=_TOY_DOUBLING_GRID,
+            time_limit=time_limit,
+            solver=solver,
+            horizon=horizon,
         )
         if plan is not None:
             _print_starts_by_minute(plan, (UnitTypeId.MARINE, UnitTypeId.MARAUDER))
 
 
-def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_walks(
+    model: TerranModel, time_limit: float, solver: Solver, _: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """No walks against the toy's Terran walks."""
     reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, resource_weight=0.0)
     for label, walks in (("no walks", _NO_WALKS), ("Terran walks", _TOY_WALKS)):
@@ -559,12 +598,15 @@ def _run_walks(model: TerranModel, time_limit: float, _: Sequence[GameTime | Non
             reward,
             grid=_TOY_DOUBLING_GRID,
             time_limit=time_limit,
+            solver=solver,
             horizon=horizon,
             economy=_economy_walking(walks),
         )
 
 
-def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | None], horizon: GameTime) -> None:
+def _run_losses(
+    model: TerranModel, time_limit: float, solver: Solver, _: Sequence[GameTime | None], horizon: GameTime
+) -> None:
     """Army units lost at 0.002 a second, or workers at 0.001."""
     reward = Reward.weighted(_TOY_WEIGHTS, half_life=None, resource_weight=0.0)
     for label, rates in (
@@ -572,20 +614,33 @@ def _run_losses(model: TerranModel, time_limit: float, _: Sequence[GameTime | No
         ("workers lost at 0.001/s", {UnitTypeId.SCV: 0.001}),
     ):
         plan = _solve_and_print(
-            label, model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon, loss_rates=rates
+            label,
+            model,
+            reward,
+            grid=_TOY_DOUBLING_GRID,
+            time_limit=time_limit,
+            solver=solver,
+            horizon=horizon,
+            loss_rates=rates,
         )
         if plan is not None:
             _print_starts_by_minute(plan, (UnitTypeId.MARINE, UnitTypeId.MARAUDER, UnitTypeId.BARRACKS, UnitTypeId.SCV))
 
 
 def _run_discount(
-    model: TerranModel, time_limit: float, half_lives: Sequence[GameTime | None], horizon: GameTime
+    model: TerranModel, time_limit: float, solver: Solver, half_lives: Sequence[GameTime | None], horizon: GameTime
 ) -> None:
     """The linear reward at each half-life."""
     for half_life in half_lives:
         reward = Reward.weighted(_TOY_WEIGHTS, half_life=half_life, resource_weight=0.0)
         _solve_and_print(
-            _half_life_label(half_life), model, reward, grid=_TOY_DOUBLING_GRID, time_limit=time_limit, horizon=horizon
+            _half_life_label(half_life),
+            model,
+            reward,
+            grid=_TOY_DOUBLING_GRID,
+            time_limit=time_limit,
+            solver=solver,
+            horizon=horizon,
         )
 
 
@@ -613,7 +668,7 @@ def _print_starts_by_minute(plan: BuildPlan, unit_types: Sequence[UnitTypeId]) -
         )
 
 
-_CASE_RUNNERS: Mapping[str, Callable[[TerranModel, float, Sequence[GameTime | None], GameTime], None]] = {
+_CASE_RUNNERS: Mapping[str, Callable[[TerranModel, float, Solver, Sequence[GameTime | None], GameTime], None]] = {
     "reference": _run_reference,
     "grids": _run_grids,
     "windows": _run_windows,

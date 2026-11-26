@@ -12,6 +12,7 @@ from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, Pl
 from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression
 from sc2nachos.extensions.planner._plan_constraints import PlanConstraints
 from sc2nachos.extensions.planner._plan_variables import NewBase
+from sc2nachos.extensions.planner._solver import Solver
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import on_a_whole_step
 from sc2nachos.gamedata import Resources
@@ -101,11 +102,13 @@ class PlanProgram(PlanConstraints):
         """The program, to count its variables and rows."""
         return self._program
 
-    def solve(self, *, time_limit: float | None, node_limit: int | None, relative_gap: float) -> BuildPlan | None:
-        """The best plan the solver finds within `time_limit` seconds and `node_limit` nodes, proven within
+    def solve(
+        self, *, solver: Solver, time_limit: float | None, node_limit: int | None, relative_gap: float
+    ) -> BuildPlan | None:
+        """The best plan `solver` finds within `time_limit` seconds and `node_limit` nodes, proven within
         `relative_gap` of the best where it gets that far, or `None` if it finds none."""
         solution = self._program.maximize(
-            self._objective, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
+            self._objective, solver=solver, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
         )
         if solution.values is None:
             return None
@@ -114,7 +117,9 @@ class PlanProgram(PlanConstraints):
             items=self._planned_items(solution.values),
             intervals=self._planned_intervals(solution.values),
             reward=solution.objective,
-            solve_report=SolveReport(gap=solution.gap, is_optimal=solution.is_optimal, seconds=solution.seconds),
+            solve_report=SolveReport(
+                gap=solution.gap, is_optimal=solution.is_optimal, seconds=solution.seconds, solver=solution.solver
+            ),
         )
 
     def _discounts_of(self, reward: Reward) -> FloatArray:

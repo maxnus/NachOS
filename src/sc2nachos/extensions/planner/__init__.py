@@ -12,6 +12,7 @@ from sc2nachos.extensions.planner._economy_model import EconomyModel
 from sc2nachos.extensions.planner._planner import Planner
 from sc2nachos.extensions.planner._planner_state import PlannerState, ProducerActivity, UnitCompletion, WorkerBuild
 from sc2nachos.extensions.planner._reward import Reward, RewardTerm, WeightCurve, WeightSegment
+from sc2nachos.extensions.planner._solver import Solver
 from sc2nachos.extensions.planner._time_grid import GridSegment, TimeGrid
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "Reward",
     "RewardTerm",
     "SolveReport",
+    "Solver",
     "TimeGrid",
     "UnitCompletion",
     "WeightCurve",
