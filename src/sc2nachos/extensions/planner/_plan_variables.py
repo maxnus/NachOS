@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
-from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
+from sc2nachos.extensions.planner._milp import FloatArray, LinearProgram, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._survival import SurvivalShares
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
