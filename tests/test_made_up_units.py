@@ -133,6 +133,14 @@ class TestUnitReport:
         assert barracks.add_on is not None and barracks.add_on.tag == 2
         assert barracks.has_tech_lab
 
+    def test_a_host_reads_where_its_add_on_stands(self):
+        """A barracks's tech lab stands 2.5 right of its center and 0.5 below (in game)."""
+        tech_lab_report = UnitReport(2, UnitTypeId.TECH_LAB_BARRACKS, at=(13.0, 10.0))
+        barracks, tech_lab = MadeUpUnits().observe(
+            UnitReport(1, UnitTypeId.BARRACKS, at=(10.5, 10.5), add_on=tech_lab_report), tech_lab_report
+        )
+        assert barracks.add_on_position == tech_lab.position
+
     def test_an_ally_raises(self):
         """The game made up has two players."""
         with pytest.raises(ValueError, match="no ALLY units"):

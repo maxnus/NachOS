@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import GameTime
+from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
@@ -260,6 +262,13 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         """The finished add-on of a barracks, factory or starport, or `None`, as while the add-on is built, when it is
         the host's `construction` (in game)."""
         return self._attached_add_on
+
+    @property
+    def add_on_position(self: OwnUnit[UnitType.Barracks | UnitType.Factory | UnitType.Starport]) -> Point:
+        """Where the add-on of a landed barracks, factory or starport stands, or would stand once built: 2.5 right of
+        the structure's center and 0.5 below (in game)."""
+        position = self.position
+        return Point((position.x + ADD_ON_OFFSET[0], position.y + ADD_ON_OFFSET[1]))
 
     @property
     def _attached_add_on(self) -> OwnUnit[Any] | None:

@@ -336,6 +336,17 @@ class TestTheReservedGrid:
             ".......",
         ]
 
+    def test_a_host_s_add_on_position_is_where_its_add_on_s_ground_is_reserved(self) -> None:
+        game = _Game()
+        game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
+        game.book.issue(game.own(1), _BUILD_REACTOR)
+        grids = game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
+        add_on_position = game.own(1).add_on_position
+        assert add_on_position == Point((9.0, 8.0))
+        add_on_ground = Grid.like(grids.reserved, dtype=bool)
+        add_on_ground.fill_footprint(Footprint.square(2), at=add_on_position, value=True)
+        assert _picture(add_on_ground) == _picture(grids.reserved)
+
     def test_a_lifted_hosts_add_on_reserves_where_it_lands_too(self) -> None:
         game = _Game()
         flying = make_unit(1, UnitTypeId.BARRACKS_FLYING, at=(12.0, 3.0), is_flying=True)

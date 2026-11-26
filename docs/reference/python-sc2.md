@@ -307,6 +307,7 @@ it.
 | `unit.add_on_tag`, `engaged_target_tag`, `order.target` as a tag | `unit.add_on`, `engaged_target`, `order.target` as the unit |
 | `unit.is_constructing_scv` | `unit.is_constructing`, from the order on, as python-sc2's is, and for any unit ordered to place a structure, a probe or a drone on its way, a queen placing a tumor and a barracks building its add-on among them; or once the structure is placed `unit.construction is not None`, with `structure.builder` |
 | `unit.has_add_on`, `has_reactor`, `has_techlab` | `unit.add_on is not None`, `unit.has_reactor`, `unit.has_tech_lab`, and `unit.production_capacity`, how many it trains at once |
+| `unit.add_on_position`, `add_on_land_position` | `unit.add_on_position` of a landed barracks, factory or starport alone, which the type checker refuses on any other type; nothing for where a host lands to join an add-on, 2.5 left of it and 0.5 above |
 | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_vespene` | `unit.is_carrying_resource`, `is_carrying_minerals`, `is_carrying_gas`, every race's gas one buff, `BuffId.CARRYING_GAS`; in both, a worker carrying gas from a rich geyser carries nothing, as the game gives it no buff ([game behavior](game-behavior/damage-and-buffs.md#buffs)) |
 | `unit.has_buff(b)` | `unit.has_buff(b)`, or any of several |
 | `unit.can_be_attacked`, of an enemy | `unit.is_visible`, which a remembered structure and an undetected unit are not; it is true of a cloaked unit of your own or an ally's, which python-sc2 calls not attackable |
@@ -387,7 +388,8 @@ it.
   - `is_powered`, for a Protoss structure, and `builder`, for any structure;
   - `mineral_contents`, for a mineral field, and `vespene_contents`, for a geyser or a gas building;
   - `assigned_harvesters` and `ideal_harvesters`, for a townhall or a gas building;
-  - `add_on`, `has_reactor` and `has_tech_lab`, for a barracks, a factory or a starport.
+  - `add_on`, `has_reactor` and `has_tech_lab`, for a barracks, a factory or a starport, and `add_on_position` for a
+    landed one.
 
   A unit typed `Unit[Any]` reads as any type, as python-sc2's does; on a `Unit[UnitType.AnyType]` such a read is an
   error until `UnitType.ProtossStructure.includes(unit)` narrows it. The type checker cannot follow a morph: a
