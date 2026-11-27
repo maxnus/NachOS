@@ -31,12 +31,12 @@ from loguru import logger
 from record_corpus import GAMES
 from s2clientprotocol import error_pb2, raw_pb2
 
+from sc2nachos.commands import CommandBook
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Race
-from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
 from sc2nachos.run import Installation
 from sc2nachos.state._state import _State
@@ -114,8 +114,8 @@ def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
     observation = game.client.observation()
     game_map = GameMap._from_game(game.client.game_info(), observation)
     game_data = GameData(game.client.game_data())
-    order_book = OrderBook(game_data)
-    tracker = _Tracker(game_data, None, order_book=order_book)
+    command_book = CommandBook(game_data)
+    tracker = _Tracker(game_data, None, command_book=command_book)
     curated_raw_data, _ = without_uncurated_units(observation.observation.raw_data)
     tracker.update(curated_raw_data, observation.observation.game_loop)
     placement_grids = PlacementGrids._build_at_start(
@@ -124,7 +124,7 @@ def _mains_with_their_walls(game: Sandbox) -> list[_Main]:
         state=_State(observation, tracker, game_map),
         step=observation.observation.game_loop,
         game_data=game_data,
-        order_book=order_book,
+        command_book=command_book,
     )
     mains = []
     for start_location in game_map.all_start_locations:

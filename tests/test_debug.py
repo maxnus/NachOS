@@ -98,7 +98,7 @@ class TestDrawing:
 
         def turn(step: int) -> None:
             if step == 0:
-                api.orders.command(api.units.own[0], AbilityId.MOVE, target=(5.0, 5.0))
+                api.commands.command(api.units.own[0], AbilityId.MOVE, target=(5.0, 5.0))
                 api.debug.draw((2.0, 3.0), DebugText("here"))
 
         observations = [make_observation(step, units=[make_unit(1)]) for step in range(3)]

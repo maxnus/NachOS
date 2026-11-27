@@ -11,6 +11,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, GameTime
+from sc2nachos.commands import CommandBook
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamedata._footprints import ADD_ON_OFFSET, FOOTPRINTS
@@ -18,7 +19,6 @@ from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
@@ -94,7 +94,7 @@ class _Game:
     def __init__(self) -> None:
         self.tracker = make_tracker(_TABLES)
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
-        self.book = OrderBook(_TABLES)
+        self.book = CommandBook(_TABLES)
         self.grids: PlacementGrids | None = None
 
     def observe(
@@ -116,7 +116,7 @@ class _Game:
                 state=state,
                 step=step,
                 game_data=_TABLES,
-                order_book=self.book,
+                command_book=self.book,
             )
         else:
             self.grids._update(present, state, step)
@@ -691,7 +691,7 @@ def _grids_at_the_start(path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
     """The map of a recorded game, a tracker that has taken in its first observation, and the grids made from it."""
     game_map, tracker, data, observation = _first_observation(path)
     state = _State(observation, tracker, game_map)
-    order_book = OrderBook(data)
+    command_book = CommandBook(data)
     present_units = tracker.unit_tracker.present
     grids = PlacementGrids._build_at_start(
         game_map,
@@ -699,7 +699,7 @@ def _grids_at_the_start(path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
         state=state,
         step=observation.observation.game_loop,
         game_data=data,
-        order_book=order_book,
+        command_book=command_book,
     )
     return game_map, tracker, grids
 
@@ -1007,7 +1007,7 @@ class _DepotBot:
             if api.resources.minerals >= 100:
                 self.site = _depot_site(api)
                 scv = api.units.own.of_type(UnitTypeId.SCV).closest_to(self.site)
-                api.orders.command(scv, _BUILD_DEPOT, target=self.site)
+                api.commands.command(scv, _BUILD_DEPOT, target=self.site)
             return
         placement = api.placement
         stands = bool(api.units.own.of_type(UnitTypeId.SUPPLY_DEPOT))

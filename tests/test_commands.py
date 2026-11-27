@@ -14,6 +14,9 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, GameTime
+from sc2nachos.commands import Command, CommandBook
+from sc2nachos.commands._action_to_send import actions_giving
+from sc2nachos.commands._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import Cost, GameData
 from sc2nachos.gamemap import GameMap
@@ -21,9 +24,6 @@ from sc2nachos.geometry import POINT_PRECISION, Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.ids.raw import RawAbilityId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.orders import Command, OrderBook
-from sc2nachos.orders._action_to_send import actions_giving
-from sc2nachos.orders._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.protocol import Client, ProtocolError, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
 from sc2nachos.state import ActionFailure, ActionResult, UnknownActionResultError
@@ -111,8 +111,8 @@ class _Game:
             for verdict in verdicts
         ]
         self.client, self.transport = make_client(*responses)
-        self.book = OrderBook(tables)
-        self.tracker = _Tracker(tables, make_enemy(tables), order_book=self.book)
+        self.book = CommandBook(tables)
+        self.tracker = _Tracker(tables, make_enemy(tables), command_book=self.book)
         self.map = GameMap(make_game_info(), start_location=Point((0.5, 0.5)))
 
     def observe(self, step: int, *units: raw_pb2.Unit, dead: tuple[int, ...] = ()) -> None:
@@ -278,7 +278,7 @@ class TestGivingAnOrder:
 
 
 class TestOrderingAUnitThroughItself:
-    """`unit.command(ability, ...)` is `api.orders.command(unit, ability, ...)`."""
+    """`unit.command(ability, ...)` is `api.commands.command(unit, ability, ...)`."""
 
     def test_the_order_goes_into_the_book_as_the_book_would_have_taken_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -323,7 +323,7 @@ class TestOrderingAUnitThroughItself:
 
     def test_it_takes_the_book_s_arguments_but_the_units(self) -> None:
         """So that an argument added to the book's `command` is not left out of the unit's."""
-        book_parameters = list(inspect.signature(OrderBook.command).parameters.values())
+        book_parameters = list(inspect.signature(CommandBook.command).parameters.values())
         unit_parameters = list(inspect.signature(OwnUnit.command).parameters.values())
         assert [parameter for parameter in book_parameters if parameter.name != "units"] == unit_parameters
 
@@ -347,7 +347,7 @@ class TestTrainingBuildingAndResearching:
         zealot = gateway.train(UnitTypeId.ZEALOT)
         warped_in = warp_gate.train(UnitTypeId.ZEALOT, target=(20.0, 21.0))
 
-        assert_type(made_up.orders.train(barracks, UnitTypeId.MARINE), Command)
+        assert_type(made_up.commands.train(barracks, UnitTypeId.MARINE), Command)
         assert (marine.ability, marine.units, marine.target) == (
             AbilityId.BARRACKS_TRAIN_MARINE,
             Units([barracks]),
@@ -366,7 +366,7 @@ class TestTrainingBuildingAndResearching:
             UnitReport(1, UnitTypeId.COMMAND_CENTER), UnitReport(2, UnitTypeId.ORBITAL_COMMAND)
         )
 
-        order = made_up.orders.train([command_center, orbital_command], UnitTypeId.SCV)
+        order = made_up.commands.train([command_center, orbital_command], UnitTypeId.SCV)
 
         assert (order.ability, order.units) == (
             AbilityId.COMMAND_CENTER_TRAIN_SCV,
@@ -377,8 +377,8 @@ class TestTrainingBuildingAndResearching:
         made_up, (gateway, warp_gate) = _made_up(UnitReport(1, UnitTypeId.GATEWAY), UnitReport(2, UnitTypeId.WARP_GATE))
 
         with pytest.raises(ValueError, match="a GATEWAY and a WARP_GATE make a ZEALOT with different abilities"):
-            made_up.orders.train([gateway, warp_gate], UnitTypeId.ZEALOT)
-        assert made_up.orders.staged == ()
+            made_up.commands.train([gateway, warp_gate], UnitTypeId.ZEALOT)
+        assert made_up.commands.staged == ()
 
     def test_a_unit_not_making_the_type_raises_saying_what_does(self) -> None:
         made_up, (barracks, high_templar) = _made_up(
@@ -388,7 +388,7 @@ class TestTrainingBuildingAndResearching:
         with pytest.raises(ValueError, match="^a BARRACKS does not make a ZEALOT: a GATEWAY or a WARP_GATE does$"):
             barracks.train(UnitTypeId.ZEALOT)
         with pytest.raises(ValueError, match="^nothing makes an ARCHON$"):
-            made_up.orders.train(high_templar, UnitTypeId.ARCHON)
+            made_up.commands.train(high_templar, UnitTypeId.ARCHON)
 
     def test_what_another_method_orders_raises_naming_it(self) -> None:
         """A command center's orbital is a morph, which `command` orders, and an SCV's depot a build."""
@@ -401,9 +401,9 @@ class TestTrainingBuildingAndResearching:
         ):
             command_center.train(UnitTypeId.ORBITAL_COMMAND)
         with pytest.raises(ValueError, match="SCV_BUILD_SUPPLY_DEPOT, which `build` orders, not `train`$"):
-            made_up.orders.train(scv, UnitTypeId.SUPPLY_DEPOT)
+            made_up.commands.train(scv, UnitTypeId.SUPPLY_DEPOT)
         with pytest.raises(ValueError, match="COMMAND_CENTER_TRAIN_SCV, which `train` orders, not `build`$"):
-            made_up.orders.build(command_center, UnitTypeId.SCV)
+            made_up.commands.build(command_center, UnitTypeId.SCV)
 
     def test_a_unit_that_trains_nothing_is_rejected_by_the_type_checker(self) -> None:
         _, (made_up_marine,) = _made_up(UnitReport(1, UnitTypeId.MARINE))
@@ -416,7 +416,7 @@ class TestTrainingBuildingAndResearching:
         made_up = MadeUpUnits()
 
         with pytest.raises(ValueError, match="an order needs a unit to give it to"):
-            made_up.orders.train([], UnitTypeId.MARINE)
+            made_up.commands.train([], UnitTypeId.MARINE)
 
     def test_a_worker_builds_a_structure_at_a_site_and_a_structure_its_add_on(self) -> None:
         _, (scv, drone, geyser, barracks, flying_barracks) = _made_up(
@@ -463,7 +463,7 @@ class TestTrainingBuildingAndResearching:
         made_up, (scv, other_scv) = _made_up(UnitReport(1, UnitTypeId.SCV), UnitReport(2, UnitTypeId.SCV))
 
         with pytest.raises(ValueError, match="only one of them can carry it out there"):
-            made_up.orders.build([scv, other_scv], UnitTypeId.SUPPLY_DEPOT, target=(30.0, 31.0))
+            made_up.commands.build([scv, other_scv], UnitTypeId.SUPPLY_DEPOT, target=(30.0, 31.0))
         with pytest.raises(TypeError, match="SCV_BUILD_SUPPLY_DEPOT"):
             scv.build(UnitTypeId.SUPPLY_DEPOT)
 
@@ -473,7 +473,7 @@ class TestTrainingBuildingAndResearching:
         )
 
         stimpack = tech_lab.research(UpgradeId.STIMPACK)
-        burrow = made_up.orders.research(lair, UpgradeId.BURROW)
+        burrow = made_up.commands.research(lair, UpgradeId.BURROW)
 
         assert (stimpack.ability, stimpack.units) == (AbilityId.BARRACKS_TECH_LAB_RESEARCH_STIMPACK, Units([tech_lab]))
         assert burrow.ability is AbilityId.LAIR_RESEARCH_BURROW
@@ -500,12 +500,12 @@ class TestTrainingBuildingAndResearching:
         stimpack = tech_lab.research(UpgradeId.STIMPACK, queued=True, force=True)
 
         assert marine.queued and stimpack.queued
-        assert {marine, stimpack} <= made_up.orders._forced
+        assert {marine, stimpack} <= made_up.commands._forced
 
     @pytest.mark.parametrize(("method", "made_through"), [("train", "units"), ("build", "units"), ("research", "unit")])
     def test_the_unit_s_method_takes_the_book_s_arguments_but_the_units(self, method: str, made_through: str) -> None:
         """So that an argument added to the book's method is not left out of the unit's."""
-        book_parameters = list(inspect.signature(getattr(OrderBook, method)).parameters.values())[1:]
+        book_parameters = list(inspect.signature(getattr(CommandBook, method)).parameters.values())[1:]
         unit_parameters = list(inspect.signature(getattr(OwnUnit, method)).parameters.values())[1:]
         assert [parameter for parameter in book_parameters if parameter.name != made_through] == unit_parameters
 
@@ -521,7 +521,7 @@ class TestTrainingBuildingAndResearching:
 
     def test_train_orders_trains_warp_ins_and_a_larva_s_morphs_and_build_builds_and_add_ons(self) -> None:
         """What the two methods order, by the game's names for it, over every type the game makes."""
-        book = MadeUpUnits().orders
+        book = MadeUpUnits().commands
         trained = {ability.name for ability in book._trained_abilities.values()}
         built = {ability.name for ability in book._built_abilities.values()}
         assert all(any(part in name for part in ("_TRAIN_", "_WARP_IN_", "LARVA_MORPH_")) for name in trained)
@@ -2051,9 +2051,9 @@ class _OrderingBot:
             return
         if self.moved is None and len(marines) >= 2:
             first, second = marines[0], marines[1]
-            self.moved = api.orders.command(first, _MOVE, target=middle + (6.0, 0.0))
-            self.stim = api.orders.command(second, _HOLD_FIRE)
-            self.stimmed_move = api.orders.command(second, _MOVE, target=middle + (0.0, 6.0))
+            self.moved = api.commands.command(first, _MOVE, target=middle + (6.0, 0.0))
+            self.stim = api.commands.command(second, _HOLD_FIRE)
+            self.stimmed_move = api.commands.command(second, _MOVE, target=middle + (0.0, 6.0))
             return
         if self.moved is None or self.stim is None:
             return
@@ -2062,7 +2062,7 @@ class _OrderingBot:
             api.client.debug([debug_pb2.DebugCommand(kill_unit=debug_pb2.DebugKillUnit(tag=[self.killed.tag]))])
             return
         if self.at_a_dead_tag is None and self.killed.is_dead:
-            self.at_a_dead_tag = api.orders.command(self.killed, _MOVE, target=middle)
+            self.at_a_dead_tag = api.commands.command(self.killed, _MOVE, target=middle)
 
 
 class _UnloadingBot:
@@ -2100,17 +2100,17 @@ class _UnloadingBot:
         if not self.loads:
             if len(marines) >= 2:
                 self.loads = [
-                    api.orders.command(medivac, AbilityId.LOAD, target=marine)
+                    api.commands.command(medivac, AbilityId.LOAD, target=marine)
                     for medivac, marine in zip(medivacs, marines, strict=False)
                 ]
             return
         if all(medivac.cargo_used > 0 for medivac in medivacs):
             self.unloaded_at = {medivac.tag: medivac.position for medivac in medivacs}
             if self.unload_first:
-                self.unload = api.orders.command(medivacs, _UNLOAD)
-            self.move = api.orders.command(medivacs, _MOVE, target=middle + (12.0, 0.0))
+                self.unload = api.commands.command(medivacs, _UNLOAD)
+            self.move = api.commands.command(medivacs, _MOVE, target=middle + (12.0, 0.0))
             if not self.unload_first:
-                self.unload = api.orders.command(medivacs, _UNLOAD)
+                self.unload = api.commands.command(medivacs, _UNLOAD)
 
 
 class _SiegingBot:
@@ -2136,7 +2136,7 @@ class _SiegingBot:
         if self.zone is None:
             self.zone = liberator.position + (4.0, 0.0)
         if self._siege_due(api.step):
-            self.sieges.append(api.orders.command(liberator, _SIEGE_AT, target=self.zone))
+            self.sieges.append(api.commands.command(liberator, _SIEGE_AT, target=self.zone))
 
     def _siege_due(self, step: int) -> bool:
         """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
@@ -2171,11 +2171,11 @@ class _GroupSiegingBot:
         if self.siege is None:
             tank = next(unit for unit in units if unit.type_id is UnitTypeId.SIEGE_TANK)
             liberator = next(unit for unit in units if unit.type_id is UnitTypeId.LIBERATOR)
-            self.siege = api.orders.command(tank, _SIEGE)
-            api.orders.command(liberator, _SIEGE_AT, target=liberator.position + (4.0, 0.0))
+            self.siege = api.commands.command(tank, _SIEGE)
+            api.commands.command(liberator, _SIEGE_AT, target=liberator.position + (4.0, 0.0))
         elif self.unsiege is None and {unit.type_id for unit in units} == _SIEGED:
             self.sieged = sorted(unit.type_id for unit in units)
-            self.unsiege = api.orders.command(units, _UNSIEGE)
+            self.unsiege = api.commands.command(units, _UNSIEGE)
 
 
 class _GroupUnloadingBot:
@@ -2206,14 +2206,14 @@ class _GroupUnloadingBot:
         if not self.loads:
             if len(marines) >= 2:
                 self.loads = [
-                    api.orders.command(transport, AbilityId.LOAD, target=marine)
+                    api.commands.command(transport, AbilityId.LOAD, target=marine)
                     for transport, marine in zip(transports, marines, strict=False)
                 ]
             return
         if self.unload is None and all(transport.cargo_used > 0 for transport in transports):
             # Units made by debug show up a turn or two later, so there may be more marines than were loaded.
             self.marines_left_out = len(marines)
-            self.unload = api.orders.command(transports, _UNLOAD)
+            self.unload = api.commands.command(transports, _UNLOAD)
 
 
 class _ProductionBot:
@@ -2251,9 +2251,9 @@ class _ProductionBot:
             api.client.debug([*(debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats), *creates])
             self.made = True
         elif not self.ordered and barracks and bays:
-            api.orders.command(barracks[0], _TRAIN_MARINE)
-            api.orders.command(barracks[0], _TRAIN_MARINE, queued=True)
-            api.orders.command(bays[0], AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
+            api.commands.command(barracks[0], _TRAIN_MARINE)
+            api.commands.command(barracks[0], _TRAIN_MARINE, queued=True)
+            api.commands.command(bays[0], AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
             self.ordered = True
         elif self.ordered:
             research = api.researches.get(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
@@ -2298,8 +2298,8 @@ class _GroupTrainingBot:
             )
             self.made = True
         elif self.cost is None and len(barracks) == 3:
-            api.orders.command(barracks, _TRAIN_MARINE)
-            self.cost = api.orders.staged_cost
+            api.commands.command(barracks, _TRAIN_MARINE)
+            self.cost = api.commands.staged_cost
         elif self.cost is not None:
             self.in_production.append(len(api.in_production(UnitType.Marine)))
 

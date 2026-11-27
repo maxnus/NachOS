@@ -15,7 +15,7 @@ codebases read alike. A new rule of style goes here, with an example from the co
   where it is called: `_holds_a_tag_of(dead, unit)`, `_new_tag_is_same_unit(unit, display)`. A pull request renames a
   one-word name in the code it touches, not only in the code it adds. An enum's member may be one word, its enum
   naming the rest: `EventPriority.BEFORE`, `Race.TERRAN` (the owner, #232).
-- **A name that holds an instance of a NachOS class follows the class**: `order_book: OrderBook`, never `orders`. A
+- **A name that holds an instance of a NachOS class follows the class**: `command_book: CommandBook`, never `orders`. A
   constructor's parameter is named for what it takes: `static_placement_grid`, `present_units`.
 - **A classmethod that turns a value of another kind into an instance of its class is named `from_` that value**:
   `Footprint.from_rows`, `GamePorts.from_start_port`, `Player._from_game`. One that builds a shape or a state names

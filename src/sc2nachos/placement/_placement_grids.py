@@ -17,11 +17,11 @@ from sc2nachos.placement._walls import ProtossWall, TerranWall
 from sc2nachos.units import UnitType
 
 if TYPE_CHECKING:
+    from sc2nachos.commands import CommandBook
     from sc2nachos.gamedata import GameData
     from sc2nachos.gamemap import GameMap, Ramp
     from sc2nachos.geometry import Footprint, Margin, PointLike
     from sc2nachos.ids import UnitTypeId
-    from sc2nachos.orders import OrderBook
     from sc2nachos.state._state import _State
     from sc2nachos.units import Unit, Units
 
@@ -87,17 +87,17 @@ class PlacementGrids:
         state: _State,
         step: int,
         game_data: GameData,
-        order_book: OrderBook,
+        command_book: CommandBook,
     ) -> Self:
         """The grids of a game's first observation on `game_map`, which `state` reads, made at `step`, and in which this
         player knows of `present_units`, from the map's placement grid at the start, and with this player's builds as
-        `order_book` holds them. The placement grid at the start blocks no unit, this player's townhall and the mineral
-        fields in sight included; it is the pathing grid that blocks those."""
+        `command_book` holds them. The placement grid at the start blocks no unit, this player's townhall and the
+        mineral fields in sight included; it is the pathing grid that blocks those."""
         static = game_map.placement.copy()
         for unit in present_units.of_type(UnitType.AnyVespeneGeyser, UnitType.CollapsibleTower):
             if (footprint := unit.footprint) is not None:
                 static.fill_footprint(footprint, at=unit.position, value=False)
-        build_sites = _BuildSites(game_data, order_book)
+        build_sites = _BuildSites(game_data, command_book)
         return cls(
             static.as_readonly(),
             game_map=game_map,

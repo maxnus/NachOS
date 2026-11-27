@@ -40,7 +40,7 @@ def test_a_turns_chat_goes_out_in_order_after_its_orders_and_the_camera_move() -
     @api.on(TurnEvent)
     def talk(event: TurnEvent) -> None:
         api.chat("gl hf")
-        api.orders.command(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
+        api.commands.command(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
         api.camera.move_to((5.0, 6.0))
         api.chat("to the team", team_only=True)
 

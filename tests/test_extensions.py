@@ -178,14 +178,14 @@ class TestWhereTheirHandlersRun:
 
         def build_extensions(api: Api[object]) -> None:
             api.on(TurnEvent, priority=extensions_priority)(
-                lambda event: api.orders.command(api.units.own[0], AbilityId.MOVE, target=(3.0, 3.0))
+                lambda event: api.commands.command(api.units.own[0], AbilityId.MOVE, target=(3.0, 3.0))
             )
 
         api = Api(extensions=build_extensions)
 
         @api.on(TurnEvent)
         def stop(event: TurnEvent) -> None:
-            api.orders.command(api.units.own[0], AbilityId.STOP)
+            api.commands.command(api.units.own[0], AbilityId.STOP)
 
         game = _play_turns(api, turns=1)
 

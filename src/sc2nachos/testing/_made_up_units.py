@@ -5,11 +5,11 @@ from typing import Any
 
 from s2clientprotocol import raw_pb2
 
+from sc2nachos.commands import CommandBook
 from sc2nachos.gamedata import GameData
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Grid, Point
 from sc2nachos.match import Enemy, Race
-from sc2nachos.orders import OrderBook
 from sc2nachos.testing._shipped_game_data import load_game_data
 from sc2nachos.testing._unit_report import ENEMY_PLAYER_ID, UnitReport
 from sc2nachos.units import Unit, Units
@@ -35,10 +35,10 @@ class MadeUpUnits:
             ladder_id=None,
             game_data=game_data,
         )
-        self._order_book = OrderBook(game_data)
+        self._command_book = CommandBook(game_data)
         # Where creep covers the ground in the latest observation, if it said.
         self._creep: Grid[bool] | None = None
-        self._tracker = _Tracker(game_data, enemy, order_book=self._order_book, on_creep=self._on_creep)
+        self._tracker = _Tracker(game_data, enemy, command_book=self._command_book, on_creep=self._on_creep)
         self._step: int | None = None
 
     @property
@@ -47,10 +47,10 @@ class MadeUpUnits:
         return self._tracker.game_data
 
     @property
-    def orders(self) -> OrderBook:
+    def commands(self) -> CommandBook:
         """Every order the units were given since they were made up, through `sc2nachos.units.OwnUnit.command` or this
-        book's `command`, as `api.orders` holds a turn's. Nothing is sent, so none leaves the book."""
-        return self._order_book
+        book's `command`, as `api.commands` holds a turn's. Nothing is sent, so none leaves the book."""
+        return self._command_book
 
     @property
     def units(self) -> Units[Unit[Any]]:
@@ -84,7 +84,7 @@ class MadeUpUnits:
         # observation at this step, so the next one must come after it.
         self._step = step
         self._creep = creep
-        self._order_book._observe(GameTime(steps=step), ())
+        self._command_book._observe(GameTime(steps=step), ())
         self._tracker.update(observation, step)
         unit_tracker = self._tracker.unit_tracker
         return [unit_tracker.by_tag(report.tag) for report in reports]

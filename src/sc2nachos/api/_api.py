@@ -10,6 +10,7 @@ from sc2nachos._shared.checks import check_file_to_write
 from sc2nachos._shared.errors import NachOSError
 from sc2nachos.api._game import _Game
 from sc2nachos.camera import Camera
+from sc2nachos.commands import CommandBook
 from sc2nachos.debug import DebugCommands
 from sc2nachos.events import (
     Event,
@@ -31,7 +32,6 @@ from sc2nachos.gametime._game_time import check_game_time
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Enemy, Player, Result
-from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, GameEndedError
@@ -280,12 +280,12 @@ class Api[E]:
         return self._current_game().result
 
     @property
-    def orders(self) -> OrderBook:
+    def commands(self) -> CommandBook:
         """This player's orders for the turn.
 
         Orders are sent in one request after the turn's last handler returns. A turn that orders nothing sends nothing.
         """
-        return self._current_game().orders
+        return self._current_game().commands
 
     @property
     def units(self) -> Units[Unit[Any]]:
@@ -351,7 +351,7 @@ class Api[E]:
         There is one for each unit: a train a structure shows, queued ones included; an egg or a cocoon becoming one; a
         structure going up, a structure morphing into one, a unit warping in; and a build a worker has been sent to
         make, or an add-on its host has been ordered to build, until the structure stands. A reactor's two marines are
-        two. The turn's orders are not among them; they are in `api.orders.issued_to`. Takes the types as
+        two. The turn's orders are not among them; they are in `api.commands.issued_to`. Takes the types as
         `Units.of_type` does.
         """
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids_of(types, unit_types)
@@ -371,7 +371,7 @@ class Api[E]:
         Raises `UncuratedIdError` if one the game gave up on names an ability the curated ids leave out.
         """
         game = self._current_game()
-        return game.orders._refusals + game.state.action_failures
+        return game.commands._refusals + game.state.action_failures
 
     @property
     def player(self) -> Player:

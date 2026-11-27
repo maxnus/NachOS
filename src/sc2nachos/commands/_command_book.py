@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import raw_pb2
 
+from sc2nachos.commands._action_to_send import actions_giving
+from sc2nachos.commands._command import Command
+from sc2nachos.commands._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.gamedata import Cost, OrderBehavior
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
-from sc2nachos.orders._action_to_send import actions_giving
-from sc2nachos.orders._command import Command
-from sc2nachos.orders._targets import aimed_at, check_target, same_point, same_target
 from sc2nachos.protocol import ProtocolError
 from sc2nachos.state import ActionFailure, ActionResult
 from sc2nachos.units import OwnUnit, Unit, Units, UnitType
@@ -49,10 +49,10 @@ _IS_AIMED_AT_ITSELF = MappingProxyType(
 
 
 @final
-class OrderBook:
+class CommandBook:
     """This player's orders for the turn.
 
-    A bot gives orders through `api.orders` while its handlers run. They are sent in one request after the turn's
+    A bot gives orders through `api.commands` while its handlers run. They are sent in one request after the turn's
     last handler returns. A unit carries out only the last order it is given in a turn, plus any abilities it
     carries out at once.
     """
@@ -499,14 +499,14 @@ def _abilities_making(game_data: GameData) -> dict[tuple[UnitTypeId, UnitTypeId]
 
 
 def _is_trained(maker: UnitTypeId, product: UnitTypeId) -> bool:
-    """Whether `OrderBook.train` orders a `maker` to make a `product`: a unit not a structure, made by a structure or
+    """Whether `CommandBook.train` orders a `maker` to make a `product`: a unit not a structure, made by a structure or
     a larva."""
     structures = UnitType.Structure.type_ids
     return product not in structures and (maker in structures or maker is UnitTypeId.LARVA)
 
 
 def _is_built(maker: UnitTypeId, product: UnitTypeId) -> bool:
-    """Whether `OrderBook.build` orders a `maker` to make a `product`: a structure made by a worker, or an add-on."""
+    """Whether `CommandBook.build` orders a `maker` to make a `product`: a structure made by a worker, or an add-on."""
     if product in UnitType.AnyAddOn.type_ids:
         return True
     return product in UnitType.Structure.type_ids and maker in UnitType.Worker.type_ids

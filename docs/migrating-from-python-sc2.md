@@ -45,14 +45,14 @@ api = Api()
 
 @api.on(TurnEvent, once=True)
 def rush(event: TurnEvent) -> None:
-    api.orders.command(api.units.own.workers, AbilityId.ATTACK, target=api.map.opponent_start_locations[0])
+    api.commands.command(api.units.own.workers, AbilityId.ATTACK, target=api.map.opponent_start_locations[0])
 
 
 @api.on(TurnEvent)
 def train_scvs(event: TurnEvent) -> None:
     cost = api.data.abilities[AbilityId.COMMAND_CENTER_TRAIN_SCV].cost
     for townhall in api.units.own.townhalls.complete.idle:
-        pending = api.orders.staged_cost
+        pending = api.commands.staged_cost
         budget = api.resources - pending.resources
         if budget.covers(cost.resources) and api.supply.left - pending.supply >= cost.supply:
             townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
@@ -66,7 +66,7 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   counts game time.
 - **An order goes to the units given, all at once**, and is sent when the turn's handlers have run.
 - **Nothing is subtracted as you order.** `can_afford` is the bot's own: what the turn's orders will cost is
-  `api.orders.staged_cost`.
+  `api.commands.staged_cost`.
 - **`steps_per_turn=4` matches python-sc2's `game_step`.** NachOS takes a turn every step unless told otherwise, and its
   `Computer()` defaults to very hard.
 
@@ -91,8 +91,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   Faster speed ([in detail](reference/python-sc2.md#units)).
 - **The tables are keyed by id, and the relations between them were swept in game**, replacing python-sc2's
   hand-written dicts ([in detail](reference/python-sc2.md#the-tables)).
-- **Orders are buffered and sent once a turn** through `api.orders`, and what the game refuses is listed in
-  `api.action_failures` ([orders](orders.md), [in detail](reference/python-sc2.md#orders)).
+- **Orders are buffered and sent once a turn** through `api.commands`, and what the game refuses is listed in
+  `api.action_failures` ([orders](commands.md), [in detail](reference/python-sc2.md#orders)).
 - **Drawing, cheats and debug commands go through `api.debug`**, and chat through `api.chat`
   ([debugging](debugging.md), [in detail](reference/python-sc2.md#debug-chat-the-camera-and-leaving)).
 - **One script plays the ladder's games and local ones**: `run_from_command_line` reads the ladder's arguments, which a
@@ -101,7 +101,7 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
 ## Where a translation goes wrong
 
 - **A unit takes the last order a turn gives it.** A second train given to a structure replaces the first; a reactor's
-  second marine needs `queued=True` ([orders](orders.md#one-order-a-unit-a-turn)).
+  second marine needs `queued=True` ([orders](commands.md#one-order-a-unit-a-turn)).
 - **A larva's morph is given to a larva**, a drone or an overlord say, not to the hatchery, which refuses it
   ([in detail](reference/python-sc2.md#orders)).
 - **A tag is not a unit.** A structure gets a new tag each time it leaves sight; keep `unit.id`, or the unit itself,

@@ -298,7 +298,7 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   and leaves its move going; aimed at a point, it replaces the move and flies there first. `UNLOAD` is answered `Error`
   by each of the three, and their own `_UNLOAD` ids `NotSupported` (tool `sweep_orders`, `held-orders`). Two medivacs
   given a move and `UNLOAD_AT` aimed at each itself, in one request and in either order, put their marines down where
-  they stood and flew on; from the next observation each showed only its move (`tests/test_orders.py`, run on GitHub
+  they stood and flew on; from the next observation each showed only its move (`tests/test_commands.py`, run on GitHub
   Actions).
 - Nothing else swept does something different to a unit's orders by what it is aimed at. A moving medivac, warp
   prism and transport overlord given a load at a passenger 1 or 8 away drop their move for it; a moving raven given

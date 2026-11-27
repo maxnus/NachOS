@@ -2,7 +2,7 @@
 
 A bot makes one `Api`, subscribes handlers to the events a game hands out with `Api.on`, and plays through a runner:
 `run_local` against the built-in computer, or `run_from_command_line` for the ladder and local games alike. Each turn
-it reads its units from `Api.units` and orders them through `Api.orders`.
+it reads its units from `Api.units` and orders them through `Api.commands`.
 
 The [README](https://github.com/maxnus/NachOS#readme) says how to get started and lists the guides.
 """

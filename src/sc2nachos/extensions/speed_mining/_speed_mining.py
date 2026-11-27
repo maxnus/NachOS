@@ -24,10 +24,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, MutableMapping, Sequence
 
     from sc2nachos import Api
+    from sc2nachos.commands import Command
     from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.gamemap import Expansion
     from sc2nachos.geometry import Point
-    from sc2nachos.orders import Command
     from sc2nachos.units import Order
 
 # The most workers speed mining holds at one field: with three, it mined 19% less than plain gathers (in game).
@@ -108,7 +108,7 @@ class SpeedMining:
       the game takes it, and `miners` and `collectors` hold it until then. A worker the bot sends to gather at another
       field is kept, and sent to its own, as one the game sends there is. So a miner the bot sends to build does not
       come back to its field, nor a drone it burrows: the bot hands it over again.
-    - A worker given an order this turn, or sent one lately that may not show yet, as `OrderBook.issued_to` reads with
+    - A worker given an order this turn, or sent one lately that may not show yet, as `CommandBook.issued_to` reads with
       `include_sent`, is left alone for the turn, and one burrowed, or doing anything but its work, as an SCV
       repairing by autocast, until it is unburrowed, idle or back at its work.
     - A worker is let go alike once it or its field is dead, and once no expansion holding its field has such a
@@ -357,20 +357,20 @@ class SpeedMining:
         is not at that work, whatever its orders show."""
         if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
             return False
-        order_book = self._api.orders
-        if not _has_a_standing_order_other_than_a_hand_overs(order_book.issued_to(worker), mining=mining):
+        command_book = self._api.commands
+        if not _has_a_standing_order_other_than_a_hand_overs(command_book.issued_to(worker), mining=mining):
             current_order = worker.current_order
             if current_order is not None and self._is_its_work(worker, current_order, mining=mining):
                 return True
             if any(
                 order.ability is AbilityId.GATHER and order.target is resource
-                for order in order_book.issued_to(worker, include_sent=True)
+                for order in command_book.issued_to(worker, include_sent=True)
             ):
                 return True
         if carries_cargo(worker):
             self._trips.hand_in_then_gather(worker, resource)
         else:
-            order_book.command(worker, AbilityId.GATHER, target=resource)
+            command_book.command(worker, AbilityId.GATHER, target=resource)
         return True
 
     def _nearest_field_with_room(
@@ -493,7 +493,7 @@ class SpeedMining:
     def _let_go_of_the_workers_the_bot_ordered(self) -> None:
         """Let go of each worker held that the bot has ordered, as `_is_ordered_by_the_bot` says, of those the turn's
         orders name."""
-        for worker in {unit for order in self._api.orders.staged for unit in order.units}:
+        for worker in {unit for order in self._api.commands.staged for unit in order.units}:
             if worker in self._field_by_worker and self._is_ordered_by_the_bot(worker, mining=True):
                 del self._field_by_worker[worker]
             elif worker in self._gas_building_by_worker and self._is_ordered_by_the_bot(worker, mining=False):
@@ -503,12 +503,12 @@ class SpeedMining:
         """Whether the bot has ordered `worker`, a miner if `mining`, else a collector: an order issued to it this turn
         stands that is not a hand-over's. Speed mining's turn comes after every handler of the bot's, so the turn's
         orders are the bot's and the hand-overs'."""
-        return _has_a_standing_order_other_than_a_hand_overs(self._api.orders.issued_to(worker), mining=mining)
+        return _has_a_standing_order_other_than_a_hand_overs(self._api.commands.issued_to(worker), mining=mining)
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
         """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not orderable,
         burrowed, given an order lately, or on an order that is not its work."""
-        if not worker.is_orderable or worker.is_burrowed or self._api.orders.issued_to(worker, include_sent=True):
+        if not worker.is_orderable or worker.is_burrowed or self._api.commands.issued_to(worker, include_sent=True):
             return True
         current_order = worker.current_order
         return current_order is not None and not self._is_its_work(worker, current_order, mining=mining)

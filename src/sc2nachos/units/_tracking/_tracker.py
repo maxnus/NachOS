@@ -18,10 +18,10 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import raw_pb2
 
+    from sc2nachos.commands import CommandBook
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Point
     from sc2nachos.match import Enemy
-    from sc2nachos.orders import OrderBook
 
 
 def _on_no_creep(point: Point) -> bool:
@@ -43,7 +43,7 @@ class _Tracker:
         "_last_changes",
         "_morph_tracker",
         "_on_creep",
-        "_order_book",
+        "_command_book",
         "_unit_comparer",
         "_unit_tracker",
         "_unit_watcher",
@@ -57,16 +57,16 @@ class _Tracker:
         enemy: Enemy | None,
         *,
         id_provider: Callable[[raw_pb2.Unit], int] | None = None,
-        order_book: OrderBook,
+        command_book: CommandBook,
         on_creep: Callable[[Point], bool] = _on_no_creep,
     ) -> None:
         """Read the observations of a game whose tables are `game_data`, against `enemy`. Each unit is made under its
         alliance's next id, or under the one `id_provider` gives the report it is first seen in. This player's units
-        are ordered into `order_book`. `on_creep` tells whether creep covers the ground at a point now, as a unit's
+        are ordered into `command_book`. `on_creep` tells whether creep covers the ground at a point now, as a unit's
         speed asks; by default no creep is known."""
         self._game_data = game_data
         self._enemy = enemy
-        self._order_book = order_book
+        self._command_book = command_book
         # What the last update found changed, numbered by update.
         self._last_changes = _TrackerChanges(0)
         self._unit_tracker = _UnitTracker(self, id_provider=id_provider)
@@ -89,9 +89,9 @@ class _Tracker:
         return self._enemy
 
     @property
-    def order_book(self) -> OrderBook:
+    def command_book(self) -> CommandBook:
         """The book this player's units are ordered into."""
-        return self._order_book
+        return self._command_book
 
     @property
     def last_changes(self) -> _TrackerChanges:

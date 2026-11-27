@@ -93,7 +93,7 @@ def test_a_bot_that_acts_plays_a_recorded_game_to_its_end(path: Path) -> None:
         if not workers:
             return
         worker = next(iter(workers))
-        api.orders.command(workers, AbilityId.MOVE, target=api.map.start_location)
+        api.commands.command(workers, AbilityId.MOVE, target=api.map.start_location)
         api.debug.draw(worker, DebugText("worker"))
         api.camera.move_to(worker.position)
         api.chat("moving")

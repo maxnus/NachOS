@@ -193,8 +193,8 @@ class TestOrders:
 
         stop = marine.command(AbilityId.STOP)
 
-        assert made_up.orders.staged == (move, stop)
-        assert made_up.orders.issued_to(marine) == (move, stop)
+        assert made_up.commands.staged == (move, stop)
+        assert made_up.commands.issued_to(marine) == (move, stop)
         assert (move.time, stop.time) == (GameTime(steps=16), GameTime(steps=17))
 
 

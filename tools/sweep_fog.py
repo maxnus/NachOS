@@ -33,12 +33,12 @@ from _sandbox import MAP, OpenGround, Sandbox, playing
 from loguru import logger
 from s2clientprotocol import raw_pb2, sc2api_pb2
 
+from sc2nachos.commands import CommandBook
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Enemy, Race
-from sc2nachos.orders import OrderBook
 from sc2nachos.run import Installation
 from sc2nachos.units._tracking._tracker import _Tracker
 
@@ -66,7 +66,7 @@ class _BayInTheFog:
         game_map = GameMap._from_game(game_info, observation)
         game_data = GameData(client.game_data())
         enemy = Enemy._from_game(game_info, sandbox.player, game_data=game_data)
-        self.tracker = _Tracker(game_data, enemy, order_book=OrderBook(game_data))
+        self.tracker = _Tracker(game_data, enemy, command_book=CommandBook(game_data))
         self.enemy_player = 2 if sandbox.player == 1 else 1
         open_ground = OpenGround(game_map, observation.observation.raw_data.units)
         self.bay_site = open_ground.claim(game_map.playable_area.center, half=2)

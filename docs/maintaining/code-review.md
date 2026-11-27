@@ -23,7 +23,7 @@ Each of these came from a real bug found in review, mostly in code that looked c
   `"banana" in rect` returns `True`.
 - **Every exported name is a promise.** No public API without a caller or a test that shows why it exists, and no
   second spelling of an operation that already exists, but where the owner chose one: `unit.command` beside
-  `api.orders.command` (#240), and `train`, `build` and `research` beside `command` (#245).
+  `api.commands.command` (#240), and `train`, `build` and `research` beside `command` (#245).
 - **Measure before claiming.** Benchmark competing shapes rather than reasoning about them; grep for real call
   sites before calling something hot.
 - **A name must not claim behavior the code lacks.** The most common defect found in review, and one tests never

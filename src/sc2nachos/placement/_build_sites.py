@@ -12,9 +12,9 @@ from sc2nachos.units import NotReportedError, Unit, UnitType
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Iterator
 
+    from sc2nachos.commands import Command, CommandBook
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Footprint
-    from sc2nachos.orders import Command, OrderBook
     from sc2nachos.placement._placement_reservation import PlacementReservation
     from sc2nachos.units import Order, OwnUnit, Units
 
@@ -24,13 +24,13 @@ class _BuildSites:
     """Where this player's builds will stand that are ordered and not standing yet: each issued this turn, or sent and
     not yet begun. One for a game."""
 
-    __slots__ = ("_builder_types", "_game_data", "_order_book")
+    __slots__ = ("_builder_types", "_game_data", "_command_book")
 
-    def __init__(self, game_data: GameData, order_book: OrderBook) -> None:
-        """The build sites of a game whose tables are `game_data`, with this player's orders as `order_book` holds
+    def __init__(self, game_data: GameData, command_book: CommandBook) -> None:
+        """The build sites of a game whose tables are `game_data`, with this player's orders as `command_book` holds
         them."""
         self._game_data = game_data
-        self._order_book = order_book
+        self._command_book = command_book
         builds = [row for row in game_data.abilities.values() if row.needs_placement]
         # The types that perform an ability that places a structure: workers, add-on hosts, queens and the like.
         self._builder_types = frozenset(type_id for row in builds for type_id in row.performers)
@@ -55,7 +55,7 @@ class _BuildSites:
 
     def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Command | Order]:
         """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
-        ordered: list[Command | Order] = [*self._order_book.issued_to(unit, include_sent=True)]
+        ordered: list[Command | Order] = [*self._command_book.issued_to(unit, include_sent=True)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
         if any(self._ability_places_structure(ability) for ability in reported):

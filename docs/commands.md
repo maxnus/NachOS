@@ -1,7 +1,7 @@
 # Orders
 
-A bot orders a unit through `unit.command` from its handlers, and several units at once through `api.orders.command`:
-`unit.command(ability, ...)` is `api.orders.command(unit, ability, ...)`, and everything here holds for both. Orders are
+A bot orders a unit through `unit.command` from its handlers, and several units at once through `api.commands.command`:
+`unit.command(ability, ...)` is `api.commands.command(unit, ability, ...)`, and everything here holds for both. Orders are
 sent in one request after the turn's last handler returns, so a turn that orders nothing sends nothing. Every order
 goes out in the turn it was given, as given, and the game charges what costs then.
 
@@ -19,12 +19,12 @@ refuses is listed in `api.action_failures`.
 
 ```python
 order = marine.command(AbilityId.STIM)
-api.orders.command(squad, AbilityId.MOVE, target=ramp)
+api.commands.command(squad, AbilityId.MOVE, target=ramp)
 scv.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
 scv.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 ```
 
-- **`units`**, of `api.orders.command`, is one unit or any number of them, and each carries the order out; a unit
+- **`units`**, of `api.commands.command`, is one unit or any number of them, and each carries the order out; a unit
   given twice counts once. An ability every unit of a command carries out goes out as one command naming them all: a
   move, an attack, a burrow, a lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from
   what the game was seen to do).
@@ -61,7 +61,7 @@ larva.train(UnitTypeId.DRONE)  # LARVA_MORPH_DRONE
 scv.build(UnitTypeId.SUPPLY_DEPOT, target=site)  # SCV_BUILD_SUPPLY_DEPOT
 drone.build(UnitTypeId.EXTRACTOR, target=geyser)  # DRONE_MORPH_EXTRACTOR
 barracks.build(UnitTypeId.TECH_LAB_BARRACKS)  # BUILD_TECH_LAB
-api.orders.train(api.units.own.of_type(UnitType.Barracks).idle, UnitTypeId.MARINE)
+api.commands.train(api.units.own.of_type(UnitType.Barracks).idle, UnitTypeId.MARINE)
 if (tech_lab := barracks.add_on) is not None:
     tech_lab.research(UpgradeId.STIMPACK)  # BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 ```
@@ -108,7 +108,7 @@ a point replaces them:
 
 ```python
 medivac.command(AbilityId.MOVE, target=retreat)
-api.orders.command([bunker, medivac], AbilityId.UNLOAD)  # all three commands go out
+api.commands.command([bunker, medivac], AbilityId.UNLOAD)  # all three commands go out
 ```
 
 `SIEGE` and `UNSIEGE` are custom ids, which the game has no ability for: `SIEGE` goes out as the tank's, the
@@ -136,13 +136,13 @@ barracks.command(AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
 Both go out, and a barracks with a reactor makes both marines at once.
 
 Orders have no priority of their own. Handlers already run highest priority first, and a later handler checks
-`api.orders.issued_to(unit)` to leave alone a unit an earlier one has ordered:
+`api.commands.issued_to(unit)` to leave alone a unit an earlier one has ordered:
 
 ```python
 @api.on(TurnEvent, priority=EventPriority.LOW)
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        if not api.orders.issued_to(marine):
+        if not api.commands.issued_to(marine):
             marine.command(AbilityId.MOVE, target=rally)
 ```
 
@@ -155,7 +155,7 @@ marine without the buff stims it once:
 
 ```python
 for marine in marines:
-    sent = api.orders.issued_to(marine, include_sent=True)
+    sent = api.commands.issued_to(marine, include_sent=True)
     if not marine.has_buff(BuffId.MARINE_STIMMED) and not any(order.ability is AbilityId.STIM for order in sent):
         marine.command(AbilityId.STIM)
 ```
@@ -227,10 +227,10 @@ if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
 
 `api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and in a
 stepped game it charges the turn's orders by the next observation (in game), so a bot giving several in one turn
-takes off what they will cost, `api.orders.staged_cost`:
+takes off what they will cost, `api.commands.staged_cost`:
 
 ```python
-budget = api.resources - api.orders.staged_cost.resources
+budget = api.resources - api.commands.staged_cost.resources
 ```
 
 `staged_cost` counts the orders of `pending` as they will go out: the last of a unit's orders that replace one another,

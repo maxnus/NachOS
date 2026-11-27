@@ -1014,12 +1014,12 @@ class TestIdle:
         seen = record(game.events, OwnUnitBecameIdleEvent)
         game.observe(0, make_unit(1, build_progress=1.0, orders=[_moving()]))
         assert game._game is not None
-        orders = game._game.orders
-        orders.command(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
+        command_book = game._game.commands
+        command_book.command(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
         client, _ = make_client(
             make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
         )
-        orders._send(client)
+        command_book._send(client)
         game.observe(16, make_unit(1, build_progress=1.0))
         game.observe(32, make_unit(1, build_progress=1.0, orders=[_moving()] if shown else []))
         assert [(event.time.steps, event.unit.tag) for event in seen] == ([] if shown else [(32, 1)])
@@ -1031,12 +1031,12 @@ class TestIdle:
         seen = record(game.events, OwnUnitBecameIdleEvent)
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
         assert game._game is not None
-        orders = game._game.orders
-        orders.command(_own_unit(game, 1), AbilityId.RALLY_UNITS, target=(30.0, 30.0))
+        command_book = game._game.commands
+        command_book.command(_own_unit(game, 1), AbilityId.RALLY_UNITS, target=(30.0, 30.0))
         client, _ = make_client(
             make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
         )
-        orders._send(client)
+        command_book._send(client)
         game.observe(16, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
         game.observe(32, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
         assert [(event.time.steps, event.unit.tag) for event in seen] == [(0, 1)]

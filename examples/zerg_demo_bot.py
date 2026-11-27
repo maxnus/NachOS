@@ -70,7 +70,7 @@ class Budget:
     """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
 
     def __init__(self) -> None:
-        staged_cost = api.orders.staged_cost
+        staged_cost = api.commands.staged_cost
         self.resources_left = api.resources - staged_cost.resources
         self.supply_left = api.supply.left - staged_cost.supply
 
@@ -108,7 +108,7 @@ def _ordered_count(ability: AbilityId) -> int:
     return sum(
         1
         for unit in api.units.own
-        for order in api.orders.issued_to(unit, include_sent=True)
+        for order in api.commands.issued_to(unit, include_sent=True)
         if order.ability is ability
     )
 
@@ -116,7 +116,7 @@ def _ordered_count(ability: AbilityId) -> int:
 def _free_larvae() -> Units[OwnUnit[UnitType.Larva]]:
     """The larvae given nothing yet."""
     return api.units.own.of_type(UnitType.Larva).filter(
-        lambda larva: not api.orders.issued_to(larva, include_sent=True)
+        lambda larva: not api.commands.issued_to(larva, include_sent=True)
     )
 
 
@@ -196,7 +196,7 @@ def hand_drones_to_speed_mining(_: TurnEvent) -> None:
 
 def _free_drones() -> Units[OwnUnit[Any]]:
     """The drones free to build: given nothing lately. Besides building, this bot's drones only mine and collect."""
-    return api.units.own.workers.filter(lambda drone: not api.orders.issued_to(drone, include_sent=True))
+    return api.units.own.workers.filter(lambda drone: not api.commands.issued_to(drone, include_sent=True))
 
 
 def _order_drone_to_build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
@@ -315,7 +315,7 @@ def train_queens(budget: Budget) -> None:
     for townhall in own.townhalls.complete.idle:
         if queens >= wanted:
             return
-        if api.orders.issued_to(townhall, include_sent=True):
+        if api.commands.issued_to(townhall, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.HATCHERY_TRAIN_QUEEN):
             townhall.command(AbilityId.HATCHERY_TRAIN_QUEEN)
@@ -327,7 +327,7 @@ def research_zergling_speed(budget: Budget) -> None:
     if UpgradeId.ZERGLING_SPEED in api.upgrades or UpgradeId.ZERGLING_SPEED in api.researches:
         return
     for pool in api.units.own.of_type(UnitType.SpawningPool).complete.idle:
-        if api.orders.issued_to(pool, include_sent=True):
+        if api.commands.issued_to(pool, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED):
             pool.command(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED)
@@ -362,7 +362,7 @@ class QueenCommander:
             near = threats.within(DEFEND_WITHIN, of=home)
             if near:
                 queen.command(AbilityId.ATTACK, target=near.closest_to(queen.position).position)
-            elif queen.is_idle and not api.orders.issued_to(queen, include_sent=True):
+            elif queen.is_idle and not api.commands.issued_to(queen, include_sent=True):
                 self._order_free_queen(queen, townhall)
 
     def _pair(self, queens: Units[OwnUnit[UnitType.Queen]]) -> None:
@@ -469,14 +469,14 @@ class Army:
             for unit in army:
                 unit.command(AbilityId.ATTACK, target=threats.closest_to(unit.position).position)
         elif self.attacking:
-            api.orders.command(army, AbilityId.ATTACK, target=self._attack_target(army))
+            api.commands.command(army, AbilityId.ATTACK, target=self._attack_target(army))
         elif was_attacking:
-            api.orders.command(army, AbilityId.MOVE, target=self._defense_location())
+            api.commands.command(army, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = army.idle.beyond(4, of=defense_location)
             if idle:
-                api.orders.command(idle, AbilityId.ATTACK, target=defense_location)
+                api.commands.command(idle, AbilityId.ATTACK, target=defense_location)
 
     def _defense_location(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""

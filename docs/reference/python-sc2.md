@@ -113,15 +113,15 @@ difference that rests on what the game does links there for its evidence.
 
 ## Orders
 
-[orders.md](../orders.md) says how an order is given, what it competes with, and how to learn what the game did with
+[commands.md](../orders.md) says how an order is given, what it competes with, and how to learn what the game did with
 it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.command(AbilityId.MOVE, target=p)`, or `api.orders.command(units, ...)` for several at once |
-| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.orders.train(units, t)` and so on for several at once ([orders](../orders.md#training-building-and-researching)) |
-| `bot.do(action)`, `await bot._do_actions(...)` | `unit.command(...)` or `api.orders.command(...)`, sent once the turn's handlers have run |
-| nothing | `unit.command(..., force=True)`, `api.orders.issued_to(unit)` |
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.command(AbilityId.MOVE, target=p)`, or `api.commands.command(units, ...)` for several at once |
+| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.commands.train(units, t)` and so on for several at once ([orders](../orders.md#training-building-and-researching)) |
+| `bot.do(action)`, `await bot._do_actions(...)` | `unit.command(...)` or `api.commands.command(...)`, sent once the turn's handlers have run |
+| nothing | `unit.command(..., force=True)`, `api.commands.issued_to(unit)` |
 | `bot.do(action, queue=True)` | `unit.command(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order an `Order`, which python-sc2 calls a `UnitOrder` |
 | `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
@@ -153,7 +153,7 @@ it.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever
-  it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.orders.staged_cost` is what the
+  it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.commands.staged_cost` is what the
   turn's orders will cost ([orders](../orders.md#what-an-order-needs)).
 - **An order a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for its
   first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
@@ -479,7 +479,7 @@ it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.commands.issued_to(unit, include_sent=True)`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research`, a `Progress` with its `fraction` and `time_left`, and its structure; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]`, the step it was last in sight |
 | `state.creep` | `api.creep` |

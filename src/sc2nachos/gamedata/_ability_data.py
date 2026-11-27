@@ -244,7 +244,7 @@ class AbilityData:
     warp-in's that of its unit's train at a gateway, not how long the warp-in takes. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     multi_unit: bool
-    """Whether every unit one command names carries it out, so that `api.orders.command` gives it to several in one
+    """Whether every unit one command names carries it out, so that `api.commands.command` gives it to several in one
     command: a move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`).
     Any other ability one unit of a command carries out, and `command` gives it to each unit in a command of its own:
     what costs minerals or vespene, a build, an add-on, a train, a research or a morph (in game); every spell but a

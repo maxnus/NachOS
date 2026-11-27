@@ -620,7 +620,7 @@ def _train_an_scv_on_the_first_turn(api: Api) -> None:
 
     @api.on(TurnEvent, once=True)
     def train(_: TurnEvent) -> None:
-        api.orders.command(api.units.own.townhalls[0], AbilityId.COMMAND_CENTER_TRAIN_SCV)
+        api.commands.command(api.units.own.townhalls[0], AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
 def _send_a_worker_to_the_natural(api: Api, *, at_time: GameTime) -> None:
@@ -628,7 +628,7 @@ def _send_a_worker_to_the_natural(api: Api, *, at_time: GameTime) -> None:
 
     @api.on(TurnEvent, at_time=at_time)
     def send(_: TurnEvent) -> None:
-        api.orders.command(api.units.own.workers[0], AbilityId.MOVE, target=api.expansions[1].center)
+        api.commands.command(api.units.own.workers[0], AbilityId.MOVE, target=api.expansions[1].center)
 
 
 @pytest.mark.integration
@@ -732,12 +732,12 @@ def _scout_the_enemys_main_and_come_back(api: Api, *, back_at_step: int) -> None
     def send(_: TurnEvent) -> None:
         scout = api.units.own.workers[0]
         scout_ids.append(scout.id)
-        api.orders.command(scout, AbilityId.MOVE, target=api.map.all_start_locations[1])
+        api.commands.command(scout, AbilityId.MOVE, target=api.map.all_start_locations[1])
 
     @api.on(TurnEvent, at_time=GameTime(steps=back_at_step))
     def come_back(_: TurnEvent) -> None:
         if (scout := api.units.own.get(scout_ids[0])) is not None:
-            api.orders.command(scout, AbilityId.MOVE, target=api.map.start_location)
+            api.commands.command(scout, AbilityId.MOVE, target=api.map.start_location)
 
 
 @pytest.mark.integration

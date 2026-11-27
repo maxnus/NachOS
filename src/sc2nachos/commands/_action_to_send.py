@@ -7,17 +7,17 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
+from sc2nachos.commands._targets import target_as_kept
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED, SentAs
 from sc2nachos.gamedata._techtree import ABILITIES_JOINING_OTHER_ORDERS, ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
 from sc2nachos.geometry import Point
-from sc2nachos.orders._targets import target_as_kept
 from sc2nachos.units import Unit
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
 
+    from sc2nachos.commands._command import Command
     from sc2nachos.ids import AbilityId, UnitTypeId
-    from sc2nachos.orders._command import Command
     from sc2nachos.units import OwnUnit, Target
 
 

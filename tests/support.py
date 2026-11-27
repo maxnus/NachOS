@@ -17,6 +17,7 @@ from websocket import WebSocketConnectionClosedException
 from sc2nachos import GameTime
 from sc2nachos.api._game import _chat_event_types_by_player, _Game
 from sc2nachos.camera import Camera
+from sc2nachos.commands import CommandBook
 from sc2nachos.debug import DebugCommands
 from sc2nachos.events import (
     AlertEvent,
@@ -61,7 +62,6 @@ from sc2nachos.gamemap import Expansion, GameMap, StartLocation
 from sc2nachos.geometry import Point
 from sc2nachos.ids import UnitTypeId
 from sc2nachos.match import Enemy, Player, Race, Result
-from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, Exchange, Recording, RecordingTransport, Status
@@ -340,7 +340,7 @@ def make_enemy(game_data: GameData) -> Enemy:
 
 def make_tracker(game_data: GameData) -> _Tracker:
     """A tracker of a game of `game_data` against `make_enemy`'s enemy, its orders in a book of its own."""
-    return _Tracker(game_data, make_enemy(game_data), order_book=OrderBook(game_data))
+    return _Tracker(game_data, make_enemy(game_data), command_book=CommandBook(game_data))
 
 
 def require_enemy(enemy: Enemy | None) -> Enemy:
@@ -433,7 +433,7 @@ def played(
     if game is None:
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
-        order_book = tracker.order_book
+        command_book = tracker.command_book
         state = _State(observation, tracker, game_map)
         expansions = Expansion._find_all(game_map, tracker.unit_tracker)
         if tracker.enemy is not None:
@@ -448,7 +448,7 @@ def played(
             ),
             enemy=tracker.enemy,
             tracker=tracker,
-            orders=order_book,
+            commands=command_book,
             observation=observation,
             state=state,
             placement=PlacementGrids._build_at_start(
@@ -457,7 +457,7 @@ def played(
                 state=state,
                 step=step,
                 game_data=tracker.game_data,
-                order_book=order_book,
+                command_book=command_book,
             ),
             vision=Vision._build_at_start(game_map, state=state, step=step),
             pathing=Pathing(client),
@@ -509,7 +509,7 @@ class RealGame:
         self.own_player = Player._from_game(info, player, start_location=None)
         game_data = GameData(client.game_data())
         self.enemy = Enemy._from_game(info, player, game_data=game_data)
-        self.tracker = _Tracker(game_data, self.enemy, order_book=OrderBook(game_data))
+        self.tracker = _Tracker(game_data, self.enemy, command_book=CommandBook(game_data))
         self.game: _Game | None = None
         self.state = self._observe()
 

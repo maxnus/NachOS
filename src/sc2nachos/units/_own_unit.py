@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import raw_pb2
 
+    from sc2nachos.commands import Command
     from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId, UpgradeId
-    from sc2nachos.orders import Command
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -40,12 +40,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         force: bool = False,
     ) -> Command:
         """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Command`, as
-        `sc2nachos.orders.OrderBook.command` orders it: `unit.command(AbilityId.MOVE, target=point)` is
-        `api.orders.command(unit, AbilityId.MOVE, target=point)`.
+        `sc2nachos.commands.CommandBook.command` orders it: `unit.command(AbilityId.MOVE, target=point)` is
+        `api.commands.command(unit, AbilityId.MOVE, target=point)`.
 
-        Raises as `OrderBook.command` does.
+        Raises as `CommandBook.command` does.
         """
-        return self._tracker.order_book.command(self, ability, target=target, queued=queued, force=force)
+        return self._tracker.command_book.command(self, ability, target=target, queued=queued, force=force)
 
     def train(
         self: OwnUnit[UnitType.Structure | UnitType.Larva],
@@ -56,12 +56,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         force: bool = False,
     ) -> Command:
         """Order the structure or larva to make a unit of `unit_type` and return the `Command`, as
-        `sc2nachos.orders.OrderBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
-        `api.orders.train(barracks, UnitTypeId.MARINE)`.
+        `sc2nachos.commands.CommandBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
+        `api.commands.train(barracks, UnitTypeId.MARINE)`.
 
-        Raises as `OrderBook.train` does.
+        Raises as `CommandBook.train` does.
         """
-        return self._tracker.order_book.train(self, unit_type, target=target, queued=queued, force=force)
+        return self._tracker.command_book.train(self, unit_type, target=target, queued=queued, force=force)
 
     def build(
         self: OwnUnit[UnitType.Worker | UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport],
@@ -72,23 +72,23 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         force: bool = False,
     ) -> Command:
         """Order the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
-        return the `Command`, as `sc2nachos.orders.OrderBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
-        target=site)` is `api.orders.build(scv, UnitTypeId.BUNKER, target=site)`.
+        return the `Command`, as `sc2nachos.commands.CommandBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
+        target=site)` is `api.commands.build(scv, UnitTypeId.BUNKER, target=site)`.
 
-        Raises as `OrderBook.build` does.
+        Raises as `CommandBook.build` does.
         """
-        return self._tracker.order_book.build(self, unit_type, target=target, queued=queued, force=force)
+        return self._tracker.command_book.build(self, unit_type, target=target, queued=queued, force=force)
 
     def research(
         self: OwnUnit[UnitType.Structure], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
     ) -> Command:
         """Order the structure to research `upgrade` and return the `Command`, as
-        `sc2nachos.orders.OrderBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
-        `api.orders.research(tech_lab, UpgradeId.STIMPACK)`.
+        `sc2nachos.commands.CommandBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
+        `api.commands.research(tech_lab, UpgradeId.STIMPACK)`.
 
-        Raises as `OrderBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
+        Raises as `CommandBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
         """
-        return self._tracker.order_book.research(self, upgrade, queued=queued, force=force)
+        return self._tracker.command_book.research(self, upgrade, queued=queued, force=force)
 
     @property
     def orders(self) -> tuple[Order, ...]:
