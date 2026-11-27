@@ -1829,14 +1829,14 @@ def _vespene_collected_on_pylons_main(*, speed_collected: bool) -> float:
             for geyser in main.geysers
             if geyser.position in refinery_by_geyser
             and refinery_by_geyser[geyser.position].is_complete
-            and builder_by_geyser[geyser.position].is_orderable
+            and builder_by_geyser[geyser.position].is_commandable
             and not builder_by_geyser[geyser.position].is_constructing
         ]
         if len(finished) == len(main.geysers):
             for refinery in finished:
                 builder = builder_by_geyser[refinery.position]
                 miner = min(
-                    (scv for scv in api.extensions.miners if scv.is_orderable),
+                    (scv for scv in api.extensions.miners if scv.is_commandable),
                     key=lambda scv: scv.distance_to(refinery),
                 )
                 for scv in (builder, miner):
@@ -1862,7 +1862,7 @@ def _vespene_collected_on_pylons_main(*, speed_collected: bool) -> float:
             ):
                 continue
             builder = min(
-                (scv for scv in api.extensions.miners if scv.is_orderable), key=lambda scv: scv.distance_to(geyser)
+                (scv for scv in api.extensions.miners if scv.is_commandable), key=lambda scv: scv.distance_to(geyser)
             )
             api.extensions.release(builder)
             api.commands.command(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _FOOTPRINT_REACH = 7.0
 
 # A collection is covariant in its units, as an immutable sequence is: a collection of own units is a collection of
-# units, and `own` and `orderable` read one. The type parameter syntax would infer the variance, and infers it
+# units, and `own` and `commandable` read one. The type parameter syntax would infer the variance, and infers it
 # invariant through those two self types, so the variable declares it.
 U = TypeVar("U", bound=Unit[Any], covariant=True)
 
@@ -297,8 +297,8 @@ class Units(Sequence[U]):
         return Units(unit for unit in self._units if unit.is_visible)
 
     @property
-    def orderable[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
-        """The units this player can order now, as `Unit.is_orderable` has it."""
+    def commandable[K: UnitType.AnyType](self: Units[Unit[K]]) -> Units[OwnUnit[K]]:
+        """The units this player can command now, as `Unit.is_commandable` has it."""
         return Units(unit for unit in self._units if isinstance(unit, OwnUnit) and unit.is_listed)
 
     @property

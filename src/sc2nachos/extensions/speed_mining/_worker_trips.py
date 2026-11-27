@@ -203,7 +203,7 @@ class WorkerTrips:
     def _is_on_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
         """Whether `worker` is on speed mining's move to `trip_end`, or was sent it lately, which its orders may not
         show yet."""
-        if not worker.is_orderable:
+        if not worker.is_commandable:
             return False
         current_order = worker.current_order
         if (
@@ -217,7 +217,7 @@ class WorkerTrips:
     def _was_sent_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
         """Whether the latest command that replaced `worker`'s orders, sent lately or given this turn, is speed
         mining's move to `trip_end`, so that no other command, the bot's included, has taken its place since."""
-        if not worker.is_orderable:
+        if not worker.is_commandable:
             return False
         replacing = [command for command in worker.pending_commands if not command.queued]
         return bool(replacing) and replacing[-1].ability is AbilityId.MOVE and replacing[-1].target == trip_end

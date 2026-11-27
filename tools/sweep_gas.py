@@ -302,7 +302,7 @@ class _TrialGame:
             builder = self._builder_by_geyser.get(geyser)
             if geyser.position in standing or (builder is not None and builder.is_alive and builder.orders):
                 continue
-            miners = [scv for scv in api.extensions.miners if scv.is_orderable]
+            miners = [scv for scv in api.extensions.miners if scv.is_commandable]
             if minerals < cost or not miners:
                 return
             builder = min(miners, key=lambda scv: scv.distance_to(geyser))
@@ -323,7 +323,7 @@ class _TrialGame:
                 refinery is None
                 or not refinery.is_complete
                 or builder is None
-                or not builder.is_orderable
+                or not builder.is_commandable
                 or builder.is_constructing
             ):
                 return None
@@ -369,7 +369,7 @@ class _TrialGame:
     def _note_the_collectors_mining(self) -> None:
         """Note each collector on a gather at a mineral field, by its refinery."""
         for scv, refinery in self._refinery_by_collector.items():
-            current_order = scv.current_order if scv.is_orderable else None
+            current_order = scv.current_order if scv.is_commandable else None
             if current_order is None or current_order.ability is not AbilityId.GATHER:
                 continue
             target = current_order.known_target
@@ -410,7 +410,7 @@ class _TrialGame:
         for geyser, refinery in zip(main.geysers, refineries, strict=True):
             builder = self._builder_by_geyser[geyser]
             miners = sorted(
-                (scv for scv in speed_mining.miners if scv.is_orderable), key=lambda scv: scv.distance_to(refinery)
+                (scv for scv in speed_mining.miners if scv.is_commandable), key=lambda scv: scv.distance_to(refinery)
             )
             for index, scv in enumerate([builder, *miners[: self._trial.collectors - 1]]):
                 if variant.speed_collected:
@@ -471,7 +471,7 @@ class _TrialGame:
         on_their_moves: list[OwnUnit[UnitType.Worker]] = []
         route_by_collector: dict[OwnUnit[UnitType.Worker], list[tuple[AbilityId, Point | Unit[Any]]]] = {}
         for scv in collectors:
-            if not scv.is_orderable:
+            if not scv.is_commandable:
                 continue
             if sent := scv.pending_commands:
                 if any(command.ability is AbilityId.MOVE for command in sent):

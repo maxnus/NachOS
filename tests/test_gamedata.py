@@ -678,7 +678,7 @@ class TestARecordedGamesTables:
         assert lurker.total_cost.time == hydralisk.total_cost.time + GameTime(steps=403)
 
     def test_every_ability_that_acts_at_once_is_one_a_unit_is_offered(self, path: Path) -> None:
-        """Each was seen in game to leave a moving unit's orders alone, so each must still be orderable.
+        """Each was seen in game to leave a moving unit's orders alone, so each must still be offered to a unit.
 
         The off half of a toggle is offered to nobody in the tables, since a unit is offered it only once the on half
         has taken effect (in game); it counts as offered when the on half is.

@@ -327,7 +327,7 @@ with it.
 | `unit.weapon_ready` | `unit.is_weapon_ready`, on your own units, which is true too while an attack is under way, its cooldown reading zero |
 | `unit.armor + unit.armor_upgrade_level` | `unit.armor` |
 | `units.find_by_tag(t)`, `by_tag(t)` | `units.get(unit_id)`, `units.by_id(unit_id)` |
-| `self.units.find_by_tag(t)` is `None`, for a unit of yours that left the observation | `unit.is_orderable` is false, on the unit kept: inside a transport or a gas building, under a neural parasite, or dead; and `units.orderable` |
+| `self.units.find_by_tag(t)` is `None`, for a unit of yours that left the observation | `unit.is_commandable` is false, on the unit kept: inside a transport or a gas building, under a neural parasite, or dead; and `units.commandable` |
 | `units.tags_in(ts)`, `tags_not_in(ts)` | `units.with_ids(ids)`, `units.without_ids(ids)` |
 | `units.of_type(UnitTypeId.MARINE)` | `units.of_type(UnitType.Marine)`, typed as marines; a `UnitTypeId` is still taken, untyped |
 | `units.exclude_type(t)` | `units.excluding_type(t)` |
@@ -380,7 +380,7 @@ with it.
   units, since the game reports them for nobody else's. python-sc2 has them on every unit, where an enemy is always
   `is_idle`. `units.own` is typed as your own units, and `units.idle` exists only on them. A unit taken over by a
   neural parasite changes class, and changes back, so a unit you kept may be an enemy `Unit` now:
-  `unit.is_orderable` says whether it is yours and in the observation.
+  `unit.is_commandable` says whether it is yours and in the observation.
 - **A unit's type is a type parameter too.** `UnitType` has a class for every type, `UnitType.Marine`, whose `id`
   is its `UnitTypeId`, and for the groups the game's tables put them in: `UnitType.Terran`, `UnitType.Structure`,
   `UnitType.ProtossStructure`. `Unit[UnitType.Marine]` is a marine, and a read only some types have is an error on

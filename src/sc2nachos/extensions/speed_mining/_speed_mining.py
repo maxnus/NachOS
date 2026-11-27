@@ -191,7 +191,7 @@ class SpeedMining:
         carries, minerals or vespene. So a worker pulled into a fight, or collecting vespene, mines from this turn.
         Nothing is sent to a worker mining minerals already, which speed mining keeps at the field from the next turn,
         nor again to one sent there lately, whose orders may not show it yet, but one given another command this turn is
-        sent there. A worker building, burrowed, or out of reach of commands (`OwnUnit.is_orderable`), as inside a
+        sent there. A worker building, burrowed, or out of reach of commands (`OwnUnit.is_commandable`), as inside a
         refinery or a transport, cannot be sent: `mine` returns `None` for it and leaves it as it was, to be handed over
         once it can be.
 
@@ -355,7 +355,7 @@ class SpeedMining:
         from, there at once, as `mine` and `collect` say, unless it is at that work already, and return whether it
         could be: not while it builds, is burrowed or is out of reach of commands. One the bot commanded elsewhere this
         turn is not at that work, whatever its orders show."""
-        if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
+        if not worker.is_commandable or worker.is_burrowed or worker.is_constructing:
             return False
         command_book = self._api.commands
         if not _has_a_standing_command_other_than_a_hand_overs(worker.staged_commands, mining=mining):
@@ -506,9 +506,9 @@ class SpeedMining:
         return _has_a_standing_command_other_than_a_hand_overs(worker.staged_commands, mining=mining)
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
-        """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not orderable,
-        burrowed, given a command lately, or on an order that is not its work."""
-        if not worker.is_orderable or worker.is_burrowed or worker.pending_commands:
+        """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not
+        commandable, burrowed, given a command lately, or on an order that is not its work."""
+        if not worker.is_commandable or worker.is_burrowed or worker.pending_commands:
             return True
         current_order = worker.current_order
         return current_order is not None and not self._is_its_work(worker, current_order, mining=mining)

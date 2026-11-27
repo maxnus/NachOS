@@ -140,10 +140,10 @@ class TestEquality:
 class TestTyping:
     def test_a_collection_of_own_units_is_a_collection_of_units(self) -> None:
         """For the type checker, which reads this test: `Units` is covariant, so a collection of own units is passed
-        where one of units is asked for, and `orderable` and `own` read it."""
+        where one of units is asked for, and `commandable` and `own` read it."""
         own: Units[OwnUnit[Any]] = _assorted_own_units(3)
         units: Units[Unit[Any]] = own
-        assert list(own.orderable) == list(own.own) == list(units)
+        assert list(own.commandable) == list(own.own) == list(units)
 
 
 class TestCombining:
@@ -385,7 +385,7 @@ class TestWhatBecameOfThem:
             ("dead", "is_dead"),
             ("listed", "is_listed"),
             ("visible", "is_visible"),
-            ("orderable", "is_orderable"),
+            ("commandable", "is_commandable"),
         ],
     )
     def test_each_filter_keeps_the_units_its_read_is_true_of(self, units_filter: str, unit_read: str) -> None:
@@ -397,7 +397,7 @@ class TestWhatBecameOfThem:
         assert _tags(held.dead) == [3]
         assert _tags(held.not_listed) == [2, 3, 8]
         assert _tags(held.visible) == [1, 4, 5]
-        assert _tags(held.orderable) == [1]
+        assert _tags(held.commandable) == [1]
 
     def test_alive_and_dead_split_the_units_and_so_do_listed_and_not_listed(self) -> None:
         held = _held_units()
@@ -408,8 +408,8 @@ class TestWhatBecameOfThem:
         """It is the enemy's, of the enemy's class, though it was this player's when the collection was kept."""
         held = _held_units()
         (parasited,) = (unit for unit in held if unit.tag == 4)
-        assert not isinstance(parasited, OwnUnit) and parasited not in held.orderable
-        assert all(isinstance(unit, OwnUnit) for unit in held.orderable)
+        assert not isinstance(parasited, OwnUnit) and parasited not in held.commandable
+        assert all(isinstance(unit, OwnUnit) for unit in held.commandable)
 
 
 class TestWhereTheyAre:
