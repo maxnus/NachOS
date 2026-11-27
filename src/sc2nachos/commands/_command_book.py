@@ -123,8 +123,8 @@ class CommandBook:
         keep their spacing where the game spreads them; any other goes out as an action to each. `queued` puts the
         command behind each unit's orders. Nothing is sent until the turn's handlers have all run.
 
-        Commands of an ability that joins other orders (`AbilityData.joins_other_orders`), given apart in one turn, go
-        out as one action where they are aimed at the same unit, or at the same point as the game keeps it, and are
+        Commands of an ability that joins other commands (`AbilityData.joins_other_commands`), given apart in one turn,
+        go out as one action where they are aimed at the same unit, or at the same point as the game keeps it, and are
         queued alike, so units commanded one at a time keep their spacing too. A command joins the last such action
         before it unless one of its units is named in that action or a later one, so a unit's commands go out in the
         order it was given them; another unit's may go out ahead of commands given before them. A command aimed at one

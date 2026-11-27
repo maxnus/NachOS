@@ -194,7 +194,7 @@ the structure is idle on the ground.
 ## Commands sent together
 
 Commands given apart go out as one action where they could have been one command: of an ability that joins other
-commands (`api.data.abilities[ability].joins_other_orders`), aimed at the same unit or at the same point as the game
+commands (`api.data.abilities[ability].joins_other_commands`), aimed at the same unit or at the same point as the game
 keeps it, sent as the same one of the game's abilities and queued alike. A squad moved to one point a marine at a time
 goes out as one move, and the game spreads it around the point as it would one command to them all:
 

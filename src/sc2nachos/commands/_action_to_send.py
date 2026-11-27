@@ -9,7 +9,11 @@ from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.commands._targets import target_as_kept
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED, SentAs
-from sc2nachos.gamedata._techtree import ABILITIES_JOINING_OTHER_ORDERS, ABILITIES_SENT_AS_ANOTHER, MULTI_UNIT_ABILITIES
+from sc2nachos.gamedata._techtree import (
+    ABILITIES_JOINING_OTHER_COMMANDS,
+    ABILITIES_SENT_AS_ANOTHER,
+    MULTI_UNIT_ABILITIES,
+)
 from sc2nachos.geometry import Point
 from sc2nachos.units import Unit
 
@@ -44,7 +48,7 @@ def actions_giving(commands: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]])
 
     A command of an ability every unit of a command carries out goes out as one action naming its units, or one for
     each ability it is sent as, and any other command as an action to each unit. An action of a command of an ability
-    that joins other orders (`ABILITIES_JOINING_OTHER_ORDERS`) joins the last action before it of the same game
+    that joins other commands (`ABILITIES_JOINING_OTHER_COMMANDS`) joins the last action before it of the same game
     ability, target as the game keeps it and queue flag, unless one of its units is named in that action or in one after
     it. So a unit's commands go out in the order it was given them, though another unit's may go out ahead of commands
     given before them, and no action names a unit twice. An action aimed at one of its own units joins nothing, and
@@ -74,9 +78,9 @@ def _join_key(
 ) -> tuple[int, Target | None, bool] | None:
     """What an action of `command`, giving the game's `ability` at `target` to `units`, shares with each action it may
     join: the ability, the target as the game keeps it and the queue flag. `None` for an action that joins none and that
-    none joins: of an ability that joins no other order, or aimed at one of its own units, as a transport's unload where
-    it stands is."""
-    if command.ability not in ABILITIES_JOINING_OTHER_ORDERS:
+    none joins: of an ability that joins no other command, or aimed at one of its own units, as a transport's unload
+    where it stands is."""
+    if command.ability not in ABILITIES_JOINING_OTHER_COMMANDS:
         return None
     if isinstance(target, Unit) and any(unit.id == target.id for unit in units):
         return None

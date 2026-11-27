@@ -1180,9 +1180,9 @@ class TestARecordedGamesTables:
         data = _tables(path)
         kept_to_their_orders = {AbilityId.MORPH_ARCHON, AbilityId.LOAD_ALL}
         for row in data.abilities.values():
-            assert row.joins_other_orders == (row.multi_unit and row.id not in kept_to_their_orders), row.id.name
-        assert data.abilities[AbilityId.MOVE].joins_other_orders
-        assert not any(data.abilities[ability].joins_other_orders for ability in kept_to_their_orders)
+            assert row.joins_other_commands == (row.multi_unit and row.id not in kept_to_their_orders), row.id.name
+        assert data.abilities[AbilityId.MOVE].joins_other_commands
+        assert not any(data.abilities[ability].joins_other_commands for ability in kept_to_their_orders)
 
     def test_every_research_time_is_a_whole_number_of_steps(self, path: Path) -> None:
         assert all(upgrade.research_time == round(upgrade.research_time) for upgrade in _answer(path).upgrades)

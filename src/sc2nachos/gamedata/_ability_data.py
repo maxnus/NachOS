@@ -13,7 +13,7 @@ from sc2nachos._shared.readable_int_enum import ReadableIntEnum
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED, SentAs
 from sc2nachos.gamedata._techtree._overrides import (
-    ABILITIES_JOINING_OTHER_ORDERS,
+    ABILITIES_JOINING_OTHER_COMMANDS,
     ABILITIES_PLACING_AT_THE_TARGET,
     ABILITIES_SENT_AS_ANOTHER,
     COST_OVERRIDES,
@@ -250,8 +250,8 @@ class AbilityData:
     Any other ability one unit of an action carries out, and `command` gives it to each unit in an action of its own:
     what costs minerals or vespene, a build, an add-on, a train, a research or a morph (in game); every spell but a
     toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out. Commands of it
-    given apart may go out as one action too, as `joins_other_orders` says."""
-    joins_other_orders: bool
+    given apart may go out as one action too, as `joins_other_commands` says."""
+    joins_other_commands: bool
     """Whether commands of it given apart in one turn go out as one action where they are aimed at the same unit, or
     at the same point as the game keeps it, and queued alike, as one command to all their units would: every ability
     that is `multi_unit` but an archon's merge, which merges the two templar each of its commands names, and a
@@ -314,7 +314,7 @@ class AbilityData:
             products=tech_tree.ability(ability).products,
             cost=costs.get(ability, _FREE),
             multi_unit=ability in MULTI_UNIT_ABILITIES,
-            joins_other_orders=ability in ABILITIES_JOINING_OTHER_ORDERS,
+            joins_other_commands=ability in ABILITIES_JOINING_OTHER_COMMANDS,
             cancelled_by=cancels.get(ability),
             command_behavior=behavior.own,
             sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, SENT_UNCHANGED),
@@ -345,7 +345,7 @@ class AbilityData:
             products=tech_tree.ability(ability).products,
             cost=costs.get(ability, _FREE),
             multi_unit=ability in MULTI_UNIT_ABILITIES,
-            joins_other_orders=ability in ABILITIES_JOINING_OTHER_ORDERS,
+            joins_other_commands=ability in ABILITIES_JOINING_OTHER_COMMANDS,
             cancelled_by=cancels.get(ability),
             command_behavior=behavior.own,
             sent_as=sent_as,
