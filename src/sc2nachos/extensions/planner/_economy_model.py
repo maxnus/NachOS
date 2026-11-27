@@ -41,15 +41,16 @@ class EconomyModel:
     initial_harvest_delay: GameTime = GameTime(seconds=3)
     """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
     applies to a new worker on its first walk, to a worker moved between minerals and vespene, and to a builder back
-    from its structure at either, whose walk back is that much shorter for it, so that the two together take its walk
-    back. With 0 a worker brings in from when it starts."""
+    from its structure at either, whose walk back is that much shorter for it: the two together take its walk back, or
+    the delay where the walk is shorter, as `builder_walk_time` says. With 0 a worker brings in from when it starts."""
     builder_walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
     """How long a worker walks to build a structure of a unit type, and walks back after: what the function returns for
     the type. The last `initial_harvest_delay` of the walk back is that delay, which the builder pays as it starts to
-    mine or to collect, all of it if the walk is shorter. Where it returns `None`, or is `None`, the default applies: 10
-    seconds to a townhall and 6 to any other structure. A build a worker has not begun, or has left, takes that walk
-    first. The function is asked about every structure a worker builds, not only those a plan values, so a lookup
-    returns `None` for those it does not hold."""
+    mine or to collect. A walk shorter than the delay is allowed: the builder then brings in nothing for the whole delay
+    after its build, longer than its walk, even with no walk at all. Where it returns `None`, or is `None`, the default
+    applies: 10 seconds to a townhall and 6 to any other structure. A build a worker has not begun, or has left, takes
+    that walk first. The function is asked about every structure a worker builds, not only those a plan values, so a
+    lookup returns `None` for those it does not hold."""
 
     def __post_init__(self) -> None:
         self._validate()
