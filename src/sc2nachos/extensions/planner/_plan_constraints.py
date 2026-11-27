@@ -280,23 +280,29 @@ class PlanConstraints(PlanVariables):
     def _fields_and_geysers_of_new_bases(self) -> tuple[RowExpression, RowExpression]:
         """The mineral fields and the geysers that the townhalls done since the plan's start bring by each interval's
         start. One in production brings what the state says of it, from when it is done. Of those the plan starts,
-        the first done brings the first new base's, and so on.
+        the first done brings the first new base's, and so on. A townhall's fields count only from the economy's
+        `new_base_walk_time` after it is done: of new bases that bring different fields, the fewest any brings.
 
         New bases that all bring the same take no variable. Otherwise each has a variable an interval, how much of it
         is taken: all of them together as many as the plan's townhalls done, and each base no more than the one
         before it."""
         intervals = self._interval_count
+        walk = self._economy.new_base_walk_time.seconds
         fields = RowExpression(intervals)
         geysers = RowExpression(intervals)
         for build in self._state.worker_builds:
-            is_done = self._done_by(self._seconds_until_built(build), at_end=False)
-            fields.constant += build.mineral_fields * is_done
-            geysers.constant += build.geysers * is_done
+            done_after = self._seconds_until_built(build)
+            fields.constant += build.mineral_fields * self._done_by(done_after + walk, at_end=False)
+            geysers.constant += build.geysers * self._done_by(done_after, at_end=False)
         command_center = self._index_of_unit_type.get(UnitTypeId.COMMAND_CENTER)
         if command_center is None:
             return fields, geysers
         done = self._starts_done(command_center, at_end=False)
         bases = self._new_bases
+        if bases and walk > 0:
+            walked_to = self._starts_done(command_center, at_end=False, later_by=walk)
+            still_walking = RowExpression(intervals).add_expression(done).add_expression(walked_to, -1.0)
+            fields.add_expression(still_walking, -min(base.mineral_fields for base in bases))
         if len(set(bases)) <= 1:
             for base in bases[:1]:
                 fields.add_expression(done, base.mineral_fields)

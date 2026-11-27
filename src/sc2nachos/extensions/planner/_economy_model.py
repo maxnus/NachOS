@@ -39,10 +39,11 @@ class EconomyModel:
     """The minerals each orbital command's MULEs mine a second, by default a MULE's whole haul for each 50 energy an
     orbital command gains (stated); 0 for a bot that spends the energy otherwise."""
     initial_harvest_delay: GameTime = GameTime(seconds=3)
-    """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
-    applies to a new worker on its first walk, to a worker moved between minerals and vespene, and to a builder back
-    from its structure at either, whose walk back is that much shorter for it: the two together take its walk back, or
-    the delay where the walk is shorter, as `builder_walk_time` says. With 0 a worker brings in from when it starts."""
+    """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds, about what a
+    worker moved between minerals and vespene loses (in game). It applies to a new worker on its first walk, to a worker
+    moved between minerals and vespene, and to a builder back from its structure at either, whose walk back is that much
+    shorter for it: the two together take its walk back, or the delay where the walk is shorter, as `builder_walk_time`
+    says. With 0 a worker brings in from when it starts."""
     builder_walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
     """How long a worker walks to build a structure of a unit type, and walks back after: what the function returns for
     the type. The last `initial_harvest_delay` of the walk back is that delay, which the builder pays as it starts to
@@ -51,6 +52,13 @@ class EconomyModel:
     applies: 8 seconds to a townhall and 3 to any other structure. A build a worker has not begun, or has left, takes
     that walk first. The function is asked about every structure a worker builds, not only those a plan values, so a
     lookup returns `None` for those it does not hold."""
+
+    new_base_walk_time: GameTime = GameTime(seconds=8)
+    """How long after a new townhall is done its mineral fields start to count: the walk there of the first workers to
+    mine them, from the bases they mined at, who then start as any worker does, paying `initial_harvest_delay`. By
+    default 8 seconds, about the walk from a main's mineral line to its natural (in game); with 0 its fields count from
+    when it is done, as if a worker could mine anywhere at once. Its geysers count from when it is done whatever it
+    is, since a gas building takes longer to build than the walk."""
 
     def __post_init__(self) -> None:
         self._validate()
@@ -71,6 +79,8 @@ class EconomyModel:
             )
         if self.initial_harvest_delay < GameTime.ZERO:
             raise ValueError(f"initial_harvest_delay must not be negative, not {self.initial_harvest_delay}")
+        if self.new_base_walk_time < GameTime.ZERO:
+            raise ValueError(f"new_base_walk_time must not be negative, not {self.new_base_walk_time}")
 
 
 def rate_tiers(rates: Sequence[float]) -> tuple[tuple[int, float], ...]:

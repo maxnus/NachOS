@@ -264,6 +264,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   so. One SCV mining the nearest field of Pylon's main took 98 steps a round trip moved so, against 105 on plain
   gathers and returns and 107 with the return aimed at nothing, and twelve on its eight fields mined 2315 minerals in
   three minutes against 2070 (tested; #201, local game, build 75689).
+- Speed mined, an SCV on a main brings in about the same at one, one and a half or two a field: 8, 12 and 16 SCVs on
+  the eight fields of each main of the pool mined 1.089, 1.085 and 1.065 minerals a second each, from 1.052 on Torches
+  at 16 to 1.111 on Persephone at 8, from 20 s to 200 s. An SCV a command center trains made its first delivery one
+  round trip after it appeared, about 5 s, as one already mining does, 21 SCVs of 21 within 1.2 s of that, so a new SCV
+  at its own base loses none of its mining. Moved between the minerals and a refinery, three workers lost 2.9 to 4.4
+  seconds of work each going to gas and 3.1 to 4.7 going to the minerals, against three already at it over the next
+  two minutes, each figure good to about 1.5 s, the most one trip brings. Four sent from a full main to mine a natural
+  just built lost 5.8 to 14.0 seconds each, 10.8 on average, against four mining there from the start (in game, the
+  mains of all seven maps of the pool, one game each a map and count, build 75689).
 - A worker on a gather or a return passes through other units, which players call mineral walking: twelve SCVs on
   Pylon's main mined 2070 minerals in three minutes on plain gathers and returns with a marine standing halfway from
   the command center to the nearest field, as many as without it (#201, local game, build 75689). A worker on a move

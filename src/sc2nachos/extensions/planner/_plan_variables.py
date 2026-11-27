@@ -308,11 +308,16 @@ class PlanVariables:
         """One row: the starts of item `index` over the whole plan."""
         return self._add_starts_to(RowExpression(1), index, 1.0)
 
-    def _starts_done(self, index: int, *, at_end: bool, survive: bool = False) -> RowExpression:
+    def _starts_done(self, index: int, *, at_end: bool, survive: bool = False, later_by: float = 0.0) -> RowExpression:
         """The starts of item `index` done by each interval's start, or its end, each as it survives its loss rate from
-        when it is done if `survive`."""
+        when it is done if `survive`; with `later_by`, those done that many seconds before."""
         rows = self._row_edges(at_end=at_end)
-        done = (self._completion_edges[index][None, :] <= rows[:, None]).astype(float)
+        completion_edges = (
+            self._completion_edges[index]
+            if not later_by
+            else self._edge_index(self._edges[:-1] + self._items[index].build_seconds + later_by)
+        )
+        done = (completion_edges[None, :] <= rows[:, None]).astype(float)
         unit_type = self._items[index].unit_type
         if survive and unit_type is not None:
             completed = self._edges[:-1] + self._items[index].build_seconds
