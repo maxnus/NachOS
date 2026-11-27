@@ -284,7 +284,7 @@ class TestTheReservedGrid:
         game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         game.flush()
         grids = game.observe(8, _scv(1, at=(9.5, 8.5)))
-        assert not game.book.issued_to(game.own(1))
+        assert not game.own(1).staged_commands
         assert grids.reserved[Point((8.0, 8.0))]
 
     def test_a_build_the_worker_shows_reserves_its_site_until_construction_begins(self) -> None:

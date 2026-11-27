@@ -91,6 +91,42 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         return self._tracker.command_book.research(self, upgrade, queued=queued, force=force)
 
     @property
+    def staged_commands(self) -> tuple[Command, ...]:
+        """The commands given to the unit this turn, which go out at its end, in the order they were given. Withdrawn
+        ones are left out.
+
+        A handler late in a turn reads this to leave alone a unit an earlier handler has commanded, since only the last
+        command a unit is given in a turn goes out.
+        """
+        return self._tracker.command_book._staged_for(self)
+
+    @property
+    def pending_commands(self) -> tuple[Command, ...]:
+        """The commands the unit's reported orders and effects may not show yet: those that went out to it in the turns
+        of the last two observations and that the game did not refuse, then `staged_commands`. Of those that went out,
+        the last that replaced its orders comes first, then those sent since that did not replace them, a queued one, a
+        train, a research, an add-on or a morph, and then what it carries out at once, a stim, a rally or a MULE, whose
+        effect, a stim's buff say, may not show yet either.
+
+        Nothing is checked against the observations: a command is pending for as long as it may take to show, the next
+        observation in a stepped game and the one after it on the ladder or in realtime. A bot reads this to leave
+        alone a unit it has commanded until its orders show the command.
+        """
+        return self._tracker.command_book._pending_for(self)
+
+    def commands(self, *, since: GameTime) -> tuple[Command, ...]:
+        """The commands given to the unit at or after `since`, oldest first: those that went out to it and that the game
+        did not refuse, then `staged_commands`. A command replaced since is still among them, and one the game took and
+        later gave up on, which `api.action_failures` lists; one not sent to the unit since it was already carrying it
+        out is not. A command sent to several units in one action counts as sent to each if the game took it, which it
+        does if any of them could.
+
+        Raises `ValueError` for a `since` more than 60 seconds of game time before the last observation, for which the
+        commands are no longer kept.
+        """
+        return self._tracker.command_book._commands_since(self, since)
+
+    @property
     def orders(self) -> tuple[Order, ...]:
         """The unit's current order, then its queued orders."""
         update = self._tracker.last_changes.update

@@ -57,8 +57,8 @@ at once: an extension reading each observation before any handler of the bot's d
   `TurnStartEvent`. An order the bot then gives a unit the extension ordered goes out last and stands, as a unit takes
   the last order it is given in a turn ([orders](commands.md)).
 - **After the bot**, an extension acts on what the bot did in the turn, as speed mining does, seeing every order the
-  bot gave. Its own orders go out last, so it leaves alone a unit the bot ordered in the turn, as `api.commands.issued_to`
-  reads.
+  bot gave. Its own commands go out last, so it leaves alone a unit the bot commanded in the turn, as
+  `unit.staged_commands` reads.
 
 A handler an extension subscribes later, on `GameStartEvent` say, is subscribed as the bot's are, at a priority of the
 bot's.

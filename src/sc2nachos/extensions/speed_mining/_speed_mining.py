@@ -108,9 +108,9 @@ class SpeedMining:
       the game takes it, and `miners` and `collectors` hold it until then. A worker the bot sends to gather at another
       field is kept, and sent to its own, as one the game sends there is. So a miner the bot sends to build does not
       come back to its field, nor a drone it burrows: the bot hands it over again.
-    - A worker given an order this turn, or sent one lately that may not show yet, as `CommandBook.issued_to` reads with
-      `include_sent`, is left alone for the turn, and one burrowed, or doing anything but its work, as an SCV
-      repairing by autocast, until it is unburrowed, idle or back at its work.
+    - A worker with `sc2nachos.units.OwnUnit.pending_commands`, given a command this turn or sent one lately that may
+      not show yet, is left alone for the turn, and one burrowed, or doing anything but its work, as an SCV repairing
+      by autocast, until it is unburrowed, idle or back at its work.
     - A worker is let go alike once it or its field is dead, and once no expansion holding its field has such a
       townhall any more, as when the townhall dies or lifts off. A collector is let go alike once its gas building is
       dead or has no vespene left, or no expansion holding its geyser has such a townhall.
@@ -358,13 +358,13 @@ class SpeedMining:
         if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
             return False
         command_book = self._api.commands
-        if not _has_a_standing_command_other_than_a_hand_overs(command_book.issued_to(worker), mining=mining):
+        if not _has_a_standing_command_other_than_a_hand_overs(worker.staged_commands, mining=mining):
             current_order = worker.current_order
             if current_order is not None and self._is_its_work(worker, current_order, mining=mining):
                 return True
             if any(
                 command.ability is AbilityId.GATHER and command.target is resource
-                for command in command_book.issued_to(worker, include_sent=True)
+                for command in worker.pending_commands
             ):
                 return True
         if carries_cargo(worker):
@@ -503,12 +503,12 @@ class SpeedMining:
         """Whether the bot has ordered `worker`, a miner if `mining`, else a collector: an order issued to it this turn
         stands that is not a hand-over's. Speed mining's turn comes after every handler of the bot's, so the turn's
         orders are the bot's and the hand-overs'."""
-        return _has_a_standing_command_other_than_a_hand_overs(self._api.commands.issued_to(worker), mining=mining)
+        return _has_a_standing_command_other_than_a_hand_overs(worker.staged_commands, mining=mining)
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
         """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not orderable,
         burrowed, given an order lately, or on an order that is not its work."""
-        if not worker.is_orderable or worker.is_burrowed or self._api.commands.issued_to(worker, include_sent=True):
+        if not worker.is_orderable or worker.is_burrowed or worker.pending_commands:
             return True
         current_order = worker.current_order
         return current_order is not None and not self._is_its_work(worker, current_order, mining=mining)

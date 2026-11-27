@@ -54,8 +54,8 @@ class _BuildSites:
         return reserved.as_readonly()
 
     def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Command | Order]:
-        """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
-        ordered: list[Command | Order] = [*self._command_book.issued_to(unit, include_sent=True)]
+        """Each build `unit` was ordered: pending, or shown by the unit."""
+        ordered: list[Command | Order] = [*self._command_book._pending_for(unit)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
         if any(self._ability_places_structure(ability) for ability in reported):

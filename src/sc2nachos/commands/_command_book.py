@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
 # once in its effect: the next in a stepped game, and the one after that on the ladder or in realtime
 # (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
+# How long before the last observation a unit's sent commands are kept.
+_COMMANDS_KEPT_FOR = GameTime(seconds=60)
 # The ability each game ability is, aimed at the unit given it: an unload at a point aimed at the transport itself is
 # `UNLOAD`.
 _IS_AIMED_AT_ITSELF = MappingProxyType(
@@ -66,6 +69,7 @@ class CommandBook:
         "_last_sent",
         "_observations",
         "_sent_at_once",
+        "_sent_by_unit",
         "_sent_not_replacing",
         "_refusals",
         "_time",
@@ -91,6 +95,9 @@ class CommandBook:
         # with the number of the observation its turn read, until the observations must show its effect. An order
         # that replaces the unit's orders leaves these, since the unit did both.
         self._sent_at_once: dict[int, list[tuple[Command, int]]] = {}
+        # By unit id, each command that went out to the unit and was not refused, oldest first, for
+        # `_COMMANDS_KEPT_FOR` before the last observation.
+        self._sent_by_unit: dict[int, deque[Command]] = {}
         # What the game refused of the last turn's orders, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
@@ -267,19 +274,24 @@ class CommandBook:
             return f"nothing makes a bare {product.name}: {_with_article(maker)} makes {_with_article(own_add_on)}"
         return f"nothing makes {_with_article(product)}"
 
-    def issued_to(self, unit: OwnUnit[Any], *, include_sent: bool = False) -> tuple[Command, ...]:
-        """The orders issued to `unit` so far this turn, in the order they were issued. Withdrawn orders are left out.
-        With `include_sent`, first come the orders that went out to it lately and that the observations may not show
-        yet: the last one sent that replaced its orders, those sent since that did not, queued ones, trains,
-        researches, add-ons and morphs, and then what it carries out at once, a stim, a rally or a MULE, whose effect
-        the observations may not show yet either, a stim's buff say.
+    def _staged_for(self, unit: OwnUnit[Any]) -> tuple[Command, ...]:
+        """The commands given to `unit` this turn and not withdrawn, in the order they were given."""
+        return tuple(command for command in self._staged_by_unit.get(unit.id, ()) if not command._withdrawn)
 
-        A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
-        order a unit is given goes out.
-        """
-        turns = self._staged_by_unit.get(unit.id, ())
-        sent = self._sent_but_not_observed_yet(unit) if include_sent else ()
-        return (*sent, *(command for command in turns if not command._withdrawn))
+    def _pending_for(self, unit: OwnUnit[Any]) -> tuple[Command, ...]:
+        """The commands `unit` may not show yet: those sent lately, then those given this turn."""
+        return (*self._sent_but_not_observed_yet(unit), *self._staged_for(unit))
+
+    def _commands_since(self, unit: OwnUnit[Any], since: GameTime) -> tuple[Command, ...]:
+        """The commands given to `unit` at or after `since` that went out to it and were not refused, oldest first,
+        then those given this turn. Raises `ValueError` for a `since` further back than the commands are kept."""
+        if self._time - since > _COMMANDS_KEPT_FOR:
+            raise ValueError(
+                f"a unit's commands are kept for {_COMMANDS_KEPT_FOR.seconds:g} seconds before the last observation, "
+                f"at {self._time}: {since} is further back"
+            )
+        sent = (command for command in self._sent_by_unit.get(unit.id, ()) if command.time >= since)
+        return (*sent, *(command for command in self._staged_for(unit) if command.time >= since))
 
     @property
     def staged(self) -> tuple[Command, ...]:
@@ -328,6 +340,7 @@ class CommandBook:
         self._time = time
         self._observations += 1
         for unit in lost:
+            self._sent_by_unit.pop(unit.id, None)
             self._last_sent.pop(unit.id, None)
             self._sent_not_replacing.pop(unit.id, None)
             self._sent_at_once.pop(unit.id, None)
@@ -338,6 +351,12 @@ class CommandBook:
                     del sent_by_unit[unit_id]
                 else:
                     sent_by_unit[unit_id] = sent
+        kept_from = time - _COMMANDS_KEPT_FOR
+        for unit_id, sent_to_unit in list(self._sent_by_unit.items()):
+            while sent_to_unit and sent_to_unit[0].time < kept_from:
+                sent_to_unit.popleft()
+            if not sent_to_unit:
+                del self._sent_by_unit[unit_id]
 
     def _commands_to_send(
         self, staged: Sequence[Command], forced: Collection[Command]
@@ -391,6 +410,7 @@ class CommandBook:
         replace them."""
         row = self._game_data.abilities.get(command.ability)
         for unit in units:
+            self._sent_by_unit.setdefault(unit.id, deque()).append(command)
             behavior = _behavior_for(row, unit)
             sent = (command, self._observations)
             if not command.queued and behavior is OrderBehavior.REPLACES:

@@ -491,10 +491,7 @@ class _Game:
             for unit in self.tracker.unit_tracker.present.own
             if unit.is_complete
             and unit.is_idle
-            and all(
-                commands._is_carried_out_at_once(command, unit)
-                for command in commands.issued_to(unit, include_sent=True)
-            )
+            and all(commands._is_carried_out_at_once(command, unit) for command in unit.pending_commands)
         ]
         self._idle_unit_ids = _Snapshot(frozenset(unit.id for unit in idle), update)
         return [unit for unit in idle if unit.id not in before]

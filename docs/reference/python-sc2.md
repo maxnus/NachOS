@@ -113,15 +113,15 @@ difference that rests on what the game does links there for its evidence.
 
 ## Orders
 
-[commands.md](../orders.md) says how an order is given, what it competes with, and how to learn what the game did with
+[commands.md](../commands.md) says how an order is given, what it competes with, and how to learn what the game did with
 it.
 
 | python-sc2 | NachOS |
 |---|---|
 | `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.command(AbilityId.MOVE, target=p)`, or `api.commands.command(units, ...)` for several at once |
-| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.commands.train(units, t)` and so on for several at once ([orders](../orders.md#training-building-and-researching)) |
+| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.commands.train(units, t)` and so on for several at once ([orders](../commands.md#training-building-and-researching)) |
 | `bot.do(action)`, `await bot._do_actions(...)` | `unit.command(...)` or `api.commands.command(...)`, sent once the turn's handlers have run |
-| nothing | `unit.command(..., force=True)`, `api.commands.issued_to(unit)` |
+| nothing | `unit.command(..., force=True)`, `unit.staged_commands`, `unit.pending_commands`, `unit.commands(since=t)` |
 | `bot.do(action, queue=True)` | `unit.command(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order an `Order`, which python-sc2 calls a `UnitOrder` |
 | `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
@@ -137,7 +137,7 @@ it.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
   is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game. A
   structure is no exception: of two trains given in a turn only the last goes out, and a reactor's second marine
-  needs `queued=True` ([orders](../orders.md#one-order-a-unit-a-turn)). python-sc2 sends both, and the game queues and
+  needs `queued=True` ([orders](../commands.md#one-order-a-unit-a-turn)). python-sc2 sends both, and the game queues and
   charges both.
 - **A drone's morph is given to a larva, and a barracks's research to its tech lab.** python-sc2's `train` and
   `research` pick the unit themselves. In NachOS, as in the game, a larva's morph given to a hatchery is refused
@@ -146,7 +146,7 @@ it.
   raise `ValueError`, naming what does.
 - **Each unit given an order carries it out.** What every unit of a command carries out, a move, an attack, a stim,
   goes out as one command naming them all, and so do orders of it given apart to one target in a turn, where
-  python-sc2's `combine_actions` joins only neighboring ones ([orders](../orders.md#orders-sent-together)); anything
+  python-sc2's `combine_actions` joins only neighboring ones ([orders](../commands.md#orders-sent-together)); anything
   else, a train, an add-on, a morph or a spell, as a command to each, so three barracks given a marine train three
   (`AbilityData.multi_unit`). A research given to several units raises `ValueError`, and so does a build, a landing, a
   rooting or a warp-in given to several at one point, which only one of them could carry out: pick the unit.
@@ -154,10 +154,10 @@ it.
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever
   it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.commands.staged_cost` is what the
-  turn's orders will cost ([orders](../orders.md#what-an-order-needs)).
+  turn's orders will cost ([orders](../commands.md#what-an-order-needs)).
 - **An order a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for its
   first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
-  ([orders](../orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
+  ([orders](../commands.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
   `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
@@ -166,7 +166,7 @@ it.
   `TypeError` for an `UNLOAD_AT` aimed at the transport itself. Likewise `SIEGE` stands for `SIEGEMODE_SIEGEMODE`,
   `MORPH_SURVEILLANCEMODE` and `MORPH_OVERSIGHTMODE`, and `UNSIEGE` for their ways back and the liberator's, whose siege
   at a point is `LIBERATOR_SIEGE_AT`, python-sc2's `MORPH_LIBERATORAGMODE`
-  ([orders](../orders.md#one-order-a-unit-a-turn)).
+  ([orders](../commands.md#one-order-a-unit-a-turn)).
 - **Only a structure's last item can be cancelled, in either library.** An item in the middle of a queue takes a UI
   action that needs the structure selected and a feature layer, and both libraries ask for the raw interface alone
   ([game behavior](game-behavior/abilities-and-orders.md#cancels-and-refunds)).
@@ -479,7 +479,7 @@ it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
-| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.commands.issued_to(unit, include_sent=True)`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
+| `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's commands and those sent too lately to show, which are in `unit.pending_commands`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research`, a `Progress` with its `fraction` and `time_left`, and its structure; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]`, the step it was last in sight |
 | `state.creep` | `api.creep` |

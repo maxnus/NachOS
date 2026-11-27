@@ -84,7 +84,7 @@ def train_workers(budget: Budget) -> None:
     for townhall in townhalls.idle:
         if count >= wanted:
             return
-        if api.commands.issued_to(townhall, include_sent=True):
+        if townhall.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
             townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
@@ -109,9 +109,7 @@ def hand_scvs_to_speed_mining(_: TurnEvent) -> None:
 def _free_scvs() -> Units[OwnUnit[Any]]:
     """The SCVs free to build: neither building nor on their way to build, and given nothing lately. Besides building,
     this bot's SCVs only mine."""
-    return api.units.own.workers.filter(
-        lambda scv: not scv.is_constructing and not api.commands.issued_to(scv, include_sent=True)
-    )
+    return api.units.own.workers.filter(lambda scv: not scv.is_constructing and not scv.pending_commands)
 
 
 def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
@@ -126,12 +124,7 @@ def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
 def _ordered_count(ability: AbilityId) -> int:
     """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: ordered this turn, or
     sent and maybe not shown. One shown already may count in both for an observation or two."""
-    return sum(
-        1
-        for scv in api.units.own.workers
-        for command in api.commands.issued_to(scv, include_sent=True)
-        if command.ability is ability
-    )
+    return sum(1 for scv in api.units.own.workers for command in scv.pending_commands if command.ability is ability)
 
 
 def build_supply(budget: Budget) -> None:
@@ -213,7 +206,7 @@ def build_barracks(budget: Budget) -> None:
 def train_marines(budget: Budget) -> None:
     """Train a marine at each idle barracks."""
     for barracks in api.units.own.of_type(UnitType.Barracks).complete.idle:
-        if api.commands.issued_to(barracks, include_sent=True):
+        if barracks.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
             barracks.command(AbilityId.BARRACKS_TRAIN_MARINE)

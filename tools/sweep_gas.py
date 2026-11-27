@@ -473,7 +473,7 @@ class _TrialGame:
         for scv in collectors:
             if not scv.is_orderable:
                 continue
-            if sent := command_book.issued_to(scv, include_sent=True):
+            if sent := scv.pending_commands:
                 if any(command.ability is AbilityId.MOVE for command in sent):
                     on_their_moves.append(scv)
                 continue

@@ -159,8 +159,8 @@ def test_the_marine_attacks_the_nearer_zergling() -> None:
         UnitReport(3, UnitTypeId.ZERGLING, at=(20, 10), alliance=Alliance.ENEMY),
     )
     attack_the_nearest(marine, [near_zergling, far_zergling])
-    (order,) = made_up.commands.issued_to(marine)
-    assert order.target is near_zergling
+    (command,) = marine.staged_commands
+    assert command.target is near_zergling
 ```
 
 Code that reads the api is tested by playing a recorded game, as above.

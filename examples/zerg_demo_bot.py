@@ -105,19 +105,12 @@ def spend_money(_: TurnEvent) -> None:
 def _ordered_count(ability: AbilityId) -> int:
     """How many orders of `ability` this player's units were given that `api.in_production` may not count yet: ordered
     this turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
-    return sum(
-        1
-        for unit in api.units.own
-        for command in api.commands.issued_to(unit, include_sent=True)
-        if command.ability is ability
-    )
+    return sum(1 for unit in api.units.own for command in unit.pending_commands if command.ability is ability)
 
 
 def _free_larvae() -> Units[OwnUnit[UnitType.Larva]]:
     """The larvae given nothing yet."""
-    return api.units.own.of_type(UnitType.Larva).filter(
-        lambda larva: not api.commands.issued_to(larva, include_sent=True)
-    )
+    return api.units.own.of_type(UnitType.Larva).filter(lambda larva: not larva.pending_commands)
 
 
 # --- Larvae
@@ -196,7 +189,7 @@ def hand_drones_to_speed_mining(_: TurnEvent) -> None:
 
 def _free_drones() -> Units[OwnUnit[Any]]:
     """The drones free to build: given nothing lately. Besides building, this bot's drones only mine and collect."""
-    return api.units.own.workers.filter(lambda drone: not api.commands.issued_to(drone, include_sent=True))
+    return api.units.own.workers.filter(lambda drone: not drone.pending_commands)
 
 
 def _order_drone_to_build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
@@ -315,7 +308,7 @@ def train_queens(budget: Budget) -> None:
     for townhall in own.townhalls.complete.idle:
         if queens >= wanted:
             return
-        if api.commands.issued_to(townhall, include_sent=True):
+        if townhall.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.HATCHERY_TRAIN_QUEEN):
             townhall.command(AbilityId.HATCHERY_TRAIN_QUEEN)
@@ -327,7 +320,7 @@ def research_zergling_speed(budget: Budget) -> None:
     if UpgradeId.ZERGLING_SPEED in api.upgrades or UpgradeId.ZERGLING_SPEED in api.researches:
         return
     for pool in api.units.own.of_type(UnitType.SpawningPool).complete.idle:
-        if api.commands.issued_to(pool, include_sent=True):
+        if pool.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED):
             pool.command(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED)
@@ -362,7 +355,7 @@ class QueenCommander:
             near = threats.within(DEFEND_WITHIN, of=home)
             if near:
                 queen.command(AbilityId.ATTACK, target=near.closest_to(queen.position).position)
-            elif queen.is_idle and not api.commands.issued_to(queen, include_sent=True):
+            elif queen.is_idle and not queen.pending_commands:
                 self._order_free_queen(queen, townhall)
 
     def _pair(self, queens: Units[OwnUnit[UnitType.Queen]]) -> None:

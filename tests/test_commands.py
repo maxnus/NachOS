@@ -570,22 +570,22 @@ class TestOneOrderAUnitATurn:
         (command,) = _commands(game.flush())
         assert command.ability_id == _ATTACK
 
-    def test_issued_to_says_what_the_turn_has_already_ordered_a_unit_and_is_empty_the_next(self) -> None:
+    def test_staged_commands_say_what_the_turn_has_already_commanded_a_unit_and_are_empty_the_next(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        assert game.book.issued_to(game.own(1)) == (order,)
-        assert game.book.issued_to(game.own(2)) == ()
+        assert game.own(1).staged_commands == (order,)
+        assert game.own(2).staged_commands == ()
         assert game.book.staged == (order,)
 
         game.flush()
         game.observe(16, _marine(1), _marine(2))
 
-        assert game.book.issued_to(game.own(1)) == ()
+        assert game.own(1).staged_commands == ()
         assert game.book.staged == ()
 
-    def test_include_sent_keeps_an_order_sent_while_the_observations_may_not_show_it(self) -> None:
+    def test_pending_commands_keep_a_command_sent_while_the_observations_may_not_show_it(self) -> None:
         """The game may show an order an observation late, as on the ladder."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
@@ -593,57 +593,57 @@ class TestOneOrderAUnitATurn:
         game.flush()
         game.observe(16, _marine(1))
 
-        assert game.book.issued_to(game.own(1)) == ()
-        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+        assert game.own(1).staged_commands == ()
+        assert game.own(1).pending_commands == (order,)
 
         game.observe(32, _marine(1, _moving((20.0, 21.0))))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+        assert game.own(1).pending_commands == ()
 
-    def test_include_sent_keeps_an_order_sent_queued_while_the_observations_may_not_show_it(self) -> None:
+    def test_pending_commands_keep_a_command_sent_queued_while_the_observations_may_not_show_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
         order = game.book.command(game.own(1), _MOVE, target=(30.0, 31.0), queued=True, force=True)
         game.flush()
         game.observe(16, _marine(1, _moving((20.0, 21.0))))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+        assert game.own(1).pending_commands == (order,)
 
         game.observe(32, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+        assert game.own(1).pending_commands == ()
 
-    def test_include_sent_keeps_a_train_sent_while_the_observations_may_not_show_it(self) -> None:
-        """A train goes behind what the structure makes, so a handler that trains while `issued_to` and the
-        structure's orders show nothing would pay for a second on the ladder."""
+    def test_pending_commands_keep_a_train_sent_while_the_observations_may_not_show_it(self) -> None:
+        """A train goes behind what the structure makes, so a handler that trains while `pending_commands` and
+        the structure's orders show nothing would pay for a second on the ladder."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         order = game.book.command(game.own(1), _TRAIN_MARINE)
         game.flush()
         game.observe(16, _barracks(1))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+        assert game.own(1).pending_commands == (order,)
 
         game.observe(32, _barracks(1, _training()))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+        assert game.own(1).pending_commands == ()
 
-    def test_include_sent_keeps_what_a_unit_carries_out_at_once_while_its_effect_may_not_show(self) -> None:
+    def test_pending_commands_keep_what_a_unit_carries_out_at_once_while_its_effect_may_not_show(self) -> None:
         """A stim's buff, like an order, may show an observation late, so a handler that stims a marine while
-        `issued_to` and its buffs show nothing would stim it twice on the ladder."""
+        `pending_commands` and its buffs show nothing would stim it twice on the ladder."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         order = game.book.command(game.own(1), _STIM)
         game.flush()
         game.observe(16, _marine(1))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == (order,)
+        assert game.own(1).pending_commands == (order,)
 
         game.observe(32, _marine(1))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == ()
+        assert game.own(1).pending_commands == ()
 
-    def test_include_sent_keeps_what_a_unit_carried_out_at_once_through_an_order_that_replaces_its_orders(
+    def test_pending_commands_keep_what_a_unit_carried_out_at_once_through_a_command_that_replaces_its_orders(
         self,
     ) -> None:
         """A marine given a stim and a move does both, and the move replaces neither the stim nor its buff."""
@@ -654,7 +654,84 @@ class TestOneOrderAUnitATurn:
         game.flush()
         game.observe(16, _marine(1))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == (move, stim)
+        assert game.own(1).pending_commands == (move, stim)
+
+    def test_pending_commands_end_with_the_staged_ones(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        move = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1))
+
+        stop = game.book.command(game.own(1), AbilityId.STOP)
+
+        assert game.own(1).pending_commands == (move, stop)
+
+    def test_pending_commands_leave_out_a_refused_command(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED])
+        game.observe(0, _marine(1))
+        game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1))
+
+        assert game.own(1).pending_commands == ()
+
+
+class TestCommandsSince:
+    """`OwnUnit.commands` holds every command that went out to a unit and was not refused, for 60 seconds of game time,
+    and those staged."""
+
+    def test_they_hold_a_replaced_command_after_the_observations_must_show_it_then_the_staged(self) -> None:
+        game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        move = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1))
+        attack = game.book.command(game.own(1), _ATTACK, target=(30.0, 31.0))
+        game.flush()
+        game.observe(32, _marine(1))
+        game.observe(48, _marine(1))
+        game.observe(64, _marine(1))
+        stop = game.book.command(game.own(1), AbilityId.STOP)
+
+        assert game.own(1).pending_commands == (stop,)
+        assert game.own(1).commands(since=GameTime.ZERO) == (move, attack, stop)
+        assert game.own(1).commands(since=GameTime(steps=1)) == (attack, stop)
+
+    def test_they_leave_out_a_refused_command_and_a_withdrawn_one(self) -> None:
+        game = _Game([ActionResult.NOT_SUPPORTED])
+        game.observe(0, _marine(1))
+        game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1))
+        game.book.command(game.own(1), AbilityId.STOP).withdraw()
+
+        assert game.own(1).commands(since=GameTime.ZERO) == ()
+
+    def test_they_leave_out_a_command_not_sent_to_a_unit_already_carrying_it_out(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1, _moving((20.0, 21.0))), _marine(2))
+        game.book.command([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        game.flush()
+        game.observe(16, _marine(1, _moving((20.0, 21.0))), _marine(2))
+
+        assert game.own(1).commands(since=GameTime.ZERO) == ()
+        assert len(game.own(2).commands(since=GameTime.ZERO)) == 1
+
+    def test_they_are_kept_for_60_seconds_and_raise_for_a_since_further_back(self) -> None:
+        game = _Game([ActionResult.SUCCESS])
+        game.observe(0, _marine(1))
+        stim = game.book.command(game.own(1), _STIM)
+        game.flush()
+        game.observe(1344, _marine(1))
+
+        assert game.own(1).commands(since=GameTime.ZERO) == (stim,)
+
+        game.observe(1345, _marine(1))
+
+        assert game.own(1).commands(since=GameTime(steps=1)) == ()
+        with pytest.raises(ValueError, match="kept for 60 seconds before the last observation"):
+            game.own(1).commands(since=GameTime.ZERO)
 
 
 class TestAnOrderAUnitIsAlreadyCarryingOut:
@@ -675,7 +752,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        assert game.book.issued_to(game.own(1)) == (order,)
+        assert game.own(1).staged_commands == (order,)
         assert game.book.staged == (order,)
 
     def test_each_turn_s_call_is_an_order_of_its_own(self) -> None:
@@ -1358,11 +1435,11 @@ class TestWhatAnOrderStopsCountingFor:
         game = _Game()
         game.observe(0, _marine(1))
         order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
-        assert game.book.issued_to(game.own(1)) == (order,)
+        assert game.own(1).staged_commands == (order,)
 
         order.withdraw()
 
-        assert game.book.issued_to(game.own(1)) == ()
+        assert game.own(1).staged_commands == ()
         assert game.book.staged == ()
 
 
@@ -1932,9 +2009,9 @@ class TestOrdersGivenApart:
         game.flush()
         game.observe(16, _marine(1), _marine(2), _marine(3))
 
-        assert game.book.issued_to(game.own(1), include_sent=True) == (first,)
-        assert game.book.issued_to(game.own(2), include_sent=True) == (second,)
-        assert game.book.issued_to(game.own(3), include_sent=True) == (second,)
+        assert game.own(1).pending_commands == (first,)
+        assert game.own(2).pending_commands == (second,)
+        assert game.own(3).pending_commands == (second,)
 
     def test_no_order_of_a_refused_command_is_taken_for_what_its_units_are_doing(self) -> None:
         game = _Game([ActionResult.ERROR], [ActionResult.SUCCESS])

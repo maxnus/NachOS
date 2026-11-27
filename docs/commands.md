@@ -135,28 +135,36 @@ barracks.command(AbilityId.BARRACKS_TRAIN_MARINE, queued=True)
 
 Both go out, and a barracks with a reactor makes both marines at once.
 
-Orders have no priority of their own. Handlers already run highest priority first, and a later handler checks
-`api.commands.issued_to(unit)` to leave alone a unit an earlier one has ordered:
+Commands have no priority of their own. Handlers already run highest priority first, and a later handler checks
+`unit.staged_commands` to leave alone a unit an earlier one has commanded:
 
 ```python
 @api.on(TurnEvent, priority=EventPriority.LOW)
 def keep_the_rest_together(event: TurnEvent) -> None:
     for marine in api.units.own.of_type(UnitType.Marine):
-        if not api.commands.issued_to(marine):
+        if not marine.staged_commands:
             marine.command(AbilityId.MOVE, target=rally)
 ```
 
-A bot that ranks its orders keeps the rank of each unit's order itself, in a `UnitDict` say, and empties it at each
-turn's start: `issued_to` holds the turn's orders alone, but a `UnitDict` keeps a value until its unit dies.
-`issued_to(unit, include_sent=True)` also gives, ahead of the rest, what went out to the unit lately and may not show
-in its orders yet: on the ladder an order can show two observations after it went out. That holds what the unit
-carries out at once too, a stim, a rally or a MULE, whose effect may not show yet either, so a bot that stims a
-marine without the buff stims it once:
+A bot that ranks its commands keeps the rank of each unit's command itself, in a `UnitDict` say, and empties it at
+each turn's start: `staged_commands` holds the turn's commands alone, but a `UnitDict` keeps a value until its unit
+dies.
+
+A command is *staged* until its turn's end, when it is *sent*; the game takes it or refuses it. One it takes is
+*pending* while the unit may not show it yet: on the ladder an order can show two observations after its command went
+out. `unit.pending_commands` gives those, ahead of the staged ones, and is what a bot checks to leave alone a unit it
+has commanded until the unit shows it. Nothing is checked against the observations: a command is pending for as long
+as it may take to show, which holds what the unit carries out at once too, a stim, a rally or a MULE, whose effect
+may not show yet either.
+
+`unit.commands(since=time)` gives every command given to the unit since `time` that went out to it and that the game
+did not refuse, then the staged ones, for up to 60 seconds of game time back. A bot that stims a marine once in a
+stim's length checks it, and not the buff, which may show late:
 
 ```python
 for marine in marines:
-    sent = api.commands.issued_to(marine, include_sent=True)
-    if not marine.has_buff(BuffId.MARINE_STIMMED) and not any(order.ability is AbilityId.STIM for order in sent):
+    recent = marine.commands(since=api.time - STIM_LASTS)
+    if not any(command.ability is AbilityId.STIM for command in recent):
         marine.command(AbilityId.STIM)
 ```
 
@@ -170,15 +178,15 @@ the game dropped, within one turn still counts on the next: repeating it then go
 
 A bot that gives the same order every turn gets a new `Command` each time: the first is sent, and the rest are
 left out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
-it shows in `issued_to`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
+it shows in `staged_commands`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
 sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
 which goes out regardless.
 
 **What a structure makes is not left out that way.** A train or a research goes behind what the structure is making
 (in game), so one given every turn goes out every turn, and the game queues each and charges it then, up to 5, or 8
 with a reactor, answering the rest `QueueIsFull`. A bot that wants one at a time trains at a structure that is idle
-and that `issued_to(unit, include_sent=True)` shows no train sent to: a rally or a MULE sent lately shows there too,
-and the structure is idle all the same. A morph or an add-on given to a structure making something is refused
+and whose `pending_commands` hold no train: a rally or a MULE sent lately shows there too, and the structure is idle
+all the same. A morph or an add-on given to a structure making something is refused
 `NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in game): give it again once
 the structure is idle on the ground.
 
@@ -293,7 +301,7 @@ may stand at a site now is for `api.placement.is_free` to say.
 ## What the game did
 
 An order goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later order
-to its units, or every unit it was given already carrying it out. Until then it shows in `issued_to` and `pending`.
+to its units, or every unit it was given already carrying it out. Until then it shows in `staged_commands` and `api.commands.staged`.
 NachOS does not follow it after.
 
 The game answers each command as it is sent. One it refuses is listed in `api.action_failures` from the next turn,
