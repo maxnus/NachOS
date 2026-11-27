@@ -754,12 +754,12 @@ def _replay_of_a_scouting_game(installation: Installation, random_seed: int) -> 
     def send(_: TurnEvent) -> None:
         scout = api.units.own.workers[0]
         scout_ids.append(scout.id)
-        api.orders.issue(scout, AbilityId.MOVE, target=api.map.all_start_locations[1])
+        api.orders.command(scout, AbilityId.MOVE, target=api.map.all_start_locations[1])
 
     @api.on(TurnEvent, at_time=GameTime(steps=_SCOUT_BACK_AT_STEP))
     def come_back(_: TurnEvent) -> None:
         if (scout := api.units.own.get(scout_ids[0])) is not None:
-            api.orders.issue(scout, AbilityId.MOVE, target=api.map.start_location)
+            api.orders.command(scout, AbilityId.MOVE, target=api.map.start_location)
 
     with tempfile.TemporaryDirectory() as directory:
         replay = Path(directory) / "scouting.SC2Replay"

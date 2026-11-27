@@ -47,9 +47,9 @@ class Budget:
     """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
 
     def __init__(self) -> None:
-        pending_cost = api.orders.pending_cost
-        self.resources_left = api.resources - pending_cost.resources
-        self.supply_left = api.supply.left - pending_cost.supply
+        staged_cost = api.orders.staged_cost
+        self.resources_left = api.resources - staged_cost.resources
+        self.supply_left = api.supply.left - staged_cost.supply
 
     def try_pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
         """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if
@@ -87,7 +87,7 @@ def train_workers(budget: Budget) -> None:
         if api.orders.issued_to(townhall, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
-            townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
+            townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
             count += 1
 
 
@@ -119,7 +119,7 @@ def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
     scvs = _free_scvs()
     if not scvs:
         return False
-    scvs.closest_to(site).issue(ability, target=site)
+    scvs.closest_to(site).command(ability, target=site)
     return True
 
 
@@ -158,7 +158,7 @@ def _depot_anchor() -> Point:
 @api.on(OwnConstructionFinishedEvent.only(UnitType.SupplyDepot))
 def lower_depot(event: OwnConstructionFinishedEvent) -> None:
     """Lower a finished depot, so it blocks nothing."""
-    event.unit.issue(AbilityId.SUPPLY_DEPOT_LOWER)
+    event.unit.command(AbilityId.SUPPLY_DEPOT_LOWER)
 
 
 def take_next_expansion(budget: Budget) -> None:
@@ -216,7 +216,7 @@ def train_marines(budget: Budget) -> None:
         if api.orders.issued_to(barracks, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
-            barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+            barracks.command(AbilityId.BARRACKS_TRAIN_MARINE)
 
 
 # --- The army
@@ -242,16 +242,16 @@ class Army:
             self.attacking = False
         if threats and not self.attacking:
             for marine in marines:
-                marine.issue(AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
+                marine.command(AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
         elif self.attacking:
-            api.orders.issue(marines, AbilityId.ATTACK, target=self._attack_target(marines))
+            api.orders.command(marines, AbilityId.ATTACK, target=self._attack_target(marines))
         elif was_attacking:
-            api.orders.issue(marines, AbilityId.MOVE, target=self._defense_location())
+            api.orders.command(marines, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = marines.idle.beyond(4, of=defense_location)
             if idle:
-                api.orders.issue(idle, AbilityId.ATTACK, target=defense_location)
+                api.orders.command(idle, AbilityId.ATTACK, target=defense_location)
 
     def _defense_location(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""

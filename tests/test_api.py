@@ -32,7 +32,7 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
-from sc2nachos.orders import IssuedOrder
+from sc2nachos.orders import Command
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
@@ -351,7 +351,7 @@ class TestPlaying:
             failures = api.action_failures
             listed.append([(f.time.steps, f.unit and f.unit.tag, f.ability, f.action_result) for f in failures])
             if event.time.steps == 0:
-                api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
+                api.orders.command(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
 
         api.play(client, steps_per_turn=2)
 
@@ -373,12 +373,12 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(2, (1, Result.VICTORY), units=[make_unit(1)])),
         )
         api = Api()
-        issued: list[tuple[IssuedOrder, tuple[IssuedOrder, ...]]] = []
+        issued: list[tuple[Command, tuple[Command, ...]]] = []
 
         @api.on(TurnEvent, once=True)
         def turn(event: TurnEvent) -> None:
-            order = api.units.own[0].issue(AbilityId.MOVE, target=(20.0, 21.0))
-            issued.append((order, api.orders.pending))
+            order = api.units.own[0].command(AbilityId.MOVE, target=(20.0, 21.0))
+            issued.append((order, api.orders.staged))
 
         api.play(client, steps_per_turn=2)
 

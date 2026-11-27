@@ -45,17 +45,17 @@ api = Api()
 
 @api.on(TurnEvent, once=True)
 def rush(event: TurnEvent) -> None:
-    api.orders.issue(api.units.own.workers, AbilityId.ATTACK, target=api.map.opponent_start_locations[0])
+    api.orders.command(api.units.own.workers, AbilityId.ATTACK, target=api.map.opponent_start_locations[0])
 
 
 @api.on(TurnEvent)
 def train_scvs(event: TurnEvent) -> None:
     cost = api.data.abilities[AbilityId.COMMAND_CENTER_TRAIN_SCV].cost
     for townhall in api.units.own.townhalls.complete.idle:
-        pending = api.orders.pending_cost
+        pending = api.orders.staged_cost
         budget = api.resources - pending.resources
         if budget.covers(cost.resources) and api.supply.left - pending.supply >= cost.supply:
-            townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
+            townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
 run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TERRAN, steps_per_turn=4)
@@ -66,7 +66,7 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   counts game time.
 - **An order goes to the units given, all at once**, and is sent when the turn's handlers have run.
 - **Nothing is subtracted as you order.** `can_afford` is the bot's own: what the turn's orders will cost is
-  `api.orders.pending_cost`.
+  `api.orders.staged_cost`.
 - **`steps_per_turn=4` matches python-sc2's `game_step`.** NachOS takes a turn every step unless told otherwise, and its
   `Computer()` defaults to very hard.
 

@@ -11,13 +11,13 @@ if TYPE_CHECKING:
 
 
 @final
-class IssuedOrder:
+class Command:
     """An order a bot gave. A refusal by the game shows in `api.action_failures`, and what a unit then reports doing
     in its `sc2nachos.units.Order`s."""
 
     __slots__ = (
         "_ability",
-        "_issued_time",
+        "_time",
         "_queued",
         "_target",
         "_units",
@@ -31,19 +31,19 @@ class IssuedOrder:
         target: Target | None,
         *,
         queued: bool,
-        issued_time: GameTime,
+        time: GameTime,
     ) -> None:
-        """An order of `ability` to `units`, issued at `issued_time`. Made by the order book, never by a bot."""
+        """An order of `ability` to `units`, issued at `time`. Made by the order book, never by a bot."""
         self._ability = ability
         self._units = units
         self._target = target
         self._queued = queued
-        self._issued_time = issued_time
+        self._time = time
         self._withdrawn = False
 
     def __repr__(self) -> str:
         units = self._units[0] if len(self._units) == 1 else f"{len(self._units)} units"
-        return f"IssuedOrder({self._ability.name}, {units})"
+        return f"Command({self._ability.name}, {units})"
 
     @property
     def ability(self) -> AbilityId:
@@ -66,9 +66,9 @@ class IssuedOrder:
         return self._queued
 
     @property
-    def issued_time(self) -> GameTime:
+    def time(self) -> GameTime:
         """The time of the observation the order was issued in."""
-        return self._issued_time
+        return self._time
 
     def withdraw(self) -> None:
         """Take the order back while its turn's handlers run, so it never goes out. After its turn it does nothing."""

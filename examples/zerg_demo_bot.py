@@ -70,9 +70,9 @@ class Budget:
     """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
 
     def __init__(self) -> None:
-        pending_cost = api.orders.pending_cost
-        self.resources_left = api.resources - pending_cost.resources
-        self.supply_left = api.supply.left - pending_cost.supply
+        staged_cost = api.orders.staged_cost
+        self.resources_left = api.resources - staged_cost.resources
+        self.supply_left = api.supply.left - staged_cost.supply
 
     def can_pay_for(self, ability: AbilityId) -> bool:
         """Whether what is left pays for `ability`."""
@@ -134,7 +134,7 @@ def build_overlords(budget: Budget) -> None:
         return
     larvae = _free_larvae()
     if larvae and budget.try_pay_for(AbilityId.LARVA_MORPH_OVERLORD, save=True):
-        larvae[0].issue(AbilityId.LARVA_MORPH_OVERLORD)
+        larvae[0].command(AbilityId.LARVA_MORPH_OVERLORD)
 
 
 def spend_larvae(budget: Budget) -> None:
@@ -147,7 +147,7 @@ def spend_larvae(budget: Budget) -> None:
         ability = _next_larva_morph(budget, drones, army_supply, threatened=threatened)
         if ability is None or not budget.try_pay_for(ability):
             return
-        larva.issue(ability)
+        larva.command(ability)
         if ability is AbilityId.LARVA_MORPH_DRONE:
             drones += 1
         else:
@@ -206,7 +206,7 @@ def _order_drone_to_build(ability: AbilityId, target: Point | Unit[Any]) -> bool
     if not drones:
         return False
     site = target.position if isinstance(target, Unit) else target
-    drones.closest_to(site).issue(ability, target=target)
+    drones.closest_to(site).command(ability, target=target)
     return True
 
 
@@ -318,7 +318,7 @@ def train_queens(budget: Budget) -> None:
         if api.orders.issued_to(townhall, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.HATCHERY_TRAIN_QUEEN):
-            townhall.issue(AbilityId.HATCHERY_TRAIN_QUEEN)
+            townhall.command(AbilityId.HATCHERY_TRAIN_QUEEN)
             queens += 1
 
 
@@ -330,7 +330,7 @@ def research_zergling_speed(budget: Budget) -> None:
         if api.orders.issued_to(pool, include_sent=True):
             continue
         if budget.try_pay_for(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED):
-            pool.issue(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED)
+            pool.command(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED)
 
 
 # --- Queens and creep
@@ -361,7 +361,7 @@ class QueenCommander:
             home = townhall.position if townhall is not None else api.player.start_location.center
             near = threats.within(DEFEND_WITHIN, of=home)
             if near:
-                queen.issue(AbilityId.ATTACK, target=near.closest_to(queen.position).position)
+                queen.command(AbilityId.ATTACK, target=near.closest_to(queen.position).position)
             elif queen.is_idle and not api.orders.issued_to(queen, include_sent=True):
                 self._order_free_queen(queen, townhall)
 
@@ -382,14 +382,14 @@ class QueenCommander:
         """Inject the queen's townhall if it can, or plant a creep tumor while keeping the energy for the next inject,
         or walk back to its townhall."""
         if townhall is not None and queen.energy >= 25 and not townhall.has_buff(BuffId.QUEEN_INJECTED):
-            queen.issue(AbilityId.QUEEN_INJECT, target=townhall)
+            queen.command(AbilityId.QUEEN_INJECT, target=townhall)
         elif queen.energy >= (50 if townhall is not None else 25):
             origin = townhall.position if townhall is not None else queen.position
             site = _creep_tumor_site(origin)
             if site is not None:
-                queen.issue(AbilityId.BUILD_CREEP_TUMOR, target=site)
+                queen.command(AbilityId.BUILD_CREEP_TUMOR, target=site)
         elif townhall is not None and queen.distance_to(townhall) > 6:
-            queen.issue(AbilityId.MOVE, target=townhall.position)
+            queen.command(AbilityId.MOVE, target=townhall.position)
 
 
 class CreepSpread:
@@ -410,7 +410,7 @@ class CreepSpread:
                 continue
             site = _creep_tumor_site(tumor.position)
             if site is not None:
-                tumor.issue(AbilityId.BUILD_CREEP_TUMOR, target=site)
+                tumor.command(AbilityId.BUILD_CREEP_TUMOR, target=site)
                 self.plants_at[tumor] = None
 
 
@@ -467,16 +467,16 @@ class Army:
             self.attacking = False
         if threats and not self.attacking:
             for unit in army:
-                unit.issue(AbilityId.ATTACK, target=threats.closest_to(unit.position).position)
+                unit.command(AbilityId.ATTACK, target=threats.closest_to(unit.position).position)
         elif self.attacking:
-            api.orders.issue(army, AbilityId.ATTACK, target=self._attack_target(army))
+            api.orders.command(army, AbilityId.ATTACK, target=self._attack_target(army))
         elif was_attacking:
-            api.orders.issue(army, AbilityId.MOVE, target=self._defense_location())
+            api.orders.command(army, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = army.idle.beyond(4, of=defense_location)
             if idle:
-                api.orders.issue(idle, AbilityId.ATTACK, target=defense_location)
+                api.orders.command(idle, AbilityId.ATTACK, target=defense_location)
 
     def _defense_location(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""

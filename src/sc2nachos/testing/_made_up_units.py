@@ -48,8 +48,8 @@ class MadeUpUnits:
 
     @property
     def orders(self) -> OrderBook:
-        """Every order the units were given since they were made up, through `sc2nachos.units.OwnUnit.issue` or this
-        book's `issue`, as `api.orders` holds a turn's. Nothing is sent, so none leaves the book."""
+        """Every order the units were given since they were made up, through `sc2nachos.units.OwnUnit.command` or this
+        book's `command`, as `api.orders` holds a turn's. Nothing is sent, so none leaves the book."""
         return self._order_book
 
     @property

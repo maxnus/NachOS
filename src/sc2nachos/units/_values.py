@@ -111,7 +111,7 @@ def _target_point(point: common_pb2.Point) -> Point:
 @dataclass(frozen=True, slots=True)
 class Order:
     """An order a unit is carrying out or has queued, as the unit reports it. What the bot gave is an
-    `sc2nachos.orders.IssuedOrder`."""
+    `sc2nachos.orders.Command`."""
 
     ability: AbilityId
     """The ability ordered."""

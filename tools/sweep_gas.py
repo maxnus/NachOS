@@ -307,7 +307,7 @@ class _TrialGame:
                 return
             builder = min(miners, key=lambda scv: scv.distance_to(geyser))
             api.extensions.release(builder)
-            api.orders.issue(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
+            api.orders.command(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
             self._builder_by_geyser[geyser] = builder
             minerals -= cost
 
@@ -434,10 +434,10 @@ class _TrialGame:
         self.api.extensions.release(scv)
         order_book = self.api.orders
         if scv.is_carrying_resource:
-            order_book.issue(scv, AbilityId.RETURN, force=True)
-            order_book.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+            order_book.command(scv, AbilityId.RETURN, force=True)
+            order_book.command(scv, AbilityId.GATHER, target=refinery, queued=True)
         else:
-            order_book.issue(scv, AbilityId.GATHER, target=refinery)
+            order_book.command(scv, AbilityId.GATHER, target=refinery)
 
     def _give_the_moves(self, main: Expansion) -> None:
         """Give the moves at each refinery, as `_give_the_moves_at` says, and count the collectors that begin to
@@ -491,9 +491,9 @@ class _TrialGame:
                     self._put_back_on_the_plain_order(scv, refinery)
         for scv, route in route_by_collector.items():
             (first_ability, first_target), *queued_behind = route
-            order_book.issue(scv, first_ability, target=first_target, force=True)
+            order_book.command(scv, first_ability, target=first_target, force=True)
             for ability, target in queued_behind:
-                order_book.issue(scv, ability, target=target, queued=True)
+                order_book.command(scv, ability, target=target, queued=True)
             self._moves_given += 1
         return yielding_ids
 
@@ -555,10 +555,10 @@ class _TrialGame:
         plain return with the gather queued behind."""
         order_book = self.api.orders
         if scv.is_carrying_resource:
-            order_book.issue(scv, AbilityId.RETURN, force=True)
-            order_book.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+            order_book.command(scv, AbilityId.RETURN, force=True)
+            order_book.command(scv, AbilityId.GATHER, target=refinery, queued=True)
         else:
-            order_book.issue(scv, AbilityId.GATHER, target=refinery, force=True)
+            order_book.command(scv, AbilityId.GATHER, target=refinery, force=True)
 
     def _read_the_findings(self, main: Expansion) -> _TrialFindings:
         """What the time measured gave, read at its end."""

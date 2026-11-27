@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from sc2nachos.extensions.speed_mining._trip_end_points import TripEndPoints
     from sc2nachos.gamemap import Expansion
     from sc2nachos.geometry import Point
-    from sc2nachos.orders import IssuedOrder
+    from sc2nachos.orders import Command
     from sc2nachos.units import Order
 
 # The most workers speed mining holds at one field: with three, it mined 19% less than plain gathers (in game).
@@ -370,7 +370,7 @@ class SpeedMining:
         if carries_cargo(worker):
             self._trips.hand_in_then_gather(worker, resource)
         else:
-            order_book.issue(worker, AbilityId.GATHER, target=resource)
+            order_book.command(worker, AbilityId.GATHER, target=resource)
         return True
 
     def _nearest_field_with_room(
@@ -493,7 +493,7 @@ class SpeedMining:
     def _let_go_of_the_workers_the_bot_ordered(self) -> None:
         """Let go of each worker held that the bot has ordered, as `_is_ordered_by_the_bot` says, of those the turn's
         orders name."""
-        for worker in {unit for order in self._api.orders.pending for unit in order.units}:
+        for worker in {unit for order in self._api.orders.staged for unit in order.units}:
             if worker in self._field_by_worker and self._is_ordered_by_the_bot(worker, mining=True):
                 del self._field_by_worker[worker]
             elif worker in self._gas_building_by_worker and self._is_ordered_by_the_bot(worker, mining=False):
@@ -576,7 +576,7 @@ def _workers_by_resource[R: Unit[Any]](
     return workers_by_resource
 
 
-def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[IssuedOrder], *, mining: bool) -> bool:
+def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[Command], *, mining: bool) -> bool:
     """Whether one of `orders`, issued to a worker this turn, a miner if `mining`, else a collector, stands, no unqueued
     order coming after it, and is not a hand-over's: a return, or a gather at a mineral field, for a miner, or at a gas
     building, for a collector."""

@@ -118,11 +118,11 @@ it.
 
 | python-sc2 | NachOS |
 |---|---|
-| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.issue(AbilityId.MOVE, target=p)`, or `api.orders.issue(units, ...)` for several at once |
+| `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.command(AbilityId.MOVE, target=p)`, or `api.orders.command(units, ...)` for several at once |
 | `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.orders.train(units, t)` and so on for several at once ([orders](../orders.md#training-building-and-researching)) |
-| `bot.do(action)`, `await bot._do_actions(...)` | `unit.issue(...)` or `api.orders.issue(...)`, sent once the turn's handlers have run |
-| nothing | `unit.issue(..., force=True)`, `api.orders.issued_to(unit)` |
-| `bot.do(action, queue=True)` | `unit.issue(..., queued=True)` |
+| `bot.do(action)`, `await bot._do_actions(...)` | `unit.command(...)` or `api.orders.command(...)`, sent once the turn's handlers have run |
+| nothing | `unit.command(..., force=True)`, `api.orders.issued_to(unit)` |
+| `bot.do(action, queue=True)` | `unit.command(..., queued=True)` |
 | `unit.orders`, `unit.is_idle` | the same, each order an `Order`, which python-sc2 calls a `UnitOrder` |
 | `unit.orders[0]`, `unit.order_target` | `unit.current_order`, `None` for an idle unit, and its `target`, or `known_target` |
 | `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
@@ -131,7 +131,7 @@ it.
 | nothing | `order.withdraw()` |
 | the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
 
-- **An order is something you hold on to until it is sent.** `issue` returns an `IssuedOrder` that can be withdrawn
+- **An order is something you hold on to until it is sent.** `command` returns a `Command` that can be withdrawn
   while the turn's handlers run; python-sc2 returns nothing. What the game refused shows in `api.action_failures` on the
   next turn, and what a unit then did, in its orders and in events.
 - **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
@@ -153,7 +153,7 @@ it.
 - **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever
-  it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.orders.pending_cost` is what the
+  it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.orders.staged_cost` is what the
   turn's orders will cost ([orders](../orders.md#what-an-order-needs)).
 - **An order a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for its
   first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game

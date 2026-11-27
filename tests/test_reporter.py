@@ -1015,7 +1015,7 @@ class TestIdle:
         game.observe(0, make_unit(1, build_progress=1.0, orders=[_moving()]))
         assert game._game is not None
         orders = game._game.orders
-        orders.issue(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
+        orders.command(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
         client, _ = make_client(
             make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
         )
@@ -1032,7 +1032,7 @@ class TestIdle:
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
         assert game._game is not None
         orders = game._game.orders
-        orders.issue(_own_unit(game, 1), AbilityId.RALLY_UNITS, target=(30.0, 30.0))
+        orders.command(_own_unit(game, 1), AbilityId.RALLY_UNITS, target=(30.0, 30.0))
         client, _ = make_client(
             make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
         )

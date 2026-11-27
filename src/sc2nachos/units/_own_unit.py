@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId, UpgradeId
-    from sc2nachos.orders import IssuedOrder
+    from sc2nachos.orders import Command
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -31,21 +31,21 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     __slots__ = ()
 
-    def issue(
+    def command(
         self,
         ability: AbilityId,
         *,
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> IssuedOrder:
-        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `IssuedOrder`, as
-        `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
-        `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
+    ) -> Command:
+        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Command`, as
+        `sc2nachos.orders.OrderBook.command` orders it: `unit.command(AbilityId.MOVE, target=point)` is
+        `api.orders.command(unit, AbilityId.MOVE, target=point)`.
 
-        Raises as `OrderBook.issue` does.
+        Raises as `OrderBook.command` does.
         """
-        return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force)
+        return self._tracker.order_book.command(self, ability, target=target, queued=queued, force=force)
 
     def train(
         self: OwnUnit[UnitType.Structure | UnitType.Larva],
@@ -54,8 +54,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> IssuedOrder:
-        """Order the structure or larva to make a unit of `unit_type` and return the `IssuedOrder`, as
+    ) -> Command:
+        """Order the structure or larva to make a unit of `unit_type` and return the `Command`, as
         `sc2nachos.orders.OrderBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
         `api.orders.train(barracks, UnitTypeId.MARINE)`.
 
@@ -70,9 +70,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> IssuedOrder:
+    ) -> Command:
         """Order the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
-        return the `IssuedOrder`, as `sc2nachos.orders.OrderBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
+        return the `Command`, as `sc2nachos.orders.OrderBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
         target=site)` is `api.orders.build(scv, UnitTypeId.BUNKER, target=site)`.
 
         Raises as `OrderBook.build` does.
@@ -81,8 +81,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     def research(
         self: OwnUnit[UnitType.Structure], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
-    ) -> IssuedOrder:
-        """Order the structure to research `upgrade` and return the `IssuedOrder`, as
+    ) -> Command:
+        """Order the structure to research `upgrade` and return the `Command`, as
         `sc2nachos.orders.OrderBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
         `api.orders.research(tech_lab, UpgradeId.STIMPACK)`.
 

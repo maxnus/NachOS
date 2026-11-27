@@ -161,11 +161,11 @@ class TestTheWholeGamesUnits:
         marine = playback.whole_game_tracker.unit_tracker.by_tag(1)
         assert isinstance(marine, OwnUnit)
 
-        order = marine.issue(AbilityId.MOVE, target=(2.0, 3.0))
+        order = marine.command(AbilityId.MOVE, target=(2.0, 3.0))
 
         order_book = playback.whole_game_tracker.order_book
         assert order_book is not None
-        assert order_book.pending == (order,)
+        assert order_book.staged == (order,)
 
 
 class TestTheWholeGamesRawData:

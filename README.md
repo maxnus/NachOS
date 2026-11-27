@@ -47,7 +47,7 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
   unit once it dies.
 - **Events** for what happens in a game, from a unit's death to an upgrade finishing, each subscribed to with
   `api.on` ([guide](https://github.com/maxnus/NachOS/blob/main/docs/events.md)).
-- **Orders** through `unit.issue`, or `api.orders.issue` for several units at once, or by what they make:
+- **Orders** through `unit.command`, or `api.orders.command` for several units at once, or by what they make:
   `unit.train`, `build` and `research`. What the game refused is listed in `api.action_failures` on the next turn
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/orders.md)).
 - **The game's data**: `api.data`, every unit type, ability, upgrade and weapon from the game's tables, with the tech

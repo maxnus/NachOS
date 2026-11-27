@@ -127,8 +127,8 @@ class WorkerTrips:
         # Forced: NachOS leaves out a return to a worker the game reports returning aimed at nothing, and a gather
         # queued behind the return the worker shows of itself takes its place, the worker carrying its cargo to the
         # field first (in game).
-        order_book.issue(worker, AbilityId.RETURN, force=True)
-        order_book.issue(worker, AbilityId.GATHER, target=resource, queued=True)
+        order_book.command(worker, AbilityId.RETURN, force=True)
+        order_book.command(worker, AbilityId.GATHER, target=resource, queued=True)
 
     def _speed_trip[R: UnitType.AnyResource](
         self,
@@ -171,13 +171,13 @@ class WorkerTrips:
         ):
             return False
         order_book = self._api.orders
-        order_book.issue(worker, AbilityId.MOVE, target=trip_end, force=True)
+        order_book.command(worker, AbilityId.MOVE, target=trip_end, force=True)
         if returning:
             # Aimed at the townhall, so the worker goes on into it at speed; a return aimed at nothing stops it at the
             # end of the move first (in game).
-            order_book.issue(worker, AbilityId.SMART, target=townhall, queued=True)
+            order_book.command(worker, AbilityId.SMART, target=townhall, queued=True)
         else:
-            order_book.issue(worker, AbilityId.GATHER, target=resource, queued=True)
+            order_book.command(worker, AbilityId.GATHER, target=resource, queued=True)
         return True
 
     def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> None:
@@ -187,7 +187,7 @@ class WorkerTrips:
             if current_order is None or current_order.ability is not AbilityId.RETURN:
                 self.hand_in_then_gather(worker, field)
         elif not _is_gathering_at(current_order, field):
-            self._api.orders.issue(worker, AbilityId.GATHER, target=field)
+            self._api.orders.command(worker, AbilityId.GATHER, target=field)
 
     def _collect_plainly(self, worker: OwnUnit[UnitType.Worker], gas_building: Unit[UnitType.GasBuilding]) -> None:
         """Keep `worker` collecting from `gas_building` with a plain gather, or returning its cargo with the gather
@@ -198,7 +198,7 @@ class WorkerTrips:
         if worker.is_carrying_resource:
             self.hand_in_then_gather(worker, gas_building)
         else:
-            self._api.orders.issue(worker, AbilityId.GATHER, target=gas_building)
+            self._api.orders.command(worker, AbilityId.GATHER, target=gas_building)
 
     def _is_on_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
         """Whether `worker` is on speed mining's move to `trip_end`, or was sent it lately, which its orders may not

@@ -82,7 +82,7 @@ def test_the_center_is_read_from_each_observation_and_a_move_goes_out_after_the_
         centers.append(api.camera.center)
         if event.time.steps == 0:
             api.camera.move_to((5.0, 6.0))
-            api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
+            api.orders.command(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
 
     api.play(client, steps_per_turn=2)
 

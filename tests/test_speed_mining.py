@@ -365,7 +365,7 @@ def _ordered_by_the_bot(
 
 def _build_a_supply_depot(api: Api[object], worker: OwnUnit[Any], *, queued: bool = False) -> None:
     """Order `worker` to build a supply depot at (30.0, 34.0), as `_build_order` reports it."""
-    api.orders.issue(worker, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=(30.0, 34.0), queued=queued)
+    api.orders.command(worker, AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=(30.0, 34.0), queued=queued)
 
 
 class TestWhatIsLeftAlone:
@@ -465,18 +465,20 @@ class TestLettingGoOfAWorkerTheBotOrders:
             ),
             (
                 False,
-                lambda api, worker: api.orders.issue(worker, AbilityId.GATHER, target=_unit_of_tag(api, _REFINERY)),
+                lambda api, worker: api.orders.command(worker, AbilityId.GATHER, target=_unit_of_tag(api, _REFINERY)),
                 (AbilityId.GATHER, _REFINERY, False),
             ),
             (
                 False,
-                lambda api, worker: api.orders.issue(worker, AbilityId.SMART, target=(30.0, 34.0)),
+                lambda api, worker: api.orders.command(worker, AbilityId.SMART, target=(30.0, 34.0)),
                 (AbilityId.SMART, Point((30.0, 34.0)), False),
             ),
             (True, _build_a_supply_depot, _BUILD_A_SUPPLY_DEPOT),
             (
                 True,
-                lambda api, worker: api.orders.issue(worker, AbilityId.GATHER, target=_unit_of_tag(api, _MINED_FIELD)),
+                lambda api, worker: api.orders.command(
+                    worker, AbilityId.GATHER, target=_unit_of_tag(api, _MINED_FIELD)
+                ),
                 (AbilityId.GATHER, _MINED_FIELD, False),
             ),
         ],
@@ -520,7 +522,7 @@ class TestLettingGoOfAWorkerTheBotOrders:
         next turn."""
 
         def move_away_then_mine(api: Api[SpeedMining], worker: OwnUnit[Any]) -> None:
-            api.orders.issue(worker, AbilityId.MOVE, target=(20.0, 30.0))
+            api.orders.command(worker, AbilityId.MOVE, target=(20.0, 30.0))
             api.extensions.mine(worker, _unit_of_tag(api, _MINED_FIELD))
 
         held: list[list[int]] = []
@@ -541,7 +543,7 @@ class TestLettingGoOfAWorkerTheBotOrders:
         elsewhere = [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order(_OTHER_FIELD))]
 
         def gather_at_the_other_field(api: Api[SpeedMining], worker: OwnUnit[Any]) -> None:
-            api.orders.issue(worker, AbilityId.GATHER, target=_unit_of_tag(api, _OTHER_FIELD))
+            api.orders.command(worker, AbilityId.GATHER, target=_unit_of_tag(api, _OTHER_FIELD))
 
         sent = _orders_sent(
             [*_pylon_main(), _reported_scv((25.0, 30.0), _gather_order())],
@@ -560,7 +562,7 @@ class TestLettingGoOfAWorkerTheBotOrders:
         zergling = _zergling_beside((26.0, 30.0), degrees_off_its_facing=0.0)
 
         def attack_the_zergling(api: Api[SpeedMining], worker: OwnUnit[Any]) -> None:
-            api.orders.issue(worker, AbilityId.ATTACK, target=_unit_of_tag(api, 30))
+            api.orders.command(worker, AbilityId.ATTACK, target=_unit_of_tag(api, 30))
 
         units = [*_pylon_main(), mining, zergling]
         sent = _orders_sent(
@@ -581,7 +583,7 @@ class TestLettingGoOfAWorkerTheBotOrders:
             @api.on(TurnEvent, priority=EventPriority.HIGH)
             def burrow(event: TurnEvent) -> None:
                 if event.time.steps == 1:
-                    api.orders.issue(_own_unit_of_tag(api, _HANDED_SCV), AbilityId.BURROW)
+                    api.orders.command(_own_unit_of_tag(api, _HANDED_SCV), AbilityId.BURROW)
 
         units = [*_pylon_main(), drone]
         sent = _orders_sent(
@@ -739,7 +741,7 @@ class TestUnitsInTheWay:
             @api.on(TurnEvent, priority=EventPriority.HIGH)
             def stop(event: TurnEvent) -> None:
                 if event.time.steps == 1:
-                    api.orders.issue(_own_unit_of_tag(api, 20), AbilityId.STOP)
+                    api.orders.command(_own_unit_of_tag(api, 20), AbilityId.STOP)
 
         sent = _orders_sent(
             [*_pylon_main(), far, in_the_way],
@@ -1779,7 +1781,7 @@ def test_in_a_real_game_speed_mined_scvs_mine_more_than_scvs_sent_to_gather_once
     @sent_once.on(GameStartEvent)
     def send_to_gather(event: GameStartEvent) -> None:
         for worker, field in _workers_on_the_main(sent_once):
-            sent_once.orders.issue(worker, AbilityId.GATHER, target=field)
+            sent_once.orders.command(worker, AbilityId.GATHER, target=field)
 
     @speed_mined.on(GameStartEvent)
     def hand_over(event: GameStartEvent) -> None:
@@ -1843,10 +1845,10 @@ def _vespene_collected_on_pylons_main(*, speed_collected: bool) -> float:
                     else:
                         api.extensions.release(scv)
                         if scv.is_carrying_resource:
-                            api.orders.issue(scv, AbilityId.RETURN, force=True)
-                            api.orders.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+                            api.orders.command(scv, AbilityId.RETURN, force=True)
+                            api.orders.command(scv, AbilityId.GATHER, target=refinery, queued=True)
                         else:
-                            api.orders.issue(scv, AbilityId.GATHER, target=refinery)
+                            api.orders.command(scv, AbilityId.GATHER, target=refinery)
             handed_over_at.append(api.time)
             return
         minerals = api.resources.minerals
@@ -1863,7 +1865,7 @@ def _vespene_collected_on_pylons_main(*, speed_collected: bool) -> float:
                 (scv for scv in api.extensions.miners if scv.is_orderable), key=lambda scv: scv.distance_to(geyser)
             )
             api.extensions.release(builder)
-            api.orders.issue(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
+            api.orders.command(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
             builder_by_geyser[geyser.position] = builder
             minerals -= cost
 

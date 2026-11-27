@@ -17,20 +17,20 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from sc2nachos.ids import AbilityId, UnitTypeId
-    from sc2nachos.orders._issued_order import IssuedOrder
+    from sc2nachos.orders._command import Command
     from sc2nachos.units import OwnUnit, Target
 
 
 @final
 @dataclass(slots=True)
-class UnitCommand:
+class ActionToSend:
     """One raw command of a turn's request: the game's `ability`, aimed at `target`, queued or not, given to the units
     of each order of `parts`."""
 
     ability: int
     target: Target | None
     queued: bool
-    parts: list[tuple[IssuedOrder, tuple[OwnUnit[Any], ...]]]
+    parts: list[tuple[Command, tuple[OwnUnit[Any], ...]]]
     """Each order the command carries, with the units it names for that order, in the order they joined it."""
 
     def to_action(self) -> sc2api_pb2.Action:
@@ -39,7 +39,7 @@ class UnitCommand:
         return _unit_command_action(self.ability, tags, self.target, queued=self.queued)
 
 
-def unit_commands_giving(orders: Iterable[tuple[IssuedOrder, tuple[OwnUnit[Any], ...]]]) -> list[UnitCommand]:
+def actions_giving(orders: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]]) -> list[ActionToSend]:
     """The raw commands giving each of `orders` to the units it goes out to, in the order they go out.
 
     An order of an ability every unit of a command carries out goes out as one command naming its units, or one for
@@ -50,7 +50,7 @@ def unit_commands_giving(orders: Iterable[tuple[IssuedOrder, tuple[OwnUnit[Any],
     before them, and no command names a unit twice. A command aimed at one of its own units joins nothing, and nothing
     joins it.
     """
-    unit_commands: list[UnitCommand] = []
+    actions_to_send: list[ActionToSend] = []
     # By game ability, target as the game keeps it and queue flag, the index of the last command an order may join.
     last_joinable: dict[tuple[int, Target | None, bool], int] = {}
     # By unit id, the index of the last command naming the unit.
@@ -59,18 +59,18 @@ def unit_commands_giving(orders: Iterable[tuple[IssuedOrder, tuple[OwnUnit[Any],
         key = _join_key(order, ability, target, units)
         at = -1 if key is None else last_joinable.get(key, -1)
         if at < 0 or any(last_naming.get(unit.id, -1) >= at for unit in units):
-            at = len(unit_commands)
-            unit_commands.append(UnitCommand(ability, target, order.queued, []))
+            at = len(actions_to_send)
+            actions_to_send.append(ActionToSend(ability, target, order.queued, []))
             if key is not None:
                 last_joinable[key] = at
-        unit_commands[at].parts.append((order, units))
+        actions_to_send[at].parts.append((order, units))
         for unit in units:
             last_naming[unit.id] = at
-    return unit_commands
+    return actions_to_send
 
 
 def _join_key(
-    order: IssuedOrder, ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
+    order: Command, ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
 ) -> tuple[int, Target | None, bool] | None:
     """What a command of `order`, giving the game's `ability` at `target` to `units`, shares with each command it may
     join: the ability, the target as the game keeps it and the queue flag. `None` for a command that joins none and that
@@ -84,8 +84,8 @@ def _join_key(
 
 
 def _commands_of_each(
-    orders: Iterable[tuple[IssuedOrder, tuple[OwnUnit[Any], ...]]],
-) -> Iterator[tuple[IssuedOrder, int, Target | None, tuple[OwnUnit[Any], ...]]]:
+    orders: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]],
+) -> Iterator[tuple[Command, int, Target | None, tuple[OwnUnit[Any], ...]]]:
     """Each raw command each of `orders` goes out as on its own, with its order: one naming its units for an ability
     every unit of a command carries out, or one for each ability it is sent as, and one to each unit for any other."""
     for order, units in orders:

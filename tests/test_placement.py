@@ -265,14 +265,14 @@ class TestTheReservedGrid:
     def test_a_build_issued_this_turn_reserves_its_site(self) -> None:
         game = _Game()
         game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.3, 7.8)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.3, 7.8)))
         grids = game.observe(0, _scv(1))
         assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
 
     def test_a_withdrawn_build_frees_its_site(self) -> None:
         game = _Game()
         grids = game.observe(0, _scv(1))
-        order = game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        order = game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         assert grids.reserved.any()
         order.withdraw()
         assert not grids.reserved.any()
@@ -281,7 +281,7 @@ class TestTheReservedGrid:
         """The game may show an order an observation late, as on the ladder."""
         game = _Game()
         game.observe(0, _scv(1, at=(9.5, 8.5)))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         game.flush()
         grids = game.observe(8, _scv(1, at=(9.5, 8.5)))
         assert not game.book.issued_to(game.own(1))
@@ -299,7 +299,7 @@ class TestTheReservedGrid:
         game = _Game()
         geyser = make_unit(2, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL)
         game.observe(0, _scv(1), geyser)
-        game.book.issue(game.own(1), _BUILD_REFINERY, target=game.tracker.unit_tracker.by_tag(2))
+        game.book.command(game.own(1), _BUILD_REFINERY, target=game.tracker.unit_tracker.by_tag(2))
         grids = game.observe(0, _scv(1), geyser)
         assert _picture(grids.reserved, x0=6, y0=6, x1=10, y1=10) == [
             ".....",
@@ -326,7 +326,7 @@ class TestTheReservedGrid:
     def test_an_add_on_reserves_the_ground_beside_its_host(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
-        game.book.issue(game.own(1), _BUILD_REACTOR)
+        game.book.command(game.own(1), _BUILD_REACTOR)
         grids = game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
         assert _picture(grids.reserved, x0=4, y0=6, x1=10, y1=10) == [
             ".......",
@@ -339,7 +339,7 @@ class TestTheReservedGrid:
     def test_a_host_s_add_on_position_is_where_its_add_on_s_ground_is_reserved(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
-        game.book.issue(game.own(1), _BUILD_REACTOR)
+        game.book.command(game.own(1), _BUILD_REACTOR)
         grids = game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
         add_on_position = game.own(1).add_on_position
         assert add_on_position == Point((9.0, 8.0))
@@ -351,7 +351,7 @@ class TestTheReservedGrid:
         game = _Game()
         flying = make_unit(1, UnitTypeId.BARRACKS_FLYING, at=(12.0, 3.0), is_flying=True)
         game.observe(0, flying)
-        game.book.issue(game.own(1), _BUILD_REACTOR, target=Point((6.5, 8.5)))
+        game.book.command(game.own(1), _BUILD_REACTOR, target=Point((6.5, 8.5)))
         grids = game.observe(0, flying)
         assert _picture(grids.reserved, x0=4, y0=6, x1=10, y1=10) == [
             ".......",
@@ -512,7 +512,7 @@ class TestTheFreeGrids:
     def test_free_is_static_and_dynamic_less_reserved(self) -> None:
         game = _Game()
         game.observe(0, _scv(1), make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         grids = game.observe(0, _scv(1), make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
         assert grids.free.equals(grids.static & grids.dynamic & ~grids.reserved)
         assert not grids.free[Point((1.5, 1.5))]
@@ -627,7 +627,7 @@ class TestPlacingOneStructure:
         game = _Game()
         grids = game.observe(0, _scv(1))
         assert grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
         assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((9.0, 9.0)))
         assert grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=1.0) is None
@@ -1007,7 +1007,7 @@ class _DepotBot:
             if api.resources.minerals >= 100:
                 self.site = _depot_site(api)
                 scv = api.units.own.of_type(UnitTypeId.SCV).closest_to(self.site)
-                api.orders.issue(scv, _BUILD_DEPOT, target=self.site)
+                api.orders.command(scv, _BUILD_DEPOT, target=self.site)
             return
         placement = api.placement
         stands = bool(api.units.own.of_type(UnitTypeId.SUPPLY_DEPOT))
