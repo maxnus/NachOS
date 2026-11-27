@@ -132,7 +132,7 @@ from _sandbox import NEUTRAL, Cheat, OpenGround, Sandbox, playing, unit_aliases
 from loguru import logger
 from s2clientprotocol import common_pb2, debug_pb2, error_pb2, raw_pb2, sc2api_pb2, ui_pb2
 
-from sc2nachos.gamedata import Attribute, GameData, OrderBehavior
+from sc2nachos.gamedata import Attribute, CommandBehavior, GameData
 from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.gamemap import GameMap
 from sc2nachos.gamemap._image_data import image_tiles
@@ -1890,7 +1890,7 @@ def _puts_to_work(game: _Game, structure: UnitTypeId) -> AbilityId | None:
     works = sorted(
         row.id.name
         for row in game.data.abilities.values()
-        if structure in row.performers and row.order_behavior is OrderBehavior.QUEUES
+        if structure in row.performers and row.command_behavior is CommandBehavior.QUEUES
     )
     return AbilityId[works[0]] if works else None
 

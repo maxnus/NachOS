@@ -89,7 +89,7 @@ PRODUCERS_FALLBACK: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingP
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
 # ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
-# This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
+# This is not the whole of `CommandBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
 # nothing and is offered only to types that hold no order of their own as keeping orders, which covers a structure's
 # own rally, load, cancel and energy casts. An action several types perform is here where it keeps every type's orders;
 # where it keeps only some types', those are in `KEEPS_ORDERS_BY_TYPE`.

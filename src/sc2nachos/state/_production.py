@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, final
 
-from sc2nachos.gamedata import Attribute, OrderBehavior
+from sc2nachos.gamedata import Attribute, CommandBehavior
 from sc2nachos.gametime import GameTime
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.state._in_production import InProduction
@@ -139,6 +139,6 @@ def _order_progress(row: AbilityData, unit_type: UnitTypeId, progress: float) ->
     start to end (in game)."""
     if row.needs_placement:
         return 0.0
-    if UnitTypeId.LARVA in row.performers or row.order_behavior_for(unit_type) is OrderBehavior.QUEUES:
+    if UnitTypeId.LARVA in row.performers or row.command_behavior_for(unit_type) is CommandBehavior.QUEUES:
         return progress
     return None

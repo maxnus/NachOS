@@ -85,7 +85,7 @@ commanded apart. Each returns the `Command`, whose `ability` is the one given.
 A unit carries out only the last command it is given in a turn. Earlier ones are never sent to it. The game does the
 same with two unqueued actions in one request, so NachOS sends only the one that would have stood.
 
-The exception is `OrderBehavior.KEEPS_ORDERS`: an ability that leaves the unit doing what it was doing. That is stim,
+The exception is `CommandBehavior.KEEPS_ORDERS`: an ability that leaves the unit doing what it was doing. That is stim,
 the cloaks, Guardian Shield, both halves of every toggle a sweep could give a moving unit, whatever else a sweep saw a
 moving unit carry out without breaking its move, and every ability except production that is offered only to types
 that hold no order of their own — a structure's own rally, load, cancel and energy casts.
@@ -98,7 +98,7 @@ several types is judged unit by unit. Hold fire keeps a ghost's orders and takes
 Given to both, it leaves the ghost the move it was given earlier in the turn and takes the lurker from its attack. A
 planetary fortress attacks and stops with the ids every unit does, yet trains on through both, and every structure
 that trains does so through a smart, which sets its rally (in game), so for those types those keep their orders.
-`api.data.abilities[ability].order_behavior_for(unit.type_id)` says what an ability does to a unit of that type.
+`api.data.abilities[ability].command_behavior_for(unit.type_id)` says what an ability does to a unit of that type.
 
 **Some ids go out as another of the game's abilities for some unit types.** `api.data.abilities[ability].sent_as`
 says which, and what each is aimed at. `UNLOAD` puts everyone down where the transport is: a bunker, a command

@@ -41,7 +41,7 @@ class TargetType(ReadableIntEnum):
     POINT_OR_NOTHING = data_pb2.AbilityData.Target.PointOrNone
 
 
-class OrderBehavior(Enum):
+class CommandBehavior(Enum):
     """What a command of an ability does to the unit's orders (tool `sweep_orders`)."""
 
     REPLACES = "replaces"
@@ -60,22 +60,22 @@ class OrderBehavior(Enum):
 
 
 # The behaviors by type of an ability whose performers all share one.
-_NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
+_NO_BEHAVIORS: Mapping[UnitTypeId, CommandBehavior] = MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
-class OrderBehaviors:
+class CommandBehaviors:
     """What a command of one ability does to a unit's orders: its own behavior, and each unit type's where that
     differs."""
 
-    own: OrderBehavior = OrderBehavior.REPLACES
-    by_type: Mapping[UnitTypeId, OrderBehavior] = field(default_factory=lambda: _NO_BEHAVIORS)
+    own: CommandBehavior = CommandBehavior.REPLACES
+    by_type: Mapping[UnitTypeId, CommandBehavior] = field(default_factory=lambda: _NO_BEHAVIORS)
 
 
-def order_behaviors(
+def command_behaviors(
     tech_tree: TechTree, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
-) -> Mapping[AbilityId, OrderBehaviors]:
-    """The order behaviors of each ability that does not simply replace every unit's orders, judged for each unit type
+) -> Mapping[AbilityId, CommandBehaviors]:
+    """The command behaviors of each ability that does not simply replace every unit's orders, judged for each unit type
     that carries it out: an ability several types perform does to each what that type's own does.
 
     In order of precedence, an ability keeps the orders of the types `KEEPS_ORDERS_BY_TYPE` names for it, and of every
@@ -89,7 +89,7 @@ def order_behaviors(
     training a marine from a larva morphing into one, and a sieged tank from a bunker.
     """
     order_holders = _unit_types_holding_orders(tech_tree, non_structures)
-    behaviors: dict[AbilityId, OrderBehaviors] = {}
+    behaviors: dict[AbilityId, CommandBehaviors] = {}
     for ability in tech_tree.abilities.keys() | KEEPS_ORDERS_ABILITIES | KEEPS_ORDERS_BY_TYPE.keys():
         products_by_maker = tech_tree.ability(ability).products
         carried_out_by = _performers_of(ability, tech_tree) | products_by_maker.keys()
@@ -98,10 +98,10 @@ def order_behaviors(
             for unit_type in carried_out_by | KEEPS_ORDERS_BY_TYPE.get(ability, frozenset())
         }
         shared_behaviors = {behavior_by_type[unit_type] for unit_type in carried_out_by}
-        own = shared_behaviors.pop() if len(shared_behaviors) == 1 else OrderBehavior.REPLACES
+        own = shared_behaviors.pop() if len(shared_behaviors) == 1 else CommandBehavior.REPLACES
         by_type = {unit_type: kind for unit_type, kind in behavior_by_type.items() if kind is not own}
-        if own is not OrderBehavior.REPLACES or by_type:
-            behaviors[ability] = OrderBehaviors(own, MappingProxyType(by_type))
+        if own is not CommandBehavior.REPLACES or by_type:
+            behaviors[ability] = CommandBehaviors(own, MappingProxyType(by_type))
     return behaviors
 
 
@@ -111,21 +111,21 @@ def _behavior(
     product: UnitTypeId | UpgradeId | None,
     structures: frozenset[UnitTypeId],
     holders: frozenset[UnitTypeId],
-) -> OrderBehavior:
+) -> CommandBehavior:
     """What `ability` does to the orders of a unit of `unit_type`, which makes `product` by it."""
     if unit_type in KEEPS_ORDERS_BY_TYPE.get(ability, ()) or ability in KEEPS_ORDERS_ABILITIES:
-        return OrderBehavior.KEEPS_ORDERS
+        return CommandBehavior.KEEPS_ORDERS
     if product is not None:
         if unit_type not in structures:
             # A worker's build, a larva's train, a unit's own morph.
-            return OrderBehavior.REPLACES
+            return CommandBehavior.REPLACES
         makes_structure = isinstance(product, UnitTypeId) and product in structures
-        return OrderBehavior.NEEDS_IDLE if makes_structure else OrderBehavior.QUEUES
-    return OrderBehavior.REPLACES if unit_type in holders else OrderBehavior.KEEPS_ORDERS
+        return CommandBehavior.NEEDS_IDLE if makes_structure else CommandBehavior.QUEUES
+    return CommandBehavior.REPLACES if unit_type in holders else CommandBehavior.KEEPS_ORDERS
 
 
 # The behaviors of an ability that replaces every unit's orders.
-_REPLACES = OrderBehaviors()
+_REPLACES = CommandBehaviors()
 
 
 def _performers_of(ability: AbilityId, tech_tree: TechTree) -> frozenset[UnitTypeId]:
@@ -161,7 +161,7 @@ def ability_costs(
 
 
 def cancel_abilities(
-    tech_tree: TechTree, behaviors: Mapping[AbilityId, OrderBehaviors]
+    tech_tree: TechTree, behaviors: Mapping[AbilityId, CommandBehaviors]
 ) -> Mapping[AbilityId, AbilityId]:
     """The ability that cancels each ability on a structure carrying it out, for those that have one.
 
@@ -177,7 +177,7 @@ def cancel_abilities(
     }
     for ability, behavior in behaviors.items():
         offered_to = tech_tree.ability(ability).performers
-        if behavior.own is OrderBehavior.QUEUES and offered_to and offered_to <= keeps_a_queue:
+        if behavior.own is CommandBehavior.QUEUES and offered_to and offered_to <= keeps_a_queue:
             cancels_by_ability[ability] = AbilityId.CANCEL_LAST
     return cancels_by_ability
 
@@ -263,15 +263,15 @@ class AbilityData:
     game). For a morph, an add-on and arming a nuke it is `CANCEL`, since those answer `CANCEL_LAST`
     with `ERROR` (tool `sweep_tech_tree`). `None` for everything else, a warp-in and a build among them: a warp gate
     keeps no queue, and a structure under construction is cancelled on itself with `CANCEL`."""
-    order_behavior: OrderBehavior
+    command_behavior: CommandBehavior
     """What a command of it does to the unit's orders: the behavior the types carrying it out share, or `REPLACES`
-    where they differ; `order_behavior_for` gives each unit type's."""
+    where they differ; `command_behavior_for` gives each unit type's."""
     sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
     """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
     the ability itself. `UNLOAD` goes out to a medivac as its unload at a point aimed at the medivac, and a
     custom id names every type it can be given to: `SIEGE` a tank's siege mode and an observer's surveillance mode,
     aimed at nothing. Empty for most abilities."""
-    _behaviors_by_performer: Mapping[UnitTypeId, OrderBehavior] = field(repr=False, compare=False)
+    _behaviors_by_performer: Mapping[UnitTypeId, CommandBehavior] = field(repr=False, compare=False)
 
     @property
     def is_research(self) -> bool:
@@ -284,18 +284,18 @@ class AbilityData:
         add-on, a creep tumor, a landing, a rooting or a warp-in."""
         return self.needs_placement or self.id in ABILITIES_PLACING_AT_THE_TARGET
 
-    def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
+    def command_behavior_for(self, unit_type: UnitTypeId) -> CommandBehavior:
         """What a command of it does to the orders of a unit of `unit_type`: what that type's own does, as a
         ghost's hold fire keeps its orders and a burrowed lurker's takes it off its attack, and keeping the orders of
         the types `KEEPS_ORDERS_BY_TYPE` names for it, such as a barracks given a smart (in game)."""
-        return self._behaviors_by_performer.get(unit_type, self.order_behavior)
+        return self._behaviors_by_performer.get(unit_type, self.command_behavior)
 
     @classmethod
     def _from_proto(
         cls,
         data: data_pb2.AbilityData,
         tech_tree: TechTree,
-        behaviors: Mapping[AbilityId, OrderBehaviors],
+        behaviors: Mapping[AbilityId, CommandBehaviors],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
@@ -316,7 +316,7 @@ class AbilityData:
             multi_unit=ability in MULTI_UNIT_ABILITIES,
             joins_other_orders=ability in ABILITIES_JOINING_OTHER_ORDERS,
             cancelled_by=cancels.get(ability),
-            order_behavior=behavior.own,
+            command_behavior=behavior.own,
             sent_as=ABILITIES_SENT_AS_ANOTHER.get(ability, SENT_UNCHANGED),
             _behaviors_by_performer=behavior.by_type,
         )
@@ -326,7 +326,7 @@ class AbilityData:
         cls,
         ability: AbilityId,
         tech_tree: TechTree,
-        behaviors: Mapping[AbilityId, OrderBehaviors],
+        behaviors: Mapping[AbilityId, CommandBehaviors],
         costs: Mapping[AbilityId, Cost],
         cancels: Mapping[AbilityId, AbilityId],
     ) -> Self:
@@ -347,7 +347,7 @@ class AbilityData:
             multi_unit=ability in MULTI_UNIT_ABILITIES,
             joins_other_orders=ability in ABILITIES_JOINING_OTHER_ORDERS,
             cancelled_by=cancels.get(ability),
-            order_behavior=behavior.own,
+            command_behavior=behavior.own,
             sent_as=sent_as,
             _behaviors_by_performer=behavior.by_type,
         )

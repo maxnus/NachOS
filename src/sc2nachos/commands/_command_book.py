@@ -11,7 +11,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.commands._action_to_send import actions_giving
 from sc2nachos.commands._command import Command
 from sc2nachos.commands._targets import aimed_at, check_target, same_point, same_target
-from sc2nachos.gamedata import Cost, OrderBehavior
+from sc2nachos.gamedata import CommandBehavior, Cost
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
@@ -396,7 +396,7 @@ class CommandBook:
         if command.queued:
             return False
         row = self._game_data.abilities.get(command.ability)
-        return _behavior_for(row, unit) is not OrderBehavior.KEEPS_ORDERS
+        return _behavior_for(row, unit) is not CommandBehavior.KEEPS_ORDERS
 
     def _add(self, command: Command) -> None:
         """Count `command` among the turn's, last."""
@@ -413,10 +413,10 @@ class CommandBook:
             self._sent_by_unit.setdefault(unit.id, deque()).append(command)
             behavior = _behavior_for(row, unit)
             sent = (command, self._observations)
-            if not command.queued and behavior is OrderBehavior.REPLACES:
+            if not command.queued and behavior is CommandBehavior.REPLACES:
                 self._last_sent[unit.id] = sent
                 self._sent_not_replacing.pop(unit.id, None)
-            elif not command.queued and behavior is OrderBehavior.KEEPS_ORDERS:
+            elif not command.queued and behavior is CommandBehavior.KEEPS_ORDERS:
                 self._sent_at_once.setdefault(unit.id, []).append(sent)
             else:
                 self._sent_not_replacing.setdefault(unit.id, []).append(sent)
@@ -430,7 +430,7 @@ class CommandBook:
         return tuple(
             unit
             for unit in units
-            if _behavior_for(row, unit) is not OrderBehavior.REPLACES
+            if _behavior_for(row, unit) is not CommandBehavior.REPLACES
             or not self._is_doing(unit, command.ability, command.target)
         )
 
@@ -465,7 +465,7 @@ class CommandBook:
         """Whether `unit` carries `command` out at once, leaving its orders as they were: unqueued, an ability its type
         keeps its orders through."""
         return not command.queued and _behavior_for(self._game_data.abilities.get(command.ability), unit) is (
-            OrderBehavior.KEEPS_ORDERS
+            CommandBehavior.KEEPS_ORDERS
         )
 
     def _unit_is_at(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
@@ -487,10 +487,10 @@ class CommandBook:
                 return target is None
 
 
-def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> OrderBehavior:
+def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> CommandBehavior:
     """What an ability does to the orders of `unit`, a unit of its type. An ability with no row replaces
     them."""
-    return OrderBehavior.REPLACES if row is None else row.order_behavior_for(unit.type_id)
+    return CommandBehavior.REPLACES if row is None else row.command_behavior_for(unit.type_id)
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
