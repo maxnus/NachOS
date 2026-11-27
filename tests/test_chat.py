@@ -34,7 +34,7 @@ def _two_turns(api: Api, *, answers: int) -> FakeTransport:
     return transport
 
 
-def test_a_turns_chat_goes_out_in_order_after_its_orders_and_the_camera_move() -> None:
+def test_a_turns_chat_goes_out_in_order_after_its_commands_and_the_camera_move() -> None:
     api = Api()
 
     @api.on(TurnEvent)

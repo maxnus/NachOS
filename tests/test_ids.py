@@ -117,7 +117,9 @@ def test_unknown_ids_raise(enum: type[ReadableIntEnum]) -> None:
         (RawAbilityId.Archon_Warp_Target, AbilityId.MORPH_ARCHON),
     ],
 )
-def test_an_id_a_unit_reports_for_another_reads_as_the_one_ordered(reported: RawAbilityId, ordered: AbilityId) -> None:
+def test_an_id_a_unit_reports_for_another_reads_as_the_one_commanded(
+    reported: RawAbilityId, ordered: AbilityId
+) -> None:
     """Read and got, it is the member; called, it is not one, since the game's tables hold a row of its own."""
     assert AbilityId.read(reported) is ordered
     assert AbilityId.get(reported) is ordered

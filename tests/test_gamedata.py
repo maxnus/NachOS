@@ -234,10 +234,10 @@ class TestReadingTheTables:
         assert set(data.units) == {UnitTypeId.MARINE}
 
     @pytest.mark.parametrize("reported_first", [True, False], ids=["reported first", "ordered first"])
-    def test_the_row_of_an_id_a_unit_reports_for_another_does_not_take_the_ordered_ones_place(
+    def test_the_row_of_an_id_a_unit_reports_for_another_does_not_take_the_commanded_ones_place(
         self, reported_first: bool
     ) -> None:
-        """A templar reports `Archon_Warp_Target`, aimed at the other, for the merge it was ordered; the row is the
+        """A templar reports `Archon_Warp_Target`, aimed at the other, for the merge it was given; the row is the
         merge's own, which takes no target."""
         merge = data_pb2.AbilityData(ability_id=AbilityId.MORPH_ARCHON)
         reported = data_pb2.AbilityData(
@@ -737,7 +737,7 @@ class TestARecordedGamesTables:
         cancel = data.abilities[AbilityId.CANCEL_LAST]
         assert cancel.command_behavior_for(UnitTypeId.CARRIER) is CommandBehavior.KEEPS_ORDERS
 
-    def test_an_action_that_keeps_every_type_s_orders_keeps_each_one_s(self, path: Path) -> None:
+    def test_an_ability_that_keeps_every_type_s_orders_keeps_each_one_s(self, path: Path) -> None:
         stim = _tables(path).abilities[AbilityId.STIM]
         assert stim.command_behavior is CommandBehavior.KEEPS_ORDERS
         for unit_type in (UnitTypeId.MARINE, UnitTypeId.MARAUDER):
@@ -889,7 +889,7 @@ class TestARecordedGamesTables:
             assert units[switched_type].cost == units[unswitched_type].cost, switched_type.name
         assert units[UnitTypeId.SIEGE_TANK_SIEGED].cost == Cost(150, 125, 3, time=GameTime(steps=720))
 
-    def test_a_zergling_costs_half_its_order_and_a_drones_structure_gives_the_drone_back(self, path: Path) -> None:
+    def test_a_zergling_costs_half_its_command_and_a_drones_structure_gives_the_drone_back(self, path: Path) -> None:
         units = _tables(path).units
         assert units[UnitTypeId.ZERGLING].cost == Cost(25, 0, 0.5, time=GameTime(steps=384))
         assert units[UnitTypeId.SPAWNING_POOL].cost.resources == Resources(200, 0)
@@ -910,7 +910,7 @@ class TestARecordedGamesTables:
             assert units[cocoon].cost == units[becoming].cost, cocoon.name
         assert units[UnitTypeId.BANELING_COCOON].cost.resources == Resources(25, 25)
 
-    def test_the_supply_one_takes_is_the_tables_whatever_its_order_cost(self, path: Path) -> None:
+    def test_the_supply_one_takes_is_the_tables_whatever_its_command_cost(self, path: Path) -> None:
         units = _tables(path).units
         assert units[UnitTypeId.ZERGLING].supply_used == 0.5
         assert units[UnitTypeId.BANELING].supply_used == 0.5
@@ -1012,7 +1012,7 @@ class TestARecordedGamesTables:
                 unit_rows[switched_type]._whole_cost.time.steps == unit_rows[unswitched_type]._whole_cost.time.steps
             ), switched_type.name
 
-    def test_an_order_takes_the_steps_of_what_it_makes_and_a_switch_none(self, path: Path) -> None:
+    def test_a_command_takes_the_steps_of_what_it_makes_and_a_switch_none(self, path: Path) -> None:
         game_data = _tables(path)
         ability_rows, unit_rows = game_data.abilities, game_data.units
         assert (
@@ -1039,15 +1039,15 @@ class TestARecordedGamesTables:
             }
             assert written_cost.time in {GameTime(steps=0), *build_times_of_products}, f"{ability.name}: {written_cost}"
 
-    def test_an_ability_is_charged_what_the_game_takes_as_it_is_ordered(self, path: Path) -> None:
+    def test_an_ability_is_charged_what_the_game_takes_as_it_is_given(self, path: Path) -> None:
         """Not what its type's row holds, which for a morph is everything spent to reach it. A refund shows no time,
         so it is left out here."""
         data = _tables(path)
         charged = {ability: replace(data.abilities[ability].cost, time=GameTime(steps=0)) for ability in _CHARGED}
         assert charged == _CHARGED
 
-    def test_three_quarters_of_what_an_order_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
-        """A refund does not depend on how far the work got, so a refund measured in game shows what the order was
+    def test_three_quarters_of_what_a_command_is_charged_is_what_cancelling_it_gave_back(self, path: Path) -> None:
+        """A refund does not depend on how far the work got, so a refund measured in game shows what the command was
         charged, and these costs must match it."""
         data = _tables(path)
         for ability, refund in _REFUNDED.items():
@@ -1172,10 +1172,10 @@ class TestARecordedGamesTables:
         ):
             assert data.abilities[ability].multi_unit, ability.name
 
-    def test_orders_given_apart_join_for_what_every_unit_carries_out_but_an_archon_s_merge_and_a_load_all(
+    def test_commands_given_apart_join_for_what_every_unit_carries_out_but_an_archon_s_merge_and_a_load_all(
         self, path: Path
     ) -> None:
-        """An archon's merge merges the two templar each of its orders names (in game), and one load-all naming two
+        """An archon's merge merges the two templar each of its commands names (in game), and one load-all naming two
         command centers took in the workers of one of them in one run (tool `sweep_orders`)."""
         data = _tables(path)
         kept_to_their_orders = {AbilityId.MORPH_ARCHON, AbilityId.LOAD_ALL}

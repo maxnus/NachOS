@@ -1,4 +1,4 @@
-"""The orders a bot gives: what goes out in a turn's request, and what the game refuses of it."""
+"""The commands a bot gives: what goes out in a turn's request, and what the game refuses of it."""
 
 # Each `type: ignore` below marks a call the type checker must reject, so an unneeded one fails.
 # pyright: reportUnnecessaryTypeIgnoreComment=true
@@ -39,7 +39,7 @@ _ATTACK = AbilityId.ATTACK
 _STIM = AbilityId.STIM
 _HOLD_FIRE = AbilityId.HOLD_FIRE_ON
 _CREEP_TUMOR = AbilityId.BUILD_CREEP_TUMOR
-# An action that goes out with the turn's orders and belongs to none of them.
+# An action that goes out with the turn's commands and belongs to none of them.
 _CHAT = sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(message="gg"))
 _TRAIN_MARINE = AbilityId.BARRACKS_TRAIN_MARINE
 _TRAIN_REAPER = AbilityId.BARRACKS_TRAIN_REAPER
@@ -102,7 +102,7 @@ def _verdict(result: ActionResult) -> error_pb2.ActionResult.ValueType:
 
 
 class _Game:
-    """An order book over a tracker, fed one observation at a time as `Api.play` feeds it."""
+    """A command book over a tracker, fed one observation at a time as `Api.play` feeds it."""
 
     def __init__(self, *verdicts: list[ActionResult], tables: GameData = _TABLES) -> None:
         """A game with `tables` that answers each flush with the next of `verdicts`, one result per action sent."""
@@ -125,7 +125,7 @@ class _Game:
         self.book._observe(GameTime(steps=step), lost)
 
     def flush(self, *, then: Sequence[sc2api_pb2.Action] = ()) -> sc2api_pb2.RequestAction | None:
-        """Send the turn's orders, and `then` after them, and return the request that went out, or `None` if none
+        """Send the turn's commands, and `then` after them, and return the request that went out, or `None` if none
         did."""
         before = len(self.transport.requests)
         self.book._send(self.client, then=then)
@@ -139,8 +139,8 @@ class _Game:
         return unit
 
     def refused(self) -> list[tuple[int, AbilityId | None, ActionResult]]:
-        """What the game refused of the turn last sent: the tag of each unit a refused command named, the ability
-        ordered, and the game's answer."""
+        """What the game refused of the turn last sent: the tag of each unit a refused action named, the ability
+        given, and the game's answer."""
         refused: list[tuple[int, AbilityId | None, ActionResult]] = []
         for failure in self.book._refusals:
             assert failure.unit is not None
@@ -174,11 +174,11 @@ def _commands(request: sc2api_pb2.RequestAction | None) -> list[raw_pb2.ActionRa
     return [action.action_raw.unit_command for action in request.actions if action.action_raw.HasField("unit_command")]
 
 
-class TestGivingAnOrder:
-    def test_an_order_goes_out_as_one_command_naming_every_unit_it_was_given_to(self) -> None:
+class TestGivingACommand:
+    def test_a_command_goes_out_as_one_action_naming_every_unit_it_was_given_to(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
-        order = game.book.command([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
+        given = game.book.command([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
 
         (command,) = _commands(game.flush())
 
@@ -186,10 +186,10 @@ class TestGivingAnOrder:
         assert list(command.unit_tags) == [1, 2]
         assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
         assert not command.queue_command
-        assert order.target == Point((20.0, 21.0))
+        assert given.target == Point((20.0, 21.0))
         assert game.refused() == []
 
-    def test_one_unit_is_given_an_order_without_a_collection(self) -> None:
+    def test_one_unit_is_given_a_command_without_a_collection(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=Point((20.0, 21.0)))
@@ -198,7 +198,7 @@ class TestGivingAnOrder:
 
         assert list(command.unit_tags) == [1]
 
-    def test_an_order_is_aimed_at_a_unit_or_at_nothing(self) -> None:
+    def test_a_command_is_aimed_at_a_unit_or_at_nothing(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         game.book.command(game.own(1), _ATTACK, target=game.own(2))
@@ -209,7 +209,7 @@ class TestGivingAnOrder:
         assert attack.target_unit_tag == 2
         assert stim.WhichOneof("target") is None
 
-    def test_a_queued_order_says_so(self) -> None:
+    def test_a_queued_command_says_so(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0), queued=True)
@@ -218,7 +218,7 @@ class TestGivingAnOrder:
 
         assert command.queue_command
 
-    def test_an_order_says_what_it_is_in_a_repr(self) -> None:
+    def test_a_command_says_what_it_is_in_a_repr(self) -> None:
         game = _Game()
         game.observe(0, _marine(1), _marine(2))
 
@@ -240,21 +240,21 @@ class TestGivingAnOrder:
             game.book.command(marine, _MOVE)
         assert game.flush() is None
 
-    def test_an_order_to_no_unit_is_a_mistake(self) -> None:
+    def test_a_command_to_no_unit_is_a_mistake(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))
 
         with pytest.raises(ValueError, match="needs a unit"):
             game.book.command([], _MOVE, target=(20.0, 21.0))
 
-    def test_a_turn_that_orders_nothing_sends_nothing(self) -> None:
+    def test_a_turn_that_commands_nothing_sends_nothing(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))
 
         assert game.flush() is None
         assert game.transport.requests == []
 
-    def test_actions_of_no_order_go_out_after_the_turns_commands(self) -> None:
+    def test_actions_of_no_command_go_out_after_the_turns_commands(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -267,7 +267,7 @@ class TestGivingAnOrder:
             (False, True),
         ]
 
-    def test_actions_of_no_order_go_out_with_no_command_too(self) -> None:
+    def test_actions_of_no_command_go_out_with_none_staged_too(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
 
@@ -277,19 +277,19 @@ class TestGivingAnOrder:
         assert len(request.actions) == 1
 
 
-class TestOrderingAUnitThroughItself:
+class TestCommandingAUnitThroughItself:
     """`unit.command(ability, ...)` is `api.commands.command(unit, ability, ...)`."""
 
-    def test_the_order_goes_into_the_book_as_the_book_would_have_taken_it(self) -> None:
+    def test_the_command_goes_into_the_book_as_the_book_would_have_taken_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         marine = game.own(1)
 
-        order = marine.command(_MOVE, target=(20.0, 21.0), queued=True)
+        given = marine.command(_MOVE, target=(20.0, 21.0), queued=True)
 
-        assert_type(order, Command)
-        assert game.book.staged == (order,)
-        assert (order.ability, order.units, order.target, order.queued) == (
+        assert_type(given, Command)
+        assert game.book.staged == (given,)
+        assert (given.ability, given.units, given.target, given.queued) == (
             _MOVE,
             Units([marine]),
             Point((20.0, 21.0)),
@@ -298,13 +298,13 @@ class TestOrderingAUnitThroughItself:
         (command,) = _commands(game.flush())
         assert (command.ability_id, list(command.unit_tags), command.queue_command) == (_MOVE, [1], True)
 
-    def test_an_order_given_only_an_ability_is_aimed_at_nothing_and_not_queued(self) -> None:
+    def test_a_command_given_only_an_ability_is_aimed_at_nothing_and_not_queued(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))
 
-        order = game.own(1).command(_STIM)
+        command = game.own(1).command(_STIM)
 
-        assert (order.target, order.queued) == (None, False)
+        assert (command.target, command.queued) == (None, False)
 
     def test_force_sends_it_to_a_unit_already_carrying_it_out(self) -> None:
         game = _Game([ActionResult.SUCCESS])
@@ -329,14 +329,14 @@ class TestOrderingAUnitThroughItself:
 
 
 def _made_up(*reports: UnitReport) -> tuple[MadeUpUnits, list[Any]]:
-    """Units of `reports` made up on the game's data NachOS ships, with the book they are ordered into."""
+    """Units of `reports` made up on the game's data NachOS ships, with the book they are commanded into."""
     made_up = MadeUpUnits()
     return made_up, made_up.observe(*reports)
 
 
 class TestTrainingBuildingAndResearching:
-    """`train`, `build` and `research` order the ability that makes a unit type or researches an upgrade, as `command`
-    orders it, on the game's own data."""
+    """`train`, `build` and `research` command the ability that makes a unit type or researches an upgrade, as
+    `command` does, on the game's own data."""
 
     def test_a_structure_trains_a_unit_with_its_own_ability(self) -> None:
         made_up, (barracks, gateway, warp_gate) = _made_up(
@@ -361,19 +361,19 @@ class TestTrainingBuildingAndResearching:
 
         assert larva.train(UnitTypeId.DRONE).ability is AbilityId.LARVA_MORPH_DRONE
 
-    def test_several_structures_train_with_one_order_where_their_types_share_the_ability(self) -> None:
+    def test_several_structures_train_with_one_command_where_their_types_share_the_ability(self) -> None:
         made_up, (command_center, orbital_command) = _made_up(
             UnitReport(1, UnitTypeId.COMMAND_CENTER), UnitReport(2, UnitTypeId.ORBITAL_COMMAND)
         )
 
-        order = made_up.commands.train([command_center, orbital_command], UnitTypeId.SCV)
+        command = made_up.commands.train([command_center, orbital_command], UnitTypeId.SCV)
 
-        assert (order.ability, order.units) == (
+        assert (command.ability, command.units) == (
             AbilityId.COMMAND_CENTER_TRAIN_SCV,
             Units([command_center, orbital_command]),
         )
 
-    def test_types_making_it_with_different_abilities_are_ordered_apart(self) -> None:
+    def test_types_making_it_with_different_abilities_are_commanded_apart(self) -> None:
         made_up, (gateway, warp_gate) = _made_up(UnitReport(1, UnitTypeId.GATEWAY), UnitReport(2, UnitTypeId.WARP_GATE))
 
         with pytest.raises(ValueError, match="a GATEWAY and a WARP_GATE make a ZEALOT with different abilities"):
@@ -390,19 +390,19 @@ class TestTrainingBuildingAndResearching:
         with pytest.raises(ValueError, match="^nothing makes an ARCHON$"):
             made_up.commands.train(high_templar, UnitTypeId.ARCHON)
 
-    def test_what_another_method_orders_raises_naming_it(self) -> None:
-        """A command center's orbital is a morph, which `command` orders, and an SCV's depot a build."""
+    def test_what_another_method_commands_raises_naming_it(self) -> None:
+        """A command center's orbital is a morph, which `command` gives, and an SCV's depot a build."""
         made_up, (command_center, scv) = _made_up(
             UnitReport(1, UnitTypeId.COMMAND_CENTER), UnitReport(2, UnitTypeId.SCV)
         )
 
         with pytest.raises(
-            ValueError, match="COMMAND_CENTER_MORPH_ORBITAL_COMMAND, which `command` orders, not `train`$"
+            ValueError, match="COMMAND_CENTER_MORPH_ORBITAL_COMMAND, which `command` gives, not `train`$"
         ):
             command_center.train(UnitTypeId.ORBITAL_COMMAND)
-        with pytest.raises(ValueError, match="SCV_BUILD_SUPPLY_DEPOT, which `build` orders, not `train`$"):
+        with pytest.raises(ValueError, match="SCV_BUILD_SUPPLY_DEPOT, which `build` gives, not `train`$"):
             made_up.commands.train(scv, UnitTypeId.SUPPLY_DEPOT)
-        with pytest.raises(ValueError, match="COMMAND_CENTER_TRAIN_SCV, which `train` orders, not `build`$"):
+        with pytest.raises(ValueError, match="COMMAND_CENTER_TRAIN_SCV, which `train` gives, not `build`$"):
             made_up.commands.build(command_center, UnitTypeId.SCV)
 
     def test_a_unit_that_trains_nothing_is_rejected_by_the_type_checker(self) -> None:
@@ -412,7 +412,7 @@ class TestTrainingBuildingAndResearching:
         with pytest.raises(ValueError, match="^a MARINE does not make a MARINE: a BARRACKS does$"):
             marine.train(UnitTypeId.MARINE)  # type: ignore
 
-    def test_no_unit_to_order_raises_as_issue_does(self) -> None:
+    def test_no_unit_to_command_raises_as_command_does(self) -> None:
         made_up = MadeUpUnits()
 
         with pytest.raises(ValueError, match="a command needs a unit to give it to"):
@@ -458,7 +458,7 @@ class TestTrainingBuildingAndResearching:
         with pytest.raises(ValueError, match="^nothing makes a bare REACTOR: a STARPORT makes a REACTOR_STARPORT$"):
             starport.build(UnitTypeId.REACTOR)
 
-    def test_a_build_raises_as_issue_does(self) -> None:
+    def test_a_build_raises_as_command_does(self) -> None:
         """Two workers at one site, and a build aimed at nothing."""
         made_up, (scv, other_scv) = _made_up(UnitReport(1, UnitTypeId.SCV), UnitReport(2, UnitTypeId.SCV))
 
@@ -519,8 +519,8 @@ class TestTrainingBuildingAndResearching:
         ]
         assert len(products) == len(set(products))
 
-    def test_train_orders_trains_warp_ins_and_a_larva_s_morphs_and_build_builds_and_add_ons(self) -> None:
-        """What the two methods order, by the game's names for it, over every type the game makes."""
+    def test_train_commands_trains_warp_ins_and_a_larva_s_morphs_and_build_builds_and_add_ons(self) -> None:
+        """What the two methods command, by the game's names for it, over every type the game makes."""
         book = MadeUpUnits().commands
         trained = {ability.name for ability in book._trained_abilities.values()}
         built = {ability.name for ability in book._built_abilities.values()}
@@ -529,8 +529,8 @@ class TestTrainingBuildingAndResearching:
         assert {"BUILD_CREEP_TUMOR", "RAVEN_SPAWN_AUTO_TURRET", "NYDUS_NETWORK_BUILD_NYDUS_WORM"}.isdisjoint(built)
 
 
-class TestOneOrderAUnitATurn:
-    def test_the_last_order_a_unit_was_given_is_the_one_sent(self) -> None:
+class TestOneCommandAUnitATurn:
+    def test_the_last_command_a_unit_was_given_is_the_one_sent(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -550,7 +550,7 @@ class TestOneOrderAUnitATurn:
 
         assert sent == [_STIM, _MOVE]
 
-    def test_an_order_keeps_the_units_a_later_order_did_not_take(self) -> None:
+    def test_a_command_keeps_the_units_a_later_command_did_not_take(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         game.book.command([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
@@ -561,7 +561,7 @@ class TestOneOrderAUnitATurn:
         assert list(move.unit_tags) == [1]
         assert list(attack.unit_tags) == [2]
 
-    def test_an_order_overridden_for_every_unit_is_never_sent(self) -> None:
+    def test_a_command_overridden_for_every_unit_is_never_sent(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         game.book.command([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
@@ -573,11 +573,11 @@ class TestOneOrderAUnitATurn:
     def test_staged_commands_say_what_the_turn_has_already_commanded_a_unit_and_are_empty_the_next(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
-        order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        command = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        assert game.own(1).staged_commands == (order,)
+        assert game.own(1).staged_commands == (command,)
         assert game.own(2).staged_commands == ()
-        assert game.book.staged == (order,)
+        assert game.book.staged == (command,)
 
         game.flush()
         game.observe(16, _marine(1), _marine(2))
@@ -589,12 +589,12 @@ class TestOneOrderAUnitATurn:
         """The game may show an order an observation late, as on the ladder."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
-        order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        command = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
         game.flush()
         game.observe(16, _marine(1))
 
         assert game.own(1).staged_commands == ()
-        assert game.own(1).pending_commands == (order,)
+        assert game.own(1).pending_commands == (command,)
 
         game.observe(32, _marine(1, _moving((20.0, 21.0))))
 
@@ -603,11 +603,11 @@ class TestOneOrderAUnitATurn:
     def test_pending_commands_keep_a_command_sent_queued_while_the_observations_may_not_show_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
-        order = game.book.command(game.own(1), _MOVE, target=(30.0, 31.0), queued=True, force=True)
+        command = game.book.command(game.own(1), _MOVE, target=(30.0, 31.0), queued=True, force=True)
         game.flush()
         game.observe(16, _marine(1, _moving((20.0, 21.0))))
 
-        assert game.own(1).pending_commands == (order,)
+        assert game.own(1).pending_commands == (command,)
 
         game.observe(32, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
@@ -618,11 +618,11 @@ class TestOneOrderAUnitATurn:
         the structure's orders show nothing would pay for a second on the ladder."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
-        order = game.book.command(game.own(1), _TRAIN_MARINE)
+        command = game.book.command(game.own(1), _TRAIN_MARINE)
         game.flush()
         game.observe(16, _barracks(1))
 
-        assert game.own(1).pending_commands == (order,)
+        assert game.own(1).pending_commands == (command,)
 
         game.observe(32, _barracks(1, _training()))
 
@@ -633,11 +633,11 @@ class TestOneOrderAUnitATurn:
         `pending_commands` and its buffs show nothing would stim it twice on the ladder."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
-        order = game.book.command(game.own(1), _STIM)
+        command = game.book.command(game.own(1), _STIM)
         game.flush()
         game.observe(16, _marine(1))
 
-        assert game.own(1).pending_commands == (order,)
+        assert game.own(1).pending_commands == (command,)
 
         game.observe(32, _marine(1))
 
@@ -734,9 +734,9 @@ class TestCommandsSince:
             game.own(1).commands(since=GameTime.ZERO)
 
 
-class TestAnOrderAUnitIsAlreadyCarryingOut:
-    """An unqueued order equal to a unit's first is answered `SUCCESS` and carries nothing out, but drops what the
-    unit had queued (in game)."""
+class TestACommandAUnitIsAlreadyCarryingOut:
+    """An unqueued command equal to a unit's first order is answered `SUCCESS` and carries nothing out, but drops
+    what the unit had queued (in game)."""
 
     def test_it_is_not_sent(self) -> None:
         game = _Game()
@@ -746,16 +746,16 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert game.flush() is None
 
-    def test_it_counts_as_issued_until_the_turn_is_sent(self) -> None:
+    def test_it_counts_as_staged_until_the_turn_is_sent(self) -> None:
         game = _Game()
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
 
-        order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        command = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        assert game.own(1).staged_commands == (order,)
-        assert game.book.staged == (order,)
+        assert game.own(1).staged_commands == (command,)
+        assert game.book.staged == (command,)
 
-    def test_each_turn_s_call_is_an_order_of_its_own(self) -> None:
+    def test_each_turn_s_call_is_a_command_of_its_own(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         first = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -767,7 +767,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         assert second is not first
         assert game.flush() is None
 
-    def test_it_takes_its_unit_from_the_turn_s_earlier_orders(self) -> None:
+    def test_it_takes_its_unit_from_the_turn_s_earlier_commands(self) -> None:
         game = _Game()
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
         game.book.command(game.own(1), _ATTACK, target=(30.0, 31.0))
@@ -775,7 +775,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert game.flush() is None
 
-    def test_a_later_order_to_its_unit_overrides_it(self) -> None:
+    def test_a_later_command_to_its_unit_overrides_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -785,7 +785,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert command.ability_id == _ATTACK
 
-    def test_withdrawing_it_lets_the_turn_s_earlier_order_go_out(self) -> None:
+    def test_withdrawing_it_lets_the_turn_s_earlier_command_go_out(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
         game.book.command(game.own(1), _ATTACK, target=(30.0, 31.0))
@@ -820,7 +820,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert game.flush() is None
 
-    def test_an_order_aimed_elsewhere_is_sent(self) -> None:
+    def test_a_command_aimed_elsewhere_is_sent(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
 
@@ -828,7 +828,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert len(_commands(game.flush())) == 1
 
-    def test_a_queued_order_is_sent(self) -> None:
+    def test_a_queued_command_is_sent(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
 
@@ -836,8 +836,8 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert len(_commands(game.flush())) == 1
 
-    def test_the_order_sent_last_turn_stands_for_what_the_unit_is_doing_until_it_can_show(self) -> None:
-        """On the ladder the observation after an order can still show what the unit did before (in game)."""
+    def test_the_command_sent_last_turn_stands_for_what_the_unit_is_doing_until_it_can_show(self) -> None:
+        """On the ladder the observation after a command can still show what the unit did before (in game)."""
         game = _Game([ActionResult.SUCCESS], [ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))))
         game.book.command(game.own(1), _ATTACK, target=(30.0, 31.0))
@@ -849,7 +849,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
         (command,) = _commands(game.flush())
         assert command.ability_id == _MOVE
 
-    def test_a_repeat_of_the_order_sent_last_turn_is_redundant_though_it_does_not_show_yet(self) -> None:
+    def test_a_repeat_of_the_command_sent_last_turn_is_redundant_though_it_does_not_show_yet(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -861,7 +861,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert game.flush() is None
 
-    def test_an_order_finished_within_a_turn_is_still_taken_for_what_the_unit_is_doing_on_the_next(self) -> None:
+    def test_a_command_finished_within_a_turn_is_still_taken_for_what_the_unit_is_doing_on_the_next(self) -> None:
         """In a stepped game the next observation already shows the unit idle, but on the ladder it might not."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
@@ -911,7 +911,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert game.flush() is None
 
-    def test_a_dead_unit_s_last_order_is_forgotten(self) -> None:
+    def test_a_dead_unit_s_last_command_is_forgotten(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -922,7 +922,7 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 
         assert unit.id not in game.book._last_sent
 
-    def test_an_order_to_a_unit_the_observation_left_out_is_sent(self) -> None:
+    def test_a_command_to_a_unit_the_observation_left_out_is_sent(self) -> None:
         """A marine in a transport is left out of the observation, though it is not dead."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0))), _marine(2))
@@ -938,8 +938,8 @@ class TestAnOrderAUnitIsAlreadyCarryingOut:
 class TestSieging:
     """`SIEGE` goes out as each type's own siege, aimed at nothing: a tank's siege mode, an observer's surveillance
     mode, an overseer's oversight mode. A liberator's is `LIBERATOR_SIEGE_AT`, its defender mode aimed at its zone:
-    ordered it at a point, it is a sieged liberator by the next observation, and reports
-    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; ordered it again, it is refused
+    given it at a point, it is a sieged liberator by the next observation, and reports
+    `LiberatorMorphtoAG_LiberatorAGMode` aimed at itself while its zone forms; given it again, it is refused
     `NotSupported` (in game). `UNSIEGE` goes out as each of the four's own."""
 
     def test_a_sieged_liberator_reads_as_carrying_out_its_siege(self) -> None:
@@ -1037,7 +1037,7 @@ def _sieged_liberator(tag: int) -> raw_pb2.Unit:
 class TestAGroupOfSeveralTypes:
     """Hold fire keeps a ghost's orders and replaces a burrowed lurker's (in game)."""
 
-    def test_it_leaves_a_unit_it_keeps_the_orders_of_the_order_it_was_given_before(self) -> None:
+    def test_it_leaves_a_unit_it_keeps_the_orders_of_the_command_it_was_given_before(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -1048,7 +1048,7 @@ class TestAGroupOfSeveralTypes:
         assert list(sent_move.unit_tags) == [1]
         assert list(sent_hold.unit_tags) == [1, 2]
 
-    def test_it_takes_a_unit_it_replaces_the_orders_of_from_the_order_it_was_given_before(self) -> None:
+    def test_it_takes_a_unit_it_replaces_the_orders_of_from_the_command_it_was_given_before(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         game.book.command(game.own(2), _ATTACK, target=(20.0, 21.0))
@@ -1058,7 +1058,7 @@ class TestAGroupOfSeveralTypes:
 
         assert sent.ability_id == _HOLD_FIRE
 
-    def test_a_later_order_takes_only_the_units_whose_orders_it_replaces(self) -> None:
+    def test_a_later_command_takes_only_the_units_whose_orders_it_replaces(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, make_unit(1, UnitTypeId.GHOST), make_unit(2, UnitTypeId.LURKER_BURROWED))
         game.book.command([game.own(1), game.own(2)], _ATTACK, target=(20.0, 21.0))
@@ -1094,14 +1094,14 @@ class TestUnloadingWhereTheTransportIs:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _medivac(1))
 
-        order = game.book.command(game.own(1), _UNLOAD)
+        given = game.book.command(game.own(1), _UNLOAD)
 
         (command,) = _commands(game.flush())
         assert command.ability_id == _UNLOAD_AT
         assert command.target_unit_tag == 1
         assert list(command.unit_tags) == [1]
-        assert order.ability is _UNLOAD
-        assert order.target is None
+        assert given.ability is _UNLOAD
+        assert given.target is None
 
     def test_a_bunker_and_a_medivac_go_out_each_as_it_takes_it(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
@@ -1121,7 +1121,7 @@ class TestUnloadingWhereTheTransportIs:
 
         assert [command.ability_id for command in _commands(game.flush())] == [_MOVE, _UNLOAD_AT]
 
-    def test_a_group_is_sent_one_command_a_transport_and_each_refusal_is_listed(self) -> None:
+    def test_a_group_is_sent_one_action_a_transport_and_each_refusal_is_listed(self) -> None:
         game = _Game([ActionResult.ERROR, ActionResult.SUCCESS, ActionResult.ERROR])
         game.observe(0, _medivac(1), _medivac(2), _medivac(3))
 
@@ -1144,7 +1144,7 @@ class TestUnloadingWhereTheTransportIs:
 
         assert game.refused() == [(1, _UNLOAD, ActionResult.NOT_SUPPORTED), (2, _UNLOAD, ActionResult.ERROR)]
 
-    def test_an_unload_at_a_sibling_transport_is_fine_for_a_transport_ordered_alone(self) -> None:
+    def test_an_unload_at_a_sibling_transport_is_fine_for_a_transport_commanded_alone(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _medivac(1), _medivac(2))
 
@@ -1153,7 +1153,7 @@ class TestUnloadingWhereTheTransportIs:
         (command,) = _commands(game.flush())
         assert command.target_unit_tag == 2
 
-    def test_an_order_after_it_is_answered_by_its_own_result(self) -> None:
+    def test_a_command_after_it_is_answered_by_its_own_result(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED])
         game.observe(0, _medivac(1), _medivac(2), _marine(3))
 
@@ -1181,10 +1181,10 @@ class TestUnloadingWhereTheTransportIs:
         assert command.ability_id == _UNLOAD_AT
 
 
-class TestForcingAnOrder:
-    """`force` sends an order to a unit already carrying it out, which drops what it has queued (in game)."""
+class TestForcingACommand:
+    """`force` sends a command to a unit already carrying it out, which drops what it has queued (in game)."""
 
-    def test_an_order_the_unit_is_already_carrying_out_is_sent(self) -> None:
+    def test_a_command_the_unit_is_already_carrying_out_is_sent(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
@@ -1194,7 +1194,7 @@ class TestForcingAnOrder:
         assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
         assert not command.queue_command
 
-    def test_the_order_sent_last_turn_is_sent_again_though_it_does_not_show_yet(self) -> None:
+    def test_the_command_sent_last_turn_is_sent_again_though_it_does_not_show_yet(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS], [ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -1215,7 +1215,7 @@ class TestForcingAnOrder:
         (command,) = _commands(game.flush())
         assert list(command.unit_tags) == [1, 2]
 
-    def test_a_later_order_still_overrides_it(self) -> None:
+    def test_a_later_command_still_overrides_it(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1, _moving((20.0, 21.0)), _moving((30.0, 31.0))))
 
@@ -1239,7 +1239,7 @@ class TestForcingAnOrder:
 
 
 class TestWhatTheGameRefused:
-    def test_a_refused_order_is_listed_with_the_ability_ordered_and_the_game_s_answer(self) -> None:
+    def test_a_refused_command_is_listed_with_the_ability_given_and_the_game_s_answer(self) -> None:
         game = _Game([ActionResult.NOT_SUPPORTED])
         game.observe(16, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -1250,7 +1250,7 @@ class TestWhatTheGameRefused:
         (failure,) = game.book._refusals
         assert failure.time == GameTime(steps=16)
 
-    def test_a_refused_command_is_listed_once_for_each_unit_it_named(self) -> None:
+    def test_a_refused_action_is_listed_once_for_each_unit_it_named(self) -> None:
         game = _Game([ActionResult.ERROR])
         game.observe(0, _marine(1), _marine(2))
         game.book.command([game.own(1), game.own(2)], _MOVE, target=(20.0, 21.0))
@@ -1270,7 +1270,7 @@ class TestWhatTheGameRefused:
         assert game.flush() is None
         assert game.refused() == []
 
-    def test_an_action_of_no_order_the_game_refuses_is_no_order_s_refusal(self) -> None:
+    def test_an_action_of_no_command_the_game_refuses_is_no_command_s_refusal(self) -> None:
         game = _Game([ActionResult.ERROR])
         game.observe(0, _marine(1))
 
@@ -1278,7 +1278,7 @@ class TestWhatTheGameRefused:
 
         assert game.refused() == []
 
-    def test_a_refused_order_is_not_taken_for_what_its_unit_is_doing(self) -> None:
+    def test_a_refused_command_is_not_taken_for_what_its_unit_is_doing(self) -> None:
         game = _Game([ActionResult.NOT_SUPPORTED], [ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -1289,7 +1289,7 @@ class TestWhatTheGameRefused:
 
         assert len(_commands(game.flush())) == 1
 
-    def test_only_the_units_of_a_command_taken_are_doing_it(self) -> None:
+    def test_only_the_units_of_an_action_taken_are_doing_it(self) -> None:
         """A sieged tank and a sieged liberator are each sent their own unsiege, and here the game takes only the
         tank's."""
         game = _Game([ActionResult.SUCCESS, ActionResult.NOT_SUPPORTED], [ActionResult.SUCCESS])
@@ -1304,7 +1304,7 @@ class TestWhatTheGameRefused:
         assert list(command.unit_tags) == [2]
 
 
-class TestOrdersThatQueue:
+class TestCommandsThatQueue:
     """A train queues behind what a structure is making, so it is neither a duplicate nor a replacement (in game)."""
 
     def test_a_train_is_sent_though_the_structure_is_already_making_one(self) -> None:
@@ -1322,9 +1322,9 @@ class TestATargetOffTheGround:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1))
 
-        order = game.book.command(game.own(1), _MOVE, target=Point3D((20.0, 21.0, 5.0)))
+        given = game.book.command(game.own(1), _MOVE, target=Point3D((20.0, 21.0, 5.0)))
 
-        assert order.target == Point((20.0, 21.0))
+        assert given.target == Point((20.0, 21.0))
         (command,) = _commands(game.flush())
         assert (command.target_world_space_pos.x, command.target_world_space_pos.y) == (20.0, 21.0)
 
@@ -1366,8 +1366,8 @@ class TestWhatAStructureDoesBesidesMaking:
         assert sent == [_TRAIN_MARINE, _SMART]
 
 
-class TestAQueuedOrder:
-    def test_a_queued_order_goes_out_beside_the_unqueued_one_it_follows(self) -> None:
+class TestAQueuedCommand:
+    def test_a_queued_command_goes_out_beside_the_unqueued_one_it_follows(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -1378,7 +1378,7 @@ class TestAQueuedOrder:
         assert (first.ability_id, first.queue_command) == (_MOVE, False)
         assert (second.ability_id, second.queue_command) == (_ATTACK, True)
 
-    def test_an_unqueued_order_after_a_queued_one_takes_the_unit_from_nothing(self) -> None:
+    def test_an_unqueued_command_after_a_queued_one_takes_the_unit_from_nothing(self) -> None:
         game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
         game.observe(0, _marine(1))
         game.book.command(game.own(1), _ATTACK, target=(30.0, 31.0), queued=True)
@@ -1389,15 +1389,15 @@ class TestAQueuedOrder:
 
 class TestAPointAsTheGameReadsIt:
     def test_a_target_is_kept_as_the_protocol_carries_it(self) -> None:
-        """A coordinate goes out as a 32-bit float, so the point an order holds is the one the game reports back."""
+        """A coordinate goes out as a 32-bit float, so the point a command holds is the one the game reports back."""
         game = _Game()
         # Rounded to 1/4096 this reads one step lower than the 32-bit float the game is given.
         crossing = 157.123288015625
         game.observe(0, _marine(1))
 
-        order = game.book.command(game.own(1), _MOVE, target=(crossing, 3.0))
+        command = game.book.command(game.own(1), _MOVE, target=(crossing, 3.0))
 
-        assert order.target == Point((157.123291015625, 3.0))
+        assert command.target == Point((157.123291015625, 3.0))
 
     def test_two_targets_are_the_same_exactly_when_the_game_keeps_them_as_one(self) -> None:
         game = _Game()
@@ -1411,7 +1411,7 @@ class TestAPointAsTheGameReadsIt:
         assert same_target(points[0], points[1])
         assert not same_target(points[0], points[2])
 
-    def test_an_order_at_it_matches_the_point_the_game_reports(self) -> None:
+    def test_a_command_at_it_matches_the_point_the_game_reports(self) -> None:
         game = _Game()
         crossing = 157.123288015625
         game.observe(0, _marine(1, _moving((crossing, 3.0))))
@@ -1421,23 +1421,23 @@ class TestAPointAsTheGameReadsIt:
         assert game.flush() is None
 
 
-class TestWhatAnOrderStopsCountingFor:
-    def test_an_order_withdrawn_before_the_turn_ends_is_never_sent(self) -> None:
+class TestWhatACommandStopsCountingFor:
+    def test_a_command_withdrawn_before_the_turn_ends_is_never_sent(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))
-        order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        command = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
 
-        order.withdraw()
+        command.withdraw()
 
         assert game.flush() is None
 
-    def test_a_withdrawn_order_speaks_for_no_unit(self) -> None:
+    def test_a_withdrawn_command_speaks_for_no_unit(self) -> None:
         game = _Game()
         game.observe(0, _marine(1))
-        order = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
-        assert game.own(1).staged_commands == (order,)
+        command = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
+        assert game.own(1).staged_commands == (command,)
 
-        order.withdraw()
+        command.withdraw()
 
         assert game.own(1).staged_commands == ()
         assert game.book.staged == ()
@@ -1457,7 +1457,7 @@ class TestTellingAStructureToMakeTwo:
         assert (two.ability_id, two.queue_command) == (_TRAIN_MARINE, True)
 
     def test_a_second_unqueued_train_takes_the_structure_from_the_first(self) -> None:
-        """The game would queue it and pay for it from the step it was ordered."""
+        """The game would queue it and pay for it from the step it was given."""
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _barracks(1))
         game.book.command(game.own(1), _TRAIN_MARINE)
@@ -1468,7 +1468,7 @@ class TestTellingAStructureToMakeTwo:
         assert command.ability_id == _TRAIN_REAPER
 
 
-# Orders that cost. These tables give them a cost, as the game's do.
+# Commands that cost. These tables give them a cost, as the game's do.
 _BUILD_DEPOT = AbilityId.SCV_BUILD_SUPPLY_DEPOT
 _BUILD_REACTOR = AbilityId.BUILD_REACTOR
 _DRONE = AbilityId.LARVA_MORPH_DRONE
@@ -1518,7 +1518,7 @@ _COSTING_TABLES = make_tables(
 
 
 def _costing(*verdicts: list[ActionResult]) -> _Game:
-    """A game whose tables give what is ordered a cost."""
+    """A game whose tables give what is commanded a cost."""
     return _Game(*verdicts, tables=_COSTING_TABLES)
 
 
@@ -1553,8 +1553,8 @@ def _sent(request: sc2api_pb2.RequestAction | None) -> list[tuple[int, list[int]
     return sent
 
 
-class TestAnOrderThatCosts:
-    """Every order goes out in the turn it was given, as given, though the game charges it then (in game)."""
+class TestACommandThatCosts:
+    """Every command goes out in the turn it was given, as given, though the game charges it then (in game)."""
 
     def test_a_build_goes_out_at_once_however_far_its_worker_is_from_the_site(self) -> None:
         game = _costing([ActionResult.SUCCESS])
@@ -1606,9 +1606,9 @@ class TestAnOrderThatCosts:
         assert _sent(game.flush()) == [(_BUILD_DEPOT, [1], _SITE, False)]
 
 
-class TestAnOrderToSeveralUnits:
-    """One command naming several units has only one of them carry out a build, a train, a research, a morph or a
-    spell, and each unit given such an order in a command of its own carries it out where there is room for each
+class TestACommandToSeveralUnits:
+    """One action naming several units has only one of them carry out a build, a train, a research, a morph or a
+    spell, and each unit given such a command in an action of its own carries it out where there is room for each
     (tool `sweep_orders`, `one-command-many-makers` and `one-command-each`)."""
 
     @pytest.mark.parametrize(
@@ -1616,7 +1616,7 @@ class TestAnOrderToSeveralUnits:
         [(_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE), (_barracks, _BUILD_REACTOR, None)],
         ids=["a train", "a spell", "an add-on where each stands"],
     )
-    def test_an_order_one_unit_of_a_command_carries_out_goes_to_each_in_a_command_of_its_own(
+    def test_a_command_one_unit_of_an_action_carries_out_goes_to_each_in_an_action_of_its_own(
         self, make: Any, ability: AbilityId, target: tuple[float, float] | None
     ) -> None:
         game = _costing([ActionResult.SUCCESS] * 3)
@@ -1626,8 +1626,8 @@ class TestAnOrderToSeveralUnits:
 
         assert _sent(game.flush()) == [(ability, [tag], target, False) for tag in (1, 2, 3)]
 
-    def test_an_order_whose_ability_this_game_s_tables_lack_is_sent_as_its_ability_goes(self) -> None:
-        """A move goes out as one command naming them all, and a train as a command to each, row or not."""
+    def test_a_command_whose_ability_this_game_s_tables_lack_is_sent_as_its_ability_goes(self) -> None:
+        """A move goes out as one action naming them all, and a train as an action to each, row or not."""
         game = _Game([ActionResult.SUCCESS] * 3, tables=make_tables())
         game.observe(0, _marine(1), _marine(2), _barracks(3), _barracks(4))
 
@@ -1640,7 +1640,7 @@ class TestAnOrderToSeveralUnits:
             (_TRAIN_MARINE, [4], None, False),
         ]
 
-    def test_a_move_to_several_goes_out_as_one_command(self) -> None:
+    def test_a_move_to_several_goes_out_as_one_action(self) -> None:
         game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1), _scv(2))
 
@@ -1658,7 +1658,7 @@ class TestAnOrderToSeveralUnits:
         assert train.units == Units([game.own(1)])
         assert _sent(game.flush()) == [(_TRAIN_MARINE, [1], None, False), (_MOVE, [2, 3], _SITE, False)]
 
-    def test_what_the_game_refuses_of_a_command_each_is_listed_for_its_unit(self) -> None:
+    def test_what_the_game_refuses_of_an_action_each_is_listed_for_its_unit(self) -> None:
         game = _costing([ActionResult.SUCCESS, ActionResult.NOT_ENOUGH_MINERALS, ActionResult.SUCCESS])
         game.observe(0, _barracks(1), _barracks(2), _barracks(3))
 
@@ -1693,10 +1693,10 @@ class TestAnOrderToSeveralUnits:
             "a warp-in",
         ],
     )
-    def test_an_order_only_one_of_them_can_carry_out_given_to_several_raises(
+    def test_a_command_only_one_of_them_can_carry_out_given_to_several_raises(
         self, make: Any, ability: AbilityId, target: tuple[float, float] | int | None, reason: str
     ) -> None:
-        """Two engineering bays given the same research in a command each research it once, two SCVs given a depot at
+        """Two engineering bays given the same research in an action each research it once, two SCVs given a depot at
         one site are both charged until the second gives up, and of two flying barracks given a landing, two spine
         crawlers a rooting and two warp gates a warp-in, each at one point, one carries it out (tool `sweep_orders`,
         `one-command-each`)."""
@@ -1710,7 +1710,7 @@ class TestAnOrderToSeveralUnits:
 
         assert game.book.staged == ()
 
-    def test_an_order_that_costs_nothing_still_goes_to_the_one_not_doing_it(self) -> None:
+    def test_a_command_that_costs_nothing_still_goes_to_the_one_not_doing_it(self) -> None:
         game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1, _moving(_SITE)), _scv(2, at=(40.0, 40.0)))
 
@@ -1729,12 +1729,12 @@ class TestAnOrderToSeveralUnits:
         assert [failure.action_result for failure in game.book._refusals] == [ActionResult.NOT_SUPPORTED]
 
 
-class TestOrdersGivenApart:
-    """Orders of an ability every unit of a command carries out, aimed at one target and queued alike, go out as one
-    command, as if one order had named all their units, unless that would send a unit's commands out of the order it
-    was given them."""
+class TestCommandsGivenApart:
+    """Commands of an ability every unit of an action carries out, aimed at one target and queued alike, go out as
+    one action, as if one command had named all their units, unless that would send a unit's commands out of the
+    order it was given them."""
 
-    def test_two_units_ordered_apart_to_one_point_go_out_in_one_command(self) -> None:
+    def test_two_units_commanded_apart_to_one_point_go_out_in_one_action(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
 
@@ -1754,7 +1754,7 @@ class TestOrdersGivenApart:
 
         assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False)]
 
-    def test_two_units_ordered_apart_at_one_unit_go_out_in_one_command(self) -> None:
+    def test_two_units_commanded_apart_at_one_unit_go_out_in_one_action(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2), make_unit(9, at=(20.0, 21.0), alliance=Alliance.ENEMY))
         enemy = game.tracker.unit_tracker.by_tag(9)
@@ -1770,7 +1770,7 @@ class TestOrdersGivenApart:
         [(_MOVE, (20.0, 22.0), False), (_MOVE, (20.0, 21.0), True), (_ATTACK, (20.0, 21.0), False)],
         ids=["at another point", "queued", "of another ability"],
     )
-    def test_an_order_that_differs_goes_out_in_a_command_of_its_own(
+    def test_a_command_that_differs_goes_out_in_an_action_of_its_own(
         self, ability: AbilityId, target: tuple[float, float], queued: bool
     ) -> None:
         game = _Game([ActionResult.SUCCESS] * 2)
@@ -1781,7 +1781,7 @@ class TestOrdersGivenApart:
 
         assert _sent(game.flush()) == [(_MOVE, [1], (20.0, 21.0), False), (ability, [2], target, queued)]
 
-    def test_orders_at_two_units_go_out_apart(self) -> None:
+    def test_commands_at_two_units_go_out_apart(self) -> None:
         game = _Game([ActionResult.SUCCESS] * 2)
         game.observe(0, _marine(1), _marine(2), *(make_unit(tag, alliance=Alliance.ENEMY) for tag in (8, 9)))
 
@@ -1798,7 +1798,7 @@ class TestOrdersGivenApart:
         [(_barracks, _TRAIN_MARINE, None), (_templar, _STORM, _SITE)],
         ids=["a train", "a spell at one point"],
     )
-    def test_an_ability_one_unit_of_a_command_carries_out_goes_to_each_in_a_command_of_its_own(
+    def test_an_ability_one_unit_of_an_action_carries_out_goes_to_each_in_an_action_of_its_own(
         self, make: Any, ability: AbilityId, target: tuple[float, float] | None
     ) -> None:
         game = _costing([ActionResult.SUCCESS] * 2)
@@ -1844,7 +1844,7 @@ class TestOrdersGivenApart:
         ]
         assert sent == [(_UNLOAD_AT, [1], 1), (_UNLOAD_AT, [2], 2)]
 
-    def test_an_archon_merge_joins_no_other_order(self) -> None:
+    def test_an_archon_merge_joins_no_other_command(self) -> None:
         """Each merges the two templar it names (in game)."""
         game = _Game([ActionResult.SUCCESS] * 2)
         game.observe(0, *(_templar(tag) for tag in (1, 2, 3, 4)))
@@ -1854,7 +1854,7 @@ class TestOrdersGivenApart:
 
         assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1, 2], [3, 4]]
 
-    def test_an_order_joins_a_command_it_does_not_follow_directly(self) -> None:
+    def test_a_command_joins_an_action_it_does_not_follow_directly(self) -> None:
         game = _Game([ActionResult.SUCCESS] * 2)
         game.observe(0, _marine(1), _marine(2))
 
@@ -1864,8 +1864,8 @@ class TestOrdersGivenApart:
 
         assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False), (_ATTACK, [1, 2], (30.0, 31.0), True)]
 
-    def test_a_unit_s_queued_order_stays_behind_its_unqueued_one(self) -> None:
-        """Joining the first command would send the second marine's queued move ahead of its move, which would then
+    def test_a_unit_s_queued_command_stays_behind_its_unqueued_one(self) -> None:
+        """Joining the first action would send the second marine's queued move ahead of its move, which would then
         replace it."""
         game = _Game([ActionResult.SUCCESS] * 3)
         game.observe(0, _marine(1), _marine(2))
@@ -1880,9 +1880,9 @@ class TestOrdersGivenApart:
             (_MOVE, [2], (20.0, 21.0), True),
         ]
 
-    def test_a_command_names_a_unit_once(self) -> None:
-        """A stim leaves a marine's orders as they are, so both of its stims go out, in a command each; the game would
-        count its tag once in one command (tool `sweep_orders`)."""
+    def test_an_action_names_a_unit_once(self) -> None:
+        """A stim leaves a marine's orders as they are, so both of its stims go out, in an action each; the game would
+        count its tag once in one action (tool `sweep_orders`)."""
         game = _Game([ActionResult.SUCCESS] * 2)
         game.observe(0, _marine(1), _marine(2))
 
@@ -1893,8 +1893,8 @@ class TestOrdersGivenApart:
         assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1, 2], [1]]
 
     def test_an_unload_at_a_transport_joins_none_of_that_transport_s_own_unload(self) -> None:
-        """The medivac unloading where it stands is sent its unload at a point aimed at itself, which one command with
-        the other's would aim at one of its own units, as `command` refuses for one order."""
+        """The medivac unloading where it stands is sent its unload at a point aimed at itself, which one action with
+        the other's would aim at one of its own units, as `command` refuses for one command."""
         for unload_first in (False, True):
             game = _Game([ActionResult.SUCCESS] * 2)
             game.observe(0, _medivac(1), _medivac(2))
@@ -1924,8 +1924,8 @@ class TestOrdersGivenApart:
             ([1, 2], 2),
         ]
 
-    def test_a_load_all_joins_no_other_order(self) -> None:
-        """One command naming two command centers took in the workers of one of them in one run and of both in the
+    def test_a_load_all_joins_no_other_command(self) -> None:
+        """One action naming two command centers took in the workers of one of them in one run and of both in the
         next (tool `sweep_orders`)."""
         game = _Game([ActionResult.SUCCESS] * 2)
         game.observe(0, *(make_unit(tag, UnitTypeId.COMMAND_CENTER, at=(12.0 * tag, 12.0)) for tag in (1, 2)))
@@ -1935,8 +1935,8 @@ class TestOrdersGivenApart:
 
         assert [list(command.unit_tags) for command in _commands(game.flush())] == [[1], [2]]
 
-    def test_no_unit_s_orders_go_out_in_another_order_than_it_was_given_them(self) -> None:
-        """Turns of orders to three marines, two medivacs and a barracks, made up at random: a move or an attack at
+    def test_no_unit_s_commands_go_out_in_another_order_than_it_was_given_them(self) -> None:
+        """Turns of commands to three marines, two medivacs and a barracks, made up at random: a move or an attack at
         one of two points, at an enemy or at a marine, a stim, an unload where each medivac stands or at the other
         medivac, and a train, queued or not."""
         rng = random.Random(7)
@@ -1969,11 +1969,11 @@ class TestOrdersGivenApart:
             actions_to_send = actions_giving(sent)
 
             for unit in (*marines, *medivacs, game.own(6)):
-                given = [order for order, units in sent if unit in units]
+                given = [command for command, units in sent if unit in units]
                 named_in = [
-                    order
+                    command
                     for action_to_send in actions_to_send
-                    for order, units in action_to_send.parts
+                    for command, units in action_to_send.parts
                     if unit in units
                 ]
                 assert named_in == given
@@ -1985,7 +1985,7 @@ class TestOrdersGivenApart:
             joined += sum(len(action_to_send.parts) - 1 for action_to_send in actions_to_send)
         assert joined > 0
 
-    def test_a_refused_command_is_listed_once_for_each_unit_of_each_order_it_carried(self) -> None:
+    def test_a_refused_action_is_listed_once_for_each_unit_of_each_command_it_carried(self) -> None:
         game = _Game([ActionResult.ERROR, ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2), _marine(3), _marine(4))
 
@@ -2000,7 +2000,7 @@ class TestOrdersGivenApart:
             (3, _MOVE, ActionResult.ERROR),
         ]
 
-    def test_each_order_of_a_command_the_game_took_is_sent_to_its_own_units(self) -> None:
+    def test_each_command_of_an_action_the_game_took_is_sent_to_its_own_units(self) -> None:
         game = _Game([ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2), _marine(3))
         first = game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -2013,7 +2013,7 @@ class TestOrdersGivenApart:
         assert game.own(2).pending_commands == (second,)
         assert game.own(3).pending_commands == (second,)
 
-    def test_no_order_of_a_refused_command_is_taken_for_what_its_units_are_doing(self) -> None:
+    def test_no_command_of_a_refused_action_is_taken_for_what_its_units_are_doing(self) -> None:
         game = _Game([ActionResult.ERROR], [ActionResult.SUCCESS])
         game.observe(0, _marine(1), _marine(2))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
@@ -2036,8 +2036,8 @@ class TestOrdersGivenApart:
             game.flush()
 
 
-class TestWhatTheTurnsOrdersCost:
-    def test_staged_cost_is_what_the_turn_s_orders_cost(self) -> None:
+class TestWhatTheTurnsCommandsCost:
+    def test_staged_cost_is_what_the_turn_s_commands_cost(self) -> None:
         game = _costing()
         game.observe(0, _scv(1), _barracks(2))
 
@@ -2046,7 +2046,7 @@ class TestWhatTheTurnsOrdersCost:
 
         assert game.book.staged_cost == Cost(150, 50)
 
-    def test_staged_cost_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
+    def test_staged_cost_counts_only_the_last_of_commands_that_replace_one_another(self) -> None:
         game = _costing()
         game.observe(0, _scv(1), _barracks(2))
         game.book.command(game.own(1), _BUILD_DEPOT, target=_SITE)
@@ -2056,7 +2056,7 @@ class TestWhatTheTurnsOrdersCost:
 
         assert game.book.staged_cost == Cost(150, 0)
 
-    def test_staged_cost_counts_an_order_to_several_once_for_each(self) -> None:
+    def test_staged_cost_counts_a_command_to_several_once_for_each(self) -> None:
         game = _costing()
         game.observe(0, _barracks(1), _barracks(2), _barracks(3, _training()))
 
@@ -2082,7 +2082,7 @@ class TestWhatTheTurnsOrdersCost:
         assert game.book.staged_cost == Cost(0, 0)
         assert game.book.staged
 
-    def test_staged_cost_leaves_out_a_withdrawn_order_and_what_went_out(self) -> None:
+    def test_staged_cost_leaves_out_a_withdrawn_command_and_what_went_out(self) -> None:
         game = _costing([ActionResult.SUCCESS])
         game.observe(0, _scv(1), _barracks(2))
         game.book.command(game.own(1), _BUILD_DEPOT, target=_SITE)
@@ -2105,8 +2105,8 @@ class TestAVerdictNachosCannotName:
             ActionResult.read(250)
 
 
-class _OrderingBot:
-    """A bot that gives a few orders and keeps each, to see what the real game makes of them."""
+class _CommandingBot:
+    """A bot that gives a few commands and keeps each, to see what the real game makes of them."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -2118,7 +2118,7 @@ class _OrderingBot:
         self.killed: OwnUnit[Any] | None = None
 
     def turn(self, event: TurnEvent) -> None:
-        """Give the next order not yet given, one per turn."""
+        """Give the next command not yet given, one per turn."""
         api = self.api
         marines = api.units.own.of_type(UnitTypeId.GHOST)
         middle = api.map.playable_area.center
@@ -2191,7 +2191,7 @@ class _UnloadingBot:
 
 
 class _SiegingBot:
-    """A bot that sieges a liberator, then orders the same siege again on two turns from 32 steps later."""
+    """A bot that sieges a liberator, then gives the same siege again on two turns from 32 steps later."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -2216,14 +2216,14 @@ class _SiegingBot:
             self.sieges.append(api.commands.command(liberator, _SIEGE_AT, target=self.zone))
 
     def _siege_due(self, step: int) -> bool:
-        """Whether to order the siege now: at once, then on two turns from 32 steps later, while the liberator still
+        """Whether to give the siege now: at once, then on two turns from 32 steps later, while the liberator still
         shows the first."""
         return not self.sieges or (len(self.sieges) < 3 and step >= self.sieges[0].time.steps + 32)
 
 
 class _GroupSiegingBot:
     """A bot that sieges a tank, and a liberator at its zone, each by its own siege, and once both are sieged,
-    unsieges them in one order."""
+    unsieges them in one command."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -2256,7 +2256,7 @@ class _GroupSiegingBot:
 
 
 class _GroupUnloadingBot:
-    """A bot that loads a bunker and a medivac with a marine each, then unloads both in one order."""
+    """A bot that loads a bunker and a medivac with a marine each, then unloads both in one command."""
 
     def __init__(self, api: Api, player: int) -> None:
         self.api = api
@@ -2306,7 +2306,7 @@ class _ProductionBot:
         self.api = api
         self.player = player
         self.made = False
-        self.ordered = False
+        self.commanded = False
         self.reads: list[tuple[int, float | None, float | None]] = []
         self.times_left: list[tuple[int, float]] = []
         self.marine_times_left: list[tuple[int, float]] = []
@@ -2327,12 +2327,12 @@ class _ProductionBot:
             ]
             api.client.debug([*(debug_pb2.DebugCommand(game_state=cheat) for cheat in cheats), *creates])
             self.made = True
-        elif not self.ordered and barracks and bays:
+        elif not self.commanded and barracks and bays:
             api.commands.command(barracks[0], _TRAIN_MARINE)
             api.commands.command(barracks[0], _TRAIN_MARINE, queued=True)
             api.commands.command(bays[0], AbilityId.ENGINEERING_BAY_RESEARCH_INFANTRY_WEAPONS_1)
-            self.ordered = True
-        elif self.ordered:
+            self.commanded = True
+        elif self.commanded:
             research = api.researches.get(UpgradeId.TERRAN_INFANTRY_WEAPONS_1)
             progress = None if research is None else research.fraction
             marines = api.in_production(UnitType.Marine)
@@ -2349,7 +2349,7 @@ class _ProductionBot:
 
 class _GroupTrainingBot:
     """A terran bot that raises three barracks by debug command under cheats for supply and resources, gives all three
-    a marine in one order, and records what the turn's orders cost then and each turn after how many marines are in
+    a marine in one command, and records what the turn's commands cost then and each turn after how many marines are in
     production."""
 
     race = Race.TERRAN
@@ -2394,15 +2394,15 @@ def _create(unit_type: UnitTypeId, at: Point, owner: int, *, quantity: int) -> d
 
 @pytest.mark.integration
 class TestAgainstTheRealGame:
-    """Run with `pytest -m integration`. Plays a minute of a game, giving orders as a bot would."""
+    """Run with `pytest -m integration`. Plays a minute of a game, giving commands as a bot would."""
 
-    def test_orders_go_out_each_turn_and_what_the_game_refuses_is_listed(self) -> None:
-        bot, failures = _play_a_minute(_OrderingBot)
+    def test_commands_go_out_each_turn_and_what_the_game_refuses_is_listed(self) -> None:
+        bot, failures = _play_a_minute(_CommandingBot)
 
         assert bot.moved is not None
         # Hold fire and a move to the same ghost both go out; neither overrides the other.
         assert bot.stim is not None and bot.stimmed_move is not None
-        # An order to a dead unit's tag is refused (in game), and nothing else is.
+        # A command to a dead unit's tag is refused (in game), and nothing else is.
         assert bot.at_a_dead_tag is not None
         refused = [(failure.unit, failure.ability, failure.action_result) for failure in failures]
         assert refused == [(bot.killed, _MOVE, ActionResult.ERROR)]
@@ -2428,14 +2428,14 @@ class TestAgainstTheRealGame:
         bot, failures = _play_a_minute(_SiegingBot)
 
         print("the liberator, turn by turn:", bot.reported[:12])
-        print("sieges:", [order.time.steps for order in bot.sieges], "refused or given up:", failures)
+        print("sieges:", [siege.time.steps for siege in bot.sieges], "refused or given up:", failures)
         refused = [(failure.time.steps, failure.ability, failure.action_result) for failure in failures]
-        assert refused == [(order.time.steps, _SIEGE_AT, ActionResult.NOT_SUPPORTED) for order in bot.sieges[1:]]
+        assert refused == [(siege.time.steps, _SIEGE_AT, ActionResult.NOT_SUPPORTED) for siege in bot.sieges[1:]]
         # Each order as its ability and whether it is aimed at the liberator itself.
         (first, *_) = (orders for _, unit_type, orders in bot.reported if unit_type is UnitTypeId.LIBERATOR_SIEGED)
         assert first == [(_SIEGE_AT, True)]
 
-    def test_a_tank_and_a_liberator_siege_by_their_own_orders_and_unsiege_in_one(self) -> None:
+    def test_a_tank_and_a_liberator_siege_by_their_own_commands_and_unsiege_in_one(self) -> None:
         bot, failures = _play_a_minute(_GroupSiegingBot)
 
         assert bot.siege is not None and bot.unsiege is not None
@@ -2445,7 +2445,7 @@ class TestAgainstTheRealGame:
         units = bot.api.units.own.of_type(_SIEGE_FORMS)
         assert {unit.type_id for unit in units} == {UnitTypeId.SIEGE_TANK, UnitTypeId.LIBERATOR}
 
-    def test_a_bunker_and_a_medivac_unload_in_one_order(self) -> None:
+    def test_a_bunker_and_a_medivac_unload_in_one_command(self) -> None:
         bot, failures = _play_a_minute(_GroupUnloadingBot)
 
         print("refused or given up:", failures)
@@ -2491,7 +2491,7 @@ class TestAgainstTheRealGame:
 
 def _play_a_minute[
     BotT: (
-        _OrderingBot,
+        _CommandingBot,
         _UnloadingBot,
         _SiegingBot,
         _GroupSiegingBot,

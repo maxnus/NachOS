@@ -264,9 +264,9 @@ class CommandBook:
         """Why `method` cannot command a `maker` to make a `product`: what commands it instead, or what makes one."""
         abilities_making = _abilities_making(self._game_data)
         if (ability := abilities_making.get((maker, product))) is not None:
-            ordered_by = "train" if _is_trained(maker, product) else "build" if _is_built(maker, product) else "command"
+            given_by = "train" if _is_trained(maker, product) else "build" if _is_built(maker, product) else "command"
             made_with = f"{_with_article(maker)} makes {_with_article(product)} with {ability.name}"
-            return f"{made_with}, which `{ordered_by}` orders, not `{method}`"
+            return f"{made_with}, which `{given_by}` gives, not `{method}`"
         makers = {made_by for made_by, made in abilities_making if made is product}
         if makers:
             return f"{_with_article(maker)} does not make {_with_article(product)}: {_listed_with_or(makers)} does"

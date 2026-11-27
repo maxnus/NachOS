@@ -404,7 +404,7 @@ class TestWhatBecameOfThem:
         assert sorted(_tags(held.alive) + _tags(held.dead)) == sorted(_tags(held))
         assert sorted(_tags(held.listed) + _tags(held.not_listed)) == sorted(_tags(held))
 
-    def test_a_unit_a_neural_parasite_holds_is_not_this_players_to_order(self) -> None:
+    def test_a_unit_a_neural_parasite_holds_is_not_this_players_to_command(self) -> None:
         """It is the enemy's, of the enemy's class, though it was this player's when the collection was kept."""
         held = _held_units()
         (parasited,) = (unit for unit in held if unit.tag == 4)

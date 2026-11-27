@@ -128,7 +128,7 @@ class _Game:
         return unit
 
     def flush(self) -> None:
-        """Send the turn's orders, each command taken."""
+        """Send the turn's commands, each taken."""
         client, _ = make_client(make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.Success] * 8)))
         self.book._send(client)
 
@@ -259,10 +259,10 @@ class TestTheDynamicGrid:
 
 
 class TestTheReservedGrid:
-    def test_nothing_is_reserved_with_no_build_ordered(self) -> None:
+    def test_nothing_is_reserved_with_no_build_commanded(self) -> None:
         assert not _Game().observe(0, _scv(1)).reserved.any()
 
-    def test_a_build_issued_this_turn_reserves_its_site(self) -> None:
+    def test_a_build_given_this_turn_reserves_its_site(self) -> None:
         game = _Game()
         game.observe(0, _scv(1))
         game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.3, 7.8)))
@@ -272,9 +272,9 @@ class TestTheReservedGrid:
     def test_a_withdrawn_build_frees_its_site(self) -> None:
         game = _Game()
         grids = game.observe(0, _scv(1))
-        order = game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        command = game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         assert grids.reserved.any()
-        order.withdraw()
+        command.withdraw()
         assert not grids.reserved.any()
 
     def test_a_build_sent_and_not_observed_yet_reserves_its_site(self) -> None:
@@ -623,7 +623,7 @@ class TestPlacingOneStructure:
         with pytest.raises(error, match=message):
             grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=3.0, margin=margin)  # pyright: ignore[reportArgumentType]
 
-    def test_a_build_issued_earlier_in_the_turn_takes_its_site(self) -> None:
+    def test_a_build_given_earlier_in_the_turn_takes_its_site(self) -> None:
         game = _Game()
         grids = game.observe(0, _scv(1))
         assert grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
@@ -725,7 +725,7 @@ class TestARecordedGamesStart:
             assert not grids.dynamic[field.position + (-0.5, 0.0)]
             assert not grids.dynamic[field.position + (0.5, 0.0)]
 
-    def test_nothing_is_reserved_before_an_order(self, path: Path) -> None:
+    def test_nothing_is_reserved_before_a_command(self, path: Path) -> None:
         _, _, grids = _grids_at_the_start(path)
         assert not grids.reserved.any()
 

@@ -59,7 +59,7 @@ class TestMoving:
         assert camera.center == Point((1.0, 1.0))
 
 
-def test_the_center_is_read_from_each_observation_and_a_move_goes_out_after_the_turns_orders() -> None:
+def test_the_center_is_read_from_each_observation_and_a_move_goes_out_after_the_turns_commands() -> None:
     marine = make_unit(1)
     transport = FakeTransport(
         make_response(join_game=sc2api_pb2.ResponseJoinGame(player_id=1)),

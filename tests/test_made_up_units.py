@@ -185,7 +185,7 @@ class TestOrders:
             (AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5)
         ]
 
-    def test_every_order_given_a_unit_stays_in_the_orders_since_nothing_is_sent(self):
+    def test_every_command_given_a_unit_stays_staged_since_nothing_is_sent(self):
         made_up = MadeUpUnits()
         (marine,) = made_up.observe(UnitReport(1, UnitTypeId.MARINE), step=16)
         move = marine.command(AbilityId.MOVE, target=(20.0, 21.0))

@@ -1007,7 +1007,7 @@ class TestIdle:
         assert [(event.time.steps, event.unit.tag) for event in seen] == [(0, 1), (16, 2)]
 
     @pytest.mark.parametrize("shown", [True, False], ids=["the order shows", "the game drops it"])
-    def test_a_unit_sent_an_order_the_observations_may_not_show_yet_is_not_idle(self, shown: bool) -> None:
+    def test_a_unit_sent_a_command_the_observations_may_not_show_yet_is_not_idle(self, shown: bool) -> None:
         """An order shows by the second observation after its turn on the ladder (in game); one that has not by then
         was dropped, and the unit is idle."""
         game = _Game()

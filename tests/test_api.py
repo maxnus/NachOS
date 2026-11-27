@@ -363,7 +363,7 @@ class TestPlaying:
             ],
         ]
 
-    def test_a_unit_ordered_through_itself_is_ordered_into_the_api_s_orders(self) -> None:
+    def test_a_unit_commanded_through_itself_is_commanded_into_the_api_s_commands(self) -> None:
         client, transport = _joined(
             make_response(game_info=make_game_info()),
             make_response(data=sc2api_pb2.ResponseData()),
@@ -373,17 +373,17 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(2, (1, Result.VICTORY), units=[make_unit(1)])),
         )
         api = Api()
-        issued: list[tuple[Command, tuple[Command, ...]]] = []
+        given: list[tuple[Command, tuple[Command, ...]]] = []
 
         @api.on(TurnEvent, once=True)
         def turn(event: TurnEvent) -> None:
-            order = api.units.own[0].command(AbilityId.MOVE, target=(20.0, 21.0))
-            issued.append((order, api.commands.staged))
+            move = api.units.own[0].command(AbilityId.MOVE, target=(20.0, 21.0))
+            given.append((move, api.commands.staged))
 
         api.play(client, steps_per_turn=2)
 
-        ((order, pending),) = issued
-        assert pending == (order,)
+        ((move, pending),) = given
+        assert pending == (move,)
         (request,) = [request.action for request in transport.requests if request.HasField("action")]
         (action,) = request.actions
         command = action.action_raw.unit_command

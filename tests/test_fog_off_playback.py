@@ -155,17 +155,17 @@ class TestThePlayersView:
 
 
 class TestTheWholeGamesUnits:
-    def test_this_players_unit_is_ordered_into_the_games_order_book(self) -> None:
+    def test_this_players_unit_is_commanded_into_the_games_command_book(self) -> None:
         playback = _playback()
         _read(playback, 0, make_unit(1, at=_OUT_OF_SIGHT))
         marine = playback.whole_game_tracker.unit_tracker.by_tag(1)
         assert isinstance(marine, OwnUnit)
 
-        order = marine.command(AbilityId.MOVE, target=(2.0, 3.0))
+        command = marine.command(AbilityId.MOVE, target=(2.0, 3.0))
 
         command_book = playback.whole_game_tracker.command_book
         assert command_book is not None
-        assert command_book.staged == (order,)
+        assert command_book.staged == (command,)
 
 
 class TestTheWholeGamesRawData:
