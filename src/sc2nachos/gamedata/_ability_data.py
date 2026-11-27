@@ -76,7 +76,7 @@ def order_behaviors(
     tech_tree: TechTree, structures: frozenset[UnitTypeId], non_structures: frozenset[UnitTypeId]
 ) -> Mapping[AbilityId, OrderBehaviors]:
     """The order behaviors of each ability that does not simply replace every unit's orders, judged for each unit type
-    that carries it out: an action several types perform does to each what that type's own does.
+    that carries it out: an ability several types perform does to each what that type's own does.
 
     In order of precedence, an ability keeps the orders of the types `KEEPS_ORDERS_BY_TYPE` names for it, and of every
     type where it is in `KEEPS_ORDERS_ABILITIES`. An ability that makes something queues on a structure making a unit
@@ -148,7 +148,7 @@ def ability_costs(
 ) -> Mapping[AbilityId, Cost]:
     """The cost of a command of each ability, supply included: the cost of the step that makes its product, of
     `step_costs`, or the upgrade's cost, time included: an orbital command 150 and 560 steps, a siege nothing. An
-    action several types perform costs what each makes costs, which is one cost for every action there is: a lift
+    ability several types perform costs what each makes costs, which is one cost for every ability there is: a lift
     nothing, a tech lab 50/25 and 400 steps. `COST_OVERRIDES` gives the few whose product does not say.
     """
     costs: dict[AbilityId, Cost] = {}
@@ -227,7 +227,7 @@ class AbilityData:
     """Whether it can be set to autocast, for some type that carries it out. An unburrow can for a roach and not for a
     drone (in game), and the switch takes effect only under each type's own game id, not `UNBURROW`'s."""
     performers: frozenset[UnitTypeId]
-    """The unit types offered it. An action several types perform is offered to each under its one id, though the
+    """The unit types offered it. An ability several types perform is offered to each under its one id, though the
     game offers each type its own. The off half of a toggle, offered only once its on half has taken, has its on half's.
     Empty for an ability the sweep never saw offered: `GATEWAY_MORPH_WARP_GATE`, which the game orders every gateway to
     carry out once the research is done, and offers a gateway turned back from a warp gate (in game);
@@ -242,7 +242,7 @@ class AbilityData:
     command, not the 550 its row holds as everything spent to reach it. Supply is charged as the product starts, less
     what the unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. Its time is the build
     time the tables give what it makes, the source's taken off: 560 steps for an orbital command, none for a siege, and
-    a warp-in's that of its unit's train at a gateway, not how long the warp-in takes. An action several types perform
+    a warp-in's that of its unit's train at a gateway, not how long the warp-in takes. An ability several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     multi_unit: bool
     """Whether every unit one action names carries it out, so that `api.commands.command` gives it to several in one

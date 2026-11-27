@@ -33,8 +33,8 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
     from sc2nachos.units import Target
 
-# The observations after the one a turn read by which its commands show in a unit's orders, and what it carries out
-# at once in its effect: the next in a stepped game, and the one after that on the ladder or in realtime
+# The observations after the one a turn read by which its commands show: in a unit's orders, or, for one carried out
+# at once, in its effect. The next in a stepped game, and the one after that on the ladder or in realtime
 # (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
 # How long before the last observation a unit's sent commands are kept.
