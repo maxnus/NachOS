@@ -48,7 +48,7 @@ class EconomyModel:
     the type. The last `initial_harvest_delay` of the walk back is that delay, which the builder pays as it starts to
     mine or to collect. A walk shorter than the delay is allowed: the builder then brings in nothing for the whole delay
     after its build, longer than its walk, even with no walk at all. Where it returns `None`, or is `None`, the default
-    applies: 10 seconds to a townhall and 6 to any other structure. A build a worker has not begun, or has left, takes
+    applies: 8 seconds to a townhall and 3 to any other structure. A build a worker has not begun, or has left, takes
     that walk first. The function is asked about every structure a worker builds, not only those a plan values, so a
     lookup returns `None` for those it does not hold."""
 
@@ -94,8 +94,9 @@ def minerals_mined_a_second(
 
 
 def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> dict[UnitTypeId, float]:
-    """The seconds a worker walks to build each of `unit_types`, by `economy`: by default 10 to a townhall, about the
-    walk from a main's mineral line to its natural on the maps of the pool (corpus), and 6 to any other structure.
+    """The seconds a worker walks to build each of `unit_types`, by `economy`: by default 8 to a townhall, about the
+    walk from a main's mineral line to its natural on the maps of the pool, and 3 to any other structure, a little over
+    what an SCV from the mineral line took to a structure in its main (in game).
 
     Raises `ValueError` for a negative time from its `builder_walk_time`.
     """
@@ -107,6 +108,6 @@ def walk_seconds_of(economy: EconomyModel, unit_types: Iterable[UnitTypeId]) -> 
                 f"builder_walk_time must not return a negative time, but returned {chosen} for {unit_type.name}"
             )
         is_townhall = unit_type is UnitTypeId.COMMAND_CENTER
-        default = GameTime(seconds=10) if is_townhall else GameTime(seconds=6)
+        default = GameTime(seconds=8) if is_townhall else GameTime(seconds=3)
         seconds[unit_type] = (default if chosen is None else chosen).seconds
     return seconds
