@@ -2122,6 +2122,72 @@ class TestEconomy:
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [58.0]
 
+    @pytest.mark.parametrize("reassignment_seconds", [3.0, 0.0], ids=["3 s", "none"])
+    def test_a_builder_back_at_a_refinery_collects_from_the_end_of_its_walk_back(
+        self, reassignment_seconds: float
+    ) -> None:
+        """No vespene, a refinery and the only SCV building a supply depot for 5 seconds more, 6 seconds' walk away, on
+        1-second intervals: the first marauder's 25 vespene, 23 seconds' collecting, come that long after its walk back,
+        whatever a reassignment takes, as a builder back at the minerals mines from the end of its walk."""
+        state = _game_start(
+            minerals=500.0,
+            supply_used=1.0,
+            units={
+                UnitTypeId.SCV: 1,
+                UnitTypeId.COMMAND_CENTER: 1,
+                UnitTypeId.BARRACKS: 1,
+                UnitTypeId.TECH_LAB_BARRACKS: 1,
+                UnitTypeId.REFINERY: 1,
+            },
+            gas_buildings_with_vespene=1,
+            free_geysers=1,
+            worker_builds=(
+                WorkerBuild(
+                    unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=5), builder_walks_there=False
+                ),
+            ),
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARAUDER: 1.0}, half_life=None),
+            horizon_seconds=80,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            fluid_after=_whole_over_any_horizon,
+            economy=EconomyModel(initial_harvest_delay=GameTime(seconds=reassignment_seconds)),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARAUDER)[0] == 34.0
+
+    @pytest.mark.parametrize(("reassignment_seconds", "marine_start"), [(3.0, 55.0), (0.0, 53.0)], ids=["3 s", "none"])
+    def test_a_builder_whose_walk_back_is_shorter_than_the_reassignment_pays_the_reassignment(
+        self, reassignment_seconds: float, marine_start: float
+    ) -> None:
+        """As a builder back at the minerals, with a walk of 1 second: it starts to mine as any worker does, so for the
+        whole reassignment, longer than its walk."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=1.0,
+            units={UnitTypeId.SCV: 1, UnitTypeId.COMMAND_CENTER: 1, UnitTypeId.BARRACKS: 1},
+            worker_builds=(
+                WorkerBuild(
+                    unit_type=UnitTypeId.SUPPLY_DEPOT, time_left=GameTime(seconds=5), builder_walks_there=False
+                ),
+            ),
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None),
+            horizon_seconds=80,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            fluid_after=_whole_over_any_horizon,
+            economy=EconomyModel(
+                initial_harvest_delay=GameTime(seconds=reassignment_seconds),
+                builder_walk_time=lambda _: GameTime(seconds=1),
+            ),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
+
     def test_a_reassignment_costs_its_time_of_an_interval_however_long_the_interval(self) -> None:
         """No vespene and one refinery with no SCV at it, on 10-second intervals: each SCV sent there collects for 7 of
         the first 10 seconds, up to 19 vespene from three, which with half the next interval's pay for a marauder at 10

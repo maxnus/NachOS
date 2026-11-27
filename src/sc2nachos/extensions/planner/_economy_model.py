@@ -40,14 +40,16 @@ class EconomyModel:
     orbital command gains (stated); 0 for a bot that spends the energy otherwise."""
     initial_harvest_delay: GameTime = GameTime(seconds=3)
     """How long a worker brings in nothing when it starts to mine or to collect, by default 3 seconds (assumed). It
-    applies to a new worker on its first walk and to a worker moved between minerals and vespene, and not to a builder
-    back from its structure, whose walk back is counted already. With 0 a worker brings in from when it starts."""
+    applies to a new worker on its first walk, to a worker moved between minerals and vespene, and to a builder back
+    from its structure at either, whose walk back is that much shorter for it, so that the two together take its walk
+    back. With 0 a worker brings in from when it starts."""
     builder_walk_time: Callable[[UnitTypeId], GameTime | None] | None = None
-    """How long a worker walks to build a structure of a unit type, and walks back after: what the function returns
-    for the type. Where it returns `None`, or is `None`, the default applies: 10 seconds to a townhall and 6 to any
-    other structure. A build a worker has not begun, or has left, takes that walk first. The function is asked about
-    every structure a worker builds, not only those a plan values, so a lookup returns `None` for those it does not
-    hold."""
+    """How long a worker walks to build a structure of a unit type, and walks back after: what the function returns for
+    the type. The last `initial_harvest_delay` of the walk back is that delay, which the builder pays as it starts to
+    mine or to collect, all of it if the walk is shorter. Where it returns `None`, or is `None`, the default applies: 10
+    seconds to a townhall and 6 to any other structure. A build a worker has not begun, or has left, takes that walk
+    first. The function is asked about every structure a worker builds, not only those a plan values, so a lookup
+    returns `None` for those it does not hold."""
 
     def __post_init__(self) -> None:
         self._validate()

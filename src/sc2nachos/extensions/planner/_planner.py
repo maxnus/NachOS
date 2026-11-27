@@ -107,7 +107,8 @@ class Planner:
       every worker to be able to work anywhere. How many mine and how many collect vespene is the plan's choice in each
       interval, which the interval holds as its `miners` and `collectors`.
     - What workers bring in, and how long a worker walks to build, is the `EconomyModel` handed to `plan_now`. A worker
-      that builds is away from its work from the walk to the structure, through the build, to the walk back.
+      that builds is away from its work from the walk to the structure, through the build, to the walk back, the last of
+      which it spends as any worker starting work does, at minerals or vespene alike.
     - A command center that morphs trains no SCV meanwhile. A reactor lets its host make two units at a time. A tech lab
       makes the units that need one, and researches by itself.
     - A new command center brings the mineral fields and the geysers of the next of the `expansions` handed to

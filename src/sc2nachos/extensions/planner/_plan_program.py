@@ -43,13 +43,13 @@ class PlanProgram(PlanConstraints):
     of them allow. Workers mine, collect or build, pooled over every field and refinery, in the tiers of `economy`'s
     rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a tier than the
     interval before, or than `state` has, brings in nothing for `economy`'s `initial_harvest_delay` from the interval's
-    start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
-    supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type, and a
-    number or a `TimeDependent`, read at each game step and summed, so that a peak in it loses its share whatever the
-    grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type it
-    counts as, the lowest of those of one type, and a limit on no item here does nothing. The plan starts at most as
-    many command centers as `new_bases` holds, each bringing the fields and geysers of the next of them once done, and
-    one in production brings what `state` says of it.
+    start, a builder back from its structure too, its walk back that much shorter. A unit counts as it survives its loss
+    rate in `loss_rates`, for income, supply and the reward: a unit type's rate is that of the type it counts as, the
+    highest of those of one type, and a number or a `TimeDependent`, read at each game step and summed, so that a peak
+    in it loses its share whatever the grid. Of an item in `start_limits` at most that many start over the plan: a unit
+    type's limit is that of the type it counts as, the lowest of those of one type, and a limit on no item here does
+    nothing. The plan starts at most as many command centers as `new_bases` holds, each bringing the fields and geysers
+    of the next of them once done, and one in production brings what `state` says of it.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
     `builder_walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, and for a unit in
