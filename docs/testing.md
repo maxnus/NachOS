@@ -41,7 +41,7 @@ run_recording("games/ladder.sc2rec", api, enemy_ladder_id="5a1f")
 ```
 
 The bot must ask what it asked when the game was recorded, in the same order, so it must read what it read then, its
-own files included, and it gets the game's own answers: to its orders, its queries and everything else. That
+own files included, and it gets the game's own answers: to its commands, its queries and everything else. That
 reproduces a crash as it happened, its handler's exception raising out of `run_recording` as out of the game. A
 request of another kind than the recording holds next raises `ProtocolError`; only the kind of each request is
 checked, not its contents. The game is created and played in real time as recorded.
@@ -98,11 +98,11 @@ def test_the_bot_plays_a_whole_recorded_game(recording: Path) -> None:
 A handler's exception ends the process, and its traceback is in `played.stderr`.
 
 With `permissive=True`, it returns `UNDECIDED` if the recording stops before the game's end, as one made with a time
-limit does, and `DEFEAT` if the bot leaves first. The bot sees the game as recorded, whatever it does: its orders
+limit does, and `DEFEAT` if the bot leaves first. The bot sees the game as recorded, whatever it does: its commands
 change nothing that comes after them. A game an older version of the bot played still tests a newer one: where the newer
 one decides otherwise, it sees what the older one did. What it asks of the game of its own accord is answered as if the
 game had answered:
-- **Orders, the camera and chat** are accepted: every order reads as sent, and `api.action_failures` stays empty.
+- **Commands, the camera and chat** are accepted: every command reads as sent, and `api.action_failures` stays empty.
 - **Debug requests** are accepted, and draw nothing.
 - **`api.pathing.query_distance` and `query_distances`** answer the straight line between each pair of ends, from a
   unit where the last observation had it.
@@ -147,8 +147,9 @@ def test_the_marine_targets_the_nearer_zergling() -> None:
   which NachOS ships, read afresh in about 15 ms for each `MadeUpUnits`. `load_game_data(base_build=75689)` reads it
   once for many, and raises `ValueError` for a build NachOS ships no data of. A test may pass game data of its own.
 
-The units belong to no game: there is no map and no event, and nothing is sent. What the code under test orders goes
-into `made_up.commands`, an `CommandBook` as `api.commands` is, and stays there, every order since the units were made up:
+The units belong to no game: there is no map and no event, and nothing is sent. What the code under test commands
+goes into `made_up.commands`, a `CommandBook` as `api.commands` is, and stays there, every command since the units
+were made up:
 
 ```python
 def test_the_marine_attacks_the_nearer_zergling() -> None:

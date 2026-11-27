@@ -42,7 +42,7 @@ class TargetType(ReadableIntEnum):
 
 
 class OrderBehavior(Enum):
-    """What ordering an ability does to the unit's orders (tool `sweep_orders`)."""
+    """What a command of an ability does to the unit's orders (tool `sweep_orders`)."""
 
     REPLACES = "replaces"
     """Drops the unit's orders and runs instead: a move, an attack, a worker's build."""
@@ -54,7 +54,7 @@ class OrderBehavior(Enum):
     KEEPS_ORDERS = "keeps orders"
     """Runs without disturbing the unit's orders, so it competes with nothing: stim, both halves of a toggle and the
     rest of `KEEPS_ORDERS_ABILITIES`, plus every ability that makes nothing and is offered only to types that hold no
-    order of their own — a structure's own rally, load, cancel and energy casts. Ordered on a producer, each of those
+    order of their own — a structure's own rally, load, cancel and energy casts. Given to a producer, each of those
     leaves what it is making at its current progress (in game). `CANCEL` is not one of them: a ghost and an
     infestor are offered it too, and it takes them off what they are channeling."""
 
@@ -65,7 +65,8 @@ _NO_BEHAVIORS: Mapping[UnitTypeId, OrderBehavior] = MappingProxyType({})
 
 @dataclass(frozen=True, slots=True)
 class OrderBehaviors:
-    """What ordering one ability does to a unit's orders: its own behavior, and each unit type's where that differs."""
+    """What a command of one ability does to a unit's orders: its own behavior, and each unit type's where that
+    differs."""
 
     own: OrderBehavior = OrderBehavior.REPLACES
     by_type: Mapping[UnitTypeId, OrderBehavior] = field(default_factory=lambda: _NO_BEHAVIORS)
@@ -145,7 +146,7 @@ def ability_costs(
     upgrades: Mapping[UpgradeId, UpgradeData],
     tech_tree: TechTree,
 ) -> Mapping[AbilityId, Cost]:
-    """The cost of ordering each ability, supply included: the cost of the step that makes its product, of
+    """The cost of a command of each ability, supply included: the cost of the step that makes its product, of
     `step_costs`, or the upgrade's cost, time included: an orbital command 150 and 560 steps, a siege nothing. An
     action several types perform costs what each makes costs, which is one cost for every action there is: a lift
     nothing, a tech lab 50/25 and 400 steps. `COST_OVERRIDES` gives the few whose product does not say.
@@ -193,7 +194,7 @@ def _cost_of_making(
 
 
 def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[UnitTypeId]) -> frozenset[UnitTypeId]:
-    """The unit types that hold an order of their own, which an order can take them off: those the game offers a
+    """The unit types that hold an order of their own, which a command can take them off: those the game offers a
     move, and a unit offered an attack, a stop or a hold even where it cannot move, such as a sieged tank or a burrowed
     lurker. A structure, an egg and a cocoon hold none. A flying structure is offered a move under its flying type."""
     offered_a_move = tech_tree.ability(AbilityId.MOVE).performers
@@ -209,19 +210,19 @@ def _unit_types_holding_orders(tech_tree: TechTree, non_structures: frozenset[Un
 @final
 @dataclass(frozen=True, slots=True)
 class AbilityData:
-    """One ability: what the game's table says about it, and what ordering it takes."""
+    """One ability: what the game's table says about it, and what a command of it takes."""
 
     id: AbilityId
     """The ability described."""
     target_type: TargetType
-    """What an order of it must be aimed at."""
+    """What a command of it must be aimed at."""
     cast_range: float
     """Its range, or zero if it has none of its own."""
     footprint_radius: float | None
-    """The radius around the ordered point that must be clear, or `None` if nothing is placed: half a structure's
+    """The radius around the commanded point that must be clear, or `None` if nothing is placed: half a structure's
     width, and for an add-on the reach past the far side of the structure it attaches to."""
     needs_placement: bool
-    """Whether ordering it places a structure."""
+    """Whether a command of it places a structure."""
     allows_autocast: bool
     """Whether it can be set to autocast, for some type that carries it out. An unburrow can for a roach and not for a
     drone (in game), and the switch takes effect only under each type's own game id, not `UNBURROW`'s."""
@@ -237,24 +238,25 @@ class AbilityData:
     makes a flying barracks of a barracks and a flying starport of a starport. Empty for an ability that makes
     nothing."""
     cost: Cost
-    """What ordering it charges. For a morph that is the difference from the source type: 150 for an orbital command,
-    not the 550 its row holds as everything spent to reach it. Supply is charged as the product starts, less what the
-    unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. Its time is the build time the
-    tables give what it makes, the source's taken off: 560 steps for an orbital command, none for a siege, and a
-    warp-in's that of its unit's train at a gateway, not how long the warp-in takes. An action several types perform
+    """What a command of it charges. For a morph that is the difference from the source type: 150 for an orbital
+    command, not the 550 its row holds as everything spent to reach it. Supply is charged as the product starts, less
+    what the unit used up gives back: 1 for a marine, -1 for a spawning pool, 0 for a baneling. Its time is the build
+    time the tables give what it makes, the source's taken off: 560 steps for an orbital command, none for a siege, and
+    a warp-in's that of its unit's train at a gateway, not how long the warp-in takes. An action several types perform
     costs the same for each. An ability that makes nothing costs nothing."""
     multi_unit: bool
-    """Whether every unit one command names carries it out, so that `api.commands.command` gives it to several in one
-    command: a move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`).
-    Any other ability one unit of a command carries out, and `command` gives it to each unit in a command of its own:
+    """Whether every unit one action names carries it out, so that `api.commands.command` gives it to several in one
+    action: a move, an attack, a burrow, a lift, a stim, a toggle, a tank's siege or an unload (tool `sweep_orders`).
+    Any other ability one unit of an action carries out, and `command` gives it to each unit in an action of its own:
     what costs minerals or vespene, a build, an add-on, a train, a research or a morph (in game); every spell but a
-    toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out. Orders of it
-    given apart may go out as one command too, as `joins_other_orders` says."""
+    toggle; a landing, a load or a liberator's siege; and an ability no one has seen a group carry out. Commands of it
+    given apart may go out as one action too, as `joins_other_orders` says."""
     joins_other_orders: bool
-    """Whether orders of it given apart in one turn go out as one command where they are aimed at the same unit, or at
-    the same point as the game keeps it, and queued alike, as one order to all their units would: every ability that is
-    `multi_unit` but an archon's merge, which merges the two templar each of its orders names, and a load-all, which
-    one command naming two command centers was seen to carry out for one of them (tool `sweep_orders`)."""
+    """Whether commands of it given apart in one turn go out as one action where they are aimed at the same unit, or
+    at the same point as the game keeps it, and queued alike, as one command to all their units would: every ability
+    that is `multi_unit` but an archon's merge, which merges the two templar each of its commands names, and a
+    load-all, which one action naming two command centers was seen to carry out for one of them (tool
+    `sweep_orders`)."""
     cancelled_by: AbilityId | None
     """The ability that cancels this one on a structure carrying it out. For a train or a research it is
     `CANCEL_LAST`, which takes the last item off a barracks, an engineering bay and a command center alike (in
@@ -262,7 +264,7 @@ class AbilityData:
     with `ERROR` (tool `sweep_tech_tree`). `None` for everything else, a warp-in and a build among them: a warp gate
     keeps no queue, and a structure under construction is cancelled on itself with `CANCEL`."""
     order_behavior: OrderBehavior
-    """What ordering it does to the unit's orders: the behavior the types carrying it out share, or `REPLACES`
+    """What a command of it does to the unit's orders: the behavior the types carrying it out share, or `REPLACES`
     where they differ; `order_behavior_for` gives each unit type's."""
     sent_as: Mapping[UnitTypeId, SentAs] = field(hash=False)
     """The game's ability it goes out as for each unit type named, and what that is aimed at; any other type is sent
@@ -283,7 +285,7 @@ class AbilityData:
         return self.needs_placement or self.id in ABILITIES_PLACING_AT_THE_TARGET
 
     def order_behavior_for(self, unit_type: UnitTypeId) -> OrderBehavior:
-        """What ordering it does to the orders of a unit of `unit_type`: what that type's own does, as a
+        """What a command of it does to the orders of a unit of `unit_type`: what that type's own does, as a
         ghost's hold fire keeps its orders and a burrowed lurker's takes it off its attack, and keeping the orders of
         the types `KEEPS_ORDERS_BY_TYPE` names for it, such as a barracks given a smart (in game)."""
         return self._behaviors_by_performer.get(unit_type, self.order_behavior)

@@ -1,4 +1,4 @@
-"""One order a bot gave."""
+"""One command a bot gave."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @final
 class Command:
-    """An order a bot gave. A refusal by the game shows in `api.action_failures`, and what a unit then reports doing
+    """A command a bot gave. A refusal by the game shows in `api.action_failures`, and what a unit then reports doing
     in its `sc2nachos.units.Order`s."""
 
     __slots__ = (
@@ -33,7 +33,7 @@ class Command:
         queued: bool,
         time: GameTime,
     ) -> None:
-        """An order of `ability` to `units`, issued at `time`. Made by the order book, never by a bot."""
+        """A command of `ability` to `units`, given at `time`. Made by the command book, never by a bot."""
         self._ability = ability
         self._units = units
         self._target = target
@@ -47,29 +47,29 @@ class Command:
 
     @property
     def ability(self) -> AbilityId:
-        """The ability ordered, as it was ordered. A unit carrying it out reads as running the same one."""
+        """The ability commanded, as it was given. A unit carrying it out reads as running the same one."""
         return self._ability
 
     @property
     def units(self) -> Units[OwnUnit[Any]]:
-        """The units the order was given to."""
+        """The units the command was given to."""
         return self._units
 
     @property
     def target(self) -> Target | None:
-        """The point or unit the order is aimed at, or `None`."""
+        """The point or unit the command is aimed at, or `None`."""
         return self._target
 
     @property
     def queued(self) -> bool:
-        """Whether the order goes behind each unit's orders instead of replacing them."""
+        """Whether the command goes behind each unit's orders instead of replacing them."""
         return self._queued
 
     @property
     def time(self) -> GameTime:
-        """The time of the observation the order was issued in."""
+        """The time of the observation the command was given in."""
         return self._time
 
     def withdraw(self) -> None:
-        """Take the order back while its turn's handlers run, so it never goes out. After its turn it does nothing."""
+        """Take the command back while its turn's handlers run, so it never goes out. After its turn it does nothing."""
         self._withdrawn = True

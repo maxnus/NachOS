@@ -1,5 +1,5 @@
-"""Speed mining's trips: the orders that keep a worker it holds at its field or gas building each turn, each trip ending
-in a move, a collector coming out yielding to one going in."""
+"""Speed mining's trips: the commands that keep a worker it holds at its field or gas building each turn, each trip
+ending in a move, a collector coming out yielding to one going in."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ _TYPES_NEVER_IN_THE_WAY = UnitType.Structure.type_ids | UnitType.Larva.type_ids
 
 @final
 class WorkerTrips:
-    """The orders of each trip of the workers speed mining holds, each turn: the move at the end of the trip, with the
+    """The commands of each trip of the workers speed mining holds, each turn: the move at the end of the trip, with the
     gather or return queued behind, a collector coming out yielding to one going in, and plain gathers and returns off
     the move."""
 
@@ -75,8 +75,8 @@ class WorkerTrips:
     ) -> None:
         """Keep `collectors_to_order`, of `gas_building`'s `collectors`, collecting from it, with `townhall` taking
         their cargo, as `_speed_trip` says: those going in first, and then those coming out, each yielding to any
-        collector going in on its move, ordered this turn or not, that has yet to pass it. Two on their moves meet head
-        on, and the one shoved back nearly stops, where one on its return passes through (in game)."""
+        collector going in on its move, commanded this turn or not, that has yet to pass it. Two on their moves meet
+        head on, and the one shoved back nearly stops, where one on its return passes through (in game)."""
         gather_point = trip_end_points.gather_point
         return_point = trip_end_points.return_point
         ordered = set(collectors_to_order)
@@ -215,8 +215,8 @@ class WorkerTrips:
         return self._was_sent_the_move_to(worker, trip_end)
 
     def _was_sent_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
-        """Whether the latest order that replaced `worker`'s, sent lately or issued this turn, is speed mining's move to
-        `trip_end`, so that no other order, the bot's included, has taken its place since."""
+        """Whether the latest command that replaced `worker`'s orders, sent lately or given this turn, is speed
+        mining's move to `trip_end`, so that no other command, the bot's included, has taken its place since."""
         if not worker.is_orderable:
             return False
         replacing = [command for command in worker.pending_commands if not command.queued]

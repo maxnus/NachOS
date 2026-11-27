@@ -39,8 +39,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         queued: bool = False,
         force: bool = False,
     ) -> Command:
-        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Command`, as
-        `sc2nachos.commands.CommandBook.command` orders it: `unit.command(AbilityId.MOVE, target=point)` is
+        """Command the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Command`, as
+        `sc2nachos.commands.CommandBook.command` commands it: `unit.command(AbilityId.MOVE, target=point)` is
         `api.commands.command(unit, AbilityId.MOVE, target=point)`.
 
         Raises as `CommandBook.command` does.
@@ -55,8 +55,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         queued: bool = False,
         force: bool = False,
     ) -> Command:
-        """Order the structure or larva to make a unit of `unit_type` and return the `Command`, as
-        `sc2nachos.commands.CommandBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
+        """Command the structure or larva to make a unit of `unit_type` and return the `Command`, as
+        `sc2nachos.commands.CommandBook.train` commands it: `barracks.train(UnitTypeId.MARINE)` is
         `api.commands.train(barracks, UnitTypeId.MARINE)`.
 
         Raises as `CommandBook.train` does.
@@ -71,8 +71,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         queued: bool = False,
         force: bool = False,
     ) -> Command:
-        """Order the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
-        return the `Command`, as `sc2nachos.commands.CommandBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
+        """Command the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
+        return the `Command`, as `sc2nachos.commands.CommandBook.build` commands it: `scv.build(UnitTypeId.BUNKER,
         target=site)` is `api.commands.build(scv, UnitTypeId.BUNKER, target=site)`.
 
         Raises as `CommandBook.build` does.
@@ -82,8 +82,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     def research(
         self: OwnUnit[UnitType.Structure], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
     ) -> Command:
-        """Order the structure to research `upgrade` and return the `Command`, as
-        `sc2nachos.commands.CommandBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
+        """Command the structure to research `upgrade` and return the `Command`, as
+        `sc2nachos.commands.CommandBook.research` commands it: `tech_lab.research(UpgradeId.STIMPACK)` is
         `api.commands.research(tech_lab, UpgradeId.STIMPACK)`.
 
         Raises as `CommandBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
@@ -195,7 +195,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def is_constructing(self) -> bool:
-        """Whether the unit builds a structure, or walks to the site of one it was ordered to build: it has a
+        """Whether the unit builds a structure, or walks to the site of one it was commanded to build: it has a
         `construction`, or its current order's ability places a structure, a barracks building its add-on and a queen
         placing a creep tumor among them."""
         return self.construction is not None or self.is_doing(self._tracker.game_data._placing_abilities)
@@ -207,8 +207,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         whether it can attack at all.
 
         It reads 0 too while an attack is under way, for 0 to 6 steps before it by type and up to 8 for an ultralisk,
-        and a move ordered 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a unit
-        that moves between attacks keeps each by waiting for the cooldown to rise, in the step of the attack.
+        and a move commanded 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a
+        unit that moves between attacks keeps each by waiting for the cooldown to rise, in the step of the attack.
         `docs/reference/game-behavior/damage-and-buffs.md` has the steps each type reads 0.
         """
         return GameTime(steps=self._latest_report.weapon_cooldown)

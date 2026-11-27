@@ -415,7 +415,7 @@ class TestTrainingBuildingAndResearching:
     def test_no_unit_to_order_raises_as_issue_does(self) -> None:
         made_up = MadeUpUnits()
 
-        with pytest.raises(ValueError, match="an order needs a unit to give it to"):
+        with pytest.raises(ValueError, match="a command needs a unit to give it to"):
             made_up.commands.train([], UnitTypeId.MARINE)
 
     def test_a_worker_builds_a_structure_at_a_site_and_a_structure_its_add_on(self) -> None:
@@ -2026,13 +2026,13 @@ class TestOrdersGivenApart:
 
         assert _sent(game.flush()) == [(_MOVE, [1, 2], (20.0, 21.0), False)]
 
-    def test_a_game_answering_fewer_commands_than_it_was_sent_is_a_protocol_error(self) -> None:
+    def test_a_game_answering_fewer_actions_than_it_was_sent_is_a_protocol_error(self) -> None:
         game = _Game([])
         game.observe(0, _marine(1), _marine(2))
         game.book.command(game.own(1), _MOVE, target=(20.0, 21.0))
         game.book.command(game.own(2), _MOVE, target=(20.0, 21.0))
 
-        with pytest.raises(ProtocolError, match="answered 0 of the 1 commands"):
+        with pytest.raises(ProtocolError, match="answered 0 of the 1 actions"):
             game.flush()
 
 

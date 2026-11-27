@@ -44,7 +44,7 @@ DEFEND_WITHIN = 15.0
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
+    """What is left to spend this turn: the bank, less what this turn's commands will cost once they go out."""
 
     def __init__(self) -> None:
         staged_cost = api.commands.staged_cost
@@ -113,7 +113,7 @@ def _free_scvs() -> Units[OwnUnit[Any]]:
 
 
 def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
-    """Order the free SCV nearest `site` to build there. The game charges the build at once, while the SCV walks."""
+    """Command the free SCV nearest `site` to build there. The game charges the build at once, while the SCV walks."""
     scvs = _free_scvs()
     if not scvs:
         return False
@@ -122,7 +122,7 @@ def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
 
 
 def _ordered_count(ability: AbilityId) -> int:
-    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: ordered this turn, or
+    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: staged this turn, or
     sent and maybe not shown. One shown already may count in both for an observation or two."""
     return sum(1 for scv in api.units.own.workers for command in scv.pending_commands if command.ability is ability)
 

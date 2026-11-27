@@ -18,8 +18,8 @@ from sc2nachos.units._tracking import _Tracker
 
 class MadeUpUnits:
     """The units of a game made up for a test, taken in one observation after another, as NachOS takes them in from a
-    game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client. What they are ordered goes into
-    `MadeUpUnits.orders`, and is never sent.
+    game: the same `Unit` and `OwnUnit` objects, kept up to date, with no game client. What they are commanded goes
+    into `MadeUpUnits.commands`, and is never sent.
 
     This player is player 1, and the enemy player 2. The units read their types from `game_data`, by default build
     75689's, as `load_game_data` reads it.
@@ -48,7 +48,7 @@ class MadeUpUnits:
 
     @property
     def commands(self) -> CommandBook:
-        """Every order the units were given since they were made up, through `sc2nachos.units.OwnUnit.command` or this
+        """Every command the units were given since they were made up, through `sc2nachos.units.OwnUnit.command` or this
         book's `command`, as `api.commands` holds a turn's. Nothing is sent, so none leaves the book."""
         return self._command_book
 

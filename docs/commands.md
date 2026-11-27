@@ -1,9 +1,9 @@
-# Orders
+# Commands
 
-A bot orders a unit through `unit.command` from its handlers, and several units at once through `api.commands.command`:
-`unit.command(ability, ...)` is `api.commands.command(unit, ability, ...)`, and everything here holds for both. Orders are
-sent in one request after the turn's last handler returns, so a turn that orders nothing sends nothing. Every order
-goes out in the turn it was given, as given, and the game charges what costs then.
+A bot commands a unit through `unit.command` from its handlers, and several units at once through
+`api.commands.command`: `unit.command(ability, ...)` is `api.commands.command(unit, ability, ...)`, and everything here
+holds for both. Commands are sent in one request after the turn's last handler returns, so a turn that commands nothing
+sends nothing. Every command goes out in the turn it was given, as given, and the game charges what costs then.
 
 ```python
 @api.on(TurnEvent)
@@ -18,41 +18,42 @@ refuses is listed in `api.action_failures`.
 ## Giving one
 
 ```python
-order = marine.command(AbilityId.STIM)
+command = marine.command(AbilityId.STIM)
 api.commands.command(squad, AbilityId.MOVE, target=ramp)
 scv.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, queued=True)
 scv.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site, force=True)
 ```
 
-- **`units`**, of `api.commands.command`, is one unit or any number of them, and each carries the order out; a unit
-  given twice counts once. An ability every unit of a command carries out goes out as one command naming them all: a
+- **`units`**, of `api.commands.command`, is one unit or any number of them, and each carries the command out; a unit
+  given twice counts once. An ability every unit of a command carries out goes out as one action naming them all: a
   move, an attack, a burrow, a lift, a stim, a toggle, a siege of tanks or an unload (`AbilityData.multi_unit`, from
   what the game was seen to do).
-  The game spreads such a group around the target point, where a command to each stacks them on the point, and orders of
-  such an ability given apart to one target go out as one command too ([orders sent together](#orders-sent-together)).
-  Any other ability goes out as a command to each unit, since one command naming several has only one of them carry it
-  out: three barracks given a marine train three, and two orbital commands given a MULE at one field call down two. A
-  research given to several units raises `ValueError`, and so does what puts something at its target, a build, an
-  add-on, a landing, a rooting or a warp-in, given to several aimed at one point or geyser, which only one of them can
-  carry out (`AbilityData.is_research`, `places_at_target`): the bot picks the unit.
+  The game spreads such a group around the target point, where an action to each stacks them on the point, and commands
+  of such an ability given apart to one target go out as one action too
+  ([commands sent together](#commands-sent-together)). Any other ability goes out as an action to each unit, since one
+  action naming several has only one of them carry it out: three barracks given a marine train three, and two orbital
+  commands given a MULE at one field call down two. A research given to several units raises `ValueError`, and so does
+  what puts something at its target, a build, an add-on, a landing, a rooting or a warp-in, given to several aimed at
+  one point or geyser, which only one of them can carry out (`AbilityData.is_research`, `places_at_target`): the bot
+  picks the unit.
 - **`target`** is a point, a unit, or nothing, whichever the ability takes; `api.data.abilities[ability].target_type`
   says which. The wrong kind raises `TypeError` at the call site instead of being sent for the game to answer `ERROR`
-  a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `order.target`
+  a turn later. A point is stored as the game will read it, rounded to the protocol's 32-bit float, so `command.target`
   is the point the game was given, not quite the one passed in.
-- **`queued`** puts the order behind each unit's orders instead of replacing them.
-- **`force`** sends the order even to units already carrying it out, which are otherwise left out
-  ([one order a unit a turn](#one-order-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it has
-  queued behind it (in game), so this is how a queue is dropped on purpose. A forced order still competes with the
-  turn's other orders.
+- **`queued`** puts the command behind each unit's orders instead of replacing them.
+- **`force`** sends the command even to units already carrying it out, which are otherwise left out
+  ([one command a unit a turn](#one-command-a-unit-a-turn)). Re-sending a unit's current order unqueued drops what it
+  has queued behind it (in game), so this is how a queue is dropped on purpose. A forced command still competes with the
+  turn's other commands.
 
 The turn's request also carries `api.camera.move_to(point)`, which centers this player's camera on a point after the
-turn's orders, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
+turn's commands, only the last move of a turn being sent, and then `api.chat(text)`, every message of the turn in order.
 `api.camera.center` is where the turn's observation has the camera.
 
 ## Training, building and researching
 
-`train`, `build` and `research` take what to make or research in place of the ability, and order the ability the
-unit's type does it with, as `command` orders it:
+`train`, `build` and `research` take what to make or research in place of the ability, and give the ability the
+unit's type does it with, as `command` gives it:
 
 ```python
 barracks.train(UnitTypeId.MARINE)  # BARRACKS_TRAIN_MARINE
@@ -66,30 +67,30 @@ if (tech_lab := barracks.add_on) is not None:
     tech_lab.research(UpgradeId.STIMPACK)  # BARRACKS_TECH_LAB_RESEARCH_STIMPACK
 ```
 
-- **`train`** orders what a structure or a larva makes that is not a structure: a train, a warp gate's warp-in, aimed
+- **`train`** gives what a structure or a larva makes that is not a structure: a train, a warp gate's warp-in, aimed
   at a point, and a larva's morph.
-- **`build`** orders a structure a worker makes, at a point or on a geyser, and a barracks's, factory's or starport's
+- **`build`** gives a structure a worker makes, at a point or on a geyser, and a barracks's, factory's or starport's
   add-on.
-- **`research`** orders an upgrade's `research_ability`, given to one of its `researchers`. A barracks's upgrades are
+- **`research`** gives an upgrade's `research_ability`, given to one of its `researchers`. A barracks's upgrades are
   its tech lab's, so `barracks.research(UpgradeId.STIMPACK)` raises `ValueError` naming the tech lab.
-- **`command`** orders the rest: a morph, as of an orbital command, a lair or a baneling, and a change of mode, as a lift
-  or a siege.
+- **`command`** gives the rest: a morph, as of an orbital command, a lair or a baneling, and a change of mode, as a
+  lift or a siege.
 
-A unit whose type does not make what it is given raises `ValueError` saying what does, or which of the three orders
+A unit whose type does not make what it is given raises `ValueError` saying what does, or which of the three gives
 it, and so do units whose types make it with different abilities, as a gateway and a warp gate a zealot: they are
-ordered apart. Each returns the `Command`, whose `ability` is the one ordered.
+commanded apart. Each returns the `Command`, whose `ability` is the one given.
 
-## One order a unit a turn
+## One command a unit a turn
 
-A unit carries out only the last order it is given in a turn. Earlier ones are never sent to it. The game does the
-same with two unqueued orders in one request, so NachOS sends only the one that would have stood.
+A unit carries out only the last command it is given in a turn. Earlier ones are never sent to it. The game does the
+same with two unqueued actions in one request, so NachOS sends only the one that would have stood.
 
 The exception is `OrderBehavior.KEEPS_ORDERS`: an ability that leaves the unit doing what it was doing. That is stim,
 the cloaks, Guardian Shield, both halves of every toggle a sweep could give a moving unit, whatever else a sweep saw a
 moving unit carry out without breaking its move, and every ability except production that is offered only to types
 that hold no order of their own — a structure's own rally, load, cancel and energy casts.
 
-Such an order neither overrides nor is overridden, because the unit does both — a marine stims and keeps moving.
+Such a command neither overrides nor is overridden, because the unit does both — a marine stims and keeps moving.
 
 An action several types perform does to each unit what that type's own does: `CANCEL` leaves a
 structure making what it was making, and takes a channeling ghost or infestor off what it is doing. A group of
@@ -108,7 +109,7 @@ a point replaces them:
 
 ```python
 medivac.command(AbilityId.MOVE, target=retreat)
-api.commands.command([bunker, medivac], AbilityId.UNLOAD)  # all three commands go out
+api.commands.command([bunker, medivac], AbilityId.UNLOAD)  # all three actions go out
 ```
 
 `SIEGE` and `UNSIEGE` are custom ids, which the game has no ability for: `SIEGE` goes out as the tank's, the
@@ -117,14 +118,14 @@ takes a point, its zone, and only one of two liberators given one carries it out
 `LIBERATOR_SIEGE_AT`, the game's. A custom id given a type it has nothing to be sent as for raises `ValueError`;
 `AbilityId.is_custom` tells one from the game's.
 
-An order goes out as one command for each ability it is sent as, or one per unit where the ability is not one every
-unit of a command carries out, or where it is aimed at the unit itself, and such a command may join another order's
-([orders sent together](#orders-sent-together)). A command the game refuses is listed in `api.action_failures` once
-for each unit it named, under the id ordered. An unload at a point aimed at one of the transports ordered raises
+A command goes out as one action for each ability it is sent as, or one per unit where the ability is not one every
+unit of a command carries out, or where it is aimed at the unit itself, and such an action may join another command's
+([commands sent together](#commands-sent-together)). An action the game refuses is listed in `api.action_failures` once
+for each unit it named, under the id given. An unload at a point aimed at one of the transports given it raises
 `TypeError`, naming `UNLOAD`.
 
 **A structure is a unit like any other here**: it makes the last thing a turn told it to. The game would queue a
-second train behind the first and charge for it from the step it was ordered, money spent before the structure can
+second train behind the first and charge for it from the step it was sent, money spent before the structure can
 start on it, so NachOS sends only the last. To fill a queue on purpose — a reactor's second slot, say, which the
 structure starts at once — pass `queued=True`:
 
@@ -168,19 +169,19 @@ for marine in marines:
         marine.command(AbilityId.STIM)
 ```
 
-**An order a unit is already carrying out is not sent to it.** In game, an unqueued order equal to a unit's first
-is answered `SUCCESS` and carries nothing out, but drops what the unit had queued behind it. So when the turn is sent,
-an unqueued order that replaces a unit's orders leaves out each unit already doing it, and an order left with no unit
-is not sent. What a unit is doing is the last such order NachOS sent it, while the observation after that turn
-may not show it yet, as on the ladder; otherwise it is the unit's first reported order, whoever gave it. So an order
-sent last turn counts though the unit still shows its old one, and in a stepped game an order the unit finished, or
-the game dropped, within one turn still counts on the next: repeating it then goes out a turn late.
+**A command a unit is already carrying out is not sent to it.** In game, an unqueued action equal to a unit's first
+order is answered `SUCCESS` and carries nothing out, but drops what the unit had queued behind it. So when the turn is
+sent, an unqueued command that replaces a unit's orders leaves out each unit already doing it, and a command left with
+no unit is not sent. What a unit is doing is the last such command NachOS sent it, while the observation after that
+turn may not show it yet, as on the ladder; otherwise it is the unit's first reported order, whoever gave it. So a
+command sent last turn counts though the unit still shows its old order, and in a stepped game a command the unit
+finished, or the game dropped, within one turn still counts on the next: repeating it then goes out a turn late.
 
-A bot that gives the same order every turn gets a new `Command` each time: the first is sent, and the rest are
-left out for as long as the units carry it out. Until the turn is sent, a repeated order is pending like any other:
-it shows in `staged_commands`, competes with the turn's other orders, and can be withdrawn. A group that gains a unit is
-sent the order for the newcomer alone. To drop a unit's queue on purpose, issue its current order with `force=True`,
-which goes out regardless.
+A bot that gives the same command every turn gets a new `Command` each time: the first is sent, and the rest are
+left out for as long as the units carry it out. Until the turn is sent, a repeated command is staged like any other:
+it shows in `staged_commands`, competes with the turn's other commands, and can be withdrawn. A group that gains a unit
+is sent the command for the newcomer alone. To drop a unit's queue on purpose, give it its current order with
+`force=True`, which goes out regardless.
 
 **What a structure makes is not left out that way.** A train or a research goes behind what the structure is making
 (in game), so one given every turn goes out every turn, and the game queues each and charges it then, up to 5, or 8
@@ -190,39 +191,39 @@ all the same. A morph or an add-on given to a structure making something is refu
 `NotSupported`, and so is a morph or a train queued behind a lifted structure's landing (in game): give it again once
 the structure is idle on the ground.
 
-## Orders sent together
+## Commands sent together
 
-Orders given apart go out as one command where they could have been one order: of an ability that joins other orders
-(`api.data.abilities[ability].joins_other_orders`), aimed at the same unit or at the same point as the game keeps it,
-sent as the same one of the game's abilities and queued alike. A squad moved to one point a marine at a time goes out
-as one move, and the game spreads it around the point as it would one order to them all:
+Commands given apart go out as one action where they could have been one command: of an ability that joins other
+commands (`api.data.abilities[ability].joins_other_orders`), aimed at the same unit or at the same point as the game
+keeps it, sent as the same one of the game's abilities and queued alike. A squad moved to one point a marine at a time
+goes out as one move, and the game spreads it around the point as it would one command to them all:
 
 ```python
 for marine in squad:
-    marine.command(AbilityId.MOVE, target=rally)  # one command naming every marine
+    marine.command(AbilityId.MOVE, target=rally)  # one action naming every marine
 ```
 
-An order joins the last such command before it unless one of its units is named in that command or a later one. So
+A command joins the last such action before it unless one of its units is named in that action or a later one. So
 each unit's commands go out in the order it was given them, a queued one behind the unqueued one before it, and no
-command names a unit twice; another unit's commands may go out ahead of commands given before them. A command aimed
+action names a unit twice; another unit's commands may go out ahead of commands given before them. A command aimed
 at one of its own units joins nothing, and nothing joins it: a medivac unloading where it stands is sent its unload at
 a point aimed at itself, which another medivac's unload at that one stays apart from. Every ability that is
-`multi_unit` joins other orders but two: an archon's merge, since each merges the two templar it names, and a
-load-all, which one command naming two command centers was seen to carry out for one of them.
+`multi_unit` joins other commands but two: an archon's merge, since each merges the two templar it names, and a
+load-all, which one action naming two command centers was seen to carry out for one of them.
 
-The game answers each command once, and one naming several units `Success` if any of them can take it
-([game behavior](reference/game-behavior/abilities-and-orders.md#one-command-to-several-units)). So a refused command
-is listed in `api.action_failures` once for each unit of every order it carried, under that unit's order's ability.
-A command taken counts as sent for every order it carried: an order whose units could not take it goes unlisted where
-another order's units in the same command could, and the same order given them again is left out as one they are
-carrying out until the observations would show it ([one order a unit a turn](#one-order-a-unit-a-turn)). A single
-order naming several units works the same way.
+The game answers each action once, and one naming several units `Success` if any of them can take it
+([game behavior](reference/game-behavior/abilities-and-orders.md#one-command-to-several-units)). So a refused action is
+listed in `api.action_failures` once for each unit of every command it carried, under that unit's command's ability.
+An action taken counts as sent for every command it carried: a command whose units could not take it goes unlisted
+where another command's units in the same action could, and the same command given them again is left out as one they
+are carrying out until the observations would show it ([one command a unit a turn](#one-command-a-unit-a-turn)). A
+single command naming several units works the same way.
 
-## What an order needs
+## What a command needs
 
-The game handles an order it cannot pay for in one of three ways: it refuses it, which `api.action_failures` lists
+The game handles a command it cannot pay for in one of three ways: it refuses it, which `api.action_failures` lists
 with the game's verdict; it answers `SUCCESS` and silently drops it, so nothing is listed and no unit ever shows it;
-or, for a queued order the supply cap cannot feed, it accepts it, charges for it, and leaves it at no progress until
+or, for a queued command the supply cap cannot feed, it accepts it, charges for it, and leaves it at no progress until
 supply frees up.
 
 A bot budgets for itself, since only it knows what matters most:
@@ -233,23 +234,23 @@ if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
     barracks.command(AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
-`api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and in a
-stepped game it charges the turn's orders by the next observation (in game), so a bot giving several in one turn
+`api.resources` and `api.supply` do not change as commands are given. They are what the game last reported, and in a
+stepped game it charges the turn's commands by the next observation (in game), so a bot giving several in one turn
 takes off what they will cost, `api.commands.staged_cost`:
 
 ```python
 budget = api.resources - api.commands.staged_cost.resources
 ```
 
-`staged_cost` counts the orders of `pending` as they will go out: the last of a unit's orders that replace one another,
-and nothing for a unit already carrying an order out. `cost` is what the game charges when the ability is ordered: the
+`staged_cost` counts the staged commands as they will go out: the last of a unit's commands that replace one another,
+and nothing for a unit already carrying a command out. `cost` is what the game charges when the ability is given: the
 difference for a morph, 150 for an orbital command rather than its type's 550; `cost.supply` is what the ability takes
 of the cap as it starts; and `cost.time` how long it takes at the normal rate, 560 steps for the orbital command, and
 none for a switch that costs nothing, such as a siege.
 
-A build is charged when it is ordered, not when the worker gets there, and so is an add-on given to a lifted
-structure, which lands first (in game). A bot that would rather pay on arrival moves the worker itself and orders the
-build once it is close: a depot ordered once the worker is within 8 of its site goes up no later than one ordered from
+A build is charged when it is given, not when the worker gets there, and so is an add-on given to a lifted
+structure, which lands first (in game). A bot that would rather pay on arrival moves the worker itself and gives the
+build once it is close: a depot given once the worker is within 8 of its site goes up no later than one given from
 30 away (tool `sweep_orders`). `api.placement.reserve` keeps the site out of the placement grids meanwhile, here for
 one step at a time, renewed each turn the worker walks:
 
@@ -261,11 +262,11 @@ else:
     scv.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site)
 ```
 
-Once ordered, the build reserves its site itself. A reservation without `max_time` lasts until it is withdrawn or
+Once given, the build reserves its site itself. A reservation without `max_time` lasts until it is withdrawn or
 one of this player's structures stands on its site.
 
-To take back an order before its turn is sent, withdraw it: what the game already has needs a cancel. A cancel is
-an order like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a
+To take back a command before its turn is sent, withdraw it: what the game already has needs a cancel. A cancel is
+a command like any other. `api.data.abilities[ability].cancelled_by` names the cancel to send to a
 structure carrying out `ability`: `CANCEL_LAST` for a train or a research on any structure with a queue, a
 tech lab included, and a morph's or an add-on's own cancel, since those answer `CANCEL_LAST` with `ERROR`. A
 warp-in has none, since a warp gate keeps no queue. A cancel takes back only the structure's last item, and frees
@@ -300,22 +301,23 @@ may stand at a site now is for `api.placement.is_free` to say.
 
 ## What the game did
 
-An order goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later order
-to its units, or every unit it was given already carrying it out. Until then it shows in `staged_commands` and `api.commands.staged`.
-NachOS does not follow it after.
+A command goes out when the turn's request is sent, unless the turn left it out: withdrawn, overridden by a later
+command to its units, or every unit it was given already carrying it out. Until then it shows in `staged_commands` and
+`api.commands.staged`, and once sent in `pending_commands` and `commands(since=...)`. NachOS does not follow what
+becomes of it.
 
-The game answers each command as it is sent. One it refuses is listed in `api.action_failures` from the next turn,
-once for each unit the command named, with the ability ordered and the game's verdict. One it takes need not be
+The game answers each action as it is sent. One it refuses is listed in `api.action_failures` from the next turn,
+once for each unit the action named, with the ability given and the game's verdict. One it takes need not be
 carried out: the game can drop it silently, give up on it later, or have another unit carry it out, one larva for
 another. What happened shows in the game itself:
 
 - **`unit.orders`**: what each unit is doing now, its current order and then its queued ones.
 - **`OwnConstructionStartedEvent`** and **`OwnUnitCreatedEvent`**: a structure placed, a unit made.
 - **`OwnUnitDiedEvent`**: a unit of yours died, and with a producer, whatever it was making was lost.
-- **`api.action_failures`**: every order the game refused when the last turn's were sent, and every one it accepted
+- **`api.action_failures`**: every command the game refused when the last turn's were sent, and every one it accepted
   earlier and gave up on since the previous observation, with the unit and why.
 
-An order's effect can show up an observation late, two on the ladder, so wait for it rather than expecting it in the
+A command's effect can show up an observation late, two on the ladder, so wait for it rather than expecting it in the
 next observation.
 
 ## Reading a unit's orders
@@ -324,7 +326,7 @@ A `Command` is what the bot asked for; `unit.orders` is what the game says the u
 its current order, `unit.current_order`, and one for each queued. The two need not agree: the game snaps a build to its
 site, and drops what it cannot carry out. The ids do agree: a unit reports its type's own id of an action several types
 perform, and NachOS reads it as the action's, so a moving marine shows `MOVE` and a gathering SCV `GATHER`. Where the
-game reports an id nothing links to the one ordered, NachOS reads it as the one ordered too: a sieging liberator shows
+game reports an id nothing links to the one given, NachOS reads it as the one given too: a sieging liberator shows
 `LIBERATOR_SIEGE_AT`, and each templar of a merge `MORPH_ARCHON` aimed at the other.
 
 The targets need not agree either. An SCV walking back to a mineral field out of sight shows its `GATHER` aimed at a

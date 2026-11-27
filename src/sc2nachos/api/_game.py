@@ -527,7 +527,7 @@ class _Game:
         self._chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
 
     def send_turn(self) -> None:
-        """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request,
+        """Send what the turn's handlers asked for: the commands, then the camera's move and the chat, in one request,
         and after it the debug commands and drawing."""
         chat, self._chat_to_send = self._chat_to_send, []
         move = self.camera._create_move_action()

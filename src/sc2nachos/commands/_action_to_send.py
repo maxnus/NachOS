@@ -1,4 +1,4 @@
-"""Orders as the protocol carries them: the actions in a turn's request."""
+"""Commands as the protocol carries them: the actions in a turn's request."""
 
 from __future__ import annotations
 
@@ -24,36 +24,36 @@ if TYPE_CHECKING:
 @final
 @dataclass(slots=True)
 class ActionToSend:
-    """One raw command of a turn's request: the game's `ability`, aimed at `target`, queued or not, given to the units
-    of each order of `parts`."""
+    """One action of a turn's request: the game's `ability`, aimed at `target`, queued or not, given to the units of
+    each command of `parts`."""
 
     ability: int
     target: Target | None
     queued: bool
     parts: list[tuple[Command, tuple[OwnUnit[Any], ...]]]
-    """Each order the command carries, with the units it names for that order, in the order they joined it."""
+    """Each command the action carries, with the units it names for that command, in the order they joined it."""
 
     def to_action(self) -> sc2api_pb2.Action:
-        """The command as the protocol carries it, naming the units of every part in turn."""
+        """The action as the protocol carries it, naming the units of every part in turn."""
         tags = [unit.tag for _, units in self.parts for unit in units]
         return _unit_command_action(self.ability, tags, self.target, queued=self.queued)
 
 
 def actions_giving(commands: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]]) -> list[ActionToSend]:
-    """The raw commands giving each of `orders` to the units it goes out to, in the order they go out.
+    """The actions giving each of `commands` to the units it goes out to, in the order they go out.
 
-    An order of an ability every unit of a command carries out goes out as one command naming its units, or one for
-    each ability it is sent as, and any other order as a command to each unit. A command of an order of an ability that
-    joins other orders (`ABILITIES_JOINING_OTHER_ORDERS`) joins the last command before it of the same game ability,
-    target as the game keeps it and queue flag, unless one of its units is named in that command or in one after it. So
-    a unit's commands go out in the order it was given them, though another unit's may go out ahead of commands given
-    before them, and no command names a unit twice. A command aimed at one of its own units joins nothing, and nothing
-    joins it.
+    A command of an ability every unit of a command carries out goes out as one action naming its units, or one for
+    each ability it is sent as, and any other command as an action to each unit. An action of a command of an ability
+    that joins other orders (`ABILITIES_JOINING_OTHER_ORDERS`) joins the last action before it of the same game
+    ability, target as the game keeps it and queue flag, unless one of its units is named in that action or in one after
+    it. So a unit's commands go out in the order it was given them, though another unit's may go out ahead of commands
+    given before them, and no action names a unit twice. An action aimed at one of its own units joins nothing, and
+    nothing joins it.
     """
     actions_to_send: list[ActionToSend] = []
-    # By game ability, target as the game keeps it and queue flag, the index of the last command an order may join.
+    # By game ability, target as the game keeps it and queue flag, the index of the last action a command may join.
     last_joinable: dict[tuple[int, Target | None, bool], int] = {}
-    # By unit id, the index of the last command naming the unit.
+    # By unit id, the index of the last action naming the unit.
     last_naming: dict[int, int] = {}
     for command, ability, target, units in _actions_of_each(commands):
         key = _join_key(command, ability, target, units)
@@ -72,8 +72,8 @@ def actions_giving(commands: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]])
 def _join_key(
     command: Command, ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
 ) -> tuple[int, Target | None, bool] | None:
-    """What a command of `order`, giving the game's `ability` at `target` to `units`, shares with each command it may
-    join: the ability, the target as the game keeps it and the queue flag. `None` for a command that joins none and that
+    """What an action of `command`, giving the game's `ability` at `target` to `units`, shares with each action it may
+    join: the ability, the target as the game keeps it and the queue flag. `None` for an action that joins none and that
     none joins: of an ability that joins no other order, or aimed at one of its own units, as a transport's unload where
     it stands is."""
     if command.ability not in ABILITIES_JOINING_OTHER_ORDERS:
@@ -86,7 +86,7 @@ def _join_key(
 def _actions_of_each(
     commands: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]],
 ) -> Iterator[tuple[Command, int, Target | None, tuple[OwnUnit[Any], ...]]]:
-    """Each raw command each of `orders` goes out as on its own, with its order: one naming its units for an ability
+    """Each action each of `commands` goes out as on its own, with its command: one naming its units for an ability
     every unit of a command carries out, or one for each ability it is sent as, and one to each unit for any other."""
     for command, units in commands:
         sent_as = ABILITIES_SENT_AS_ANOTHER.get(command.ability, SENT_UNCHANGED)
@@ -102,7 +102,7 @@ def _actions_of_ability(
     target: Target | None,
     sent_as: Mapping[UnitTypeId, SentAs],
 ) -> list[tuple[int, Target | None, tuple[OwnUnit[Any], ...]]]:
-    """The raw commands giving `ability` at `target` to `units`, each as the game's ability, its target and the units
+    """The actions giving `ability` at `target` to `units`, each as the game's ability, its target and the units
     it names: one naming the units that take `ability` itself, then, for each ability `sent_as` sends their types
     instead, one naming its units, or one per unit where it is aimed at the unit itself."""
     own: list[OwnUnit[Any]] = []
@@ -122,7 +122,7 @@ def _actions_of_ability(
 
 
 def _unit_command_action(ability: int, tags: list[int], target: Target | None, *, queued: bool) -> sc2api_pb2.Action:
-    """One raw command giving `ability` to the units of `tags`, aimed at `target`."""
+    """One action giving `ability` to the units of `tags`, aimed at `target`."""
     if target is None:
         command = raw_pb2.ActionRawUnitCommand(ability_id=ability, unit_tags=tags, queue_command=queued)
     elif isinstance(target, Point):

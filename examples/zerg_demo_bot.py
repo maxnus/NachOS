@@ -67,7 +67,7 @@ TUMOR_PLANTS_AFTER_ITS_BURROW = GameTime(steps=289)
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
+    """What is left to spend this turn: the bank, less what this turn's commands will cost once they go out."""
 
     def __init__(self) -> None:
         staged_cost = api.commands.staged_cost
@@ -103,8 +103,8 @@ def spend_money(_: TurnEvent) -> None:
 
 
 def _ordered_count(ability: AbilityId) -> int:
-    """How many orders of `ability` this player's units were given that `api.in_production` may not count yet: ordered
-    this turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
+    """How many commands of `ability` this player's units were given that `api.in_production` may not count yet:
+    staged this turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
     return sum(1 for unit in api.units.own for command in unit.pending_commands if command.ability is ability)
 
 
@@ -193,7 +193,7 @@ def _free_drones() -> Units[OwnUnit[Any]]:
 
 
 def _order_drone_to_build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
-    """Order the free drone nearest `target` to morph into a structure there. The game charges it at once, while the
+    """Command the free drone nearest `target` to morph into a structure there. The game charges it at once, while the
     drone walks."""
     drones = _free_drones()
     if not drones:
@@ -345,7 +345,7 @@ class QueenCommander:
 
     @api.on(TurnEvent, min_interval=GameTime(steps=8))
     def order_queens(self, _: TurnEvent) -> None:
-        """Pair the queens with the townhalls, and order each that is free."""
+        """Pair the queens with the townhalls, and command each that is free."""
         queens = api.units.own.of_type(UnitType.Queen)
         self._pair(queens)
         threats = api.units.enemy.non_structures
@@ -394,7 +394,7 @@ class CreepSpread:
 
     @api.on(TurnEvent, min_interval=GameTime(steps=16))
     def plant_tumors(self, _: TurnEvent) -> None:
-        """Order each tumor that can plant one now, and has not been ordered to, to plant one toward the enemy."""
+        """Command each tumor that can plant one now, and has not been commanded to, to plant one toward the enemy."""
         for tumor in api.units.own.of_type(UnitType.CreepTumorBurrowed):
             if tumor.orders:
                 continue

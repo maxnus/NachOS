@@ -1,8 +1,8 @@
 # Debugging
 
 A bot draws on the game's screen, turns cheats on and makes units through `api.debug`. What it asks for in a turn goes
-out after the turn's orders, in one debug request. The game takes it from a client that joined the game as from the one
-that created it (in game); what a ladder's own proxy lets through, NachOS cannot see, and a debug request the game
+out after the turn's commands, in one debug request. The game takes it from a client that joined the game as from the
+one that created it (in game); what a ladder's own proxy lets through, NachOS cannot see, and a debug request the game
 refuses raises `ProtocolError` out of `api.play`, ending the bot's game, so a bot draws only where it is let. The Linux
 client renders nothing, so a drawing shows only in the game's window on Windows or macOS (stated).
 

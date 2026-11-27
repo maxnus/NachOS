@@ -111,15 +111,15 @@ difference that rests on what the game does links there for its evidence.
   has no `AlertError` or `TrainError`, which the game was never seen to raise
   ([game behavior](game-behavior/alerts-and-chat.md#alerts-and-the-camera)).
 
-## Orders
+## Commands
 
-[commands.md](../commands.md) says how an order is given, what it competes with, and how to learn what the game did with
-it.
+[commands.md](../commands.md) says how a command is given, what it competes with, and how to learn what the game did
+with it.
 
 | python-sc2 | NachOS |
 |---|---|
 | `unit.move(p)`, `unit.attack(t)`, `unit(AbilityId.X, target)` | `unit.command(AbilityId.MOVE, target=p)`, or `api.commands.command(units, ...)` for several at once |
-| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.commands.train(units, t)` and so on for several at once ([orders](../commands.md#training-building-and-researching)) |
+| `unit.train(t)`, `unit.warp_in(t, p)`, `unit.build(t, p)`, `unit.research(u)` | `unit.train(t)`, `unit.train(t, target=p)` for a warp gate, `unit.build(t, target=p)`, `unit.research(u)`, or `api.commands.train(units, t)` and so on for several at once ([commands](../commands.md#training-building-and-researching)) |
 | `bot.do(action)`, `await bot._do_actions(...)` | `unit.command(...)` or `api.commands.command(...)`, sent once the turn's handlers have run |
 | nothing | `unit.command(..., force=True)`, `unit.staged_commands`, `unit.pending_commands`, `unit.commands(since=t)` |
 | `bot.do(action, queue=True)` | `unit.command(..., queued=True)` |
@@ -128,37 +128,37 @@ it.
 | `unit.is_moving`, `is_attacking`, `is_gathering`, `is_returning`, `is_repairing` | the same, on your own units, each the current order alone; NachOS has no id for `ATTACK_ATTACKTOWARDS` or `ATTACK_ATTACKBARRAGE`, which python-sc2's `is_attacking` counts too |
 | `unit.is_using_ability(a)`, `is_collecting` | `unit.is_doing(a)`, one ability or several: `is_doing({AbilityId.GATHER, AbilityId.RETURN})`, each one id whatever the unit's type |
 | `order.target`, a tag or a point | `order.target`, the unit or the point, raising `NotReportedError` for a unit the game names by a tag it never reports, and `order.known_target`, `None` there |
-| nothing | `order.withdraw()` |
-| the results `client.actions(...)` returns | `api.action_failures`, a refused order listed for each unit it named |
+| nothing | `command.withdraw()` |
+| the results `client.actions(...)` returns | `api.action_failures`, a refused command listed for each unit it named |
 
-- **An order is something you hold on to until it is sent.** `command` returns a `Command` that can be withdrawn
+- **A command is something you hold on to until it is sent.** `command` returns a `Command` that can be withdrawn
   while the turn's handlers run; python-sc2 returns nothing. What the game refused shows in `api.action_failures` on the
   next turn, and what a unit then did, in its orders and in events.
-- **A unit takes one order a turn, the last it was given**, apart from the abilities it carries out at once. There
-  is no `bot.do` to call twice for two orders to one unit; the second replaces the first, as it would in game. A
+- **A unit takes one command a turn, the last it was given**, apart from the abilities it carries out at once. There
+  is no `bot.do` to call twice for two commands to one unit; the second replaces the first, as it would in game. A
   structure is no exception: of two trains given in a turn only the last goes out, and a reactor's second marine
-  needs `queued=True` ([orders](../commands.md#one-order-a-unit-a-turn)). python-sc2 sends both, and the game queues and
-  charges both.
+  needs `queued=True` ([commands](../commands.md#one-command-a-unit-a-turn)). python-sc2 sends both, and the game
+  queues and charges both.
 - **A drone's morph is given to a larva, and a barracks's research to its tech lab.** python-sc2's `train` and
   `research` pick the unit themselves. In NachOS, as in the game, a larva's morph given to a hatchery is refused
-  `NotSupported` (in game), so pick a larva from `api.units.own.of_type(UnitType.Larva)` and order
+  `NotSupported` (in game), so pick a larva from `api.units.own.of_type(UnitType.Larva)` and call
   `larva.train(UnitTypeId.DRONE)`. `hatchery.train(UnitTypeId.DRONE)` and `barracks.research(UpgradeId.STIMPACK)`
   raise `ValueError`, naming what does.
-- **Each unit given an order carries it out.** What every unit of a command carries out, a move, an attack, a stim,
-  goes out as one command naming them all, and so do orders of it given apart to one target in a turn, where
-  python-sc2's `combine_actions` joins only neighboring ones ([orders](../commands.md#orders-sent-together)); anything
-  else, a train, an add-on, a morph or a spell, as a command to each, so three barracks given a marine train three
-  (`AbilityData.multi_unit`). A research given to several units raises `ValueError`, and so does a build, a landing, a
-  rooting or a warp-in given to several at one point, which only one of them could carry out: pick the unit.
-- **Nothing is subtracted as you order, and nothing is checked.** python-sc2's `subtract_cost` keeps its own tally;
-  NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
-  ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever
-  it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.commands.staged_cost` is what the
-  turn's orders will cost ([orders](../commands.md#what-an-order-needs)).
-- **An order a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for its
-  first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
-  ([orders](../commands.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
-  `force=True`.
+- **Each unit given a command carries it out.** What every unit of a command carries out, a move, an attack, a stim,
+  goes out as one action naming them all, and so do commands of it given apart to one target in a turn, where
+  python-sc2's `combine_actions` joins only neighboring ones ([commands](../commands.md#commands-sent-together));
+  anything else, a train, an add-on, a morph or a spell, as an action to each, so three barracks given a marine train
+  three (`AbilityData.multi_unit`). A research given to several units raises `ValueError`, and so does a build, a
+  landing, a rooting or a warp-in given to several at one point, which only one of them could carry out: pick the unit.
+- **Nothing is subtracted as you command, and nothing is checked.** python-sc2's `subtract_cost` keeps its own
+  tally; NachOS reads what the game reports, which already counts a build's cost from the step it was given
+  ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every command as given,
+  whatever it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.commands.staged_cost`
+  is what the turn's commands will cost ([commands](../commands.md#what-a-command-needs)).
+- **A command a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for
+  its first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
+  ([commands](../commands.md#one-command-a-unit-a-turn)). To drop a queue on purpose, give the unit its current order
+  with `force=True`.
 - **A wrong target is a `TypeError`, not a verdict.** python-sc2 sends whatever you pass and the game answers
   `ERROR` a turn later. NachOS reads `target_type` off the ability and raises at the call site.
 - **Unloading in place is `UNLOAD`, for every transport.** python-sc2 bots write `medivac(AbilityId.UNLOADALLAT_MEDIVAC,
@@ -166,7 +166,7 @@ it.
   `TypeError` for an `UNLOAD_AT` aimed at the transport itself. Likewise `SIEGE` stands for `SIEGEMODE_SIEGEMODE`,
   `MORPH_SURVEILLANCEMODE` and `MORPH_OVERSIGHTMODE`, and `UNSIEGE` for their ways back and the liberator's, whose siege
   at a point is `LIBERATOR_SIEGE_AT`, python-sc2's `MORPH_LIBERATORAGMODE`
-  ([orders](../commands.md#one-order-a-unit-a-turn)).
+  ([commands](../commands.md#one-command-a-unit-a-turn)).
 - **Only a structure's last item can be cancelled, in either library.** An item in the middle of a queue takes a UI
   action that needs the structure selected and a feature layer, and both libraries ask for the raw interface alone
   ([game behavior](game-behavior/abilities-and-orders.md#cancels-and-refunds)).
@@ -180,7 +180,7 @@ it.
 | `client.debug_text_world(text, p)`, `debug_line_out(p, q)`, `debug_box2_out(p)`, `debug_sphere_out(p, r)` | `api.debug.draw(p, DebugText(text))`, `draw(p, DebugLine(to=q))`, `draw(p, DebugBox(1, 1))`, `draw(p, DebugSphere(r))`, each shown for `shown_for=` and returning a `Drawing`; shapes compose in a `DebugGroup` |
 | `client.debug_text_screen(text, pos)` | `api.debug.draw_text_on_screen(text, at=pos)` |
 | a `color` of red, green and blue, as a tuple, a list or a `Point3` | `Color.RED`, or a tuple of the three |
-| `await client._send_debug()`, after every step | nothing: sent after the turn's orders, at most every `api.debug.refresh_interval` |
+| `await client._send_debug()`, after every step | nothing: sent after the turn's commands, at most every `api.debug.refresh_interval` |
 | `client.debug_show_map()`, `debug_god()`, `debug_fast_build()` and the other switches | `api.debug.turn_on(Cheat.SHOW_MAP)`, `turn_off`, and `api.debug.cheats` |
 | `client.debug_minerals()`, `debug_all_resources()`, `debug_upgrade()` | `api.debug.give_minerals()`, `give_resources()`, `give_upgrades()` |
 | `client.debug_gas()` | nothing: it gives no vespene (in game) |
@@ -188,7 +188,7 @@ it.
 | `client.debug_kill_unit(units)`, `debug_set_unit_value(units, 2, v)` | `api.debug.kill(units)`, `api.debug.set_vitals(units, life=v)` |
 | `client.debug_leave()` | `api.debug.surrender()`, and `declare_victory()` |
 | `client.debug_hang(s)`, `debug_set_score(s)` | `api.client.debug([...])`, raw protocol messages |
-| `bot.chat_send(text, team_only)` | `api.chat(text, team_only=...)`, sent with the turn's orders |
+| `bot.chat_send(text, team_only)` | `api.chat(text, team_only=...)`, sent with the turn's commands |
 | `client.move_camera(p)`, `state.observation_raw.player.camera` | `api.camera.move_to(p)`, `api.camera.center` |
 | `client.leave()` | `api.leave_game()`, at the end of the turn |
 
@@ -416,7 +416,7 @@ it.
   python-sc2's rule: exact for a unit that can move firing at a unit, it reaches some 0.1 too far for an attacker that
   cannot move and up to some 0.26 for a structure ([game behavior](game-behavior/damage-and-buffs.md)).
 - **`weapon_cooldown` reads zero while an attack is under way**, for up to 8 steps before it by type, and a move
-  ordered then cancels the attack unless it comes in the last step. A unit that moves off between attacks waits for the
+  given then cancels the attack unless it comes in the last step. A unit that moves off between attacks waits for the
   cooldown to rise ([game behavior](game-behavior/damage-and-buffs.md)).
 - **The enemy's upgrades are read off its units, once, for the whole player.** The game reports nothing of the
   enemy's upgrades beyond the attack, armor and shield levels on each unit in sight, and those belong to the player
@@ -515,7 +515,7 @@ it.
 | `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
 | `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
-| nothing | `api.placement.reserve(t, at=p, margin=m)`, ground kept out of the grids for a build not ordered yet, with `margin` as `is_free` takes it |
+| nothing | `api.placement.reserve(t, at=p, margin=m)`, ground kept out of the grids for a build not given yet, with `margin` as `is_free` takes it |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.pathing.cheapest_paths_from(a).distances[b]` over the turn's grid, which leaves a structure `a` lies in as the game does |
 | `game_info.map_center` | `api.map.playable_area.center` |
@@ -596,7 +596,7 @@ it.
 | `game_data` | `api.data` |
 | `game_data.units[unit_type.value]` | `api.data.units[unit_type]` |
 | `game_data.abilities`, `game_data.upgrades` | `api.data.abilities`, `api.data.upgrades`, `api.data.effects` |
-| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the order that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
+| `unit_data.cost` | `unit_data.cost`, a `Cost` of minerals, vespene, supply and steps: what the command that made one cost, an orbital command's own 150 where python-sc2's is 550; see below |
 | `unit_data.cost.time`, in steps | `unit_data.build_time`, a `GameTime`, a morph's own alone, as python-sc2's, but rounded up to a whole step, and the lurker's the 403 steps it took in game, where python-sc2 reads its row's 553.33, and the archon's the 192 it took, where python-sc2 reads its row's none; `unit_data.cost.time` is that of the last step that cost anything, a sieged tank's the tank's |
 | `unit_data._proto.food_required`, `food_provided` | `unit_data.supply_used`, `unit_data.supply_provided` |
 | `unit_data._proto.movement_speed`, and python-sc2's `1.4 *` before it | `unit_data.speed`, per second of Faster speed |
@@ -610,11 +610,11 @@ it.
 | `weapon.damage_bonus` | `weapon.damage_bonuses`, by the attribute each is earned by |
 | `ability_data.link_name`, `button_name`, `friendly_name` | nothing; see below |
 | `ability_data.is_building` | `ability_data.needs_placement` |
-| `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is ordered |
-| `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's order for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
-| `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the order that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
-| `bot.calculate_unit_value(t)` | `unit_data.total_cost`, what every order that made one cost: 550 for an orbital command, 350 for a hatchery, two high templar's 100/300 for an archon, nothing for a MULE |
-| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: an order that takes no supply goes though the army stands over the cap |
+| `game_data.calculate_ability_cost(a)` | `ability_data.cost`, what the game charges as it is given |
+| `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's morph for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
+| `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the command that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
+| `bot.calculate_unit_value(t)` | `unit_data.total_cost`, what every command that made one cost: 550 for an orbital command, 350 for a hatchery, two high templar's 100/300 for an archon, nothing for a MULE |
+| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: a command that takes no supply goes though the army stands over the cap |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |
@@ -637,10 +637,10 @@ it.
 - **An action several unit types perform has one id.** The game gives each type its own -- `HARVEST_GATHER_SCV`,
   `HARVEST_GATHER_PROBE` and `HARVEST_GATHER_DRONE` in python-sc2's spelling -- and a unit is offered and reports its
   own, though the game takes the action's id as an order for any of them. NachOS curates only `GATHER`, and reads each
-  type's own as it: it is what you order, what a unit is offered and what it reports, and a table holds a row for the
+  type's own as it: it is what you command, what a unit is offered and what it reports, and a table holds a row for the
   action alone, whose `id` is its own. python-sc2 folds the same way in `AbilityData.id`, which returns the remapped id
   while `exact_id` returns the row's own, and keeps both spellings in `AbilityId`. NachOS also reads the liberator's
-  siege and the archon's merge as the ids ordered, which neither the game's rows nor python-sc2 link
+  siege and the archon's merge as the ids given, which neither the game's rows nor python-sc2 link
   ([game behavior](game-behavior/abilities-and-orders.md#ids-what-a-unit-is-offered-ordered-and-runs)). A leveled
   research keeps an id per level and has no general one: python-sc2's `RESEARCH_TERRANINFANTRYWEAPONS` has no
   counterpart, and `ENGINEERINGBAYRESEARCH_TERRANINFANTRYWEAPONSLEVEL1` is
@@ -668,7 +668,7 @@ it.
   it. Its amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game
   gave stays whole until something divides it. `cost.is_free` says whether a cost takes no minerals, vespene or
   supply, whatever its time.
-- **A unit type's cost is what the order that made one cost, and an ability's what ordering it costs.**
+- **A unit type's cost is what the command that made one cost, and an ability's what giving it costs.**
   python-sc2's `unit_data.cost` hands the game's number back as it is, an orbital command's 550 with the command
   center's 400 in it. NachOS's is that of the last step that cost anything, an orbital command's 150, as
   `COMMAND_CENTER_MORPH_ORBITAL_COMMAND` costs, an extractor's 25 and a baneling's 25/25
@@ -703,14 +703,14 @@ it.
 - **Power is the structure's, not the ability's.** An unpowered gateway is offered nothing it trains, which
   python-sc2 writes as `requires_power` on each ability; NachOS has `needs_power` on the unit type.
 - **A unit type is offered what the game offers it, less what does not work.** Once Burrow is researched, every
-  zerg unit that burrows is offered every zerg unit's burrow, and ordered any of them burrows as itself, so a
+  zerg unit that burrows is offered every zerg unit's burrow, and given any of them burrows as itself, so a
   zergling is offered `BURROW` by its own burrow alone, and `BURROW`'s `products` make a burrowed
   zergling of a zergling and a burrowed roach of a roach.
   A cancel, a halt or an unload counts among a type's `abilities` though it is offered only while there is something
   to cancel, halt or unload. A warp gate warps in the six units a gateway trains, each by an ability of its own:
   `WARP_GATE_WARP_IN_ZEALOT`'s `products` are `{WARP_GATE: ZEALOT}`. A zealot's `creation_ability` is
   `GATEWAY_TRAIN_ZEALOT`, whose `performers` hold no warp gate.
-- **`morphed_from` names the unit type used up making another**, where the unit ordered becomes the product or is
+- **`morphed_from` names the unit type used up making another**, where the unit commanded becomes the product or is
   gone: a larva for a zergling, a drone for a spawning pool, a command center for an orbital command, a siege tank
   for a sieged one. An SCV, a probe and a barracks make theirs beside themselves. A morph's `cost` is that of its own
   step, its `ability_data.cost`.

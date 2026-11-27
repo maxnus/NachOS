@@ -71,8 +71,21 @@ As of 2026-11-22:
 
 The issue, discussion or pull request named holds the reasons, and the alternatives weighed.
 
-### Orders
+### Commands
 
+- **A bot gives a unit a command, and the game reports its orders** (the owner, 2026-11-27, #265, reversing #242's
+  `IssuedOrder`): `unit.command(...)` and `api.commands.command(...)` return a `Command`, held by the `CommandBook` in
+  `sc2nachos.commands`, and what goes out is an action (`ActionToSend`; the reported one is `state.UnitAction`). A
+  command is *staged* until its turn's end, then *sent*, refused or taken, and *pending* while staged or sent and not
+  refused within the last two observations. "Issued" names no stage: the game answers an action naming several units
+  `Success` if any of them can take it, so nothing may claim a unit took a command. The bullets below keep the names
+  of their own pull requests.
+- **A unit has `staged_commands`, `pending_commands` and `commands(since=...)`** (the owner, 2026-11-27, #265), over
+  `issued_to(unit, include_sent=True)`, whose fixed window could not answer "did I stim within a stim's length"; over
+  one method with a flag per stage, since the common case is staged and pending together; and over an issued-only
+  history, which no question needs. Pending is a timer, never checked against the observations; matching sent
+  commands against reported orders is a step of its own (Next). `commands` keeps 60 seconds of game time and raises
+  for a `since` further back, so no bot reads a cut-short answer.
 - **NachOS checks nothing an order needs** (#46): minerals, vespene, supply, queue room and tech are the game's to
   judge and the bot's to budget, and `api.action_failures` lists what the game refused. No budget, no `can_afford`,
   no `api.orders.cancel`: a built version with all of that was dropped as too complicated for what it bought.
@@ -364,6 +377,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
 
 ## Next
 
+- **#265, open**: the command vocabulary and the unit's three reads of its commands (above), a stim, a rally or a MULE
+  pending as other sent commands are, and a landed host's `add_on_position`. A bot has to change its code: the notes
+  of the release that takes it list the renames. Then, to plan with the owner: **matching sent commands against
+  reported orders**, so that one stops being pending once the unit shows it, the window kept as a ceiling for what
+  never shows as an order (a stim's buff, a MULE, a rally, a move finished within the turn).
 - **Toward 1.0** (proposed 2026-11-22, when the owner asked whether NachOS was ready): first, in #258, `py.typed`
   (mypy read none of NachOS's annotations), Python 3.14 in CI, and the ids AI Arena's replays had shown raising, a
   creep tumor's own burrow and the collapsible towers' buffs, beside which ten playbacks every step of five games, three

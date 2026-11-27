@@ -1,4 +1,4 @@
-"""The orders a bot gives in a turn, sent after its handlers have run."""
+"""The commands a bot gives in a turn, sent after its handlers have run."""
 
 from __future__ import annotations
 
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
     from sc2nachos.protocol import Client
     from sc2nachos.units import Target
 
-# The observations after the one a turn read by which its orders show in a unit's orders, and what it carries out at
-# once in its effect: the next in a stepped game, and the one after that on the ladder or in realtime
+# The observations after the one a turn read by which its commands show in a unit's orders, and what it carries out
+# at once in its effect: the next in a stepped game, and the one after that on the ladder or in realtime
 # (docs/reference/game-behavior/protocol.md).
 _SHOWN_WITHIN = 2
 # How long before the last observation a unit's sent commands are kept.
@@ -53,10 +53,10 @@ _IS_AIMED_AT_ITSELF = MappingProxyType(
 
 @final
 class CommandBook:
-    """This player's orders for the turn.
+    """This player's commands for the turn.
 
-    A bot gives orders through `api.commands` while its handlers run. They are sent in one request after the turn's
-    last handler returns. A unit carries out only the last order it is given in a turn, plus any abilities it
+    A bot gives commands through `api.commands` while its handlers run. They are sent in one request after the turn's
+    last handler returns. A unit carries out only the last command it is given in a turn, plus any abilities it
     carries out at once.
     """
 
@@ -79,30 +79,30 @@ class CommandBook:
     def __init__(self, game_data: GameData) -> None:
         """A book for one game. `game_data` says what each ability does and what it must be aimed at."""
         self._game_data = game_data
-        # The turn's orders in the order they were issued, and those of each unit by its id.
+        # The turn's commands in the order they were given, and those of each unit by its id.
         self._staged: list[Command] = []
         self._staged_by_unit: dict[int, list[Command]] = {}
-        # The turn's orders issued with `force`, sent even to units already carrying them out.
+        # The turn's commands given with `force`, sent even to units already carrying them out.
         self._forced: set[Command] = set()
-        # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
+        # By unit id, the last unqueued command the game took that replaces the unit's orders, and the number of the
         # observation its turn read.
         self._last_sent: dict[int, tuple[Command, int]] = {}
-        # By unit id, each order the game took that does not replace the unit's orders, one queued, a train, a
+        # By unit id, each command the game took that does not replace the unit's orders, one queued, a train, a
         # research, an add-on or a morph, with the number of the observation its turn read, until the observations must
-        # show it or an order replaces the unit's orders.
+        # show it or a command replaces the unit's orders.
         self._sent_not_replacing: dict[int, list[tuple[Command, int]]] = {}
-        # By unit id, each unqueued order the game took that the unit carries out at once, a stim, a rally or a MULE,
-        # with the number of the observation its turn read, until the observations must show its effect. An order
+        # By unit id, each unqueued command the game took that the unit carries out at once, a stim, a rally or a MULE,
+        # with the number of the observation its turn read, until the observations must show its effect. A command
         # that replaces the unit's orders leaves these, since the unit did both.
         self._sent_at_once: dict[int, list[tuple[Command, int]]] = {}
         # By unit id, each command that went out to the unit and was not refused, oldest first, for
         # `_COMMANDS_KEPT_FOR` before the last observation.
         self._sent_by_unit: dict[int, deque[Command]] = {}
-        # What the game refused of the last turn's orders, one entry per unit a refused command named.
+        # What the game refused of the last turn's commands, one entry per unit a refused command named.
         self._refusals: tuple[ActionFailure, ...] = ()
         self._observations = 0
         self._time = GameTime.ZERO
-        # By maker and product, the ability `train` orders, and the one `build` orders.
+        # By maker and product, the ability `train` gives, and the one `build` gives.
         abilities_making = _abilities_making(game_data)
         self._trained_abilities = {pair: ability for pair, ability in abilities_making.items() if _is_trained(*pair)}
         self._built_abilities = {pair: ability for pair, ability in abilities_making.items() if _is_built(*pair)}
@@ -116,36 +116,36 @@ class CommandBook:
         queued: bool = False,
         force: bool = False,
     ) -> Command:
-        """Order `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Command`.
+        """Command `units` to use `ability`, aimed at a point, a unit or nothing, and return the `Command`.
 
         Every unit given carries it out, and a unit given twice counts once. An ability every unit of one command
-        carries out (`AbilityData.multi_unit`) goes out as one command naming them all, so units ordered together keep
-        their spacing where the game spreads them; any other goes out as a command to each. `queued` puts the order
-        behind each unit's orders. Nothing is sent until the turn's handlers have all run.
+        carries out (`AbilityData.multi_unit`) goes out as one action naming them all, so units commanded together
+        keep their spacing where the game spreads them; any other goes out as an action to each. `queued` puts the
+        command behind each unit's orders. Nothing is sent until the turn's handlers have all run.
 
-        Orders of an ability that joins other orders (`AbilityData.joins_other_orders`), given apart in one turn, go out
-        as one command where they are aimed at the same unit, or at the same point as the game keeps it, and are queued
-        alike, so units ordered one at a time keep their spacing too. An order joins the last such command before it
-        unless one of its units is named in that command or a later one, so a unit's commands go out in the order it was
-        given them; another unit's may go out ahead of commands given before them. A command aimed at one of its own
-        units, as a transport's unload where it stands is, joins nothing, and nothing joins it. The game answers a
-        command naming several units `Success` if any of them can take it, so then every order it carries counts as
-        sent: one whose units could not take it is not listed in `api.action_failures`, and the same order given them
-        again is left out as one they are carrying out until the observations would show it.
+        Commands of an ability that joins other orders (`AbilityData.joins_other_orders`), given apart in one turn, go
+        out as one action where they are aimed at the same unit, or at the same point as the game keeps it, and are
+        queued alike, so units commanded one at a time keep their spacing too. A command joins the last such action
+        before it unless one of its units is named in that action or a later one, so a unit's commands go out in the
+        order it was given them; another unit's may go out ahead of commands given before them. A command aimed at one
+        of its own units, as a transport's unload where it stands is, joins nothing, and nothing joins it. The game
+        answers an action naming several units `Success` if any of them can take it, so then every command it carries
+        counts as sent: one whose units could not take it is not listed in `api.action_failures`, and the same command
+        given them again is left out as one they are carrying out until the observations would show it.
 
-        An unqueued order that replaces a unit's orders is not sent to a unit already doing it: sending it would only
-        drop what the unit has queued behind it. What a unit is doing is the last such order sent to it, while the
+        An unqueued command that replaces a unit's orders is not sent to a unit already doing it: sending it would only
+        drop what the unit has queued behind it. What a unit is doing is the last such command sent to it, while the
         observation after its turn may not show it yet, and otherwise its first reported order. `force` sends it to
         those units too: that is how a unit is made to drop its queue and go on with its current order. It still
-        competes with the turn's other orders like any other.
+        competes with the turn's other commands like any other.
 
         An ability that goes out as another for some types (`AbilityData.sent_as`) goes out as that one to their units,
-        in commands of its own, which join other orders' as the ability's own do. A command the game refuses is listed
-        in `api.action_failures` once for each unit it names, under the ability of that unit's order.
+        in actions of its own, which join other commands' as the ability's own do. An action the game refuses is listed
+        in `api.action_failures` once for each unit it names, under the ability of that unit's command.
 
         Raises `TypeError` for a target the ability cannot be aimed at, for an add-on with no point given to a flying
         structure, and for a transport's unload at a point aimed at one of `units` itself, which is `UNLOAD` for that
-        one: a group given an unload at one of its own transports is two orders. Raises `ValueError` for a research
+        one: a group given an unload at one of its own transports is two commands. Raises `ValueError` for a research
         given to several units, and for an ability that places something at its target (`AbilityData.places_at_target`)
         given to several aimed at one; and for a custom ability given to a type it has nothing to be sent as for, or
         which this game's tables lack an ability it is sent as for.
@@ -183,15 +183,15 @@ class CommandBook:
         queued: bool = False,
         force: bool = False,
     ) -> Command:
-        """Order `units` to make a unit of `unit_type` and return the `Command`, as `command` orders the ability
+        """Command `units` to make a unit of `unit_type` and return the `Command`, as `command` gives the ability
         their type makes it with: a barracks's `BARRACKS_TRAIN_MARINE`, a warp gate's `WARP_GATE_WARP_IN_ZEALOT`, aimed
         at a point, a larva's `LARVA_MORPH_DRONE`.
 
-        It orders what a structure or a larva makes that is not a structure; `build` orders a structure a worker makes
-        and an add-on, and `command` the rest, a morph such as an orbital command's or a baneling's among them.
+        It commands what a structure or a larva makes that is not a structure; `build` commands a structure a worker
+        makes and an add-on, and `command` the rest, a morph such as an orbital command's or a baneling's among them.
 
         Raises `ValueError` where one of `units` does not train `unit_type`, saying what does, and where two of them
-        make it with different abilities, as a gateway and a warp gate a zealot: they are ordered apart. Raises
+        make it with different abilities, as a gateway and a warp gate a zealot: they are commanded apart. Raises
         otherwise as `command` does.
         """
         given = _unit_tuple(units)
@@ -207,12 +207,12 @@ class CommandBook:
         queued: bool = False,
         force: bool = False,
     ) -> Command:
-        """Order `units` to make a structure of `unit_type` and return the `Command`, as `command` orders the
+        """Command `units` to make a structure of `unit_type` and return the `Command`, as `command` gives the
         ability their type makes it with: an SCV's `SCV_BUILD_SUPPLY_DEPOT` aimed at a point, a drone's
         `DRONE_MORPH_EXTRACTOR` aimed at a geyser, a barracks's `BUILD_TECH_LAB`.
 
-        It orders a structure a worker makes, and an add-on; `train` orders what a structure or a larva makes that is
-        not a structure, and `command` the rest, a morph such as an orbital command's or a lair's among them.
+        It commands a structure a worker makes, and an add-on; `train` commands what a structure or a larva makes that
+        is not a structure, and `command` the rest, a morph such as an orbital command's or a lair's among them.
 
         Raises `ValueError` where one of `units` does not build `unit_type`, saying what does, and where two of them
         make it with different abilities. Raises otherwise as `command` does: `ValueError` for workers given one site.
@@ -222,7 +222,7 @@ class CommandBook:
         return self.command(given, ability, target=target, queued=queued, force=force)
 
     def research(self, unit: OwnUnit[Any], upgrade: UpgradeId, *, queued: bool = False, force: bool = False) -> Command:
-        """Order `unit` to research `upgrade` and return the `Command`, as `command` orders the upgrade's
+        """Command `unit` to research `upgrade` and return the `Command`, as `command` gives the upgrade's
         `research_ability`: Stimpack's `BARRACKS_TECH_LAB_RESEARCH_STIMPACK`.
 
         Raises `ValueError` where nothing researches `upgrade`, and where `unit`'s type is not one of its
@@ -243,7 +243,7 @@ class CommandBook:
         abilities: Mapping[tuple[UnitTypeId, UnitTypeId], AbilityId],
         method: str,
     ) -> AbilityId:
-        """The one ability `units` make `product` with, of `abilities`, those the order book's `method` orders.
+        """The one ability `units` make `product` with, of `abilities`, those the command book's `method` gives.
         Raises `ValueError` as `train` and `build` say."""
         if not units:
             raise ValueError(_NEEDS_A_UNIT)
@@ -257,11 +257,11 @@ class CommandBook:
             makers = " and ".join(_with_article(maker) for makers in makers_by_ability.values() for maker in makers)
             used = " and ".join(ability.name for ability in makers_by_ability)
             made = _with_article(product)
-            raise ValueError(f"{makers} make {made} with different abilities, {used}: order them apart")
+            raise ValueError(f"{makers} make {made} with different abilities, {used}: command them apart")
         return next(iter(makers_by_ability))
 
     def _why_not_made(self, maker: UnitTypeId, product: UnitTypeId, method: str) -> str:
-        """Why `method` cannot order a `maker` to make a `product`: what orders it instead, or what makes one."""
+        """Why `method` cannot command a `maker` to make a `product`: what commands it instead, or what makes one."""
         abilities_making = _abilities_making(self._game_data)
         if (ability := abilities_making.get((maker, product))) is not None:
             ordered_by = "train" if _is_trained(maker, product) else "build" if _is_built(maker, product) else "command"
@@ -295,15 +295,15 @@ class CommandBook:
 
     @property
     def staged(self) -> tuple[Command, ...]:
-        """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
+        """Every command given this turn and still to be sent. Withdrawn commands are left out."""
         return tuple(command for command in self._staged if not command._withdrawn)
 
     @property
     def staged_cost(self) -> Cost:
-        """What the bank does not show yet: the cost of the orders of `pending` that will go out, each its ability's
-        `cost` in the game's tables for each unit it goes out to. A unit given orders that replace one another pays for
-        the last, and one already carrying an order out pays nothing for it again. Its time is every order's added up,
-        though the units may carry them out side by side."""
+        """What the bank does not show yet: the cost of the commands of `staged` that will go out, each its ability's
+        `cost` in the game's tables for each unit it goes out to. A unit given commands that replace one another pays
+        for the last, and one already carrying a command out pays nothing for it again. Its time is every command's
+        added up, though the units may carry them out side by side."""
         total = Cost(0, 0)
         for command, units in self._commands_to_send(self._staged, self._forced):
             row = self._game_data.abilities.get(command.ability)
@@ -312,8 +312,8 @@ class CommandBook:
         return total
 
     def _send(self, client: Client, *, then: Sequence[sc2api_pb2.Action] = ()) -> None:
-        """Send the turn's orders and after them `then`, actions that belong to no order, in one request, and keep what
-        the game refused of the orders. Sends nothing if there is nothing to send."""
+        """Send the turn's commands and after them `then`, actions that belong to no command, in one request, and keep
+        what the game refused of the commands. Sends nothing if there is nothing to send."""
         staged, forced = self._staged, self._forced
         self._staged, self._staged_by_unit, self._forced = [], {}, set()
         self._refusals = ()
@@ -323,8 +323,8 @@ class CommandBook:
             return
         results = client.act(actions).result
         if len(results) < len(actions_to_send):
-            raise ProtocolError(f"the game answered {len(results)} of the {len(actions_to_send)} commands it was sent")
-        # What comes after the commands is answered after them, and belongs to no order.
+            raise ProtocolError(f"the game answered {len(results)} of the {len(actions_to_send)} actions it was sent")
+        # What comes after the commands' actions is answered after them, and belongs to no command.
         refusals: list[ActionFailure] = []
         for action_to_send, result in zip(actions_to_send, results, strict=False):
             action_result = ActionResult.read(result)
@@ -361,11 +361,11 @@ class CommandBook:
     def _commands_to_send(
         self, staged: Sequence[Command], forced: Collection[Command]
     ) -> Iterator[tuple[Command, tuple[OwnUnit[Any], ...]]]:
-        """Each order of `issued` that goes out, with the units it goes out to.
+        """Each command of `staged` that goes out, with the units it goes out to.
 
-        An order that acts at once, or that is queued behind a unit's orders, competes with nothing. Of the
-        rest, a unit keeps only the last it was given. An order is then left out for the units already carrying it
-        out, unless it is in `forced`. A withdrawn order, or one left with no unit, is not sent.
+        A command that acts at once, or that is queued behind a unit's orders, competes with nothing. Of the rest, a
+        unit keeps only the last it was given. A command is then left out for the units already carrying it out, unless
+        it is in `forced`. A withdrawn command, or one left with no unit, is not sent.
         """
         holder: dict[int, Command] = {}
         for command in staged:
@@ -387,9 +387,9 @@ class CommandBook:
                 yield command, units
 
     def _competes_for(self, command: Command, unit: OwnUnit[Any]) -> bool:
-        """Whether `order` competes with the turn's other orders for `unit`, which then takes the last of them.
+        """Whether `command` competes with the turn's other commands for `unit`, which then takes the last of them.
 
-        Every unqueued order does, a structure's train included, whatever it would do to the unit. A queued order
+        Every unqueued command does, a structure's train included, whatever it would do to the unit. A queued command
         competes with nothing, and nor does an ability the unit's type carries out at once: the unit does both (in
         game). Each unit of a group is judged by its own type.
         """
@@ -399,13 +399,13 @@ class CommandBook:
         return _behavior_for(row, unit) is not OrderBehavior.KEEPS_ORDERS
 
     def _add(self, command: Command) -> None:
-        """Count `order` among the turn's, last."""
+        """Count `command` among the turn's, last."""
         self._staged.append(command)
         for unit_id in {unit.id for unit in command.units}:
             self._staged_by_unit.setdefault(unit_id, []).append(command)
 
     def _remember_sent(self, command: Command, units: Sequence[OwnUnit[Any]]) -> None:
-        """Record `order`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
+        """Record `command`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
         replaces, unqueued, one sent that the unit carries out at once, unqueued, and otherwise one sent that does not
         replace them."""
         row = self._game_data.abilities.get(command.ability)
@@ -422,8 +422,8 @@ class CommandBook:
                 self._sent_not_replacing.setdefault(unit.id, []).append(sent)
 
     def _units_not_carrying_it_out(self, command: Command, units: tuple[OwnUnit[Any], ...]) -> tuple[OwnUnit[Any], ...]:
-        """The units of `units` that `order` would change anything for: all of them for a queued order, else all but
-        those whose orders it replaces and which are already doing it."""
+        """The units of `units` that `command` would change anything for: all of them for a queued command, else all
+        but those whose orders it replaces and which are already doing it."""
         if command.queued:
             return units
         row = self._game_data.abilities.get(command.ability)
@@ -435,7 +435,7 @@ class CommandBook:
         )
 
     def _is_doing(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
-        """Whether `unit` is doing `ability` at `target`: the last order sent to it says, while it may not show yet,
+        """Whether `unit` is doing `ability` at `target`: the last command sent to it says, while it may not show yet,
         and otherwise its first reported order."""
         sent = self._sent_and_not_shown(unit)
         if sent is not None:
@@ -443,14 +443,14 @@ class CommandBook:
         return self._unit_is_at(unit, ability, target)
 
     def _sent_and_not_shown(self, unit: OwnUnit[Any]) -> Command | None:
-        """The last order sent to `unit` that replaced its orders, while the observations may not show it yet."""
+        """The last command sent to `unit` that replaced its orders, while the observations may not show it yet."""
         last = self._last_sent.get(unit.id)
         if last is not None and self._observations - last[1] < _SHOWN_WITHIN:
             return last[0]
         return None
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Command]:
-        """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
+        """The commands that went out to `unit` lately and that the observations may not show yet: the last sent that
         replaced its orders, those sent since that did not, and those it carries out at once, whose effect may not
         show yet."""
         commands = []
@@ -462,7 +462,7 @@ class CommandBook:
         return commands
 
     def _is_carried_out_at_once(self, command: Command, unit: OwnUnit[Any]) -> bool:
-        """Whether `unit` carries `order` out at once, leaving its orders as they were: unqueued, an ability its type
+        """Whether `unit` carries `command` out at once, leaving its orders as they were: unqueued, an ability its type
         keeps its orders through."""
         return not command.queued and _behavior_for(self._game_data.abilities.get(command.ability), unit) is (
             OrderBehavior.KEEPS_ORDERS
@@ -494,12 +494,12 @@ def _behavior_for(row: AbilityData | None, unit: OwnUnit[Any]) -> OrderBehavior:
 
 
 def _ability_of_unit_order(order: raw_pb2.UnitOrder) -> AbilityId:
-    """The ability a raw order runs, or `NULL` if the curated ids leave it out. No order of ours runs such an
+    """The ability a raw order runs, or `NULL` if the curated ids leave it out. No command of ours gives such an
     ability."""
     return AbilityId.get(order.ability_id) or AbilityId.NULL
 
 
-_NEEDS_A_UNIT = "an order needs a unit to give it to"
+_NEEDS_A_UNIT = "a command needs a unit to give it to"
 
 
 def _abilities_making(game_data: GameData) -> dict[tuple[UnitTypeId, UnitTypeId], AbilityId]:
@@ -521,14 +521,15 @@ def _abilities_making(game_data: GameData) -> dict[tuple[UnitTypeId, UnitTypeId]
 
 
 def _is_trained(maker: UnitTypeId, product: UnitTypeId) -> bool:
-    """Whether `CommandBook.train` orders a `maker` to make a `product`: a unit not a structure, made by a structure or
-    a larva."""
+    """Whether `CommandBook.train` commands a `maker` to make a `product`: a unit not a structure, made by a structure
+    or a larva."""
     structures = UnitType.Structure.type_ids
     return product not in structures and (maker in structures or maker is UnitTypeId.LARVA)
 
 
 def _is_built(maker: UnitTypeId, product: UnitTypeId) -> bool:
-    """Whether `CommandBook.build` orders a `maker` to make a `product`: a structure made by a worker, or an add-on."""
+    """Whether `CommandBook.build` commands a `maker` to make a `product`: a structure made by a worker, or an
+    add-on."""
     if product in UnitType.AnyAddOn.type_ids:
         return True
     return product in UnitType.Structure.type_ids and maker in UnitType.Worker.type_ids
