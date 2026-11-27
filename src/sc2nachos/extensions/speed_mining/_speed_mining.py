@@ -358,13 +358,13 @@ class SpeedMining:
         if not worker.is_orderable or worker.is_burrowed or worker.is_constructing:
             return False
         command_book = self._api.commands
-        if not _has_a_standing_order_other_than_a_hand_overs(command_book.issued_to(worker), mining=mining):
+        if not _has_a_standing_command_other_than_a_hand_overs(command_book.issued_to(worker), mining=mining):
             current_order = worker.current_order
             if current_order is not None and self._is_its_work(worker, current_order, mining=mining):
                 return True
             if any(
-                order.ability is AbilityId.GATHER and order.target is resource
-                for order in command_book.issued_to(worker, include_sent=True)
+                command.ability is AbilityId.GATHER and command.target is resource
+                for command in command_book.issued_to(worker, include_sent=True)
             ):
                 return True
         if carries_cargo(worker):
@@ -493,7 +493,7 @@ class SpeedMining:
     def _let_go_of_the_workers_the_bot_ordered(self) -> None:
         """Let go of each worker held that the bot has ordered, as `_is_ordered_by_the_bot` says, of those the turn's
         orders name."""
-        for worker in {unit for order in self._api.commands.staged for unit in order.units}:
+        for worker in {unit for command in self._api.commands.staged for unit in command.units}:
             if worker in self._field_by_worker and self._is_ordered_by_the_bot(worker, mining=True):
                 del self._field_by_worker[worker]
             elif worker in self._gas_building_by_worker and self._is_ordered_by_the_bot(worker, mining=False):
@@ -503,7 +503,7 @@ class SpeedMining:
         """Whether the bot has ordered `worker`, a miner if `mining`, else a collector: an order issued to it this turn
         stands that is not a hand-over's. Speed mining's turn comes after every handler of the bot's, so the turn's
         orders are the bot's and the hand-overs'."""
-        return _has_a_standing_order_other_than_a_hand_overs(self._api.commands.issued_to(worker), mining=mining)
+        return _has_a_standing_command_other_than_a_hand_overs(self._api.commands.issued_to(worker), mining=mining)
 
     def _is_left_alone(self, worker: OwnUnit[UnitType.Worker], *, mining: bool) -> bool:
         """Whether speed mining leaves `worker`, a miner if `mining`, else a collector, alone this turn: not orderable,
@@ -576,18 +576,22 @@ def _workers_by_resource[R: Unit[Any]](
     return workers_by_resource
 
 
-def _has_a_standing_order_other_than_a_hand_overs(orders: Sequence[Command], *, mining: bool) -> bool:
-    """Whether one of `orders`, issued to a worker this turn, a miner if `mining`, else a collector, stands, no unqueued
-    order coming after it, and is not a hand-over's: a return, or a gather at a mineral field, for a miner, or at a gas
-    building, for a collector."""
-    if not orders:
+def _has_a_standing_command_other_than_a_hand_overs(commands: Sequence[Command], *, mining: bool) -> bool:
+    """Whether one of `commands`, given to a worker this turn, a miner if `mining`, else a collector, stands, no
+    unqueued command coming after it, and is not a hand-over's: a return, or a gather at a mineral field, for a miner,
+    or at a gas building, for a collector."""
+    if not commands:
         return False
-    standing_from = max((place for place, order in enumerate(orders) if not order.queued), default=0)
+    standing_from = max((place for place, command in enumerate(commands) if not command.queued), default=0)
     gathered_at = UnitType.AnyMineralField if mining else UnitType.GasBuilding
     return not all(
-        order.ability is AbilityId.RETURN
-        or (order.ability is AbilityId.GATHER and isinstance(order.target, Unit) and gathered_at.includes(order.target))
-        for order in orders[standing_from:]
+        command.ability is AbilityId.RETURN
+        or (
+            command.ability is AbilityId.GATHER
+            and isinstance(command.target, Unit)
+            and gathered_at.includes(command.target)
+        )
+        for command in commands[standing_from:]
     )
 
 

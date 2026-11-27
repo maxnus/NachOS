@@ -39,7 +39,7 @@ class ActionToSend:
         return _unit_command_action(self.ability, tags, self.target, queued=self.queued)
 
 
-def actions_giving(orders: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]]) -> list[ActionToSend]:
+def actions_giving(commands: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]]) -> list[ActionToSend]:
     """The raw commands giving each of `orders` to the units it goes out to, in the order they go out.
 
     An order of an ability every unit of a command carries out goes out as one command naming its units, or one for
@@ -55,48 +55,48 @@ def actions_giving(orders: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]]) -
     last_joinable: dict[tuple[int, Target | None, bool], int] = {}
     # By unit id, the index of the last command naming the unit.
     last_naming: dict[int, int] = {}
-    for order, ability, target, units in _commands_of_each(orders):
-        key = _join_key(order, ability, target, units)
+    for command, ability, target, units in _actions_of_each(commands):
+        key = _join_key(command, ability, target, units)
         at = -1 if key is None else last_joinable.get(key, -1)
         if at < 0 or any(last_naming.get(unit.id, -1) >= at for unit in units):
             at = len(actions_to_send)
-            actions_to_send.append(ActionToSend(ability, target, order.queued, []))
+            actions_to_send.append(ActionToSend(ability, target, command.queued, []))
             if key is not None:
                 last_joinable[key] = at
-        actions_to_send[at].parts.append((order, units))
+        actions_to_send[at].parts.append((command, units))
         for unit in units:
             last_naming[unit.id] = at
     return actions_to_send
 
 
 def _join_key(
-    order: Command, ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
+    command: Command, ability: int, target: Target | None, units: tuple[OwnUnit[Any], ...]
 ) -> tuple[int, Target | None, bool] | None:
     """What a command of `order`, giving the game's `ability` at `target` to `units`, shares with each command it may
     join: the ability, the target as the game keeps it and the queue flag. `None` for a command that joins none and that
     none joins: of an ability that joins no other order, or aimed at one of its own units, as a transport's unload where
     it stands is."""
-    if order.ability not in ABILITIES_JOINING_OTHER_ORDERS:
+    if command.ability not in ABILITIES_JOINING_OTHER_ORDERS:
         return None
     if isinstance(target, Unit) and any(unit.id == target.id for unit in units):
         return None
-    return ability, target_as_kept(target), order.queued
+    return ability, target_as_kept(target), command.queued
 
 
-def _commands_of_each(
-    orders: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]],
+def _actions_of_each(
+    commands: Iterable[tuple[Command, tuple[OwnUnit[Any], ...]]],
 ) -> Iterator[tuple[Command, int, Target | None, tuple[OwnUnit[Any], ...]]]:
     """Each raw command each of `orders` goes out as on its own, with its order: one naming its units for an ability
     every unit of a command carries out, or one for each ability it is sent as, and one to each unit for any other."""
-    for order, units in orders:
-        sent_as = ABILITIES_SENT_AS_ANOTHER.get(order.ability, SENT_UNCHANGED)
-        groups = (units,) if order.ability in MULTI_UNIT_ABILITIES else tuple((unit,) for unit in units)
+    for command, units in commands:
+        sent_as = ABILITIES_SENT_AS_ANOTHER.get(command.ability, SENT_UNCHANGED)
+        groups = (units,) if command.ability in MULTI_UNIT_ABILITIES else tuple((unit,) for unit in units)
         for group in groups:
-            for ability, target, named in _commands_giving(order.ability, group, order.target, sent_as):
-                yield order, ability, target, named
+            for ability, target, named in _actions_of_ability(command.ability, group, command.target, sent_as):
+                yield command, ability, target, named
 
 
-def _commands_giving(
+def _actions_of_ability(
     ability: AbilityId,
     units: Sequence[OwnUnit[Any]],
     target: Target | None,
@@ -112,13 +112,13 @@ def _commands_giving(
             own.append(unit)
         else:
             sent.setdefault(sending, []).append(unit)
-    commands: list[tuple[int, Target | None, tuple[OwnUnit[Any], ...]]] = [(ability, target, tuple(own))] if own else []
+    actions: list[tuple[int, Target | None, tuple[OwnUnit[Any], ...]]] = [(ability, target, tuple(own))] if own else []
     for sending, group in sent.items():
         if sending.aimed_at_itself:
-            commands += [(sending.ability, unit, (unit,)) for unit in group]
+            actions += [(sending.ability, unit, (unit,)) for unit in group]
         else:
-            commands.append((sending.ability, None, tuple(group)))
-    return commands
+            actions.append((sending.ability, None, tuple(group)))
+    return actions
 
 
 def _unit_command_action(ability: int, tags: list[int], target: Target | None, *, queued: bool) -> sc2api_pb2.Action:

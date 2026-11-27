@@ -1887,7 +1887,7 @@ class TestOrdersGivenApart:
                         game.book.command(one, _UNLOAD_AT, target=other, queued=queued)
                     case _:
                         game.book.command(game.own(6), _TRAIN_MARINE, queued=queued)
-            sent = list(game.book._orders_to_send(game.book._issued, game.book._forced))
+            sent = list(game.book._commands_to_send(game.book._staged, game.book._forced))
 
             actions_to_send = actions_giving(sent)
 

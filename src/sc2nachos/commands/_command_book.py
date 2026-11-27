@@ -61,8 +61,8 @@ class CommandBook:
         "_built_abilities",
         "_forced",
         "_game_data",
-        "_issued",
-        "_issued_by_unit",
+        "_staged",
+        "_staged_by_unit",
         "_last_sent",
         "_observations",
         "_sent_at_once",
@@ -76,8 +76,8 @@ class CommandBook:
         """A book for one game. `game_data` says what each ability does and what it must be aimed at."""
         self._game_data = game_data
         # The turn's orders in the order they were issued, and those of each unit by its id.
-        self._issued: list[Command] = []
-        self._issued_by_unit: dict[int, list[Command]] = {}
+        self._staged: list[Command] = []
+        self._staged_by_unit: dict[int, list[Command]] = {}
         # The turn's orders issued with `force`, sent even to units already carrying them out.
         self._forced: set[Command] = set()
         # By unit id, the last unqueued order the game took that replaces the unit's orders, and the number of the
@@ -161,11 +161,11 @@ class CommandBook:
             _check_placed_where_flying(ability, row, given)
         if isinstance(aimed, Unit):
             _check_not_aimed_at_itself(ability, aimed, given)
-        order = Command(ability, Units(given), aimed, queued=queued, time=self._time)
-        self._add(order)
+        command = Command(ability, Units(given), aimed, queued=queued, time=self._time)
+        self._add(command)
         if force:
-            self._forced.add(order)
-        return order
+            self._forced.add(command)
+        return command
 
     def train(
         self,
@@ -277,14 +277,14 @@ class CommandBook:
         A handler late in a turn reads this to leave alone a unit an earlier handler has ordered, since only the last
         order a unit is given goes out.
         """
-        turns = self._issued_by_unit.get(unit.id, ())
+        turns = self._staged_by_unit.get(unit.id, ())
         sent = self._sent_but_not_observed_yet(unit) if include_sent else ()
-        return (*sent, *(order for order in turns if not order._withdrawn))
+        return (*sent, *(command for command in turns if not command._withdrawn))
 
     @property
     def staged(self) -> tuple[Command, ...]:
         """Every order issued this turn and still to be sent. Withdrawn orders are left out."""
-        return tuple(order for order in self._issued if not order._withdrawn)
+        return tuple(command for command in self._staged if not command._withdrawn)
 
     @property
     def staged_cost(self) -> Cost:
@@ -293,8 +293,8 @@ class CommandBook:
         the last, and one already carrying an order out pays nothing for it again. Its time is every order's added up,
         though the units may carry them out side by side."""
         total = Cost(0, 0)
-        for order, units in self._orders_to_send(self._issued, self._forced):
-            row = self._game_data.abilities.get(order.ability)
+        for command, units in self._commands_to_send(self._staged, self._forced):
+            row = self._game_data.abilities.get(command.ability)
             if row is not None:
                 total += row.cost * len(units)
         return total
@@ -302,10 +302,10 @@ class CommandBook:
     def _send(self, client: Client, *, then: Sequence[sc2api_pb2.Action] = ()) -> None:
         """Send the turn's orders and after them `then`, actions that belong to no order, in one request, and keep what
         the game refused of the orders. Sends nothing if there is nothing to send."""
-        issued, forced = self._issued, self._forced
-        self._issued, self._issued_by_unit, self._forced = [], {}, set()
+        staged, forced = self._staged, self._forced
+        self._staged, self._staged_by_unit, self._forced = [], {}, set()
         self._refusals = ()
-        actions_to_send = actions_giving(self._orders_to_send(issued, forced))
+        actions_to_send = actions_giving(self._commands_to_send(staged, forced))
         actions = [*(action_to_send.to_action() for action_to_send in actions_to_send), *then]
         if not actions:
             return
@@ -316,11 +316,11 @@ class CommandBook:
         refusals: list[ActionFailure] = []
         for action_to_send, result in zip(actions_to_send, results, strict=False):
             action_result = ActionResult.read(result)
-            for order, units in action_to_send.parts:
+            for command, units in action_to_send.parts:
                 if action_result is ActionResult.SUCCESS:
-                    self._remember_sent(order, units)
+                    self._remember_sent(command, units)
                 else:
-                    refusals += [ActionFailure(self._time, unit, order.ability, action_result) for unit in units]
+                    refusals += [ActionFailure(self._time, unit, command.ability, action_result) for unit in units]
         self._refusals = tuple(refusals)
 
     def _observe(self, time: GameTime, lost: Iterable[Unit[Any]]) -> None:
@@ -334,13 +334,13 @@ class CommandBook:
         recent = self._observations - _SHOWN_WITHIN + 1
         for sent_by_unit in (self._sent_not_replacing, self._sent_at_once):
             for unit_id, sent in list(sent_by_unit.items()):
-                if not (sent := [(order, sent_at) for order, sent_at in sent if sent_at >= recent]):
+                if not (sent := [(command, sent_at) for command, sent_at in sent if sent_at >= recent]):
                     del sent_by_unit[unit_id]
                 else:
                     sent_by_unit[unit_id] = sent
 
-    def _orders_to_send(
-        self, issued: Sequence[Command], forced: Collection[Command]
+    def _commands_to_send(
+        self, staged: Sequence[Command], forced: Collection[Command]
     ) -> Iterator[tuple[Command, tuple[OwnUnit[Any], ...]]]:
         """Each order of `issued` that goes out, with the units it goes out to.
 
@@ -349,67 +349,69 @@ class CommandBook:
         out, unless it is in `forced`. A withdrawn order, or one left with no unit, is not sent.
         """
         holder: dict[int, Command] = {}
-        for order in issued:
-            if not order._withdrawn:
-                for unit in order.units:
-                    if self._competes_for(order, unit):
-                        holder[unit.id] = order
-        for order in issued:
-            if order._withdrawn:
+        for command in staged:
+            if not command._withdrawn:
+                for unit in command.units:
+                    if self._competes_for(command, unit):
+                        holder[unit.id] = command
+        for command in staged:
+            if command._withdrawn:
                 continue
             units = tuple(
-                unit for unit in order.units if holder.get(unit.id) is order or not self._competes_for(order, unit)
+                unit
+                for unit in command.units
+                if holder.get(unit.id) is command or not self._competes_for(command, unit)
             )
-            if order not in forced:
-                units = self._units_not_carrying_it_out(order, units)
+            if command not in forced:
+                units = self._units_not_carrying_it_out(command, units)
             if units:
-                yield order, units
+                yield command, units
 
-    def _competes_for(self, order: Command, unit: OwnUnit[Any]) -> bool:
+    def _competes_for(self, command: Command, unit: OwnUnit[Any]) -> bool:
         """Whether `order` competes with the turn's other orders for `unit`, which then takes the last of them.
 
         Every unqueued order does, a structure's train included, whatever it would do to the unit. A queued order
         competes with nothing, and nor does an ability the unit's type carries out at once: the unit does both (in
         game). Each unit of a group is judged by its own type.
         """
-        if order.queued:
+        if command.queued:
             return False
-        row = self._game_data.abilities.get(order.ability)
+        row = self._game_data.abilities.get(command.ability)
         return _behavior_for(row, unit) is not OrderBehavior.KEEPS_ORDERS
 
-    def _add(self, order: Command) -> None:
+    def _add(self, command: Command) -> None:
         """Count `order` among the turn's, last."""
-        self._issued.append(order)
-        for unit_id in {unit.id for unit in order.units}:
-            self._issued_by_unit.setdefault(unit_id, []).append(order)
+        self._staged.append(command)
+        for unit_id in {unit.id for unit in command.units}:
+            self._staged_by_unit.setdefault(unit_id, []).append(command)
 
-    def _remember_sent(self, order: Command, units: Sequence[OwnUnit[Any]]) -> None:
+    def _remember_sent(self, command: Command, units: Sequence[OwnUnit[Any]]) -> None:
         """Record `order`, which the game took, as sent to each of `units`: the last sent to a unit whose orders it
         replaces, unqueued, one sent that the unit carries out at once, unqueued, and otherwise one sent that does not
         replace them."""
-        row = self._game_data.abilities.get(order.ability)
+        row = self._game_data.abilities.get(command.ability)
         for unit in units:
             behavior = _behavior_for(row, unit)
-            sent = (order, self._observations)
-            if not order.queued and behavior is OrderBehavior.REPLACES:
+            sent = (command, self._observations)
+            if not command.queued and behavior is OrderBehavior.REPLACES:
                 self._last_sent[unit.id] = sent
                 self._sent_not_replacing.pop(unit.id, None)
-            elif not order.queued and behavior is OrderBehavior.KEEPS_ORDERS:
+            elif not command.queued and behavior is OrderBehavior.KEEPS_ORDERS:
                 self._sent_at_once.setdefault(unit.id, []).append(sent)
             else:
                 self._sent_not_replacing.setdefault(unit.id, []).append(sent)
 
-    def _units_not_carrying_it_out(self, order: Command, units: tuple[OwnUnit[Any], ...]) -> tuple[OwnUnit[Any], ...]:
+    def _units_not_carrying_it_out(self, command: Command, units: tuple[OwnUnit[Any], ...]) -> tuple[OwnUnit[Any], ...]:
         """The units of `units` that `order` would change anything for: all of them for a queued order, else all but
         those whose orders it replaces and which are already doing it."""
-        if order.queued:
+        if command.queued:
             return units
-        row = self._game_data.abilities.get(order.ability)
+        row = self._game_data.abilities.get(command.ability)
         return tuple(
             unit
             for unit in units
             if _behavior_for(row, unit) is not OrderBehavior.REPLACES
-            or not self._is_doing(unit, order.ability, order.target)
+            or not self._is_doing(unit, command.ability, command.target)
         )
 
     def _is_doing(self, unit: OwnUnit[Any], ability: AbilityId, target: Target | None) -> bool:
@@ -431,18 +433,18 @@ class CommandBook:
         """The orders that went out to `unit` lately and that the observations may not show yet: the last sent that
         replaced its orders, those sent since that did not, and those it carries out at once, whose effect may not
         show yet."""
-        orders = []
+        commands = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
-            orders.append(sent)
+            commands.append(sent)
         recent = self._observations - _SHOWN_WITHIN + 1
-        orders += [order for order, sent_at in self._sent_not_replacing.get(unit.id, ()) if sent_at >= recent]
-        orders += [order for order, sent_at in self._sent_at_once.get(unit.id, ()) if sent_at >= recent]
-        return orders
+        commands += [command for command, sent_at in self._sent_not_replacing.get(unit.id, ()) if sent_at >= recent]
+        commands += [command for command, sent_at in self._sent_at_once.get(unit.id, ()) if sent_at >= recent]
+        return commands
 
-    def _is_carried_out_at_once(self, order: Command, unit: OwnUnit[Any]) -> bool:
+    def _is_carried_out_at_once(self, command: Command, unit: OwnUnit[Any]) -> bool:
         """Whether `unit` carries `order` out at once, leaving its orders as they were: unqueued, an ability its type
         keeps its orders through."""
-        return not order.queued and _behavior_for(self._game_data.abilities.get(order.ability), unit) is (
+        return not command.queued and _behavior_for(self._game_data.abilities.get(command.ability), unit) is (
             OrderBehavior.KEEPS_ORDERS
         )
 

@@ -108,8 +108,8 @@ def _ordered_count(ability: AbilityId) -> int:
     return sum(
         1
         for unit in api.units.own
-        for order in api.commands.issued_to(unit, include_sent=True)
-        if order.ability is ability
+        for command in api.commands.issued_to(unit, include_sent=True)
+        if command.ability is ability
     )
 
 

@@ -219,7 +219,9 @@ class WorkerTrips:
         `trip_end`, so that no other order, the bot's included, has taken its place since."""
         if not worker.is_orderable:
             return False
-        replacing = [order for order in self._api.commands.issued_to(worker, include_sent=True) if not order.queued]
+        replacing = [
+            command for command in self._api.commands.issued_to(worker, include_sent=True) if not command.queued
+        ]
         return bool(replacing) and replacing[-1].ability is AbilityId.MOVE and replacing[-1].target == trip_end
 
 
