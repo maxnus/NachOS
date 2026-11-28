@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import final
 
+from sc2nachos._shared.vector_arithmetic import _VectorArithmetic
 from sc2nachos.gamedata._resources import Resources, ResourcesAndSupply
-from sc2nachos.gamedata._vector_arithmetic import _VectorArithmetic
 from sc2nachos.gametime import GameTime
 
 

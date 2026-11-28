@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, final
 
-from sc2nachos.gamedata._vector_arithmetic import _VectorArithmetic
+from sc2nachos._shared.vector_arithmetic import _VectorArithmetic
 
 if TYPE_CHECKING:
     from sc2nachos.gamedata._cost import Cost
