@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from sc2nachos.extensions.planner._economy_model import rate_tiers, walk_seconds_of
-from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression, VariableBlock
+from sc2nachos.extensions.planner._milp import FloatArray, LinearProgram, RowExpression, VariableBlock
 from sc2nachos.extensions.planner._survival import SurvivalShares
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
 from sc2nachos.extensions.planner._time_grid import SECONDS_TOLERANCE
@@ -178,7 +178,8 @@ class PlanVariables:
 
     def _completions_and_builders(self) -> tuple[tuple[tuple[UnitTypeId, float], ...], tuple[float, ...]]:
         """Each unit in production with the seconds until it is done, a structure an SCV builds after any walk there;
-        and the seconds until each SCV building, or walking to build, is back at work after its walk back.
+        and the seconds until each SCV building, or walking to build, is free again after its walk back, less the
+        economy's `initial_harvest_delay`, which it pays as it starts work.
 
         Raises `ValueError` for a unit in production of a type that is no item of the model's."""
         for in_production in (*self._state.unit_completions, *self._state.worker_builds):
@@ -194,7 +195,7 @@ class PlanVariables:
         for build in self._state.worker_builds:
             done_after = self._seconds_until_built(build)
             completions.append((build.unit_type, done_after))
-            builders_free_after.append(done_after + self._walk_seconds.get(build.unit_type, 0.0))
+            builders_free_after.append(done_after + self._walk_back_seconds(build.unit_type))
         return tuple(completions), tuple(builders_free_after)
 
     def _seconds_until_built(self, build: WorkerBuild) -> float:
@@ -307,11 +308,16 @@ class PlanVariables:
         """One row: the starts of item `index` over the whole plan."""
         return self._add_starts_to(RowExpression(1), index, 1.0)
 
-    def _starts_done(self, index: int, *, at_end: bool, survive: bool = False) -> RowExpression:
+    def _starts_done(self, index: int, *, at_end: bool, survive: bool = False, later_by: float = 0.0) -> RowExpression:
         """The starts of item `index` done by each interval's start, or its end, each as it survives its loss rate from
-        when it is done if `survive`."""
+        when it is done if `survive`; with `later_by`, those done that many seconds before."""
         rows = self._row_edges(at_end=at_end)
-        done = (self._completion_edges[index][None, :] <= rows[:, None]).astype(float)
+        completion_edges = (
+            self._completion_edges[index]
+            if not later_by
+            else self._edge_index(self._edges[:-1] + self._items[index].build_seconds + later_by)
+        )
+        done = (completion_edges[None, :] <= rows[:, None]).astype(float)
         unit_type = self._items[index].unit_type
         if survive and unit_type is not None:
             completed = self._edges[:-1] + self._items[index].build_seconds
@@ -410,6 +416,16 @@ class PlanVariables:
     def _walk_seconds_of(self, item: ProductionItem) -> float:
         """The seconds an SCV walks to build `item`, and back."""
         return 0.0 if item.unit_type is None else self._walk_seconds.get(item.unit_type, 0.0)
+
+    def _walk_back_seconds_of(self, item: ProductionItem) -> float:
+        """The seconds an SCV that built `item` is away after it: see `_walk_back_seconds`."""
+        return 0.0 if item.unit_type is None else self._walk_back_seconds(item.unit_type)
+
+    def _walk_back_seconds(self, unit_type: UnitTypeId) -> float:
+        """The seconds an SCV that built a `unit_type` is away after it: its walk back, less the economy's
+        `initial_harvest_delay`, which it pays as it starts to mine or to collect, as every worker does; none if the
+        walk is shorter than the delay."""
+        return max(self._walk_seconds.get(unit_type, 0.0) - self._economy.initial_harvest_delay.seconds, 0.0)
 
 
 def _limits_by_counted_type(

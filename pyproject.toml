@@ -34,7 +34,14 @@ Repository = "https://github.com/maxnus/NachOS"
 Documentation = "https://maxnus.github.io/NachOS/"
 
 [project.optional-dependencies]
+# The build planner's `Solver.GUROBI`: Gurobi, with HiGHS's presolve and postsolve around it. Each gurobipy release
+# comes with a size-limited licence that expires with it, 14's on 2028-11-29.
+gurobi = [
+    "gurobipy>=14",
+    "highspy>=1.16",
+]
 dev = [
+    "sc2nachos[gurobi]",
     "pytest>=8.0",
     "pytest-xdist>=3.8",
     "ruff>=0.8",

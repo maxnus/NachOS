@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
 from sc2nachos.extensions.planner._economy_model import EconomyModel, minerals_mined_a_second
+from sc2nachos.extensions.planner._milp import Solver, check_gurobi_starts
 from sc2nachos.extensions.planner._plan_program import PlanProgram
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._planner_state import (
@@ -91,6 +92,8 @@ class Planner:
     at most half an interval early or late. With 0 every start waits until the bank alone pays for it, up to an interval
     late, and with 1 every start is as early as it could be. It matters most where intervals are long.
 
+    `solver` is the `Solver` that finds a plan, HiGHS by default.
+
     What the planner assumes of the game:
 
     - What each thing costs, how long it takes, the supply it takes and gives, what makes it and what it needs first
@@ -104,14 +107,18 @@ class Planner:
       every worker to be able to work anywhere. How many mine and how many collect vespene is the plan's choice in each
       interval, which the interval holds as its `miners` and `collectors`.
     - What workers bring in, and how long a worker walks to build, is the `EconomyModel` handed to `plan_now`. A worker
-      that builds is away from its work from the walk to the structure, through the build, to the walk back.
+      that builds is away from its work from the walk to the structure, through the build, to the walk back, the last of
+      which it spends as any worker starting work does, at minerals or vespene alike.
     - A command center that morphs trains no SCV meanwhile. A reactor lets its host make two units at a time. A tech lab
       makes the units that need one, and researches by itself.
     - A new command center brings the mineral fields and the geysers of the next of the `expansions` handed to
-      `plan_now`. With none, a plan starts no command center.
+      `plan_now`, its fields from the `EconomyModel`'s `new_base_walk_time` after it is done. With none, a plan starts
+      no command center.
 
     Raises `ValueError` for a player of a race other than Terran, or a `max_ignored_overrun`, an `unlock_fraction` or a
-    `spendable_income_fraction` outside 0 to 1; and `NotPlayingError` if built before the game starts.
+    `spendable_income_fraction` outside 0 to 1; `NotPlayingError` if built before the game starts; and, for
+    `Solver.GUROBI`, `ImportError` without gurobipy and highspy installed and `RuntimeError` where Gurobi cannot start,
+    as without a licence.
     """
 
     __slots__ = (
@@ -121,6 +128,7 @@ class Planner:
         "_model",
         "_plan",
         "_fluid_after",
+        "_solver",
         "_spendable_income_fraction",
         "_unlock_fraction",
     )
@@ -134,6 +142,7 @@ class Planner:
         max_ignored_overrun: float = 0.25,
         unlock_fraction: float = 1.0,
         spendable_income_fraction: float = 0.5,
+        solver: Solver = Solver.HIGHS,
     ) -> None:
         if api.player.race is not Race.TERRAN:
             raise ValueError(f"the planner plans for Terran alone, and this player is {api.player.race.name}")
@@ -143,12 +152,15 @@ class Planner:
             raise ValueError(f"the unlock fraction must be 0 to 1, not {unlock_fraction}")
         if not 0 <= spendable_income_fraction <= 1:
             raise ValueError(f"the spendable income fraction must be 0 to 1, not {spendable_income_fraction}")
+        if solver is Solver.GUROBI:
+            check_gurobi_starts()
         self._api = api
         self._grid = TimeGrid.doubling() if grid is None else grid
         self._fluid_after = fluid_after
         self._max_ignored_overrun = max_ignored_overrun
         self._unlock_fraction = unlock_fraction
         self._spendable_income_fraction = spendable_income_fraction
+        self._solver = solver
         self._model = TerranModel(api.data)
         self._plan: BuildPlan | None = None
 
@@ -250,7 +262,9 @@ class Planner:
             unlock_fraction=self._unlock_fraction,
             spendable_income_fraction=self._spendable_income_fraction,
         )
-        plan = program.solve(time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap)
+        plan = program.solve(
+            solver=self._solver, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
+        )
         if plan is not None:
             self._plan = plan
         return plan

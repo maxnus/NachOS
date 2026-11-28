@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, final
 import numpy as np
 
 from sc2nachos.extensions.planner._build_plan import BuildPlan, PlanInterval, PlanItem, PlanMoment, SolveReport
-from sc2nachos.extensions.planner._linear_program import FloatArray, LinearProgram, RowExpression
+from sc2nachos.extensions.planner._milp import FloatArray, LinearProgram, RowExpression, Solver
 from sc2nachos.extensions.planner._plan_constraints import PlanConstraints
 from sc2nachos.extensions.planner._plan_variables import NewBase
 from sc2nachos.extensions.planner._terran_model import SUPPLY_LIMIT
@@ -43,13 +43,14 @@ class PlanProgram(PlanConstraints):
     of them allow. Workers mine, collect or build, pooled over every field and refinery, in the tiers of `economy`'s
     rates, and each orbital command adds its MULEs' income. A worker more mining or collecting in a tier than the
     interval before, or than `state` has, brings in nothing for `economy`'s `initial_harvest_delay` from the interval's
-    start, but a builder back from its walk. A unit counts as it survives its loss rate in `loss_rates`, for income,
-    supply and the reward: a unit type's rate is that of the type it counts as, the highest of those of one type, and a
-    number or a `TimeDependent`, read at each game step and summed, so that a peak in it loses its share whatever the
-    grid. Of an item in `start_limits` at most that many start over the plan: a unit type's limit is that of the type it
-    counts as, the lowest of those of one type, and a limit on no item here does nothing. The plan starts at most as
-    many command centers as `new_bases` holds, each bringing the fields and geysers of the next of them once done, and
-    one in production brings what `state` says of it.
+    start, a builder back from its structure too, its walk back that much shorter. A unit counts as it survives its loss
+    rate in `loss_rates`, for income, supply and the reward: a unit type's rate is that of the type it counts as, the
+    highest of those of one type, and a number or a `TimeDependent`, read at each game step and summed, so that a peak
+    in it loses its share whatever the grid. Of an item in `start_limits` at most that many start over the plan: a unit
+    type's limit is that of the type it counts as, the lowest of those of one type, and a limit on no item here does
+    nothing. The plan starts at most as many command centers as `new_bases` holds, each bringing the geysers of the
+    next of them once done and its fields `economy`'s `new_base_walk_time` later, and one in production brings what
+    `state` says of it, alike.
 
     Raises `ValueError` unless `fluid_after_seconds` hold one time for each item, for a negative walk from `economy`'s
     `builder_walk_time`, for a loss rate from a `TimeDependent` that is negative or not finite, and for a unit in
@@ -101,11 +102,13 @@ class PlanProgram(PlanConstraints):
         """The program, to count its variables and rows."""
         return self._program
 
-    def solve(self, *, time_limit: float | None, node_limit: int | None, relative_gap: float) -> BuildPlan | None:
-        """The best plan the solver finds within `time_limit` seconds and `node_limit` nodes, proven within
+    def solve(
+        self, *, solver: Solver, time_limit: float | None, node_limit: int | None, relative_gap: float
+    ) -> BuildPlan | None:
+        """The best plan `solver` finds within `time_limit` seconds and `node_limit` nodes, proven within
         `relative_gap` of the best where it gets that far, or `None` if it finds none."""
         solution = self._program.maximize(
-            self._objective, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
+            self._objective, solver=solver, time_limit=time_limit, node_limit=node_limit, relative_gap=relative_gap
         )
         if solution.values is None:
             return None
@@ -114,7 +117,9 @@ class PlanProgram(PlanConstraints):
             items=self._planned_items(solution.values),
             intervals=self._planned_intervals(solution.values),
             reward=solution.objective,
-            solve_report=SolveReport(gap=solution.gap, is_optimal=solution.is_optimal, seconds=solution.seconds),
+            solve_report=SolveReport(
+                gap=solution.gap, is_optimal=solution.is_optimal, seconds=solution.seconds, solver=solution.solver
+            ),
         )
 
     def _discounts_of(self, reward: Reward) -> FloatArray:

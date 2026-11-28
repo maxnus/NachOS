@@ -81,7 +81,7 @@ Everything the planner assumes of the game is the bot's to read and change, as a
 |---|---|
 | `expansions` | The expansions the bot means to take next, in order. A plan starts no more command centers than these, so none by default. |
 | `state` | The state of the game the plan starts from: `planner.state()` by default, plain values a bot may change first. |
-| `economy` | An `EconomyModel`: what workers and MULEs bring in, and how long an SCV walks to build. |
+| `economy` | An `EconomyModel`: what workers and MULEs bring in, how long an SCV walks to build, and how long after a new base is done its fields can be mined. |
 | `loss_rates` | The share of each unit type the bot expects to lose a second, a number or a [value that depends on the game time](time-dependent-values.md). Only what is expected to survive counts. |
 | `start_limits` | The most a plan may start of a type, for what the bot will not make. |
 | `time_limit`, `node_limit`, `relative_gap` | When the solve may stop. A node limit gives the same plan on every machine, for tests and recorded games. |
@@ -103,6 +103,27 @@ plan = planner.plan_now(
 
 `Planner(api, ...)` takes how a plan is laid out in time: the grid of intervals, for how long each item is planned in
 whole numbers, and how the model rounds a start and a build to the grid. The defaults suit a normal game.
+
+## Solving with Gurobi
+
+Gurobi, a commercial solver, finds the same plans faster than HiGHS, which comes with SciPy:
+
+```python
+# pip install sc2nachos[gurobi]
+from sc2nachos.extensions.planner import Planner, Solver
+
+self.planner = Planner(api, solver=Solver.GUROBI)
+```
+
+Gurobi runs on one thread, on what HiGHS's presolve leaves of a plan's program, about half its rows.
+
+- **The licence gurobipy comes with** is free, size-limited, for non-production, non-commercial use only, as
+  [Gurobi says](https://support.gurobi.com/hc/en-us/articles/29682074018833), and expires with its release, gurobipy
+  14's on 2028-11-29. Its limit, 2000 variables and 2000 rows after the presolve, fits a plan on the default grid over 5
+  minutes, and may not fit a finer grid, a longer horizon or a reward on many types. A licence bought from Gurobi, or an
+  academic one, has no limit.
+- **A plan Gurobi refuses** is found by HiGHS within what is left of the time limit, with a warning in the log, and
+  `plan.solve_report.solver` says which solver found it. HiGHS prints its banner once, the first time it presolves.
 
 ## How far a plan was off
 

@@ -87,9 +87,10 @@ rows of the table below and a few sentences of the decisions, can be run again f
    production after, lost workers replaced.
 7. **The builder is an occupancy interval per race, and walks shift it.** Terran's SCV is away from the walk there
    through the build to the walk back; Protoss's probe for the two walks only; Zerg's drone walks there and is gone.
-   Walk times are per structure, and the bot's (decision 11): `EconomyModel.builder_walk_time`, by default 10 seconds to
-   a command center, about the walk from a main's mineral line to its natural on every map of the pool (corpus), and 6
-   to any other structure; the planner reads no path for them. A structure cannot start before its walk unless a worker
+   Walk times are per structure, and the bot's (decision 11): `EconomyModel.builder_walk_time`, by default 8 seconds to
+   a command center, about the walk from a main's mineral line to its natural on every map of the pool, and 3 to any
+   other structure (the owner, 2026-11-27, from the example bot's walks in game, where they had been 10 and 6, the 10
+   from the corpus); the planner reads no path for them. A structure cannot start before its walk unless a worker
    is already on its way. Walks cost Terran 2% and two SCVs.
 8. **A plan is executed as an order, not a timetable.** The next item starts when affordable; the predicted times
    are for monitoring and the debug overlay. In AvocaDOS the order maps onto the priorities of the production,
@@ -293,12 +294,15 @@ file as it was at `807304c`.
    worth some 0.07% on a grid where every chain is exact, for a count done by each item and interval. Interval lengths
    of each item's own were weighed and were no better.
 10. **Workers per base: not built** (the owner, 2026-11-23: "I would really like to have workers per base, but I don't
-    think we can afford it"). The planner pools workers over every field and gas building, and a new base's fields count
-    from when its townhall is done. The one charge for a move is `EconomyModel.initial_harvest_delay`, 3 seconds, with
-    no number of its own for a new base (the owner, the same day: "SCVs should already be delayed by 3 seconds when they
-    start to mine or change their assignment to the new base"). The error left is estimated at 30 to 75 minerals an
-    expansion. Workers per base, with transfers, would roughly double the program's variables, estimated and not
-    measured; a prototype outside the package is a few hours' work, and not made.
+    think we can afford it"). The planner pools workers over every field and gas building. A new base's fields count
+    from `EconomyModel.new_base_walk_time` after its townhall is done, 8 seconds by default, and its first workers then
+    pay `initial_harvest_delay` as any worker starting does (the owner, 2026-11-27: "OK I think I like option 2. But it
+    should be a new parameter so it can be set to zero"). Until then a new base had no number of its own (the owner,
+    2026-11-23: "SCVs should already be delayed by 3 seconds when they start to mine or change their assignment to the
+    new base"), and the error left was estimated at 30 to 75 minerals an expansion; measured, a worker sent to a newly
+    built natural lost 10.8 seconds of mining against 3 charged. Workers per base, with transfers, would roughly double
+    the program's variables, estimated and not measured; a prototype outside the package is a few hours' work, and not
+    made.
 11. **What an item needs first is whole** (the owner, 2026-11-20, and 2026-11-21, who made it a fraction and named it,
     the planner to offer many arguments since nobody knows yet how it works best). `Planner(unlock_fraction=1.0)`, the
     default, adds a 0 or 1 for each needed tech and interval. Without it a hundredth of a factory unlocked a starport,
@@ -318,9 +322,17 @@ file as it was at `807304c`.
       `EconomyModel.initial_harvest_delay`, 3 seconds by default, is how long a worker that starts to collect brings in
       nothing. The 3 seconds are assumed, not measured in game.
     - **Every start of mining pays too** ("I think workers immediately assigned to mining should pay too"): a new SCV's
-      first walk to a field, and a worker moved between minerals and vespene. A builder back from its structure pays its
-      walk back instead. The solve is a tenth to a quarter slower in all, and a plan from a game's start worth 0.6 to
-      1.5% less.
+      first walk to a field, and a worker moved between minerals and vespene. The solve is a tenth to a quarter slower
+      in all, and a plan from a game's start worth 0.6 to 1.5% less.
+    - **A builder back pays it too, out of its walk back** (the owner, 2026-11-27: "I am not sure I like the
+      inconsistency between minerals and gas"). A builder back at the minerals had paid its walk back alone, and one
+      back at a refinery its walk back and the delay as well. Each now walks back for its walk less the delay and pays
+      the delay as it starts, at minerals or vespene alike, so that the two together are its walk back, and all of the
+      delay where the walk is shorter. Gone with it are the variables and the row that let a builder start to mine for
+      nothing: 45 variables and 45 rows on the default grid, the integers as they were. It solves as fast (the
+      benchmark's `reference` and `replans` in 30.7 s before and 31.7 after, single runs), its plans are worth up to
+      0.4% more, most likely from builders that go straight on to another build, which no longer pay the delay, and the
+      example bot plays as well (42 of 126 games won against Cheater 3 after, 47 before, within the noise).
     - **A plan holds its intervals** ("Would it not be better to have a new class that represents all these values for a
       single bucket and then have a single tuple over objects of this class?"), each a `PlanInterval`. An interval was a
       bucket until he renamed it ("I don't really like the name").
@@ -454,6 +466,24 @@ file as it was at `807304c`.
       "Two the two smaller things first I think?"). `BuildPlan.to_string()` and `PlanItem.to_string()`, named as
       `GameTime`'s is. The helper for which items of a plan are still to do waits for his word: counting by the state is
       wrong where a unit died or a command center morphed, and a bot that ticks off what it starts needs none.
+19. **Gurobi, optional, on its size-limited licence** (the owner, 2026-11-26: "I think we want to support gurobi via the
+    free license, making use of highs pre and post solve abilities", "mostly contained to the LinearProgram class", and
+    "We would only be running with a single thread"). `Planner(solver=Solver.GUROBI)`, behind `pip install
+    sc2nachos[gurobi]`: HiGHS's presolve, Gurobi on one thread, HiGHS's postsolve. The licence counts the program as it
+    is handed over, 2000 variables and 2000 rows at most; every benchmark program is over that as built, 2508 to 4471
+    rows, and 13 of 14 fit after the presolve, 990 to 1998, the 10-minute `double90` grid's 2896 not. On those 13
+    Gurobi proves the plan 5.6 times sooner in the median, 1.6 to 10.7. A program Gurobi refuses is solved by HiGHS
+    within the time left, and `SolveReport.solver` says which. highspy comes in for this alone; Open 2 stands for
+    HiGHS's own solve. Settled with the owner the same day, in #262:
+    - **Always the presolve** ("OK agreed"), also for a program that fits as built: on 32 programs of 2 to 3 minutes
+      that do, Gurobi alone was faster by 1.11 times in the median, 0.76 to 1.61. Worth building only with a licence of
+      no limit, and measured then.
+    - **An enum, not solver classes** ("OK agreed"): settings, when one is needed, as a dictionary of the solver's own
+      parameters beside it, `plan_now`'s limits winning. The dispatch is a `match` that ends in `assert_never`.
+    - **HiGHS's presolve is a class, `HighsPresolve`**, and Gurobi a function on a `MatrixForm`, presolved or not; the
+      solver layer is a package of its own, `planner/_milp/`, the rest of the planner flat. From the second round:
+      `HighsPresolve.run` presolves and its constructor stores; `_milp` lists what the planner takes in its
+      `__init__`; and a conversion names both kinds, a rule of the code style now.
 
 ## Risks
 
