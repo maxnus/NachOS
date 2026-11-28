@@ -654,7 +654,19 @@ class TestOneCommandAUnitATurn:
         game.flush()
         game.observe(16, _marine(1))
 
-        assert game.own(1).pending_commands == (move, stim)
+        assert game.own(1).pending_commands == (stim, move)
+
+    def test_pending_commands_are_in_the_order_they_went_out(self) -> None:
+        """A rally given before a train comes first, though the barracks carries the rally out at once and the train
+        goes behind what it makes."""
+        game = _Game([ActionResult.SUCCESS, ActionResult.SUCCESS])
+        game.observe(0, _barracks(1))
+        rally = game.book.command(game.own(1), _RALLY, target=(20.0, 21.0))
+        train = game.book.command(game.own(1), _TRAIN_MARINE)
+        game.flush()
+        game.observe(16, _barracks(1))
+
+        assert game.own(1).pending_commands == (rally, train)
 
     def test_pending_commands_end_with_the_staged_ones(self) -> None:
         game = _Game([ActionResult.SUCCESS])

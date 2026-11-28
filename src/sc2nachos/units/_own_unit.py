@@ -103,10 +103,9 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
     @property
     def pending_commands(self) -> tuple[Command, ...]:
         """The commands the unit's reported orders and effects may not show yet: those that went out to it in the turns
-        of the last two observations and that the game did not refuse, then `staged_commands`. Of those that went out,
-        the last that replaced its orders comes first, then those sent since that did not replace them, a queued one, a
-        train, a research, an add-on or a morph, and then what it carries out at once, a stim, a rally or a MULE, whose
-        effect, a stim's buff say, may not show yet either.
+        of the last two observations, that the game did not refuse and that none sent after replaced, in the order they
+        went out, then `staged_commands`. What the unit carries out at once is among them, a stim, a rally or a MULE,
+        whose effect, a stim's buff say, may not show yet either.
 
         Nothing is checked against the observations: a command is pending for as long as it may take to show, the next
         observation in a stepped game and the one after it on the ladder or in realtime. A bot reads this to leave

@@ -158,10 +158,10 @@ dies.
 
 A command is *staged* until its turn's end, when it is *sent*; the game takes it or refuses it. One it takes is
 *pending* while the unit may not show it yet: on the ladder an order can show two observations after its command went
-out. `unit.pending_commands` gives those, ahead of the staged ones, and is what a bot checks to leave alone a unit it
-has commanded until the unit shows it. Nothing is checked against the observations: a command is pending for as long
-as it may take to show, which holds what the unit carries out at once too, a stim, a rally or a MULE, whose effect
-may not show yet either.
+out. `unit.pending_commands` gives those, in the order they went out and ahead of the staged ones, and is what a bot
+checks to leave alone a unit it has commanded until the unit shows it. Nothing is checked against the observations: a
+command is pending for as long as it may take to show, which holds what the unit carries out at once too, a stim, a
+rally or a MULE, whose effect may not show yet either.
 
 `unit.commands(since=time)` gives every command given to the unit since `time` that went out to it and that the game
 did not refuse, then the staged ones, for up to 60 seconds of game time back. A bot that stims a marine once in a

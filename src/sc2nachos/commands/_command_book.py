@@ -279,7 +279,8 @@ class CommandBook:
         return tuple(command for command in self._staged_by_unit.get(unit.id, ()) if not command._withdrawn)
 
     def _pending_for(self, unit: OwnUnit[Any]) -> tuple[Command, ...]:
-        """The commands `unit` may not show yet: those sent lately, then those given this turn."""
+        """The commands `unit` may not show yet: those sent lately, in the order they went out, then those given this
+        turn."""
         return (*self._sent_but_not_observed_yet(unit), *self._staged_for(unit))
 
     def _commands_since(self, unit: OwnUnit[Any], since: GameTime) -> tuple[Command, ...]:
@@ -450,15 +451,25 @@ class CommandBook:
         return None
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Command]:
-        """The commands that went out to `unit` lately and that the observations may not show yet: the last sent that
-        replaced its orders, those sent since that did not, and those it carries out at once, whose effect may not
-        show yet."""
+        """The commands that went out to `unit` lately and that the observations may not show yet, in the order they
+        went out: the last sent that replaced its orders, those sent since that did not, and those it carries out at
+        once, whose effect may not show yet."""
         commands = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
             commands.append(sent)
         recent = self._observations - _SHOWN_WITHIN + 1
         commands += [command for command, sent_at in self._sent_not_replacing.get(unit.id, ()) if sent_at >= recent]
         commands += [command for command, sent_at in self._sent_at_once.get(unit.id, ()) if sent_at >= recent]
+        if len(commands) < 2:
+            return commands
+        # They went out in one turn, the last, so they are the newest the unit's sent commands keep.
+        newest_first = []
+        for command in reversed(self._sent_by_unit.get(unit.id, ())):
+            if command in commands:
+                newest_first.append(command)
+                if len(newest_first) == len(commands):
+                    return newest_first[::-1]
+        # None of them is kept any more if the observation before the last was more than `_COMMANDS_KEPT_FOR` before it.
         return commands
 
     def _is_carried_out_at_once(self, command: Command, unit: OwnUnit[Any]) -> bool:
