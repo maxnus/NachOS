@@ -14,6 +14,7 @@ from sc2nachos.gamedata import (
     GameData,
     OrderBehavior,
     Resources,
+    ResourcesAndSupply,
     TargetDomain,
     TargetType,
     Tech,
@@ -213,6 +214,67 @@ class TestCost:
         assert Cost(0, 0, time=GameTime(steps=16)).is_free
         assert not Cost(0, 25).is_free
         assert not Cost(0, 0, -1).is_free
+
+
+class TestResourcesAndSupply:
+    def test_it_covers_another_amount_with_at_least_its_minerals_its_vespene_and_its_supply(self) -> None:
+        left = ResourcesAndSupply(150, 50, 2)
+        assert left.covers(Cost(150, 50, 2))
+        assert not left.covers(Cost(151, 0))
+        assert not left.covers(Cost(0, 51))
+        assert not left.covers(Cost(50, 0, 3))
+        assert left.covers(ResourcesAndSupply(150, 50, 2))
+        assert not left.covers(ResourcesAndSupply(0, 0, 3))
+        assert left.covers(Resources(150, 50))
+        assert not left.covers(Resources(150, 51))
+
+    def test_what_takes_no_supply_is_covered_however_little_is_free(self) -> None:
+        """Over the cap, once units that provided supply are lost, a player can still build what provides more."""
+        over_the_cap = ResourcesAndSupply(400, 0, -3)
+        assert over_the_cap.covers(Cost(100, 0))
+        assert over_the_cap.covers(Cost(200, 0, -1))
+        assert over_the_cap.covers(Resources(400, 0))
+        assert not over_the_cap.covers(Cost(50, 0, 1))
+
+    def test_paying_takes_off_the_supply_too_and_may_leave_it_negative(self) -> None:
+        left = ResourcesAndSupply(100, 0, 2)
+        left -= Cost(50, 0, 1, time=GameTime(steps=272))
+        assert left == ResourcesAndSupply(50, 0, 1)
+        assert left - ResourcesAndSupply(150, 25, 2) == ResourcesAndSupply(-100, -25, -1)
+
+    def test_paying_for_a_spawning_pool_frees_the_supply_of_the_drone_it_uses_up(self) -> None:
+        assert ResourcesAndSupply(200, 0, 0) - Cost(200, 0, -1) == ResourcesAndSupply(0, 0, 1)
+
+    def test_it_adds_scales_shares_out_and_negates_part_by_part(self) -> None:
+        marine = ResourcesAndSupply(50, 0, 1)
+        assert marine + ResourcesAndSupply(100, 25, 2) == ResourcesAndSupply(150, 25, 3)
+        assert 3 * marine == marine * 3 == ResourcesAndSupply(150, 0, 3)
+        assert ResourcesAndSupply(150, 0, 3) / 3 == marine
+        assert -marine == ResourcesAndSupply(-50, 0, -1)
+
+    def test_it_holds_its_minerals_and_vespene_as_resources_and_a_cost_its_parts_but_the_time(self) -> None:
+        assert ResourcesAndSupply(150, 100, 3).resources == Resources(150, 100)
+        assert Cost(150, 100, 2, time=GameTime(steps=400)).resources_and_supply == ResourcesAndSupply(150, 100, 2)
+
+
+class TestArithmeticOfAmounts:
+    def test_each_kind_adds_and_takes_off_only_its_own_kind(self) -> None:
+        """So that the supply or the time of the other is never silently dropped; a cost taken off what is left is the
+        one exception, which drops only the time."""
+        with pytest.raises(TypeError):
+            _ = Resources(100, 0) + Cost(50, 0)  # pyright: ignore[reportOperatorIssue]
+        with pytest.raises(TypeError):
+            _ = Resources(100, 0) - ResourcesAndSupply(50, 0)  # pyright: ignore[reportOperatorIssue]
+        with pytest.raises(TypeError):
+            _ = Cost(100, 0) - ResourcesAndSupply(50, 0)  # pyright: ignore[reportOperatorIssue]
+        with pytest.raises(TypeError):
+            _ = ResourcesAndSupply(100, 0) + Cost(50, 0)  # pyright: ignore[reportOperatorIssue]
+
+    def test_each_kind_gives_its_parts_in_the_order_its_constructor_takes_them(self) -> None:
+        time = GameTime(steps=400)
+        assert Resources(50, 25).to_tuple() == (50, 25)
+        assert ResourcesAndSupply(50, 25, 1).to_tuple() == (50, 25, 1)
+        assert Cost(50, 25, 1, time=time).to_tuple() == (50, 25, 1, time)
 
 
 class TestReadingTheTables:

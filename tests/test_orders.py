@@ -15,7 +15,7 @@ from s2clientprotocol import common_pb2, data_pb2, debug_pb2, error_pb2, raw_pb2
 
 from sc2nachos import Api, GameTime
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import Cost, GameData
+from sc2nachos.gamedata import GameData, ResourcesAndSupply
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import POINT_PRECISION, Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -1943,7 +1943,7 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.issue(game.own(2), _TRAIN_REAPER)
 
-        assert game.book.pending_cost == Cost(150, 50)
+        assert game.book.pending_cost == ResourcesAndSupply(150, 50)
 
     def test_pending_cost_counts_only_the_last_of_orders_that_replace_one_another(self) -> None:
         game = _costing()
@@ -1953,7 +1953,7 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(2), _TRAIN_REAPER)
         game.book.issue(game.own(2), _TRAIN_MARINE)
 
-        assert game.book.pending_cost == Cost(150, 0)
+        assert game.book.pending_cost == ResourcesAndSupply(150, 0)
 
     def test_pending_cost_counts_an_order_to_several_once_for_each(self) -> None:
         game = _costing()
@@ -1961,7 +1961,7 @@ class TestWhatTheTurnsOrdersCost:
 
         game.book.issue([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
 
-        assert game.book.pending_cost == Cost(150, 0)
+        assert game.book.pending_cost == ResourcesAndSupply(150, 0)
 
     def test_pending_cost_counts_each_queued_train(self) -> None:
         game = _costing()
@@ -1969,7 +1969,7 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(1), _TRAIN_MARINE)
         game.book.issue(game.own(1), _TRAIN_MARINE, queued=True)
 
-        assert game.book.pending_cost == Cost(100, 0)
+        assert game.book.pending_cost == ResourcesAndSupply(100, 0)
 
     def test_pending_cost_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
         """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""
@@ -1978,7 +1978,7 @@ class TestWhatTheTurnsOrdersCost:
 
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
 
-        assert game.book.pending_cost == Cost(0, 0)
+        assert game.book.pending_cost == ResourcesAndSupply(0, 0)
         assert game.book.pending
 
     def test_pending_cost_leaves_out_a_withdrawn_order_and_what_went_out(self) -> None:
@@ -1987,11 +1987,11 @@ class TestWhatTheTurnsOrdersCost:
         game.book.issue(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.issue(game.own(2), _TRAIN_MARINE).withdraw()
 
-        assert game.book.pending_cost == Cost(100, 0)
+        assert game.book.pending_cost == ResourcesAndSupply(100, 0)
 
         game.flush()
 
-        assert game.book.pending_cost == Cost(0, 0)
+        assert game.book.pending_cost == ResourcesAndSupply(0, 0)
 
 
 class TestAVerdictNachosCannotName:
@@ -2257,7 +2257,7 @@ class _GroupTrainingBot:
         self.api = api
         self.player = player
         self.made = False
-        self.cost: Cost | None = None
+        self.cost: ResourcesAndSupply | None = None
         self.in_production: list[int] = []
 
     def turn(self, event: TurnEvent) -> None:
@@ -2382,8 +2382,7 @@ class TestAgainstTheRealGame:
 
         print("marines in production, turn by turn:", bot.in_production)
         print("refused:", failures)
-        # The three trains' steps added up, as `pending_cost` adds them: a marine takes 400 in the tables (in game).
-        assert bot.cost == Cost(150, 0, supply=3, time=GameTime(steps=1200))
+        assert bot.cost == ResourcesAndSupply(150, 0, 3)
         assert max(bot.in_production) == 3
         assert not [failure for failure in failures if failure.ability is _TRAIN_MARINE]
 

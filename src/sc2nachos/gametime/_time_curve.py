@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from numpy import ndarray
 
-    from sc2nachos._shared.supports_vector_arithmetic import SupportsVectorArithmetic
+    from sc2nachos._shared.vector_arithmetic import SupportsVectorArithmetic
 
 
 @final
