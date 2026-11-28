@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from loguru import logger
-from s2clientprotocol import error_pb2, sc2api_pb2
+from s2clientprotocol import error_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import (
     Api,
@@ -28,6 +28,7 @@ from sc2nachos.events import (
     TurnEvent,
     TurnStartEvent,
 )
+from sc2nachos.gamedata import Tech
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -45,7 +46,15 @@ from sc2nachos.protocol import (
 from sc2nachos.run import GameProcess, Installation, MapFile, MapNotFoundError, free_port
 from sc2nachos.state import ActionResult, Research
 from sc2nachos.units import Alliance, UnitType
-from support import FakeTransport, make_game_info, make_observation, make_response, make_unit
+from support import (
+    FakeTransport,
+    ScriptedGame,
+    make_game_info,
+    make_observation,
+    make_response,
+    make_unit,
+    shipped_game_data,
+)
 
 # A map from the current AIE ladder pool, for the test games.
 _LADDER_MAP = "PylonAIE_v4"
@@ -423,6 +432,50 @@ class TestPlaying:
         assert counted == [(0, 0, 0, 0), (1, 1, 1, 0)]
         assert zealots == [(UnitTypeId.ZEALOT, 1, 0.5)]
         assert researches == [{}, {}]
+
+    def test_the_techs_are_those_the_finished_structures_grant_and_unlock_what_needs_them(self) -> None:
+        """A lowered depot grants `SUPPLY_DEPOT`, and a barracks or an armory nothing until finished. The second
+        weapons level is unlocked only with both an armory and the first level; a marauder from the start, whatever
+        tech lab, which a producer needs and a player does not."""
+        depot = make_unit(1, UnitTypeId.SUPPLY_DEPOT_LOWERED, build_progress=1.0)
+
+        def structures(progress: float) -> list[raw_pb2.Unit]:
+            return [
+                depot,
+                make_unit(2, UnitTypeId.BARRACKS, build_progress=progress),
+                make_unit(3, UnitTypeId.ARMORY, build_progress=progress),
+            ]
+
+        level_1 = (UpgradeId.TERRAN_INFANTRY_WEAPONS_1.value,)
+        observations = [
+            make_observation(0, units=structures(0.5)),
+            make_observation(2, units=structures(1.0)),
+            make_observation(4, units=structures(1.0), upgrades=level_1),
+            make_observation(6, units=structures(1.0), upgrades=level_1),
+        ]
+        api = Api()
+        seen: list[tuple[frozenset[Tech], bool, bool, bool, bool]] = []
+
+        @api.on(TurnEvent)
+        def turn(event: TurnEvent) -> None:
+            seen.append(
+                (
+                    api.techs,
+                    api.techs is api.techs,
+                    api.is_unlocked(UnitTypeId.FACTORY),
+                    api.is_unlocked(UpgradeId.TERRAN_INFANTRY_WEAPONS_2),
+                    api.is_unlocked(UnitTypeId.MARAUDER),
+                )
+            )
+
+        api.play(ScriptedGame(observations, data=shipped_game_data()).joined())
+
+        built = frozenset((Tech.SUPPLY_DEPOT, Tech.BARRACKS, Tech.ARMORY))
+        assert seen == [
+            (frozenset((Tech.SUPPLY_DEPOT,)), True, False, False, True),
+            (built, True, True, False, True),
+            (built, True, True, True, True),
+        ]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [
