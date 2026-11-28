@@ -552,6 +552,68 @@ class TestWhereTheyAre:
             _assorted_own_units(3).closest_to(Circle((0, 0), 1))  # pyright: ignore[reportArgumentType]
 
 
+class TestTotals:
+    """What the units add up to, each total read as the `Unit` property it is named after reads."""
+
+    def test_the_supply_is_each_types_together_half_a_zergling_and_none_for_a_structure(self) -> None:
+        units = Units(
+            MadeUpUnits().observe(
+                UnitReport(1, UnitTypeId.MARINE),
+                UnitReport(2, UnitTypeId.ZERGLING, alliance=Alliance.ENEMY),
+                UnitReport(3, UnitTypeId.BARRACKS),
+            )
+        )
+        assert units.supply_used == 1.5
+
+    def test_the_vitals_are_the_units_own_together_and_their_maxima_together(self) -> None:
+        """A zealot of 60 of 100 health and 10 of 50 shield, and a ghost of 45 of 125 health and 50 of 200 energy."""
+        units = Units(
+            MadeUpUnits().observe(
+                UnitReport(1, UnitTypeId.ZEALOT, health=60.0, health_max=100.0, shield=10.0, shield_max=50.0),
+                UnitReport(2, UnitTypeId.GHOST, health=45.0, health_max=125.0, energy=50.0, energy_max=200.0),
+            )
+        )
+        assert (units.health, units.shield, units.life, units.energy) == (105.0, 10.0, 115.0, 50.0)
+        assert (units.health_max, units.shield_max, units.life_max, units.energy_max) == (225.0, 50.0, 275.0, 200.0)
+
+    def test_a_fraction_is_of_the_totals_so_a_unit_without_energy_or_a_shield_does_not_lower_it(self) -> None:
+        """Not the mean of the units' fractions: a marine of 9 of 45 health weighs less than a thor of 400 of 400,
+        and has no energy or shield to count."""
+        units = Units(
+            MadeUpUnits().observe(
+                UnitReport(1, UnitTypeId.MARINE, health=9.0, health_max=45.0),
+                UnitReport(2, UnitTypeId.THOR, health=400.0, energy=50.0, energy_max=200.0, shield=0.0),
+                UnitReport(3, UnitTypeId.ZEALOT, health=100.0, shield=25.0, shield_max=50.0),
+            )
+        )
+        assert units.health_fraction == pytest.approx(509.0 / 545.0)
+        assert units.shield_fraction == 0.5
+        assert units.life_fraction == pytest.approx(534.0 / 595.0)
+        assert units.energy_fraction == 0.25
+
+    def test_a_fraction_is_0_where_the_maximum_is_0_as_for_no_units(self) -> None:
+        """No units add up to nothing, and marines have no shield or energy."""
+        empty = Units[Unit[Any]]()
+        assert (empty.supply_used, empty.life, empty.life_max) == (0.0, 0.0, 0.0)
+        marines = Units(MadeUpUnits().observe(UnitReport(1, UnitTypeId.MARINE, health=45.0)))
+        assert [
+            (units.health_fraction, units.shield_fraction, units.life_fraction, units.energy_fraction)
+            for units in (empty, marines)
+        ] == [(0.0, 0.0, 0.0, 0.0), (1.0, 0.0, 1.0, 0.0)]
+
+    def test_a_unit_out_of_sight_counts_as_last_seen_and_one_never_seen_raises(self) -> None:
+        made_up = MadeUpUnits()
+        zealot, command_center = made_up.observe(
+            UnitReport(1, UnitTypeId.ZEALOT, alliance=Alliance.ENEMY, health=60.0, health_max=100.0),
+            UnitReport(2, UnitTypeId.COMMAND_CENTER, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG),
+        )
+        made_up.observe(UnitReport(2, UnitTypeId.COMMAND_CENTER, alliance=Alliance.ENEMY, visibility=Visibility.IN_FOG))
+        assert not zealot.is_listed
+        assert (Units([zealot]).health, Units([zealot]).health_fraction) == (60.0, 0.6)
+        with pytest.raises(NotReportedError, match="never reported its health"):
+            _ = Units([zealot, command_center]).health_fraction
+
+
 class TestStructureAt:
     def test_it_is_the_structure_whose_footprint_holds_the_point(self) -> None:
         """A depot at (4, 4) covers the tiles (3, 3) to (4, 4)."""
