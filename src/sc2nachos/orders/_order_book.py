@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from s2clientprotocol import raw_pb2
 
-from sc2nachos.gamedata import Cost, OrderBehavior
+from sc2nachos.gamedata import OrderBehavior, ResourcesAndSupply
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
@@ -282,16 +282,16 @@ class OrderBook:
         return tuple(order for order in self._issued if not order._withdrawn)
 
     @property
-    def pending_cost(self) -> Cost:
-        """What the bank does not show yet: the cost of the orders of `pending` that will go out, each its ability's
-        `cost` in the game's tables for each unit it goes out to. A unit given orders that replace one another pays for
-        the last, and one already carrying an order out pays nothing for it again. Its time is every order's added up,
-        though the units may carry them out side by side."""
-        total = Cost(0, 0)
+    def pending_cost(self) -> ResourcesAndSupply:
+        """What the bank does not show yet: the minerals, vespene and supply the orders of `pending` that will go out
+        take, each its ability's `cost` in the game's tables for each unit it goes out to, without the time, since the
+        units carry them out side by side. A unit given orders that replace one another pays for the last, and one
+        already carrying an order out pays nothing for it again."""
+        total = ResourcesAndSupply(0, 0)
         for order, units in self._orders_to_send(self._issued, self._forced):
             row = self._game_data.abilities.get(order.ability)
             if row is not None:
-                total += row.cost * len(units)
+                total += row.cost.resources_and_supply * len(units)
         return total
 
     def _send(self, client: Client, *, then: Sequence[sc2api_pb2.Action] = ()) -> None:

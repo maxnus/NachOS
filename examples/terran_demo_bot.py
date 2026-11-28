@@ -44,21 +44,19 @@ DEFEND_WITHIN = 15.0
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
+    """What is left to spend this turn: `api.budget` as the turn starts, less each order's cost as the bot gives it, and
+    what it sets aside."""
 
     def __init__(self) -> None:
-        pending_cost = api.orders.pending_cost
-        self.resources_left = api.resources - pending_cost.resources
-        self.supply_left = api.supply.left - pending_cost.supply
+        self.left = api.budget
 
     def try_pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
         """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if
         not, so nothing cheaper spends it first."""
         cost = api.data.abilities[ability].cost
-        affordable = self.resources_left.covers(cost.resources) and self.supply_left >= cost.supply
+        affordable = self.left.covers(cost)
         if affordable or save:
-            self.resources_left -= cost.resources
-            self.supply_left -= cost.supply
+            self.left -= cost
         return affordable
 
 

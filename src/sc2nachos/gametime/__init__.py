@@ -2,7 +2,7 @@
 time: `TimeSeries`, values a bot records against it, `TimeCurve`, a few values joined between their times, and
 `TimeFunction`, a function of it."""
 
-from sc2nachos._shared.supports_vector_arithmetic import SupportsVectorArithmetic
+from sc2nachos._shared.vector_arithmetic import SupportsVectorArithmetic
 from sc2nachos.gametime._game_speed import (
     FASTER_PER_NORMAL_SPEED,
     SECONDS_PER_STEP,

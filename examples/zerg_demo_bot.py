@@ -67,26 +67,22 @@ TUMOR_PLANTS_AFTER_ITS_BURROW = GameTime(steps=289)
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
+    """What is left to spend this turn: `api.budget` as the turn starts, less each order's cost as the bot gives it, and
+    what it sets aside."""
 
     def __init__(self) -> None:
-        pending_cost = api.orders.pending_cost
-        self.resources_left = api.resources - pending_cost.resources
-        self.supply_left = api.supply.left - pending_cost.supply
+        self.left = api.budget
 
     def can_pay_for(self, ability: AbilityId) -> bool:
         """Whether what is left pays for `ability`."""
-        cost = api.data.abilities[ability].cost
-        return self.resources_left.covers(cost.resources) and self.supply_left >= cost.supply
+        return self.left.covers(api.data.abilities[ability].cost)
 
     def try_pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
         """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if
         not, so nothing cheaper spends it first."""
-        cost = api.data.abilities[ability].cost
         affordable = self.can_pay_for(ability)
         if affordable or save:
-            self.resources_left -= cost.resources
-            self.supply_left -= cost.supply
+            self.left -= api.data.abilities[ability].cost
         return affordable
 
 

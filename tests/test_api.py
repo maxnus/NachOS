@@ -28,7 +28,7 @@ from sc2nachos.events import (
     TurnEvent,
     TurnStartEvent,
 )
-from sc2nachos.gamedata import Tech
+from sc2nachos.gamedata import ResourcesAndSupply, Tech
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -475,6 +475,40 @@ class TestPlaying:
             (frozenset((Tech.SUPPLY_DEPOT,)), True, False, False, True),
             (built, True, True, False, True),
             (built, True, True, True, True),
+        ]
+
+    def test_the_budget_is_the_bank_and_the_supply_free_less_what_the_turn_s_orders_will_cost(self) -> None:
+        """Read again after an order, it takes that order off too. Over the cap, its supply is negative."""
+        barracks = [make_unit(tag, UnitTypeId.BARRACKS, build_progress=1.0) for tag in (1, 2)]
+        observations = [
+            make_observation(
+                0, units=barracks, common=sc2api_pb2.PlayerCommon(minerals=200, vespene=25, food_used=14, food_cap=15)
+            ),
+            make_observation(
+                2, units=barracks, common=sc2api_pb2.PlayerCommon(minerals=150, food_used=17, food_cap=15)
+            ),
+            make_observation(4, units=barracks),
+        ]
+        api = Api()
+        seen: list[ResourcesAndSupply] = []
+
+        @api.on(TurnEvent)
+        def turn(event: TurnEvent) -> None:
+            seen.append(api.budget)
+            if len(seen) == 1:
+                first, second = api.units.own
+                first.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+                seen.append(api.budget)
+                second.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+                seen.append(api.budget)
+
+        api.play(ScriptedGame(observations, data=shipped_game_data()).joined())
+
+        assert seen == [
+            ResourcesAndSupply(200, 25, 1),
+            ResourcesAndSupply(150, 25, 0),
+            ResourcesAndSupply(100, 25, -1),
+            ResourcesAndSupply(150, 0, -2),
         ]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
