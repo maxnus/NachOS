@@ -79,6 +79,11 @@ A unit whose type does not make what it is given raises `ValueError` saying what
 it, and so do units whose types make it with different abilities, as a gateway and a warp gate a zealot: they are
 ordered apart. Each returns the `IssuedOrder`, whose `ability` is the one ordered.
 
+Whether this player has what a product needs is `api.is_unlocked(product)`, a unit type or an upgrade: every tech and
+upgrade its `tech_requirements` name, read against `api.techs`, what its finished structures grant, and `api.upgrades`.
+It asks the player only, so the producer's own tech lab, `needs_tech_lab`, is left to the bot, and
+`unit.production_capacity` says how many the producer makes at once.
+
 ## One order a unit a turn
 
 A unit carries out only the last order it is given in a turn. Earlier ones are never sent to it. The game does the

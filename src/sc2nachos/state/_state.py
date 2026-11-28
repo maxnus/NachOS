@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-from sc2nachos.gamedata import Resources
+from sc2nachos.gamedata import Resources, Tech
 from sc2nachos.gamemap._image_data import image_tiles
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Grid
@@ -88,6 +88,15 @@ class _State:
     @property
     def upgrades(self) -> frozenset[UpgradeId]:
         return self._tracker.upgrade_tracker.own
+
+    @cached_property
+    def techs(self) -> frozenset[Tech]:
+        rows = self._tracker.game_data.units
+        techs: set[Tech] = set()
+        for unit in self._tracker.unit_tracker.present.own:
+            if (granted := rows[unit._type_id].techs_granted) and unit.is_complete:
+                techs.update(granted)
+        return frozenset(techs)
 
     @cached_property
     def _visibility(self) -> ndarray:

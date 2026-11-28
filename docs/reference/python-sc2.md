@@ -341,6 +341,7 @@ it.
 | `units \| other`, `units - other`, `units.sorted(key, reverse)` | `units.combined_with(other)` and `units.without(other)`, by NachOS id, `other` one unit or several, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
 | nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
+| `sum(u.health for u in units)`, and so on | `units.health`, `shield`, `life` and `energy`, each with its `_max` and its `_fraction`, the fraction of the totals rather than the mean of the units', and `units.supply_used` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
 | `units.random` | `random.choice(units)` |
 
@@ -477,6 +478,7 @@ it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
+| `bot.tech_requirement_progress(t) == 1` | `api.is_unlocked(t)`, a unit type or an upgrade, whether this player has every tech and upgrade it needs, the producer's tech lab apart; `api.techs`, the `Tech`s its finished structures grant |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's orders and those sent too lately to show, which are in `api.orders.issued_to(unit, include_sent=True)`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research`, a `Progress` with its `fraction` and `time_left`, and its structure; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]`, the step it was last in sight |

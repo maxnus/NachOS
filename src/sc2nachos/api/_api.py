@@ -24,7 +24,7 @@ from sc2nachos.events import (
     TurnStartEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
-from sc2nachos.gamedata import GameData, Resources
+from sc2nachos.gamedata import GameData, Resources, Tech
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.gametime import GameTime
 from sc2nachos.gametime._game_time import check_game_time
@@ -334,6 +334,28 @@ class Api[E]:
     def upgrades(self) -> frozenset[UpgradeId]:
         """Every upgrade this player has finished. Raises `UncuratedIdError` if one is one the curated ids leave out."""
         return self._current_game().state.upgrades
+
+    @property
+    def techs(self) -> frozenset[Tech]:
+        """Every tech this player has: those its finished structures grant, a lowered supply depot `SUPPLY_DEPOT` and a
+        greater spire `SPIRE` among them, as `data.types_granting` lists them. A structure under construction grants
+        none."""
+        return self._current_game().state.techs
+
+    def is_unlocked(self, product: UnitTypeId | UpgradeId) -> bool:
+        """Whether this player has every tech and upgrade `product`'s `tech_requirements` name, a unit type's in
+        `data.units` or an upgrade's in `data.upgrades`, read against `techs` and `upgrades`.
+
+        Only the player is asked, not a producer: neither whether one stands nor `needs_tech_lab`, the producer's own
+        add-on, so a marauder is unlocked from the start, though only a barracks with a tech lab makes one.
+        """
+        data = self.data
+        requirements = (
+            data.upgrades[product].tech_requirements
+            if isinstance(product, UpgradeId)
+            else data.units[product].tech_requirements
+        )
+        return requirements.techs <= self.techs and requirements.upgrades <= self.upgrades
 
     @overload
     def in_production(
