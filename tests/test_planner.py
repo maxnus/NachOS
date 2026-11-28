@@ -1916,20 +1916,20 @@ class TestEconomy:
     def test_rates_become_tiers_of_equal_rates_above_0(self) -> None:
         assert rate_tiers((1.0, 1.0, 0.5, 0.0)) == ((2, 1.0), (1, 0.5))
 
-    def test_an_scv_walks_10_seconds_to_a_command_center_and_6_to_any_other_structure_or_what_walk_time_returns(
+    def test_an_scv_walks_8_seconds_to_a_command_center_and_3_to_any_other_structure_or_what_walk_time_returns(
         self,
     ) -> None:
         unit_types = (UnitTypeId.COMMAND_CENTER, UnitTypeId.SUPPLY_DEPOT, UnitTypeId.BARRACKS)
         assert walk_seconds_of(EconomyModel(), unit_types) == {
-            UnitTypeId.COMMAND_CENTER: 10.0,
-            UnitTypeId.SUPPLY_DEPOT: 6.0,
-            UnitTypeId.BARRACKS: 6.0,
+            UnitTypeId.COMMAND_CENTER: 8.0,
+            UnitTypeId.SUPPLY_DEPOT: 3.0,
+            UnitTypeId.BARRACKS: 3.0,
         }
-        depots_near = EconomyModel(
-            builder_walk_time=lambda t: GameTime(seconds=3) if t == UnitTypeId.SUPPLY_DEPOT else None
+        depots_far = EconomyModel(
+            builder_walk_time=lambda t: GameTime(seconds=6) if t == UnitTypeId.SUPPLY_DEPOT else None
         )
-        assert walk_seconds_of(depots_near, unit_types)[UnitTypeId.SUPPLY_DEPOT] == 3.0
-        assert walk_seconds_of(depots_near, unit_types)[UnitTypeId.COMMAND_CENTER] == 10.0
+        assert walk_seconds_of(depots_far, unit_types)[UnitTypeId.SUPPLY_DEPOT] == 6.0
+        assert walk_seconds_of(depots_far, unit_types)[UnitTypeId.COMMAND_CENTER] == 8.0
 
     def test_a_negative_walk_raises(self) -> None:
         with pytest.raises(ValueError, match="BARRACKS"):
@@ -2117,7 +2117,9 @@ class TestEconomy:
             horizon_seconds=80,
             grid=TimeGrid.uniform(GameTime(seconds=1)),
             fluid_after=_whole_over_any_horizon,
-            economy=EconomyModel(initial_harvest_delay=GameTime(seconds=reassignment_seconds)),
+            economy=dataclasses.replace(
+                _WALKING_6_SECONDS_TO_EVERY_STRUCTURE, initial_harvest_delay=GameTime(seconds=reassignment_seconds)
+            ),
             start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [58.0]
@@ -2153,7 +2155,9 @@ class TestEconomy:
             horizon_seconds=80,
             grid=TimeGrid.uniform(GameTime(seconds=1)),
             fluid_after=_whole_over_any_horizon,
-            economy=EconomyModel(initial_harvest_delay=GameTime(seconds=reassignment_seconds)),
+            economy=dataclasses.replace(
+                _WALKING_6_SECONDS_TO_EVERY_STRUCTURE, initial_harvest_delay=GameTime(seconds=reassignment_seconds)
+            ),
             start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARAUDER)[0] == 34.0

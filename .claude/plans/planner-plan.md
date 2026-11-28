@@ -87,9 +87,10 @@ rows of the table below and a few sentences of the decisions, can be run again f
    production after, lost workers replaced.
 7. **The builder is an occupancy interval per race, and walks shift it.** Terran's SCV is away from the walk there
    through the build to the walk back; Protoss's probe for the two walks only; Zerg's drone walks there and is gone.
-   Walk times are per structure, and the bot's (decision 11): `EconomyModel.builder_walk_time`, by default 10 seconds to
-   a command center, about the walk from a main's mineral line to its natural on every map of the pool (corpus), and 6
-   to any other structure; the planner reads no path for them. A structure cannot start before its walk unless a worker
+   Walk times are per structure, and the bot's (decision 11): `EconomyModel.builder_walk_time`, by default 8 seconds to
+   a command center, about the walk from a main's mineral line to its natural on every map of the pool, and 3 to any
+   other structure (the owner, 2026-11-27, from the example bot's walks in game, where they had been 10 and 6, the 10
+   from the corpus); the planner reads no path for them. A structure cannot start before its walk unless a worker
    is already on its way. Walks cost Terran 2% and two SCVs.
 8. **A plan is executed as an order, not a timetable.** The next item starts when affordable; the predicted times
    are for monitoring and the debug overlay. In AvocaDOS the order maps onto the priorities of the production,
