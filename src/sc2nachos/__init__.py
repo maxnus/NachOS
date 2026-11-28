@@ -10,7 +10,7 @@ The [README](https://github.com/maxnus/NachOS#readme) says how to get started an
 from sc2nachos.__about__ import __version__
 from sc2nachos._shared.errors import NachOSError
 from sc2nachos.api import Api, FogOnError, NoEnemyError, NotPlayingError
-from sc2nachos.gamedata import Cost, Resources
+from sc2nachos.gamedata import Cost, Resources, ResourcesAndSupply
 from sc2nachos.gamemap import Expansion, StartLocation
 from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Circle, Footprint, Point, Rectangle
@@ -50,6 +50,7 @@ __all__ = [
     "Rectangle",
     "ReplayPlayback",
     "Resources",
+    "ResourcesAndSupply",
     "Result",
     "StartLocation",
     "Unit",

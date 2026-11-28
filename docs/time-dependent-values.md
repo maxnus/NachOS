@@ -93,7 +93,7 @@ once made; iterating over it hands its pairs back, to make another from.
 ### Values that are no numbers
 
 A curve's values are numbers, or anything else that adds, subtracts and multiplies by a number, as `Resources`, a
-`Cost`, a `Point` and a `GameTime` do: a `SupportsVectorArithmetic`, to a type checker. It reads along the line
+`ResourcesAndSupply`, a `Cost`, a `Point` and a `GameTime` do: a `SupportsVectorArithmetic`, to a type checker. It reads along the line
 between two of them by their own arithmetic:
 
 ```python

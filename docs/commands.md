@@ -80,6 +80,11 @@ A unit whose type does not make what it is given raises `ValueError` saying what
 it, and so do units whose types make it with different abilities, as a gateway and a warp gate a zealot: they are
 commanded apart. Each returns the `Command`, whose `ability` is the one given.
 
+Whether this player has what a product needs is `api.is_unlocked(product)`, a unit type or an upgrade: every tech and
+upgrade its `tech_requirements` name, read against `api.techs`, what its finished structures grant, and `api.upgrades`.
+It asks the player only, so the producer's own tech lab, `needs_tech_lab`, is left to the bot, and
+`unit.production_capacity` says how many the producer makes at once.
+
 ## One command a unit a turn
 
 A unit carries out only the last command it is given in a turn. Earlier ones are never sent to it. The game does the
@@ -226,20 +231,29 @@ with the game's verdict; it answers `SUCCESS` and silently drops it, so nothing 
 or, for a queued command the supply cap cannot feed, it accepts it, charges for it, and leaves it at no progress until
 supply frees up.
 
-A bot budgets for itself, since only it knows what matters most:
+A bot budgets for itself, since only it knows what matters most. `api.budget` is what it has left to spend, the
+minerals and vespene and the supply free under its cap:
 
 ```python
 cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
-if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
+if api.budget.covers(cost):
     barracks.command(AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
-`api.resources` and `api.supply` do not change as commands are given. They are what the game last reported, and in a
-stepped game it charges the turn's commands by the next observation (in game), so a bot giving several in one turn
-takes off what they will cost, `api.commands.staged_cost`:
+`covers` asks for supply only of a cost that takes some, so a player over its cap, once units that provided supply are
+lost, can still build what provides more. `api.resources` and `api.supply` do not change as commands are given. They
+are what the game last reported, and in a stepped game it charges the turn's commands by the next observation (in
+game), so `api.budget` takes off what they will cost, `api.commands.staged_cost`, and read again after a command it
+takes that one off too. A bot that sets money aside for what it cannot pay for yet keeps the budget it read and takes
+the cost off itself, so that nothing cheaper spends it first:
 
 ```python
-budget = api.resources - api.commands.staged_cost.resources
+budget = api.budget
+if budget.covers(depot_cost):
+    scv.command(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site)
+budget -= depot_cost
+if budget.covers(marine_cost):
+    barracks.command(AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
 `staged_cost` counts the staged commands as they will go out: the last of a unit's commands that replace one another,

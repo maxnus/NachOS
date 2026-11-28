@@ -472,6 +472,83 @@ class Units(Sequence[U]):
         count = len(self._units)
         return Point((x / count, y / count))
 
+    # Totals, each named after the `Unit` property it adds up and read as that property reads: a unit out of sight
+    # counts as it last read in sight, and one the game never showed visible raises `NotReportedError`.
+
+    @property
+    def supply_used(self) -> float:
+        """The supply the units take, their types' `supply_used` together: 0.5 for a zergling, 0 for a structure."""
+        return sum((unit.type_data.supply_used for unit in self._units), 0.0)
+
+    @property
+    def health(self) -> float:
+        """The units' health together."""
+        return sum((unit.health for unit in self._units), 0.0)
+
+    @property
+    def health_max(self) -> float:
+        """The units' maximum health together."""
+        return sum((unit.health_max for unit in self._units), 0.0)
+
+    @property
+    def health_fraction(self) -> float:
+        """The units' health together as a fraction of their maximum health together, so that a big unit weighs more
+        than a small one. 0 where that maximum is 0, as for no units."""
+        return _fraction(self.health, self.health_max)
+
+    @property
+    def shield(self) -> float:
+        """The units' shield together."""
+        return sum((unit.shield for unit in self._units), 0.0)
+
+    @property
+    def shield_max(self) -> float:
+        """The units' maximum shield together."""
+        return sum((unit.shield_max for unit in self._units), 0.0)
+
+    @property
+    def shield_fraction(self) -> float:
+        """The units' shield together as a fraction of their maximum shield together, so that a unit without one does
+        not lower it. 0 where that maximum is 0, as for no units or none with a shield."""
+        return _fraction(self.shield, self.shield_max)
+
+    @property
+    def life(self) -> float:
+        """The units' health and shield together."""
+        return sum((unit.life for unit in self._units), 0.0)
+
+    @property
+    def life_max(self) -> float:
+        """The units' maximum health and shield together."""
+        return sum((unit.life_max for unit in self._units), 0.0)
+
+    @property
+    def life_fraction(self) -> float:
+        """The units' health and shield together as a fraction of their maximum together. 0 where that maximum is 0,
+        as for no units."""
+        return _fraction(self.life, self.life_max)
+
+    @property
+    def energy(self) -> float:
+        """The units' energy together."""
+        return sum((unit.energy for unit in self._units), 0.0)
+
+    @property
+    def energy_max(self) -> float:
+        """The units' maximum energy together."""
+        return sum((unit.energy_max for unit in self._units), 0.0)
+
+    @property
+    def energy_fraction(self) -> float:
+        """The units' energy together as a fraction of their maximum energy together, so that a unit without energy
+        does not lower it. 0 where that maximum is 0, as for no units or none with energy."""
+        return _fraction(self.energy, self.energy_max)
+
+
+def _fraction(part: float, whole: float) -> float:
+    """`part` as a fraction of `whole`, or 0 where `whole` is 0."""
+    return part / whole if whole else 0.0
+
 
 def _unit_tuple[T: Unit[Any]](units: T | Iterable[T]) -> tuple[T, ...]:
     """The units given, one unit or any number of them, as a tuple."""

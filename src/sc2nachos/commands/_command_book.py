@@ -11,7 +11,7 @@ from s2clientprotocol import raw_pb2
 from sc2nachos.commands._action_to_send import actions_giving
 from sc2nachos.commands._command import Command
 from sc2nachos.commands._targets import aimed_at, check_target, same_point, same_target
-from sc2nachos.gamedata import CommandBehavior, Cost
+from sc2nachos.gamedata import CommandBehavior, ResourcesAndSupply
 from sc2nachos.gamedata._sent_as import SENT_UNCHANGED
 from sc2nachos.gamedata._techtree import ABILITIES_SENT_AS_ANOTHER
 from sc2nachos.gametime import GameTime
@@ -299,16 +299,16 @@ class CommandBook:
         return tuple(command for command in self._staged if not command._withdrawn)
 
     @property
-    def staged_cost(self) -> Cost:
-        """What the bank does not show yet: the cost of the commands of `staged` that will go out, each its ability's
-        `cost` in the game's tables for each unit it goes out to. A unit given commands that replace one another pays
-        for the last, and one already carrying a command out pays nothing for it again. Its time is every command's
-        added up, though the units may carry them out side by side."""
-        total = Cost(0, 0)
+    def staged_cost(self) -> ResourcesAndSupply:
+        """What the bank does not show yet: the minerals, vespene and supply the commands of `staged` that will go out
+        take, each its ability's `cost` in the game's tables for each unit it goes out to, without the time, since the
+        units carry them out side by side. A unit given commands that replace one another pays for the last, and one
+        already carrying a command out pays nothing for it again."""
+        total = ResourcesAndSupply(0, 0)
         for command, units in self._commands_to_send(self._staged, self._forced):
             row = self._game_data.abilities.get(command.ability)
             if row is not None:
-                total += row.cost * len(units)
+                total += row.cost.resources_and_supply * len(units)
         return total
 
     def _send(self, client: Client, *, then: Sequence[sc2api_pb2.Action] = ()) -> None:

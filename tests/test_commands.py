@@ -18,7 +18,7 @@ from sc2nachos.commands import Command, CommandBook
 from sc2nachos.commands._action_to_send import actions_giving
 from sc2nachos.commands._targets import aimed_at, same_target, target_as_kept
 from sc2nachos.events import TurnEvent
-from sc2nachos.gamedata import Cost, GameData
+from sc2nachos.gamedata import GameData, ResourcesAndSupply
 from sc2nachos.gamemap import GameMap
 from sc2nachos.geometry import POINT_PRECISION, Point, Point3D
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -2044,7 +2044,7 @@ class TestWhatTheTurnsCommandsCost:
         game.book.command(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.command(game.own(2), _TRAIN_REAPER)
 
-        assert game.book.staged_cost == Cost(150, 50)
+        assert game.book.staged_cost == ResourcesAndSupply(150, 50)
 
     def test_staged_cost_counts_only_the_last_of_commands_that_replace_one_another(self) -> None:
         game = _costing()
@@ -2054,7 +2054,7 @@ class TestWhatTheTurnsCommandsCost:
         game.book.command(game.own(2), _TRAIN_REAPER)
         game.book.command(game.own(2), _TRAIN_MARINE)
 
-        assert game.book.staged_cost == Cost(150, 0)
+        assert game.book.staged_cost == ResourcesAndSupply(150, 0)
 
     def test_staged_cost_counts_a_command_to_several_once_for_each(self) -> None:
         game = _costing()
@@ -2062,7 +2062,7 @@ class TestWhatTheTurnsCommandsCost:
 
         game.book.command([game.own(1), game.own(2), game.own(3)], _TRAIN_MARINE)
 
-        assert game.book.staged_cost == Cost(150, 0)
+        assert game.book.staged_cost == ResourcesAndSupply(150, 0)
 
     def test_staged_cost_counts_each_queued_train(self) -> None:
         game = _costing()
@@ -2070,7 +2070,7 @@ class TestWhatTheTurnsCommandsCost:
         game.book.command(game.own(1), _TRAIN_MARINE)
         game.book.command(game.own(1), _TRAIN_MARINE, queued=True)
 
-        assert game.book.staged_cost == Cost(100, 0)
+        assert game.book.staged_cost == ResourcesAndSupply(100, 0)
 
     def test_staged_cost_leaves_out_a_build_its_worker_is_already_carrying_out(self) -> None:
         """A build repeated every turn, once the game has it: the send leaves it out, and the game charged it."""
@@ -2079,7 +2079,7 @@ class TestWhatTheTurnsCommandsCost:
 
         game.book.command(game.own(1), _BUILD_DEPOT, target=_SITE)
 
-        assert game.book.staged_cost == Cost(0, 0)
+        assert game.book.staged_cost == ResourcesAndSupply(0, 0)
         assert game.book.staged
 
     def test_staged_cost_leaves_out_a_withdrawn_command_and_what_went_out(self) -> None:
@@ -2088,11 +2088,11 @@ class TestWhatTheTurnsCommandsCost:
         game.book.command(game.own(1), _BUILD_DEPOT, target=_SITE)
         game.book.command(game.own(2), _TRAIN_MARINE).withdraw()
 
-        assert game.book.staged_cost == Cost(100, 0)
+        assert game.book.staged_cost == ResourcesAndSupply(100, 0)
 
         game.flush()
 
-        assert game.book.staged_cost == Cost(0, 0)
+        assert game.book.staged_cost == ResourcesAndSupply(0, 0)
 
 
 class TestAVerdictNachosCannotName:
@@ -2358,7 +2358,7 @@ class _GroupTrainingBot:
         self.api = api
         self.player = player
         self.made = False
-        self.cost: Cost | None = None
+        self.cost: ResourcesAndSupply | None = None
         self.in_production: list[int] = []
 
     def turn(self, event: TurnEvent) -> None:
@@ -2483,8 +2483,7 @@ class TestAgainstTheRealGame:
 
         print("marines in production, turn by turn:", bot.in_production)
         print("refused:", failures)
-        # The three trains' steps added up, as `staged_cost` adds them: a marine takes 400 in the tables (in game).
-        assert bot.cost == Cost(150, 0, supply=3, time=GameTime(steps=1200))
+        assert bot.cost == ResourcesAndSupply(150, 0, 3)
         assert max(bot.in_production) == 3
         assert not [failure for failure in failures if failure.ability is _TRAIN_MARINE]
 

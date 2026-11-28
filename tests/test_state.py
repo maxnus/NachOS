@@ -582,6 +582,7 @@ class TestThroughTheApi:
         "score",
         "resources",
         "supply",
+        "budget",
         "ui_unit_counts",
         "upgrades",
         "vision",

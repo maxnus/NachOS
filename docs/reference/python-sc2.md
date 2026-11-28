@@ -154,7 +154,8 @@ with it.
   tally; NachOS reads what the game reports, which already counts a build's cost from the step it was given
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every command as given,
   whatever it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.commands.staged_cost`
-  is what the turn's commands will cost ([commands](../commands.md#what-a-command-needs)).
+  is what the turn's commands will cost, and `api.budget` what is left once they are paid
+  ([commands](../commands.md#what-a-command-needs)).
 - **A command a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for
   its first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
   ([commands](../commands.md#one-command-a-unit-a-turn)). To drop a queue on purpose, give the unit its current order
@@ -342,6 +343,7 @@ with it.
 | `units \| other`, `units - other`, `units.sorted(key, reverse)` | `units.combined_with(other)` and `units.without(other)`, by NachOS id, `other` one unit or several, and `units.sorted(key, reverse=...)`, `reverse` keyword-only, each a collection |
 | `units.closest_n_units(p, n)` | `units.closest_n_to(n, p)`, `p` a point or a unit, as in `closest_to`, `sorted_by_distance_to` and `closest_distance_to` |
 | nothing | `units.doing(a)`, your own units whose current order is `a` or one of several, and `units.with_buff(b)` |
+| `sum(u.health for u in units)`, and so on | `units.health`, `shield`, `life` and `energy`, each with its `_max` and its `_fraction`, the fraction of the totals rather than the mean of the units', and `units.supply_used` |
 | `units.amount`, `exists`, `empty`, `first` | `len(units)`, `bool(units)`, `not units`, `units[0]` |
 | `units.random` | `random.choice(units)` |
 
@@ -470,7 +472,7 @@ with it.
 | `state.score.collected_minerals`, `collection_rate_*`, `spent_*` | `api.score.collected.minerals`, `collection_rate`, `spent`, each a `Resources` |
 | `state.score.total_value_units`, `killed_value_structures` | `api.score.total_value.units`, `killed_value.structures` |
 | `state.score.idle_worker_time`, `idle_production_time`, in seconds | `api.score.idle_worker_time`, `idle_production_time`, each a `GameTime` |
-| `bot.minerals`, `vespene` | `api.resources.minerals`, `vespene`, and `api.resources.covers(cost.resources)` against a cost |
+| `bot.minerals`, `vespene` | `api.resources.minerals`, `vespene`, and `api.budget.covers(cost)` against a cost |
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
@@ -479,6 +481,7 @@ with it.
 | `game_info.players`, `player_races` | `api.player` and `api.enemy`, each with its `id`, races and `name`; reading `api.enemy` raises `NoEnemyError` in a game with no other player |
 | `opponent_id`, a ladder argument | `api.enemy.ladder_id`, from the ladder's `--OpponentId`; `None` outside a ladder game |
 | `state.upgrades` | `api.upgrades` |
+| `bot.tech_requirement_progress(t) == 1` | `api.is_unlocked(t)`, a unit type or an upgrade, whether this player has every tech and upgrade it needs, the producer's tech lab apart; `api.techs`, the `Tech`s its finished structures grant |
 | `bot.already_pending(t)` | `len(api.in_production(t))`, without the turn's commands and those sent too lately to show, which are in `unit.pending_commands`; each an `InProduction`, a `Progress` with its `product`, `fraction`, `total_time` and `time_left`, and its `producer` and its `unit` once it stands |
 | `bot.already_pending_upgrade(u)` | `api.researches.get(u)`, `None` when nothing researches it, else a `Research`, a `Progress` with its `fraction` and `time_left`, and its structure; once done, `u in api.upgrades` |
 | `state.visibility[p] == 2`, `> 0` | `api.vision.in_sight[p]`, `api.vision.explored[p]`, and `api.vision.last_in_sight[p]`, the step it was last in sight |
@@ -614,7 +617,7 @@ with it.
 | `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's morph for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
 | `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the command that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
 | `bot.calculate_unit_value(t)` | `unit_data.total_cost`, what every command that made one cost: 550 for an orbital command, 350 for a hatchery, two high templar's 100/300 for an archon, nothing for a MULE |
-| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: a command that takes no supply goes though the army stands over the cap |
+| `bot.can_afford(x)` | `api.budget.covers(cost)`, with `cost` as for `calculate_cost`: it takes off the turn's commands, and a command that takes no supply goes though the army stands over the cap |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |
@@ -662,12 +665,15 @@ with it.
   `__add__` adds and its `__eq__` ignores, and for a morph it is the morph's alone, an orbital command's 560. So is
   NachOS's `unit_data.cost.time`, a `GameTime`, the time of its last step that cost anything: an orbital command's 560,
   and a sieged tank's the tank's 720, since a switch costs nothing. NachOS's `Cost` adds, subtracts, scales and compares
-  every field; costs added up add their times, which is production time one after another, not how long they take
-  side by side. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts, scales, divides,
-  answers `covers` and takes the `minimum` and `maximum` of each resource; `cost.resources` is what to hold against
-  it. Its amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game
-  gave stays whole until something divides it. `cost.is_free` says whether a cost takes no minerals, vespene or
-  supply, whatever its time.
+  every field; costs added up add their times, which is production time one after another, not how long they take side
+  by side. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts, scales, divides,
+  answers `covers` and takes the `minimum` and `maximum` of each resource; `cost.resources` is what to hold against it.
+  `ResourcesAndSupply` holds the supply too: what is left to spend, `api.budget`, and what the turn's commands take,
+  `api.commands.staged_cost`; `api.budget.covers(cost)` asks for supply only of a cost that takes some. Each of the
+  three adds and subtracts only its own kind, but a `Cost` comes off a `ResourcesAndSupply` without its time. Its
+  amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game gave stays
+  whole until something divides it. `cost.is_free` says whether a cost takes no minerals, vespene or supply, whatever
+  its time.
 - **A unit type's cost is what the command that made one cost, and an ability's what giving it costs.**
   python-sc2's `unit_data.cost` hands the game's number back as it is, an orbital command's 550 with the command
   center's 400 in it. NachOS's is that of the last step that cost anything, an orbital command's 150, as

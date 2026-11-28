@@ -52,9 +52,7 @@ def rush(event: TurnEvent) -> None:
 def train_scvs(event: TurnEvent) -> None:
     cost = api.data.abilities[AbilityId.COMMAND_CENTER_TRAIN_SCV].cost
     for townhall in api.units.own.townhalls.complete.idle:
-        staged = api.commands.staged_cost
-        budget = api.resources - staged.resources
-        if budget.covers(cost.resources) and api.supply.left - staged.supply >= cost.supply:
+        if api.budget.covers(cost):
             townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
@@ -65,8 +63,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
 - **`iteration == 0` is `once=True`.** There is no iteration: `event.time` is when the event came, and `min_interval`
   counts game time.
 - **A command goes to the units given, all at once**, and is sent when the turn's handlers have run.
-- **Nothing is subtracted as you command.** `can_afford` is the bot's own: what the turn's commands will cost is
-  `api.commands.staged_cost`.
+- **`can_afford` is `api.budget.covers(cost)`.** `api.budget` is the bank and the supply free, less what the turn's
+  commands will cost, and read again it takes off each command given since.
 - **`steps_per_turn=4` matches python-sc2's `game_step`.** NachOS takes a turn every step unless told otherwise, and its
   `Computer()` defaults to very hard.
 
