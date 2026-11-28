@@ -1,12 +1,14 @@
 """A unit's weapon, reach, damage and dps against another, on the tables of the first corpus game."""
 
+from collections.abc import Sequence
 from typing import Any
 
 import pytest
 from s2clientprotocol import raw_pb2
 
 from sc2nachos.gamedata import Attribute, GameData, TargetDomain
-from sc2nachos.ids import BuffId, UnitTypeId, UpgradeId
+from sc2nachos.ids import AbilityId, BuffId, UnitTypeId, UpgradeId
+from sc2nachos.testing import MadeUpUnits, ReportedOrder, UnitReport
 from sc2nachos.units import Alliance, OwnUnit, Unit, Units
 from support import make_observation, make_tracker, make_unit
 
@@ -356,6 +358,26 @@ class TestAddOnsAndCapacity:
             (False, True),
             (False, False),
         ]
+
+    def test_a_reactor_counts_once_its_host_no_longer_shows_the_order_that_built_it(self) -> None:
+        """In the observation where a reactor first reads finished, its barracks still shows the order that built it
+        and refuses a train, so it reads 1 then, and 2 a step later; a tech lab never raises it."""
+        made_up = MadeUpUnits()
+        reactor, tech_lab = UnitReport(11, UnitTypeId.REACTOR_BARRACKS), UnitReport(12, UnitTypeId.TECH_LAB_BARRACKS)
+
+        def capacities(
+            reactor_host_orders: Sequence[ReportedOrder], tech_lab_host_orders: Sequence[ReportedOrder]
+        ) -> list[int]:
+            hosts = made_up.observe(
+                UnitReport(1, UnitTypeId.BARRACKS, add_on=reactor, orders=reactor_host_orders),
+                UnitReport(2, UnitTypeId.BARRACKS, add_on=tech_lab, orders=tech_lab_host_orders),
+                reactor,
+                tech_lab,
+            )[:2]
+            return [host.production_capacity for host in hosts]
+
+        assert capacities([(AbilityId.BUILD_REACTOR, None, 1.0)], [(AbilityId.BUILD_TECH_LAB, None, 1.0)]) == [1, 1]
+        assert capacities([], []) == [2, 1]
 
 
 class TestTheUnitsInRange:

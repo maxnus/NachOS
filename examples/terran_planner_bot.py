@@ -80,9 +80,6 @@ START_EARLY_BY = GameTime(seconds=5)
 BARRACKS_MARGIN = (1, 3, 1, 1)
 # Where an add-on stands from its host's center.
 ADD_ON_OFFSET = Point((2.5, -0.5))
-# What builds an add-on. In the observation where its add-on first reads finished, a structure still shows that order,
-# and refuses a train (in game).
-ADD_ON_BUILDS = (AbilityId.BUILD_TECH_LAB, AbilityId.BUILD_REACTOR)
 ATTACK_WITH_SUPPLY = 40
 RETREAT_BELOW_SUPPLY = 12
 DEFEND_WITHIN = 15.0
@@ -211,7 +208,6 @@ def _train(unit_type: UnitTypeId, budget: Budget) -> bool:
     producers = api.units.own.of_type(row.producers).complete.filter(
         lambda producer: (
             len(producer.orders) < producer.production_capacity
-            and not producer.is_doing(ADD_ON_BUILDS)
             and (producer.has_tech_lab or not needs_tech_lab)
             and _is_free(producer)
         )

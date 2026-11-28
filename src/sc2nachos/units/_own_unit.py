@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import GameTime
@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId, UpgradeId
     from sc2nachos.orders import IssuedOrder
+
+# What builds an add-on, a host's order while it does.
+_ADD_ON_BUILDS: Final = frozenset((AbilityId.BUILD_TECH_LAB, AbilityId.BUILD_REACTOR))
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -250,12 +253,12 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         game's tables give as a maker of a unit, and 0 for anything else, an SCV and a larva among them, which make no
         unit from a queue. A warp gate reads 1, though it warps in without one. Whether the structure is finished is
         left out. A reactor counts once finished, since the game names a structure's add-on only then (in game): a
-        barracks building its reactor reads 1. In the observation where its tech lab or reactor first reads finished, a
-        barracks still shows the order that built it and refuses a train until a step later, though it reads 2 there
-        with a reactor (in game)."""
+        barracks building its reactor reads 1. Nor does it count while its host still shows the order that built it,
+        as in the observation where it first reads finished, since the host refuses a train until then (in game, tool
+        `sweep_orders`): fewer `orders` than this leave room for a train."""
         if self.type_id not in self._tracker.game_data._unit_trainers:
             return 0
-        return 2 if self._has_add_on_of(UnitType.AnyReactor) else 1
+        return 2 if self._has_add_on_of(UnitType.AnyReactor) and not self.is_doing(_ADD_ON_BUILDS) else 1
 
     @property
     def add_on(self: OwnUnit[UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport]) -> OwnUnit[Any] | None:
