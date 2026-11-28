@@ -154,7 +154,8 @@ it.
   NachOS reads what the game reports, which already counts a build's cost from the step it was ordered
   ([game behavior](game-behavior/abilities-and-orders.md#builds-and-work-lost)). It sends every order as given, whatever
   it costs, and `api.action_failures` lists what the game refused. Within a turn, `api.orders.pending_cost` is what the
-  turn's orders will cost ([orders](../orders.md#what-an-order-needs)).
+  turn's orders will cost, and `api.budget` what is left once they are paid
+  ([orders](../orders.md#what-an-order-needs)).
 - **An order a unit is already carrying out is left out for it**, as python-sc2's `prevent_double_actions` does for its
   first order, and NachOS keeps what is queued behind it too, since re-sending the order drops that queue in game
   ([orders](../orders.md#one-order-a-unit-a-turn)). To drop a queue on purpose, issue the unit's current order with
@@ -614,7 +615,7 @@ it.
 | `bot.calculate_cost(x)` | `unit_data.cost` for a unit type, half a larva's order for a zergling; `upgrade_data.cost` for an upgrade; `ability_data.cost` for an ability, nothing for a switch, where python-sc2's for a sieged tank is a tank's whole cost |
 | `bot.calculate_supply_cost(t)` | `unit_data.supply_used`, the supply one takes; `unit_data.cost.supply` is the supply the order that made one cost, which counts what it frees too, -1 for a spawning pool, whose drone is used up, where python-sc2 answers 0 |
 | `bot.calculate_unit_value(t)` | `unit_data.total_cost`, what every order that made one cost: 550 for an orbital command, 350 for a hatchery, two high templar's 100/300 for an archon, nothing for a MULE |
-| `bot.can_afford(x)` | `api.resources.covers(cost.resources) and (cost.supply <= 0 or api.supply.left >= cost.supply)`, with `cost` as for `calculate_cost`: an order that takes no supply goes though the army stands over the cap |
+| `bot.can_afford(x)` | `api.budget.covers(cost)`, with `cost` as for `calculate_cost`: it takes off the turn's orders, and an order that takes no supply goes though the army stands over the cap |
 | `unit_data._proto.tech_requirement`, `require_attached` | `data.units[performer].ability_requirements[ability]`; see below |
 | `UNIT_TRAINED_FROM[t]` | `data.units[t].producers` |
 | `UPGRADE_RESEARCHED_FROM[u]` | `data.upgrades[u].researchers` |

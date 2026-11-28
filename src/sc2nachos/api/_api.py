@@ -24,7 +24,7 @@ from sc2nachos.events import (
     TurnStartEvent,
 )
 from sc2nachos.events._event_bus import _EventBus
-from sc2nachos.gamedata import GameData, Resources, Tech
+from sc2nachos.gamedata import Budget, GameData, Resources, Tech
 from sc2nachos.gamemap import Expansion, GameMap
 from sc2nachos.gametime import GameTime
 from sc2nachos.gametime._game_time import check_game_time
@@ -324,6 +324,15 @@ class Api[E]:
     def supply(self) -> Supply:
         """The supply this player's units take and its structures and units provide."""
         return self._current_game().state.supply
+
+    @property
+    def budget(self) -> Budget:
+        """What this player has left to spend: the minerals and vespene of `resources` and the supply free under its
+        cap, less what the turn's orders will cost once they go out, `orders.pending_cost`. Read again, it takes off the
+        orders given since. A bot that sets money aside, for what it cannot pay for yet, keeps the one it read and takes
+        that off itself: `budget -= cost`."""
+        resources = self.resources
+        return Budget(resources.minerals, resources.vespene, self.supply.left) - self.orders.pending_cost
 
     @property
     def ui_unit_counts(self) -> UiUnitCounts:

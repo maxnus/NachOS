@@ -212,20 +212,29 @@ with the game's verdict; it answers `SUCCESS` and silently drops it, so nothing 
 or, for a queued order the supply cap cannot feed, it accepts it, charges for it, and leaves it at no progress until
 supply frees up.
 
-A bot budgets for itself, since only it knows what matters most:
+A bot budgets for itself, since only it knows what matters most. `api.budget` is what it has left to spend, the
+minerals and vespene and the supply free under its cap:
 
 ```python
 cost = api.data.abilities[AbilityId.BARRACKS_TRAIN_MARINE].cost
-if api.resources.covers(cost.resources) and api.supply.left >= cost.supply:
+if api.budget.covers(cost):
     barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
-`api.resources` and `api.supply` do not change as orders are given. They are what the game last reported, and in a
-stepped game it charges the turn's orders by the next observation (in game), so a bot giving several in one turn
-takes off what they will cost, `api.orders.pending_cost`:
+`covers` asks for supply only of a cost that takes some, so a player over its cap, once units that provided supply are
+lost, can still build what provides more. `api.resources` and `api.supply` do not change as orders are given. They are
+what the game last reported, and in a stepped game it charges the turn's orders by the next observation (in game), so
+`api.budget` takes off what they will cost, `api.orders.pending_cost`, and read again after an order it takes that one
+off too. A bot that sets money aside for what it cannot pay for yet keeps the budget it read and takes the cost off
+itself, so that nothing cheaper spends it first:
 
 ```python
-budget = api.resources - api.orders.pending_cost.resources
+budget = api.budget
+if budget.covers(depot_cost):
+    scv.issue(AbilityId.SCV_BUILD_SUPPLY_DEPOT, target=site)
+budget -= depot_cost
+if budget.covers(marine_cost):
+    barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
 ```
 
 `pending_cost` counts the orders of `pending` as they will go out: the last of a unit's orders that replace one another,

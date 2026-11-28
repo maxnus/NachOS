@@ -9,6 +9,7 @@ from s2clientprotocol import common_pb2, data_pb2, sc2api_pb2
 
 from sc2nachos.gamedata import (
     Attribute,
+    Budget,
     Cost,
     CreepRequirement,
     GameData,
@@ -213,6 +214,34 @@ class TestCost:
         assert Cost(0, 0, time=GameTime(steps=16)).is_free
         assert not Cost(0, 25).is_free
         assert not Cost(0, 0, -1).is_free
+
+
+class TestBudget:
+    def test_a_budget_covers_a_cost_with_at_least_its_minerals_its_vespene_and_its_supply(self) -> None:
+        budget = Budget(150, 50, 2)
+        assert budget.covers(Cost(150, 50, 2))
+        assert not budget.covers(Cost(151, 0))
+        assert not budget.covers(Cost(0, 51))
+        assert not budget.covers(Cost(50, 0, 3))
+
+    def test_a_cost_that_takes_no_supply_is_covered_however_little_is_free(self) -> None:
+        """Over the cap, once units that provided supply are lost, a player can still build what provides more."""
+        over_the_cap = Budget(400, 0, -3)
+        assert over_the_cap.covers(Cost(100, 0))
+        assert over_the_cap.covers(Cost(200, 0, -1))
+        assert not over_the_cap.covers(Cost(50, 0, 1))
+
+    def test_paying_takes_off_the_supply_too_and_may_leave_a_budget_negative(self) -> None:
+        budget = Budget(100, 0, 2)
+        budget -= Cost(50, 0, 1)
+        assert budget == Budget(50, 0, 1)
+        assert budget - Cost(150, 25, 2) == Budget(-100, -25, -1)
+
+    def test_paying_for_a_spawning_pool_frees_the_supply_of_the_drone_it_uses_up(self) -> None:
+        assert Budget(200, 0, 0) - Cost(200, 0, -1) == Budget(0, 0, 1)
+
+    def test_a_budget_holds_its_minerals_and_vespene_as_resources(self) -> None:
+        assert Budget(150, 100, 3).resources == Resources(150, 100)
 
 
 class TestReadingTheTables:

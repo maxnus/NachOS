@@ -43,40 +43,38 @@ DEFEND_WITHIN = 15.0
 # --- Spending
 
 
-class Budget:
-    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out."""
+class Spending:
+    """This turn's spending: what is left of `api.budget`, as the bot takes each order's cost off, and what it sets
+    aside."""
 
     def __init__(self) -> None:
-        pending_cost = api.orders.pending_cost
-        self.resources_left = api.resources - pending_cost.resources
-        self.supply_left = api.supply.left - pending_cost.supply
+        self.left = api.budget
 
     def try_pay_for(self, ability: AbilityId, *, save: bool = False) -> bool:
         """Whether what is left pays for `ability`, taking its cost if so. With `save`, its cost is set aside even if
         not, so nothing cheaper spends it first."""
         cost = api.data.abilities[ability].cost
-        affordable = self.resources_left.covers(cost.resources) and self.supply_left >= cost.supply
+        affordable = self.left.covers(cost)
         if affordable or save:
-            self.resources_left -= cost.resources
-            self.supply_left -= cost.supply
+            self.left -= cost
         return affordable
 
 
 @api.on(TurnEvent)
 def spend_money(_: TurnEvent) -> None:
     """Spend the turn's money, most important first."""
-    budget = Budget()
-    train_workers(budget)
-    build_supply(budget)
-    take_next_expansion(budget)
-    build_barracks(budget)
-    train_marines(budget)
+    spending = Spending()
+    train_workers(spending)
+    build_supply(spending)
+    take_next_expansion(spending)
+    build_barracks(spending)
+    train_marines(spending)
 
 
 # --- Workers
 
 
-def train_workers(budget: Budget) -> None:
+def train_workers(spending: Spending) -> None:
     """Train an SCV at each idle townhall, up to what the bases can use and a few to build with."""
     townhalls = api.units.own.townhalls.complete
     wanted = min(sum(townhall.ideal_harvesters for townhall in townhalls) + 6, MAX_WORKERS)
@@ -86,7 +84,7 @@ def train_workers(budget: Budget) -> None:
             return
         if api.orders.issued_to(townhall, include_sent=True):
             continue
-        if budget.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
+        if spending.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
             townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
             count += 1
 
@@ -134,7 +132,7 @@ def _ordered_count(ability: AbilityId) -> int:
     )
 
 
-def build_supply(budget: Budget) -> None:
+def build_supply(spending: Spending) -> None:
     """Build a depot on the far side of the main's townhall from its minerals before supply runs out, saving for it
     first."""
     supply = api.supply
@@ -145,7 +143,7 @@ def build_supply(budget: Budget) -> None:
     if supply.left + 8 * in_progress >= 2 + 2 * producers or in_progress >= 3:
         return
     site = api.placement.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=_depot_anchor(), max_distance=25)
-    if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
+    if site is not None and spending.try_pay_for(AbilityId.SCV_BUILD_SUPPLY_DEPOT, save=True):
         _order_scv_to_build(AbilityId.SCV_BUILD_SUPPLY_DEPOT, site)
 
 
@@ -161,7 +159,7 @@ def lower_depot(event: OwnConstructionFinishedEvent) -> None:
     event.unit.issue(AbilityId.SUPPLY_DEPOT_LOWER)
 
 
-def take_next_expansion(budget: Budget) -> None:
+def take_next_expansion(spending: Spending) -> None:
     """Build a command center at the next free expansion once the bases have nearly all the SCVs they can use, or the
     bank is full, saving for it first."""
     townhalls = api.units.own.townhalls
@@ -176,7 +174,7 @@ def take_next_expansion(budget: Budget) -> None:
     if not api.units.own.of_type(UnitType.Barracks):
         return
     expansion = _next_expansion()
-    if expansion is not None and budget.try_pay_for(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
+    if expansion is not None and spending.try_pay_for(AbilityId.SCV_BUILD_COMMAND_CENTER, save=True):
         _order_scv_to_build(AbilityId.SCV_BUILD_COMMAND_CENTER, expansion.center)
 
 
@@ -194,7 +192,7 @@ def _next_expansion() -> Expansion | None:
     return None
 
 
-def build_barracks(budget: Budget) -> None:
+def build_barracks(spending: Spending) -> None:
     """Build one barracks before the first expansion, and then more as the bases grow, each with a tile free all
     around it, so the units it trains can always walk out."""
     if not api.units.own.of_type(UnitType.AnySupplyDepot).complete:
@@ -206,16 +204,16 @@ def build_barracks(budget: Budget) -> None:
     start = api.player.start_location
     anchor = start.center.towards(start.natural.center, 9)
     site = api.placement.nearest_free(UnitTypeId.BARRACKS, near=anchor, max_distance=math.inf, margin=1)
-    if site is not None and budget.try_pay_for(AbilityId.SCV_BUILD_BARRACKS):
+    if site is not None and spending.try_pay_for(AbilityId.SCV_BUILD_BARRACKS):
         _order_scv_to_build(AbilityId.SCV_BUILD_BARRACKS, site)
 
 
-def train_marines(budget: Budget) -> None:
+def train_marines(spending: Spending) -> None:
     """Train a marine at each idle barracks."""
     for barracks in api.units.own.of_type(UnitType.Barracks).complete.idle:
         if api.orders.issued_to(barracks, include_sent=True):
             continue
-        if budget.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
+        if spending.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
             barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
 
 
