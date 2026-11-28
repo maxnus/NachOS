@@ -31,9 +31,12 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
    ladder's maps that NachOS is tested on.
 3. **Play a game.** Each demo bot is a whole bot in one file, and beats the built-in computer at medium difficulty:
    [`examples/terran_demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/terran_demo_bot.py) trains
-   SCVs, expands and attacks with marines, and
+   SCVs, expands and attacks with marines,
    [`examples/zerg_demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/zerg_demo_bot.py) morphs drones,
-   expands, injects and spreads creep with its queens, and attacks with zerglings and roaches. Save one and run:
+   expands, injects and spreads creep with its queens, and attacks with zerglings and roaches, and
+   [`examples/terran_planner_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/terran_planner_bot.py) makes
+   what the build planner plans, from SCVs and command centers to marines, marauders and their upgrades, and attacks
+   with them. Save one and run:
 
    ```bash
    python terran_demo_bot.py --Map PylonAIE_v4 --ComputerRace ZERG --ComputerDifficulty MEDIUM

@@ -17,7 +17,7 @@ As of 2026-11-22:
 - **The build planner is the work in progress**: `sc2nachos.extensions.planner`, a solver of build orders any bot hands
   its reward. [planner-plan.md](planner-plan.md) holds its decisions, the measurements behind them, its design and its
   phases. Phase 1, the extension for Terran, synchronous, is the pull request that moved it here; phase 2 plays it in
-  AvocaDOS.
+  AvocaDOS. `examples/terran_planner_bot.py` plays it already, a whole bot in one file held to the demo bots' bar.
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
   on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
