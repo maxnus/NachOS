@@ -5,18 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import final
 
-from sc2nachos.gamedata._resources import Resources
+from sc2nachos._shared.vector_arithmetic import _VectorArithmetic
+from sc2nachos.gamedata._resources import Resources, ResourcesAndSupply
 from sc2nachos.gametime import GameTime
 
 
 @final
 @dataclass(frozen=True, slots=True)
-class Cost:
+class Cost(_VectorArithmetic):
     """The cost of making something: minerals, vespene, supply and the time it takes.
 
-    Not a `Resources`, which is an amount a player holds, earns or spends. Supply is room under the cap, so compare
-    `cost.resources` against `api.resources` and `cost.supply` against `api.supply.left`. Costs added up add their
-    times too, which makes the production time they take one after another, not how long they take side by side.
+    Not a `Resources`, which is an amount a player holds, earns or spends, nor a `ResourcesAndSupply`, which has no
+    time: `api.budget.covers(cost)` says whether what is left pays for it. Costs added up add their times too, which
+    makes the production time they take one after another, not how long they take side by side.
     """
 
     minerals: float
@@ -30,46 +31,21 @@ class Cost:
     or divided; zero for an order that makes nothing, for a switch that costs nothing, such as a siege, and where the
     tables give none, as for an interceptor."""
 
+    def to_tuple(self) -> tuple[float, float, float, GameTime]:
+        """Its minerals, vespene, supply and time."""
+        return (self.minerals, self.vespene, self.supply, self.time)
+
     @property
     def resources(self) -> Resources:
         """The minerals and vespene, to compare against what the player has."""
         return Resources(self.minerals, self.vespene)
 
     @property
+    def resources_and_supply(self) -> ResourcesAndSupply:
+        """The minerals, vespene and supply, without the time."""
+        return ResourcesAndSupply(self.minerals, self.vespene, self.supply)
+
+    @property
     def is_free(self) -> bool:
         """Whether it takes no minerals, vespene or supply, whatever its time: a siege, a MULE's calldown."""
         return not (self.minerals or self.vespene or self.supply)
-
-    def __add__(self, other: Cost) -> Cost:
-        """The sum of the two costs."""
-        return Cost(
-            self.minerals + other.minerals,
-            self.vespene + other.vespene,
-            self.supply + other.supply,
-            self.time + other.time,
-        )
-
-    def __sub__(self, other: Cost) -> Cost:
-        """This cost less `other`."""
-        return Cost(
-            self.minerals - other.minerals,
-            self.vespene - other.vespene,
-            self.supply - other.supply,
-            self.time - other.time,
-        )
-
-    def __mul__(self, count: float) -> Cost:
-        """This cost `count` times over."""
-        return Cost(self.minerals * count, self.vespene * count, self.supply * count, self.time * count)
-
-    def __rmul__(self, count: float) -> Cost:
-        """This cost `count` times over."""
-        return self * count
-
-    def __truediv__(self, divisor: float) -> Cost:
-        """This cost divided by `divisor`."""
-        return Cost(self.minerals / divisor, self.vespene / divisor, self.supply / divisor, self.time / divisor)
-
-    def __neg__(self) -> Cost:
-        """This cost negated: given back rather than paid."""
-        return Cost(-self.minerals, -self.vespene, -self.supply, -self.time)
