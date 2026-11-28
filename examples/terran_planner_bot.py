@@ -40,7 +40,7 @@ from sc2nachos.extensions.speed_mining import SpeedMining
 if TYPE_CHECKING:
     from sc2nachos import Expansion
     from sc2nachos.extensions.planner import PlanItem
-    from sc2nachos.gamedata import Cost, TechRequirements
+    from sc2nachos.gamedata import Cost
 
 
 class Extensions:
@@ -186,15 +186,6 @@ def _start(item: PlanItem, budget: Budget) -> bool:
     return _train(product, budget)
 
 
-def _has_what_is_needed(requirements: TechRequirements) -> bool:
-    """Whether a finished structure of this player's grants each tech `requirements` names, and each upgrade it names is
-    done."""
-    finished = api.units.own.structures.complete
-    return requirements.upgrades <= api.upgrades and all(
-        finished.of_type(api.data.types_granting(tech)) for tech in requirements.techs
-    )
-
-
 def _is_free(unit: OwnUnit[Any]) -> bool:
     """Whether `unit` was given no order this turn, nor one lately that the observation may not show yet."""
     return not api.orders.issued_to(unit, include_sent=True)
@@ -212,7 +203,7 @@ def _train(unit_type: UnitTypeId, budget: Budget) -> bool:
             and _is_free(producer)
         )
     )
-    if not producers or not _has_what_is_needed(row.tech_requirements) or not budget.try_pay_for(row.cost):
+    if not producers or not api.is_unlocked(unit_type) or not budget.try_pay_for(row.cost):
         return False
     min(producers, key=lambda producer: producer.has_tech_lab).train(unit_type)
     return True
@@ -222,7 +213,7 @@ def _morph_to_orbital_command(budget: Budget) -> bool:
     """Morph an idle command center into an orbital command."""
     row = api.data.units[UnitTypeId.ORBITAL_COMMAND]
     command_centers = api.units.own.of_type(UnitType.CommandCenter).complete.idle.filter(_is_free)
-    if not command_centers or not _has_what_is_needed(row.tech_requirements) or not budget.try_pay_for(row.cost):
+    if not command_centers or not api.is_unlocked(UnitTypeId.ORBITAL_COMMAND) or not budget.try_pay_for(row.cost):
         return False
     command_centers[0].issue(AbilityId.COMMAND_CENTER_MORPH_ORBITAL_COMMAND)
     return True
@@ -244,7 +235,7 @@ def _research(upgrade: UpgradeId, budget: Budget) -> bool:
     """Research `upgrade` at an idle structure that researches it."""
     row = api.data.upgrades[upgrade]
     researchers = api.units.own.of_type(row.researchers).complete.idle.filter(_is_free)
-    if not researchers or not _has_what_is_needed(row.tech_requirements) or not budget.try_pay_for(row.cost):
+    if not researchers or not api.is_unlocked(upgrade) or not budget.try_pay_for(row.cost):
         return False
     researchers[0].research(upgrade)
     return True
@@ -258,7 +249,7 @@ def _build_structure(unit_type: UnitTypeId, budget: Budget) -> bool:
     while the SCV walks."""
     row = api.data.units[unit_type]
     scvs = _free_scvs()
-    if not scvs or not _has_what_is_needed(row.tech_requirements):
+    if not scvs or not api.is_unlocked(unit_type):
         return False
     site = _site_for(unit_type)
     if site is None or not budget.try_pay_for(row.cost):
@@ -401,11 +392,6 @@ def _has_attack_aimed_near(unit: OwnUnit[Any], target: Point) -> bool:
     return False
 
 
-def _army_supply(army: Units[OwnUnit[Any]]) -> float:
-    """The supply `army` takes."""
-    return sum(unit.type_data.supply_used for unit in army)
-
-
 class Army:
     """The marines and marauders: they wait at the defense location, defend the bases, attack once the army is big
     enough, and stim in a fight."""
@@ -419,7 +405,7 @@ class Army:
         """Defend against what comes near the bases, attack once the army is big enough, and fall back once too little
         of it is left."""
         army = _army_units()
-        supply = _army_supply(army)
+        supply = army.supply_used
         threats = api.units.enemy.non_structures.within(DEFEND_WITHIN, of=api.units.own.townhalls)
         was_attacking = self.attacking
         if supply >= ATTACK_WITH_SUPPLY:
@@ -453,7 +439,7 @@ class Army:
         enemies = api.units.enemy.non_structures
         stimming = _army_units().filter(
             lambda unit: (
-                unit.health >= STIM_ABOVE_HEALTH * unit.health_max
+                unit.health_fraction >= STIM_ABOVE_HEALTH
                 and not unit.has_buff((BuffId.MARINE_STIMMED, BuffId.MARAUDER_STIMMED))
                 and bool(enemies.within(STIM_WITHIN, of=unit))
             )
