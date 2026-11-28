@@ -452,8 +452,8 @@ class CommandBook:
 
     def _sent_but_not_observed_yet(self, unit: OwnUnit[Any]) -> list[Command]:
         """The commands that went out to `unit` lately and that the observations may not show yet, in the order they
-        went out: the last sent that replaced its orders, those sent since that did not, and those it carries out at
-        once, whose effect may not show yet."""
+        went out. They are the last sent that replaced its orders, those sent since that did not, and those it carries
+        out at once, whose effect may not show yet."""
         commands = []
         if (sent := self._sent_and_not_shown(unit)) is not None:
             commands.append(sent)
