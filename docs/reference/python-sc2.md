@@ -512,10 +512,11 @@ it.
 | `game_info.map_name` | `api.map.name` |
 | `game_info.pathing_grid`, `in_pathing_grid(p)` | `api.map.pathing`, `api.map.pathing[p]` as the game began; `api.pathing.grid` now, asked of the game once a turn that reads it, blocking the structures in sight |
 | `game_info.placement_grid`, `in_placement_grid(p)` | `api.map.placement`, `api.map.placement[p]` as the game began; `api.placement.free` now |
-| `can_place(building, p)` | `api.placement.is_free(t, at=p)` |
+| `can_place(building, p)` | `api.placement.is_free(t, at=p)`, power included for a type that needs it unless `power=False` |
 | `find_placement(building, near, max_distance)` | `api.placement.nearest_free(t, near=near, max_distance=d)`, the nearest site rather than a random one, or `None` |
 | `find_placement(..., addon_place=True)` | `nearest_free(..., margin=(0, 2, 0, 0))`, two tiles kept free right of its every row, where the add-on covers the lower two |
 | nothing | `api.placement.reserve(t, at=p, margin=m)`, ground kept out of the grids for a build not ordered yet, with `margin` as `is_free` takes it |
+| `state.psionic_matrix.sources`, `psionic_matrix.covers(p)` | `api.placement.power_sources`, each with its `unit`; `api.placement.powered_for(t)[c]`, at the center `c` the game snaps a structure of type `t` to, `footprint.snapped_center(at=p)` |
 | `game_info.terrain_height`, `get_terrain_z_height(p)` | `api.map.height`, `api.map.height_at(p)` |
 | `await client.query_pathing(a, b)`, `query_pathings(pairs)`, asked of the game | `api.pathing.query_distance(a, b)`, `query_distances(pairs)`, asked of the game; or `api.pathing.cheapest_paths_from(a).distances[b]` over the turn's grid, which leaves a structure `a` lies in as the game does |
 | `game_info.map_center` | `api.map.playable_area.center` |
@@ -582,8 +583,13 @@ it.
   mineral field; and `reserved`, the ground under this player's builds not standing yet. `free` combines them, and
   `free_for(unit_type)` keeps to creep or off it as the type needs, and a townhall off the ground around resources.
   `is_free` and `nearest_free` answer for one structure, by the `footprint` each type was measured to cover in game;
-  a grid's `fits_footprint` and `where_footprint_fits` do it for any grid. Power and units in the way are the bot's to
-  add.
+  a grid's `fits_footprint` and `where_footprint_fits` do it for any grid. `is_free` and `nearest_free` heed power,
+  unless told `power=False`; units in the way are the bot's to add.
+- **A pylon powers no higher level, and no source a center exactly a radius off.** python-sc2's
+  `psionic_matrix.covers(p)` takes any point within a source's radius, its edge included, on any level. The game
+  refuses a center on a higher level than a pylon's, though a phasing warp prism powers every level, and one on the
+  edge ([game behavior](game-behavior/map.md)). `powered_for(t)` gives the game's answer, by the tile holding a
+  center, so a gateway and a cannon read different grids.
 - **No wall-in placements.** python-sc2's `Ramp` also says where to put supply depots and a barracks to wall off a
   ramp, and raises on any ramp whose shape it does not expect. NachOS has no equivalent yet.
 - **A pathing distance with no path is `math.inf`.** python-sc2's `query_pathing` returns `None` and `query_pathings`

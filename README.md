@@ -56,8 +56,8 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 - **The map**: `api.map`'s heights, ramps and start locations, `api.expansions`, and each player's `start_location`
   with its main's ramp, its ground, its natural and its thirds
   ([reference](https://maxnus.github.io/NachOS/sc2nachos/gamemap.html)).
-- **Placement**: `api.placement`, where a structure may stand now, sites kept for builds to come, and the walls at a
-  main's ramp ([reference](https://maxnus.github.io/NachOS/sc2nachos/placement.html)).
+- **Placement**: `api.placement`, where a structure may stand now, power included, sites kept for builds to come, and
+  the walls at a main's ramp ([reference](https://maxnus.github.io/NachOS/sc2nachos/placement.html)).
 - **Pathing**: `api.pathing`, the cheapest paths on the game's current pathing grid, and the game's own distances
   ([reference](https://maxnus.github.io/NachOS/sc2nachos/pathing.html)).
 - **Combat reads** on a unit: the weapon that can hit a target, whether it is in range, one attack's damage and the

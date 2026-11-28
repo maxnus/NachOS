@@ -66,6 +66,14 @@ class OpenGround:
             x, y = int(unit.pos.x) - self._origin.x, int(unit.pos.y) - self._origin.y
             self._take(x, y, reach, free=False)
 
+    @property
+    def free_tiles(self) -> numpy.ndarray:
+        """A read-only view of where nothing has claimed the ground, indexed `[x, y]` from the placement grid's
+        origin."""
+        view = self._free.view()
+        view.flags.writeable = False
+        return view
+
     def claim(self, near: Point, half: int) -> Point:
         """Take the free square `2 * half + 1` tiles across nearest to `near`, and return its center. `release` gives
         it back."""

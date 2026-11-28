@@ -12,7 +12,7 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 ## Where things stand
 
-As of 2026-11-22:
+As of 2026-11-23:
 
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
@@ -59,8 +59,9 @@ As of 2026-11-22:
   `VIPER_CONSUMED`, which had ended AvocaDOS's AI Arena match 5118204 (AvocaDOS #98) when upgrade inference read an
   enemy unit's buffs and `Unit.buffs` raised `UncuratedIdError`. AvocaDOS #104 takes it.
 - **Since 0.8.1**, on main: #258, `py.typed`, Python 3.14 in CI, a creep tumor's own burrow as `CREEP_TUMOR_BURROW`,
-  and the collapsible towers' buffs skipped, the first of "Toward 1.0" (Next). Proposed: 0.8.2, which a bot takes with
-  no change. On its branch: a Zerg demo bot, and the Terran one renamed (Next).
+  and the collapsible towers' buffs skipped, the first of "Toward 1.0" (Next); and #259, a Zerg demo bot, and the
+  Terran one renamed. Proposed: 0.8.2, which a bot takes with no change. On its branch: power in the placement grids,
+  the demo bots' second step (Next).
 - The consuming bot is AvocaDOS ([github.com/maxnus/AvocaDOS](https://github.com/maxnus/AvocaDOS), branch
   `main`). Its `docs/plans/nachOS-plan.md` holds what is left of the migration on its side, and
   `docs/plans/archive/nachOS-plan.md` the milestone plan (M0 to M6) with every nachOS PR it took. It has no
@@ -213,6 +214,12 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   plays one. What one needs that NachOS lacks goes into NachOS first, planned with the owner one gap at a time.
 - **An id the curated enums leave out raises when read** (the owner, 2026-11-23, over a fallback or catching it in
   NachOS's extensions): that is how the ids are found fast.
+- **Power is the placement grids'** (the owner, 2026-11-23): `api.placement.power_sources`, and `powered_for(t)`, a
+  grid by the tile holding a structure's center, as `where_footprint_fits` has it, one for each parity of footprint,
+  since power goes by the center and a pylon powers no higher level, which neither one grid nor a `SourceField` can
+  hold. `is_free` and `nearest_free` heed it, unless `power=False` (over `check_power=False`, review of #123).
+  `needs_power` stays a bool for 1.0 (over an enum of needing power, providing it and neither, review of #123): what
+  provides power, and how far, is `power_sources`.
 
 ### The map
 
@@ -373,10 +380,10 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   replays of every race for the ids left, which checks too whether a changeling's disguise or a locust's take-off, made
   by the game as a tumor's burrow is, shows as the unit's order (review of #258); what 1.0 promises, `protocol`,
   `testing` and the extensions included or not, and how a rename goes after it; semita, alpha and required as
-  `>=0.2.1` with no bound; and `needs_power` and the self types for energy, cargo and detection (section 1), which
-  would break a bot if they came after.
+  `>=0.2.1` with no bound; and the self types for energy, cargo and detection (section 1), which would break a bot if
+  they came after. `needs_power` is settled (above).
 - **The demo bots** (above), a pull request a bot, in this order (the owner, 2026-11-23):
-  1. On its branch: `zerg_demo_bot.py`, and `demo_bot.py` renamed `terran_demo_bot.py`. Each won all 21 games against
+  1. Done in #259: `zerg_demo_bot.py`, and `demo_bot.py` renamed `terran_demo_bot.py`. Each won all 21 games against
      `MEDIUM` (2026-11-23, build 75689). The Zerg bot's tumors wait out the 289 steps after their burrow before they
      plant (`docs/reference/game-behavior/units.md`). Found playing it, to plan with the owner, neither stopping it:
      - Speed mining's return refused with `CANT_FIND_DROP_OFF`, over and over, for a drone carrying minerals 6.3 from
@@ -388,8 +395,8 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
        expansion center at (59.5, 120.5), 35 and 39 times in 2 of 6 games there while the bot ordered a refused tumor
        again, and 89 refusals of a site not logged in a third; and once each, (54.5, 124.5) beside a mineral field on
        MagannathaAIE, (92.5, 149.5) on PylonAIE, 1 from the drone above, and (116.5, 111.5) on UltraloveAIE.
-  2. Power in the placement grids, in a pull request of its own that measures what the game requires (section 1),
-     which also settles `needs_power` before 1.0.
+  2. On its branch: power in the placement grids (above), measured by tool `sweep_power`. Warp-ins, which the game
+     refuses too far from power with an error of their own, are not measured.
   3. `protoss_demo_bot.py`: probes, pylons, gateways and a cybernetics core, zealots and stalkers trained at gateways
      with no Warp Gate research, and chrono boost on the nexus.
 - **A value that depends on the game time is a `TimeDependent`**, planned with the owner 2026-11-24, after the planner's

@@ -283,7 +283,8 @@ if terran_wall is not None and api.placement.is_free(UnitTypeId.SUPPLY_DEPOT, at
 
 Each is `None` for a ramp not of the shape every main ramp of the pool is: two tiles across its top, a `width` of 2,
 and an `orientation` along a diagonal. A ramp out of no start location's main raises `ValueError`. Whether a structure
-may stand at a site now is for `api.placement.is_free` to say.
+may stand at a site now is for `api.placement.is_free` to say, power included: a gateway of the Protoss wall is free
+only once its pylon has finished, unless asked with `power=False`.
 
 ## What the game did
 
