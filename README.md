@@ -31,9 +31,12 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
    ladder's maps that NachOS is tested on.
 3. **Play a game.** Each demo bot is a whole bot in one file, and beats the built-in computer at medium difficulty:
    [`examples/terran_demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/terran_demo_bot.py) trains
-   SCVs, expands and attacks with marines, and
+   SCVs, expands and attacks with marines,
    [`examples/zerg_demo_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/zerg_demo_bot.py) morphs drones,
-   expands, injects and spreads creep with its queens, and attacks with zerglings and roaches. Save one and run:
+   expands, injects and spreads creep with its queens, and attacks with zerglings and roaches, and
+   [`examples/terran_planner_bot.py`](https://github.com/maxnus/NachOS/blob/main/examples/terran_planner_bot.py) makes
+   what the build planner plans, from SCVs and command centers to marines, marauders and their upgrades, and attacks
+   with them. Save one and run:
 
    ```bash
    python terran_demo_bot.py --Map PylonAIE_v4 --ComputerRace ZERG --ComputerDifficulty MEDIUM
@@ -72,7 +75,7 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 - **Testing**: `sc2nachos.testing` makes units for a bot's unit tests
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/testing.md)).
 - **Extensions**: features a bot opts into, NachOS's or anyone's, which the api builds once the game starts and holds
-  as `api.extensions`. NachOS's own are speed mining and upgrade inference
+  as `api.extensions`. NachOS's own are speed mining, upgrade inference and a build planner
   ([guide](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md)).
 
 ## Design
@@ -134,6 +137,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
   creating units.
 - [Extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md): features a bot opts into, how to use
   one and how to write one.
+- [The build planner](https://github.com/maxnus/NachOS/blob/main/docs/build-planner.md): a plan of what to make and
+  when, from what units and upgrades are worth to the bot.
 - [Values that depend on the game time](https://github.com/maxnus/NachOS/blob/main/docs/time-dependent-values.md): a
   value recorded each step, a few joined between their times, or a function of the game time, all read the same way.
 - [Running StarCraft II on GitHub Actions](https://github.com/maxnus/NachOS/blob/main/docs/github-actions.md): playing

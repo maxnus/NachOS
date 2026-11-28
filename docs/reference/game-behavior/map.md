@@ -125,6 +125,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
 - From a unit's tag it answers for that unit: from atop a cliff on PylonAIE_v4, 63.7 for a marine, by the ramp, 3.3
   for a reaper, which jumps the cliff, 58.0 for a colossus, and the straight line for a medivac. From the marine's
   position the answer was 61.7 (tool `sweep_requests`, build 75689).
+- An SCV ordered to build takes about 8 seconds from a main's mineral line to its natural's townhall site, and 2 to 3 to
+  a structure in its main, from the order until the structure is first seen. In the planner example bot's games, whose
+  structures stand within some 10 of its main's townhall, the first command center of a game, at the natural, took a
+  median 7.9 s, from 6.9 on MagannathaAIE_v2 to 9.0 on TorchesAIE_v4 (168 games), and the second, at the third base,
+  9.9. 4,061 depots, barracks, refineries and engineering bays given to an SCV from the mineral line took a median
+  2.3 s and 90% of them at most 3.9, refineries a median 1.3 (in game, the example bot of #264 at Cheater 3, build
+  75689).
 - Over 100 random pairs of tiles on PylonAIE_v4, its distance was 0.89 to 1.12 times that of `Grid.cheapest_paths_from`,
   0.95 at the median. The two pairs it answered 0 for, where the grid has a path, ended inside the computer's
   structures, which the start's grid leaves open (tool `sweep_requests`, build 75689).

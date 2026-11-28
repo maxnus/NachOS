@@ -1,4 +1,5 @@
-"""The demo bots in examples/, a whole bot in one file for each race."""
+"""The demo bots in examples/, a whole bot in one file for each race, and the Terran one that follows the build
+planner's plans."""
 
 import importlib.util
 from pathlib import Path
@@ -13,6 +14,7 @@ _EXAMPLES = Path(__file__).parent.parent / "examples"
 # Each demo bot by its module's name, with the race it plays and the computer's it is tested against here.
 _RACES_OF_THE_DEMO_BOTS = {
     "terran_demo_bot": (Race.TERRAN, Race.ZERG),
+    "terran_planner_bot": (Race.TERRAN, Race.ZERG),
     "zerg_demo_bot": (Race.ZERG, Race.TERRAN),
 }
 

@@ -197,3 +197,6 @@ class ThreatMap:
 
   It reads the buffs on every visible unit, so a buff the curated ids leave out raises `UncuratedIdError`, as reading
   `Unit.buffs` does.
+- **The build planner**, `sc2nachos.extensions.planner.Planner`, for Terran: given what units and upgrades are worth to
+  the bot, what to make and when, as a list of items in order, each with the time it is expected to start. It has a
+  [page of its own](build-planner.md).

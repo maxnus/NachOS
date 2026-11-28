@@ -61,8 +61,10 @@ These are the non-negotiables. They exist because this library is published for 
   differently in a way a bot moving over could trip on, add it to `docs/reference/python-sc2.md`, concisely, and to
   the short `docs/migrating-from-python-sc2.md` only if most bots moving over would.
 - **Scope:** anything useful to any bot maker, if it is (or can be made) acceptable quality — protocol, state, data
-  model, units, orders, events, geometry, pathfinding, map analysis, generic utilities. Not: strategy, build
-  orders, combat micro, roles, economy management. `sc2nachos.extensions` may hold opt-in features outside that
+  model, units, orders, events, geometry, pathfinding, map analysis, generic utilities, and a solver any bot hands
+  its own objective, as pathfinding is a solver over the map and the build planner one over build orders. Not:
+  strategy, build orders, combat micro, roles, economy management, nor the objective a solver is handed, which stays
+  the bot's. `sc2nachos.extensions` may hold opt-in features outside that
   scope, as speed mining is; each is a module, or a package once it needs more than one, imports only public names
   but its own, the core neither imports nor names any, docstrings included, which tests check, and a heavy dependency
   goes behind an optional install.

@@ -22,6 +22,13 @@ codebases read alike. A new rule of style goes here, with an example from the co
   what it builds: `Footprint.square`, `Grid.zeros`. One that finds the instance at a position is named `at`:
   `Tile.at(point)`, the tile a point falls in. `of` names what selects part of a whole, `Units.of_type` and
   `AnyAreaEvent.of(area)`, or what reads something of a value, `_key_of`.
+- **A function names the kind of value it takes, where its name can**: `_expansion_is_free_to_take(expansion)` and
+  `Budget.start_plan_item(item)` in the planner demo bot, never `_is_free_to_take(expansion)` or `start(item)` (the
+  owner, review of #264).
+- **A function that turns one kind of value into another names both**: `_highs_lp_to_matrix_form`, never
+  `_matrix_form_of`, and a method `to_` what it makes, `LinearProgram.to_matrix_form` as `BuildPlan.to_string`; a
+  classmethod of the kind it makes is `from_` the other, `PresolveOutcome.from_highs_status` (the owner, review of
+  #262).
 - **A leading underscore marks what a bot must not use**, not what another NachOS module must not call.
 
 ## Signatures
@@ -48,6 +55,8 @@ codebases read alike. A new rule of style goes here, with an example from the co
   statements, as ruff's `PLR0915` counts them, which `ruff check` enforces; `tests` and `tools` are exempt. In the hot
   loop, extract the rare path, so that the common one makes no extra call: `Unit._update` calls `_update_alliance`
   only for a report whose alliance changed.
+- **A dataclass checks its fields in a `_validate` method, which `__post_init__` calls**, so that `__post_init__`
+  reads as the steps that set the object up, the check being one of them (the owner, review of #239).
 - **Values that do not belong together are assigned on lines of their own**: `units = ...` and `reader = ...`, never
   `units, reader = ..., ...`. Several are assigned at once only as the parts of one thing: a value taken apart
   (`x, y = point`), a corner's two coordinates (`left, bottom = int(within.x), int(within.y)`), or a swap.

@@ -264,6 +264,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   so. One SCV mining the nearest field of Pylon's main took 98 steps a round trip moved so, against 105 on plain
   gathers and returns and 107 with the return aimed at nothing, and twelve on its eight fields mined 2315 minerals in
   three minutes against 2070 (tested; #201, local game, build 75689).
+- Speed mined, an SCV on a main brings in about the same at one, one and a half or two a field: 8, 12 and 16 SCVs on
+  the eight fields of each main of the pool mined 1.089, 1.085 and 1.065 minerals a second each, from 1.052 on Torches
+  at 16 to 1.111 on Persephone at 8, from 20 s to 200 s. An SCV a command center trains made its first delivery one
+  round trip after it appeared, about 5 s, as one already mining does, 21 SCVs of 21 within 1.2 s of that, so a new SCV
+  at its own base loses none of its mining. Moved between the minerals and a refinery, three workers lost 2.9 to 4.4
+  seconds of work each going to gas and 3.1 to 4.7 going to the minerals, against three already at it over the next
+  two minutes, each figure good to about 1.5 s, the most one trip brings. Four sent from a full main to mine a natural
+  just built lost 5.8 to 14.0 seconds each, 10.8 on average, against four mining there from the start (in game, the
+  mains of all seven maps of the pool, one game each a map and count, build 75689).
 - A worker on a gather or a return passes through other units, which players call mineral walking: twelve SCVs on
   Pylon's main mined 2070 minerals in three minutes on plain gathers and returns with a marine standing halfway from
   the command center to the nearest field, as many as without it (#201, local game, build 75689). A worker on a move
@@ -275,7 +284,13 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   on plain gathers and returns and 80 moved at both ends as a miner is, and at the farther, 8.06 from it, 94 and 86;
   three a refinery took 99 on plain gathers, 33 for each inside and changing over, and collected 163 to 164 a minute
   at either, and no move made them faster. Moved at one end only, one SCV gained 2 to 7% (`tools/sweep_gas.py`,
-  `sc2` runs 41837996802 and 41856036606, build 75689).
+  `sc2` runs 41837996802 and 41856036606, build 75689). On plain gathers one SCV a refinery collected 61 vespene a
+  minute at the nearer and 57 at the farther, and two 123 and 115, each as much as one alone, so that a third added 41
+  and 48, about three quarters of what each of the first two brought (`tools/sweep_gas.py`, local games, build 75689).
+  Speed collected, the sweep's `collect` variant, one SCV a refinery took 204 and 188 vespene in three minutes, two 404
+  and 376, and three 492 and 492, what three take on plain gathers, 492 and 488: a third then adds about half of what
+  each of the first two brings (the same games). An SCV walks 8.0 to 10.9 seconds from a main's mineral line to its
+  natural on the maps of the pool, by the pathing distance and its speed (corpus).
 - Two workers on moves meet head on and push each other aside, where one on a gather or a return passes through one
   on a move. Two SCVs a refinery moved at both ends of their trips, along the line between the two centers, met once
   every round trip, about 2.5 from the refinery's center: at the nearer refinery the one going in was shoved back,
@@ -411,6 +426,15 @@ Part of [how the game behaves](README.md), which says how each entry was seen.
   refused `NotEnoughMinerals`, the move is carried out, and minerals mined meanwhile do not bring the depot back. A
   storm queued behind a move, its energy spent meanwhile, is dropped with no error. An action error names the unit
   and the ability, and comes in the observation in which the game gave up (tool `sweep_orders`).
+- When a build is about to go down, the game puts a move ahead of the orders of a unit of this player's standing on
+  its site, so that they read `MOVE` and then its own, and the unit steps off. An order given to the unit then replaces
+  that move, as any order does, and if the unit is still on the site about 3.6 seconds later, the game gives the build
+  up with `CantBuildLocationInvalid`. In the planner example bot's games, a marine or a marauder trained beside its
+  barracks stood on a depot's or a tech lab's site while the bot gave it its attack every 4 steps: its orders went from
+  `MOVE`, `ATTACK` to `ATTACK` each time, 5 times in 63 games, two depots and three tech labs. On PylonAIE_v4 a marine
+  went back and forth between (164.25, 80.45) and (164.77, 80.24), inside the depot's footprint, while the SCV waited
+  from 6:14.6. With the bot leaving alone a unit already attacking near its target, the same 63 games had none (#264,
+  replays of local games played back with the fog off, build 75689).
 - A builder killed before the game gives up on its build is reported dead and nothing more. An SCV whose site one of
   this player's marines held position on was given up on 108 steps after the order, with `CantBuildLocationInvalid`;
   one sent to another such site and killed on the way got no error at all, then or twelve steps later (tool

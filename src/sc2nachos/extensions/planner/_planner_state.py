@@ -1,0 +1,296 @@
+"""The state of the game as the planner reads it: plain values, taken from the api, which a bot may change."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, final
+
+from sc2nachos.gamedata import Resources
+from sc2nachos.gametime import GameTime
+from sc2nachos.geometry import Point
+from sc2nachos.ids import UnitTypeId, UpgradeId
+from sc2nachos.units import UnitType
+
+if TYPE_CHECKING:
+    from sc2nachos import Api, Expansion
+    from sc2nachos.extensions.planner._terran_model import TerranModel
+    from sc2nachos.ids import AbilityId
+    from sc2nachos.state import InProduction
+    from sc2nachos.units import OwnUnit
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProducerActivity:
+    """A producer kept busy by what it makes now: a train, a morph, an add-on or a research."""
+
+    producer: UnitTypeId
+    """The type the producer counts as."""
+    time_until_start: GameTime
+    """The time from the state's until it starts: zero for one running, more for one queued behind another."""
+    time_left: GameTime
+    """The time from the state's until it is done."""
+    needs_tech_lab: bool
+    """Whether it is a unit its producer makes only with a tech lab."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class UnitCompletion:
+    """A unit in production but a structure a worker builds: a train, a morph or an add-on."""
+
+    unit_type: UnitTypeId
+    """The type it counts as."""
+    time_left: GameTime
+    """The time from the state's until it is done, after what its producer makes before it."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorkerBuild:
+    """A structure a worker builds, going up or with the worker on its way."""
+
+    unit_type: UnitTypeId
+    """The type it counts as."""
+    time_left: GameTime
+    """The building it has left: its whole build time if not begun."""
+    builder_walks_there: bool
+    """Whether a worker has yet to walk there: for a build not begun, and for a structure going up whose worker has
+    left."""
+    mineral_fields: int = 0
+    """The mineral fields it brings once done. For a townhall at an expansion, the fields the expansion has left; none
+    for a townhall anywhere else, and for any other structure."""
+    geysers: int = 0
+    """The geysers it brings once done, each free for a gas building. For a townhall at an expansion, the expansion's
+    geysers with no gas building on them; none for a townhall anywhere else, and for any other structure."""
+
+
+@final
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlannerState:
+    """The state of the game a plan starts from, as plain values: what `Planner.state` reads, which a bot may change
+    with `dataclasses.replace` and hand to `Planner.plan_now`, to leave out a base about to fall, say. The planner pools
+    what it holds: it never knows which base a field, a gas building or a worker is at.
+
+    It holds each unit as the type it counts as, as `Planner` says: a barracks for a flying one, a siege tank for a
+    sieged one, a hellion for a hellbat, a refinery for a rich one."""
+
+    time: GameTime
+    """The game time it was taken at, from which the plan's times count."""
+    resources: Resources
+    """The minerals and vespene in stock."""
+    collected: Resources = Resources(0.0, 0.0)
+    """The minerals and vespene collected in the game so far, as its score counts them. A plan adds what it expects to
+    collect to it, for `BuildPlan.deviation_of` to hold a later state's against: nothing by default, which serves a
+    state made by hand as long as the later one's counts from there too."""
+    supply_used: float
+    """The supply taken, by units alive and in production."""
+    supply_cap: float
+    """The supply cap, up to the game's limit. Where it is below `supply_used`, after a supply depot was lost, say, a
+    plan starts nothing that takes supply until it has raised the cap to what is taken with it."""
+    units: Mapping[UnitTypeId, int]
+    """The number of this player's finished units alive counted as each type, those inside a gas building or a
+    transport included, which the observation leaves out."""
+    upgrades: frozenset[UpgradeId] = frozenset()
+    """The upgrades done."""
+    unit_completions: tuple[UnitCompletion, ...] = ()
+    """Each unit in production but a structure a worker builds."""
+    upgrade_completions: Mapping[UpgradeId, GameTime] = field(default_factory=dict)
+    """Each upgrade being researched, with the time until it is done."""
+    producer_activities: tuple[ProducerActivity, ...] = ()
+    """What keeps each producer busy now."""
+    worker_builds: tuple[WorkerBuild, ...] = ()
+    """Each structure a worker builds, going up or with the worker on its way."""
+    mineral_fields: int = 0
+    """The mineral fields left at bases with a finished townhall of this player's."""
+    gas_buildings_with_vespene: int = 0
+    """This player's finished gas buildings with vespene left."""
+    vespene_collectors: int = 0
+    """The workers collecting vespene now: those the game counts as assigned to those gas buildings. The planner takes
+    every other worker that builds nothing to be mining."""
+    free_geysers: int = 0
+    """The geysers without a gas building at bases with a finished townhall of this player's, less one for each gas
+    building a worker is on its way to build."""
+
+
+def read_planner_state(api: Api[object], *, model: TerranModel) -> PlannerState:
+    """The state of the game `api` plays now, its unit types read by `model`."""
+    counts, gas_buildings_with_vespene, vespene_collectors = _counts_of_own_units(api, model)
+    fields, free_geysers = _bases_of(api)
+    unit_completions, producer_activities, worker_builds = _production_of(api, model)
+    refineries_not_begun = sum(
+        build.unit_type is UnitTypeId.REFINERY and in_production.unit is None for build, in_production in worker_builds
+    )
+    upgrade_completions, research_activities = _researches_of(api, model)
+    return PlannerState(
+        time=api.time,
+        resources=api.resources,
+        collected=api.score.collected,
+        supply_used=api.supply.used,
+        supply_cap=api.supply.cap,
+        units=counts,
+        upgrades=api.upgrades,
+        unit_completions=tuple(unit_completions),
+        upgrade_completions=upgrade_completions,
+        producer_activities=tuple(producer_activities + research_activities),
+        worker_builds=tuple(build for build, _ in worker_builds),
+        mineral_fields=fields,
+        gas_buildings_with_vespene=gas_buildings_with_vespene,
+        vespene_collectors=vespene_collectors,
+        free_geysers=max(free_geysers - refineries_not_begun, 0),
+    )
+
+
+def _counts_of_own_units(api: Api[object], model: TerranModel) -> tuple[dict[UnitTypeId, int], int, int]:
+    """The number of this player's finished units counted as each type, of its finished refineries with vespene left,
+    and of the workers assigned to those. Those known alive count, an SCV inside a refinery and a marine in a bunker
+    among them, which the last observation leaves out (in game)."""
+    counts: dict[UnitTypeId, int] = {}
+    gas_buildings_with_vespene = 0
+    vespene_collectors = 0
+    for unit in api.known_units.own:
+        if not unit.is_complete:
+            continue
+        counted = model.counted_as(unit.type_id)
+        counts[counted] = counts.get(counted, 0) + 1
+        if UnitType.GasBuilding.includes(unit) and unit.vespene_contents > 0:
+            gas_buildings_with_vespene += 1
+            vespene_collectors += unit.assigned_harvesters
+    return counts, gas_buildings_with_vespene, vespene_collectors
+
+
+def _bases_of(api: Api[object]) -> tuple[int, int]:
+    """The mineral fields left and the geysers free at bases with a finished townhall of this player's."""
+    fields = 0
+    free_geysers = 0
+    for expansion in api.expansions:
+        townhall = expansion.townhall
+        if townhall is not None and townhall.is_own and townhall.is_complete:
+            fields_of_it, free_geysers_of_it = fields_and_free_geysers_of(api, expansion)
+            fields += fields_of_it
+            free_geysers += free_geysers_of_it
+    return fields, free_geysers
+
+
+def fields_and_free_geysers_of(api: Api[object], expansion: Expansion) -> tuple[int, int]:
+    """The mineral fields `expansion` has left, and its geysers with no gas building on them."""
+    gas_building_positions = {building.position for building in api.units.gas_buildings}
+    free_geysers = sum(geyser.position not in gas_building_positions for geyser in expansion.geysers)
+    return len(expansion.mineral_fields.alive), free_geysers
+
+
+def _production_of(
+    api: Api[object], model: TerranModel
+) -> tuple[list[UnitCompletion], list[ProducerActivity], list[tuple[WorkerBuild, InProduction]]]:
+    """Each unit in production but a structure an SCV builds, with the time until it is done; what keeps each
+    producer busy; and each structure an SCV builds, with what it was read from. A structure not begun, or going up
+    with no SCV building it, waits for an SCV's walk there."""
+    completions: list[UnitCompletion] = []
+    worker_builds: list[tuple[WorkerBuild, InProduction]] = []
+    builds_not_begun: dict[int, int] = {}
+    by_producer: dict[int, list[InProduction]] = {}
+    producers: dict[int, OwnUnit[Any]] = {}
+    for in_production in api.in_production(model.types_counted_as_items):
+        unit_type = model.counted_as(in_production.product)
+        producer = in_production.producer
+        if model.unit_items[unit_type].is_built_by_worker:
+            walks_there = in_production.unit is None or producer is None
+            mineral_fields, geysers = _fields_and_geysers_brought_by(api, in_production, builds_not_begun)
+            build = WorkerBuild(
+                unit_type=unit_type,
+                time_left=in_production.time_left,
+                builder_walks_there=walks_there,
+                mineral_fields=mineral_fields,
+                geysers=geysers,
+            )
+            worker_builds.append((build, in_production))
+        elif producer is None:
+            completions.append(UnitCompletion(unit_type=unit_type, time_left=in_production.time_left))
+        else:
+            by_producer.setdefault(producer.id, []).append(in_production)
+            producers[producer.id] = producer
+    producer_activities: list[ProducerActivity] = []
+    for producer_id, queue in by_producer.items():
+        producer = producers[producer_id]
+        lanes = [GameTime.ZERO] * max(producer.production_capacity, 1)
+        for in_production in sorted(queue, key=lambda queued: queued.fraction == 0):
+            unit_type = model.counted_as(in_production.product)
+            lane = lanes.index(min(lanes))
+            start = lanes[lane]
+            lanes[lane] = start + in_production.time_left
+            completions.append(UnitCompletion(unit_type=unit_type, time_left=lanes[lane]))
+            producer_activities.append(
+                ProducerActivity(
+                    producer=model.counted_as(producer.type_id),
+                    time_until_start=start,
+                    time_left=lanes[lane],
+                    needs_tech_lab=model.unit_items[unit_type].needs_tech_lab,
+                )
+            )
+    return completions, producer_activities, worker_builds
+
+
+def _fields_and_geysers_brought_by(
+    api: Api[object], in_production: InProduction, builds_not_begun: dict[int, int]
+) -> tuple[int, int]:
+    """The mineral fields left and the geysers with no gas building at the expansion a townhall `in_production` stands
+    at, or is to stand at: the expansion whose center the townhall covers. None of either for a townhall anywhere
+    else, and for anything but a townhall. `builds_not_begun` counts the townhalls not begun read so far of each
+    worker, by its id, and is counted up, so that a worker's second one reads its second order."""
+    data = api.data.units[in_production.product]
+    footprint = data.footprint
+    if in_production.product not in UnitType.Townhall.type_ids or footprint is None:
+        return 0, 0
+    built_at = _point_built_at(in_production, data.creation_ability, builds_not_begun)
+    if built_at is None:
+        return 0, 0
+    covered = footprint.bounding_box(at=built_at)
+    for expansion in api.expansions:
+        if expansion.center in covered:
+            return fields_and_free_geysers_of(api, expansion)
+    return 0, 0
+
+
+def _point_built_at(
+    in_production: InProduction, creation_ability: AbilityId | None, builds_not_begun: dict[int, int]
+) -> Point | None:
+    """Where the structure `in_production` stands, or for a build not begun, the point its worker's order of
+    `creation_ability` is aimed at: the worker's first such order for the first of its builds read, as
+    `builds_not_begun` counts them, the second for the second. `None` where neither says."""
+    if in_production.unit is not None:
+        return in_production.unit.position
+    worker = in_production.producer
+    if worker is None:
+        return None
+    read_before = builds_not_begun.get(worker.id, 0)
+    builds_not_begun[worker.id] = read_before + 1
+    points = [
+        target
+        for order in worker.orders
+        if order.ability == creation_ability and isinstance(target := order.known_target, Point)
+    ]
+    return points[read_before] if read_before < len(points) else None
+
+
+def _researches_of(api: Api[object], model: TerranModel) -> tuple[dict[UpgradeId, GameTime], list[ProducerActivity]]:
+    """Each research's time until it is done, one structure researching one at a time, and what keeps each researcher
+    busy."""
+    completions: dict[UpgradeId, GameTime] = {}
+    producer_activities: list[ProducerActivity] = []
+    free_after: dict[int, GameTime] = {}
+    researches = sorted(api.researches.items(), key=lambda research: research[1].fraction == 0)
+    for upgrade, research in researches:
+        start = free_after.get(research.unit.id, GameTime.ZERO)
+        end = start + research.time_left
+        free_after[research.unit.id] = end
+        completions[upgrade] = end
+        producer_activities.append(
+            ProducerActivity(
+                producer=model.counted_as(research.unit.type_id),
+                time_until_start=start,
+                time_left=end,
+                needs_tech_lab=False,
+            )
+        )
+    return completions, producer_activities

@@ -14,6 +14,10 @@ stood before they were cut to that, are `git show 582149c:.claude/plans/next-ste
 
 As of 2026-11-22:
 
+- **The build planner is the work in progress**: `sc2nachos.extensions.planner`, a solver of build orders any bot hands
+  its reward. [planner-plan.md](planner-plan.md) holds its decisions, the measurements behind them, its design and its
+  phases. Phase 1, the extension for Terran, synchronous, is the pull request that moved it here; phase 2 plays it in
+  AvocaDOS. `examples/terran_planner_bot.py` plays it already, a whole bot in one file held to the demo bots' bar.
 - **M4 is done**: its slice 7 became `OwnUnit.issue` (#240), and shortcuts for common orders wait (section 1).
 - **M5's swap is done**: AvocaDOS runs on NachOS, on the ladder since its v1.4.0 (2026-11-01). Its exit gate, a day
   on the ladder and the comparison of `AverageStepTime` with the baseline (AvocaDOS's plan, the first of "Open"), is
@@ -294,6 +298,9 @@ The issue, discussion or pull request named holds the reasons, and the alternati
   by their kind (the owner, review of #231, over marking its orders through `Order.data`); a refused order lets the
   worker go too, as documented (the owner, over reading the refusals).
 - **Speed mining is a package**, a class to a file, as upgrade inference is (#225).
+- **The build planner is an extension of NachOS's own** (the owner, 2026-11-07), over a package of its own,
+  `sc2nachos-planner`: a solver any bot hands its objective is in scope, as AGENTS.md's scope line now says, and the
+  objective stays the bot's. The plan's decisions stand as [planner-plan.md](planner-plan.md) records them.
 - **Upgrade inference is an extension** (#206), and the core always reads the levels the enemy's units report.
 - **Upgrade inference reads each turn's observation on `TurnStartEvent`, and not the one the game ended on** (the
   owner, review of #234, over reading that one on `GameEndEvent` too, as #206 did): `api.enemy.upgrades` at the end
@@ -392,6 +399,11 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      which also settles `needs_power` before 1.0.
   3. `protoss_demo_bot.py`: probes, pylons, gateways and a cybernetics core, zealots and stalkers trained at gateways
      with no Warp Gate research, and chrono boost on the nexus.
+- **The build planner**, a phase at a time, as [planner-plan.md](planner-plan.md) orders them: after phase 1, playing it
+  in AvocaDOS against this checkout, then replanning in a background process. Its "Open" holds what phase 1 found for
+  the owner to settle: a wide reward's item set, which is not solved in 3 seconds, the count-form cut, and workers
+  per base, which the owner wants to come back to. Its
+  3-second exit is met since its grid was cut to a worker's build time.
 - **A value that depends on the game time is a `TimeDependent`**, planned with the owner 2026-11-24, after the planner's
   loss rate (#239) raised it (the owner: "Maybe we need to have a think about how we make TimeSeries
   better in a separate session then, so that this can become the standard way of expressing time dependence. For example
@@ -482,7 +494,9 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
      interpolation, `STEP` too, which needs none of it, and works out the value halfway between each two as it is
      made, refusing two no line joins, as a number and a value that is none; a value that is no number is not checked
      for being finite; a numpy boolean counts as a number.
-  2. The planner's loss rate, as commits on #239 once step 1 is on `main`.
+  2. Done on #239: the planner's `loss_rates` take a number or a `TimeDependent[float]`, read by one call with every
+     step of the plan; [planner-plan.md](planner-plan.md)'s Open 17 holds what a function not in a `TimeFunction` and a
+     series too short for the plan raise, and what was measured.
 - **Fields** (#18, above), planned with the owner 2026-11-06, a pull request a step:
   1. Done in #238: the `Field` protocol, in `sc2nachos.geometry`, and `Grid` satisfying it. A field reads
      `value_at(point)`, `min` and `max(within=area)`, `argmin` and `argmax(within=area)`, and `gradient_at(point)` (the
@@ -630,10 +644,6 @@ Code the owner chose to keep as it is, which a review could otherwise propose to
   against 5.2, two clumps far apart 7.1 against 2.9; but 134 compact tiles 3.5 against 3.6, 1,000 compact 5.5
   against 7.9, a block of 5,000 7.5 against 26.7. Checking each tile against the grid's bounds, which a set reaching
   past it needs, takes the gain away.
-- The build planner (#239) drops `_note_morph_starts` and `morph_starts` once its branch takes main, which times a
-  command center's morph, and reads `InProduction.product` and `fraction` where it read `type_id` and `progress`. It
-  drops its own `usual_form` too, for `UnitTypeData.equivalent_types`, which puts a hellbat with the hellion where it
-  kept them apart, and chooses itself which type of a group it builds.
 - Two miners of a field may meet head on, both on their moves, as two collectors of a refinery did before #222
   (unmeasured): a sweep of one and two SCVs a field, on plain gathers, speed mined and with the yield, to plan with
   the owner. The yield goes into `mine` only if it is measured to mine more.

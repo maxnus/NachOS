@@ -143,3 +143,7 @@ def share_lost(loss_rate: TimeDependent[float], start: GameTime, end: GameTime) 
     rates = loss_rate(numpy.arange(start.steps, end.steps))
     return 1.0 - math.exp(-rates.sum() * SECONDS_PER_STEP)
 ```
+
+The [build planner](build-planner.md) takes both: a reward term's `time_factor` is a function of the game
+time, read once an interval of a plan, and a loss rate handed to `plan_now` is a number or a `TimeDependent[float]`,
+read at every game step of the plan at once.
