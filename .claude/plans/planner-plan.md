@@ -294,12 +294,15 @@ file as it was at `807304c`.
    worth some 0.07% on a grid where every chain is exact, for a count done by each item and interval. Interval lengths
    of each item's own were weighed and were no better.
 10. **Workers per base: not built** (the owner, 2026-11-23: "I would really like to have workers per base, but I don't
-    think we can afford it"). The planner pools workers over every field and gas building, and a new base's fields count
-    from when its townhall is done. The one charge for a move is `EconomyModel.initial_harvest_delay`, 3 seconds, with
-    no number of its own for a new base (the owner, the same day: "SCVs should already be delayed by 3 seconds when they
-    start to mine or change their assignment to the new base"). The error left is estimated at 30 to 75 minerals an
-    expansion. Workers per base, with transfers, would roughly double the program's variables, estimated and not
-    measured; a prototype outside the package is a few hours' work, and not made.
+    think we can afford it"). The planner pools workers over every field and gas building. A new base's fields count
+    from `EconomyModel.new_base_walk_time` after its townhall is done, 8 seconds by default, and its first workers then
+    pay `initial_harvest_delay` as any worker starting does (the owner, 2026-11-27: "OK I think I like option 2. But it
+    should be a new parameter so it can be set to zero"). Until then a new base had no number of its own (the owner,
+    2026-11-23: "SCVs should already be delayed by 3 seconds when they start to mine or change their assignment to the
+    new base"), and the error left was estimated at 30 to 75 minerals an expansion; measured, a worker sent to a newly
+    built natural lost 10.8 seconds of mining against 3 charged. Workers per base, with transfers, would roughly double
+    the program's variables, estimated and not measured; a prototype outside the package is a few hours' work, and not
+    made.
 11. **What an item needs first is whole** (the owner, 2026-11-20, and 2026-11-21, who made it a fraction and named it,
     the planner to offer many arguments since nobody knows yet how it works best). `Planner(unlock_fraction=1.0)`, the
     default, adds a 0 or 1 for each needed tech and interval. Without it a hundredth of a factory unlocked a starport,

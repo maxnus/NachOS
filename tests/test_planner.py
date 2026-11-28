@@ -1901,12 +1901,14 @@ class TestEconomy:
             {"vespene_per_collector_second": (-0.1,)},
             {"mule_minerals_per_orbital_second": -1.0},
             {"initial_harvest_delay": GameTime(seconds=-1)},
+            {"new_base_walk_time": GameTime(seconds=-1)},
         ],
         ids=[
             "a rate above the one before",
             "a negative rate",
             "a negative MULE rate",
             "a negative initial harvest delay",
+            "a negative walk to a new base",
         ],
     )
     def test_a_rate_above_the_one_before_or_a_negative_number_raises(self, arguments: dict[str, Any]) -> None:
@@ -2191,6 +2193,40 @@ class TestEconomy:
             start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
         )
         assert _start_seconds_of_units_done_in_time(plan, UnitTypeId.MARINE) == [marine_start]
+
+    @pytest.mark.parametrize(("walk_seconds", "first_more"), [(8.0, 13.0), (0.0, 5.0)], ids=["8 s", "none"])
+    def test_a_new_base_s_fields_count_from_the_walk_there_after_it_is_done(
+        self, walk_seconds: float, first_more: float
+    ) -> None:
+        """Twenty SCVs, a main of eight fields that takes sixteen, and a command center bringing eight more done in 5
+        seconds, its builder there already, on 1-second intervals: more than sixteen mine only from the walk to the new
+        base after it is done."""
+        state = _game_start(
+            minerals=0.0,
+            supply_used=20.0,
+            supply_cap=30.0,
+            units={UnitTypeId.SCV: 20, UnitTypeId.COMMAND_CENTER: 1},
+            worker_builds=(
+                WorkerBuild(
+                    unit_type=UnitTypeId.COMMAND_CENTER,
+                    time_left=GameTime(seconds=5),
+                    builder_walks_there=False,
+                    mineral_fields=8,
+                ),
+            ),
+        )
+        plan = _best_plan(
+            state,
+            Reward.weighted({UnitTypeId.MARINE: 1.0}, half_life=None),
+            horizon_seconds=30,
+            grid=TimeGrid.uniform(GameTime(seconds=1)),
+            economy=EconomyModel(new_base_walk_time=GameTime(seconds=walk_seconds)),
+            start_limits={**_NOTHING_BUT_UNITS, UnitTypeId.SCV: 0},
+        )
+        more_than_the_main_takes = [
+            interval.start.time.seconds for interval in plan.intervals if interval.miners > 16 + 1e-6
+        ]
+        assert more_than_the_main_takes[0] == first_more
 
     def test_a_reassignment_costs_its_time_of_an_interval_however_long_the_interval(self) -> None:
         """No vespene and one refinery with no SCV at it, on 10-second intervals: each SCV sent there collects for 7 of

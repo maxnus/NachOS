@@ -76,7 +76,7 @@ Everything the planner assumes of the game is the bot's to read and change, as a
 |---|---|
 | `expansions` | The expansions the bot means to take next, in order. A plan starts no more command centers than these, so none by default. |
 | `state` | The state of the game the plan starts from: `planner.state()` by default, plain values a bot may change first. |
-| `economy` | An `EconomyModel`: what workers and MULEs bring in, and how long an SCV walks to build. |
+| `economy` | An `EconomyModel`: what workers and MULEs bring in, how long an SCV walks to build, and how long after a new base is done its fields can be mined. |
 | `loss_rates` | The share of each unit type the bot expects to lose a second, a number or a [value that depends on the game time](time-dependent-values.md). Only what is expected to survive counts. |
 | `start_limits` | The most a plan may start of a type, for what the bot will not make. |
 | `time_limit`, `node_limit`, `relative_gap` | When the solve may stop. A node limit gives the same plan on every machine, for tests and recorded games. |

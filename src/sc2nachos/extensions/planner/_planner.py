@@ -112,7 +112,8 @@ class Planner:
     - A command center that morphs trains no SCV meanwhile. A reactor lets its host make two units at a time. A tech lab
       makes the units that need one, and researches by itself.
     - A new command center brings the mineral fields and the geysers of the next of the `expansions` handed to
-      `plan_now`. With none, a plan starts no command center.
+      `plan_now`, its fields from the `EconomyModel`'s `new_base_walk_time` after it is done. With none, a plan starts
+      no command center.
 
     Raises `ValueError` for a player of a race other than Terran, or a `max_ignored_overrun`, an `unlock_fraction` or a
     `spendable_income_fraction` outside 0 to 1; `NotPlayingError` if built before the game starts; and, for
