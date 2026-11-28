@@ -470,7 +470,7 @@ it.
 | `state.score.collected_minerals`, `collection_rate_*`, `spent_*` | `api.score.collected.minerals`, `collection_rate`, `spent`, each a `Resources` |
 | `state.score.total_value_units`, `killed_value_structures` | `api.score.total_value.units`, `killed_value.structures` |
 | `state.score.idle_worker_time`, `idle_production_time`, in seconds | `api.score.idle_worker_time`, `idle_production_time`, each a `GameTime` |
-| `bot.minerals`, `vespene` | `api.resources.minerals`, `vespene`, and `api.resources.covers(cost.resources)` against a cost |
+| `bot.minerals`, `vespene` | `api.resources.minerals`, `vespene`, and `api.budget.covers(cost)` against a cost |
 | `bot.supply_used`, `supply_cap`, `supply_left`, `supply_army`, `supply_workers` | `api.supply.used`, `cap`, `left`, `army`, `workers` |
 | `bot.idle_worker_count`, `army_count`, `warp_gate_count` | `api.ui_unit_counts.idle_workers`, `army`, `warp_gates` |
 | `bot.race`, `player_id` | `api.player.race`, `api.player.id` |
