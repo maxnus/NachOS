@@ -104,15 +104,13 @@ STIM_ABOVE_HEALTH = 0.7
 
 
 class Budget:
-    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out, and the
-    orders that spend it. Each is given only if a unit of this player's can carry it out now and what is left pays for
-    it, and says whether it was. Where a unit can carry it out but what is left falls short, its cost is set aside all
-    the same, so that nothing after it spends what it waits for."""
+    """What is left to spend this turn, `api.budget` as the turn starts, and the orders that spend it. Each is given
+    only if a unit of this player's can carry it out now and what is left pays for it, and says whether it was. Where a
+    unit can carry it out but what is left falls short, its cost is set aside all the same, so that nothing after it
+    spends what it waits for."""
 
     def __init__(self) -> None:
-        pending_cost = api.orders.pending_cost
-        self.resources_left = api.resources - pending_cost.resources
-        self.supply_left = api.supply.left - pending_cost.supply
+        self.left = api.budget
 
     def start_plan_item(self, item: PlanItem) -> bool:
         """Start `item`, by whichever order makes its product."""
@@ -191,13 +189,9 @@ class Budget:
         return True
 
     def _try_pay_for(self, cost: Cost) -> bool:
-        """Whether what is left pays for `cost`: its supply too if it takes any, so that a structure is paid for over
-        the cap, once supply depots are lost. Its cost is taken either way."""
-        affordable = self.resources_left.covers(cost.resources) and (
-            cost.supply <= 0 or self.supply_left >= cost.supply
-        )
-        self.resources_left -= cost.resources
-        self.supply_left -= cost.supply
+        """Whether what is left pays for `cost`. Its cost is taken either way."""
+        affordable = self.left.covers(cost)
+        self.left -= cost
         return affordable
 
 
