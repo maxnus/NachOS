@@ -103,8 +103,8 @@ STIM_ABOVE_HEALTH = 0.7
 # --- Following the plan
 
 
-class Spending:
-    """This turn's spending: what is left of the bank, less what this turn's orders will cost once they go out, and the
+class Budget:
+    """What is left to spend this turn: the bank, less what this turn's orders will cost once they go out, and the
     orders that spend it. Each is given only if a unit of this player's can carry it out now and what is left pays for
     it, and says whether it was. Where a unit can carry it out but what is left falls short, its cost is set aside all
     the same, so that nothing after it spends what it waits for."""
@@ -203,7 +203,7 @@ class Spending:
 
 class PlanFollower:
     """The planner's last plan, carried out: the items of it not started yet, each started in the plan's order as soon
-    as a unit can make it and the spending pays for it."""
+    as a unit can make it and the budget pays for it."""
 
     def __init__(self) -> None:
         self.items_left: list[PlanItem] = []
@@ -218,8 +218,8 @@ class PlanFollower:
             self._plan()
         due_by = api.time + START_EARLY_BY
         due = list(itertools.takewhile(lambda item: item.start <= due_by, self.items_left))
-        spending = Spending()
-        not_started = [item for item in due if not spending.start_plan_item(item)]
+        budget = Budget()
+        not_started = [item for item in due if not budget.start_plan_item(item)]
         self.items_left = not_started + self.items_left[len(due) :]
 
     def _plan(self) -> None:

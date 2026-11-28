@@ -23,7 +23,7 @@ codebases read alike. A new rule of style goes here, with an example from the co
   `Tile.at(point)`, the tile a point falls in. `of` names what selects part of a whole, `Units.of_type` and
   `AnyAreaEvent.of(area)`, or what reads something of a value, `_key_of`.
 - **A function names the kind of value it takes, where its name can**: `_expansion_is_free_to_take(expansion)` and
-  `Spending.start_plan_item(item)` in the planner demo bot, never `_is_free_to_take(expansion)` or `start(item)` (the
+  `Budget.start_plan_item(item)` in the planner demo bot, never `_is_free_to_take(expansion)` or `start(item)` (the
   owner, review of #264).
 - **A function that turns one kind of value into another names both**: `_highs_lp_to_matrix_form`, never
   `_matrix_form_of`, and a method `to_` what it makes, `LinearProgram.to_matrix_form` as `BuildPlan.to_string`; a
