@@ -28,7 +28,7 @@ from sc2nachos.events import (
     TurnEvent,
     TurnStartEvent,
 )
-from sc2nachos.gamedata import Budget, Tech
+from sc2nachos.gamedata import ResourcesAndSupply, Tech
 from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
@@ -490,7 +490,7 @@ class TestPlaying:
             make_observation(4, units=barracks),
         ]
         api = Api()
-        seen: list[Budget] = []
+        seen: list[ResourcesAndSupply] = []
 
         @api.on(TurnEvent)
         def turn(event: TurnEvent) -> None:
@@ -504,7 +504,12 @@ class TestPlaying:
 
         api.play(ScriptedGame(observations, data=shipped_game_data()).joined())
 
-        assert seen == [Budget(200, 25, 1), Budget(150, 25, 0), Budget(100, 25, -1), Budget(150, 0, -2)]
+        assert seen == [
+            ResourcesAndSupply(200, 25, 1),
+            ResourcesAndSupply(150, 25, 0),
+            ResourcesAndSupply(100, 25, -1),
+            ResourcesAndSupply(150, 0, -2),
+        ]
 
     def test_the_expansions_are_found_once_at_the_start_holding_the_units_on_the_map(self) -> None:
         fields = [

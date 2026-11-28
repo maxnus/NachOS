@@ -666,7 +666,9 @@ it.
   every field; costs added up add their times, which is production time one after another, not how long they take
   side by side. What a player holds is `Resources`, minerals and vespene alone, which adds, subtracts, scales, divides,
   answers `covers` and takes the `minimum` and `maximum` of each resource; `cost.resources` is what to hold against
-  it. Its amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game
+  it. `ResourcesAndSupply` holds the supply too: what is left to spend, `api.budget`, and what the turn's orders
+  take, `api.orders.pending_cost`; `api.budget.covers(cost)` asks for supply only of a cost that takes some. Each of
+  the three adds and subtracts only its own kind, but a `Cost` comes off a `ResourcesAndSupply` without its time. Its amounts are fractional, since half a cost and an average cost are ordinary things to want; what the game
   gave stays whole until something divides it. `cost.is_free` says whether a cost takes no minerals, vespene or
   supply, whatever its time.
 - **A unit type's cost is what the order that made one cost, and an ability's what ordering it costs.**
