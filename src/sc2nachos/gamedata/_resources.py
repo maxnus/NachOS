@@ -49,8 +49,8 @@ class Resources(_VectorArithmetic):
 @final
 @dataclass(frozen=True, slots=True)
 class ResourcesAndSupply(_VectorArithmetic):
-    """An amount of minerals, vespene and supply: what a player has left to spend, `api.budget`, or what orders take,
-    `api.orders.pending_cost`. A bot giving several orders in a turn may take each one's cost off as it goes:
+    """An amount of minerals, vespene and supply: what a player has left to spend, `api.budget`, or what commands
+    take, `api.commands.staged_cost`. A bot giving several commands in a turn may take each one's cost off as it goes:
     `budget -= cost`.
 
     Not a `Resources`, which holds no supply, nor a `Cost`, which is the price of one thing, with the time it takes to
@@ -64,8 +64,8 @@ class ResourcesAndSupply(_VectorArithmetic):
     """Vespene."""
     supply: float = 0.0
     """Supply: what is free under the cap in what a player has left, negative once units that provided supply are lost
-    or once more is taken off than was free; and in what orders take, what they take of the cap, negative for one that
-    gives supply back, a spawning pool's."""
+    or once more is taken off than was free; and in what commands take, what they take of the cap, negative for one
+    that gives supply back, a spawning pool's."""
 
     def to_tuple(self) -> tuple[float, float, float]:
         """Its minerals, vespene and supply."""

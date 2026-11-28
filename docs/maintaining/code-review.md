@@ -6,7 +6,7 @@ Each of these came from a real bug found in review, mostly in code that looked c
   (`tuple[float, float]`, not `tuple[float, ...]`), fixed-length returns where the count is in the name, real
   protobuf types under `TYPE_CHECKING`.
 - **A self type can make a generic class invariant.** `Units[U]` inferred its variance, and `own`'s
-  `self: Units[Unit[K]]` made it invariant, so a `Units[OwnUnit]` had no `orderable`, and every test passed, each
+  `self: Units[Unit[K]]` made it invariant, so a `Units[OwnUnit]` had no `commandable`, and every test passed, each
   over a `Units[Unit]`. Declare the variance of a class that must be covariant, and type-check a read through the
   subtype.
 - **No false IS-A.** Types of different shape must not inherit from each other — `Point3` is not a `Point2`, a
@@ -22,8 +22,8 @@ Each of these came from a real bug found in review, mostly in code that looked c
 - **`__contains__` has no reflected form.** Return a bool, never `NotImplemented` — it is truthy, so
   `"banana" in rect` returns `True`.
 - **Every exported name is a promise.** No public API without a caller or a test that shows why it exists, and no
-  second spelling of an operation that already exists, but where the owner chose one: `unit.issue` beside
-  `api.orders.issue` (#240), and `train`, `build` and `research` beside `issue` (#245).
+  second spelling of an operation that already exists, but where the owner chose one: `unit.command` beside
+  `api.commands.command` (#240), and `train`, `build` and `research` beside `command` (#245).
 - **Measure before claiming.** Benchmark competing shapes rather than reasoning about them; grep for real call
   sites before calling something hot.
 - **A name must not claim behavior the code lacks.** The most common defect found in review, and one tests never

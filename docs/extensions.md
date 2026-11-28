@@ -54,11 +54,11 @@ turn's events but `TurnStartEvent`, which goes out alone, before the rest, as an
 at once: an extension reading each observation before any handler of the bot's does so on `TurnStartEvent`.
 
 - **Before the bot**, an extension works out what the bot's handlers read, as upgrade inference does on
-  `TurnStartEvent`. An order the bot then gives a unit the extension ordered goes out last and stands, as a unit takes
-  the last order it is given in a turn ([orders](orders.md)).
-- **After the bot**, an extension acts on what the bot did in the turn, as speed mining does, seeing every order the
-  bot gave. Its own orders go out last, so it leaves alone a unit the bot ordered in the turn, as `api.orders.issued_to`
-  reads.
+  `TurnStartEvent`. A command the bot then gives a unit the extension commanded goes out last and stands, as a unit
+  takes the last command it is given in a turn ([commands](commands.md)).
+- **After the bot**, an extension acts on what the bot did in the turn, as speed mining does, seeing every command the
+  bot gave. Its own commands go out last, so it leaves alone a unit the bot commanded in the turn, as
+  `unit.staged_commands` reads.
 
 A handler an extension subscribes later, on `GameStartEvent` say, is subscribed as the bot's are, at a priority of the
 bot's.
@@ -98,8 +98,8 @@ class ThreatMap:
   one.
 - **Keep a value for each unit in a `UnitDict`**, which forgets a unit once it is dead, as speed mining keeps each
   worker's field.
-- **Never order a unit the bot has not handed over.** Speed mining orders only the workers the bot gives it, and lets
-  one go once the bot orders it.
+- **Never command a unit the bot has not handed over.** Speed mining commands only the workers the bot gives it, and
+  lets one go once the bot commands it.
 
 ## NachOS's own
 
@@ -125,7 +125,7 @@ class ThreatMap:
   `mine` sends the worker to its field at once, its cargo handed in first, unless it is mining minerals already, so a
   worker pulled into a fight or collecting vespene mines from that turn. A worker it cannot send, building, burrowed or
   inside a refinery, it does not take: `mine` returns `None`, and the bot hands it over once it can be sent. A worker
-  held that the bot orders elsewhere, to build say, or a drone it burrows, is let go, its orders as they are, and the
+  held that the bot commands elsewhere, to build say, or a drone it burrows, is let go, its orders as they are, and the
   bot hands it over again once it is done; `release(workers)` takes one or several back, and `miners` and
   `workers_at(field)` read which worker mines which field. A worker on a move, unlike one on a gather or a return, can
   be stopped by other units, so no move is given while a unit stands in a worker's way. A worker attacks an enemy it
@@ -142,14 +142,14 @@ class ThreatMap:
   any, and then a third at the base nearest the worker, farthest first, which is where a third adds the most. A gas
   building takes three workers at most, at a base with a finished townhall of this player's, and its workers are let
   go once it dies or runs dry, or its base's townhall is gone. As `mine` does, `collect` sends the worker at once,
-  takes none it cannot send, and lets go of one the bot orders elsewhere; a collector attacks as a miner does, and
+  takes none it cannot send, and lets go of one the bot commands elsewhere; a collector attacks as a miner does, and
   `collectors` and `workers_at(gas_building)` read them, and `workers` every worker held, miners and collectors. A
   worker is held at one field or gas building at a time: `mine` moves a collector to minerals, and `collect` a miner
   to gas. How many collect stays the bot's, and `mine` given no field never picks gas.
 
   So a bot can keep a number of collectors without naming a gas building: it hands a worker to `collect(worker)`
   while it holds fewer, and calls `release_collectors(count)` when it wants fewer, which releases that many, those
-  whose leaving costs the least vespene, and returns them for the bot to hand out again. One the bot has ordered
+  whose leaving costs the least vespene, and returns them for the bot to hand out again. One the bot has commanded
   elsewhere in the turn leaves first, then a third, at the gas building nearest its townhall first, where it adds the
   least, and then the others, farthest first, the reverse of how `collect` fills them. `release_miners(count)` does
   the same for miners, those at the farther half of a base's fields first, the reverse of how `mine` picks. The API

@@ -1,4 +1,4 @@
-"""Where this player's ordered builds will stand."""
+"""Where this player's commanded builds will stand."""
 
 from __future__ import annotations
 
@@ -12,25 +12,25 @@ from sc2nachos.units import NotReportedError, Unit, UnitType
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Iterator
 
+    from sc2nachos.commands import Command, CommandBook
     from sc2nachos.gamedata import GameData
     from sc2nachos.geometry import Footprint
-    from sc2nachos.orders import IssuedOrder, OrderBook
     from sc2nachos.placement._placement_reservation import PlacementReservation
     from sc2nachos.units import Order, OwnUnit, Units
 
 
 @final
 class _BuildSites:
-    """Where this player's builds will stand that are ordered and not standing yet: each issued this turn, or sent and
-    not yet begun. One for a game."""
+    """Where this player's builds will stand that are commanded and not standing yet: each given this turn, or sent
+    and not yet begun. One for a game."""
 
-    __slots__ = ("_builder_types", "_game_data", "_order_book")
+    __slots__ = ("_builder_types", "_game_data", "_command_book")
 
-    def __init__(self, game_data: GameData, order_book: OrderBook) -> None:
-        """The build sites of a game whose tables are `game_data`, with this player's orders as `order_book` holds
+    def __init__(self, game_data: GameData, command_book: CommandBook) -> None:
+        """The build sites of a game whose tables are `game_data`, with this player's commands as `command_book` holds
         them."""
         self._game_data = game_data
-        self._order_book = order_book
+        self._command_book = command_book
         builds = [row for row in game_data.abilities.values() if row.needs_placement]
         # The types that perform an ability that places a structure: workers, add-on hosts, queens and the like.
         self._builder_types = frozenset(type_id for row in builds for type_id in row.performers)
@@ -53,9 +53,9 @@ class _BuildSites:
                     self._reserve_site(reserved, build, unit, standing)
         return reserved.as_readonly()
 
-    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[IssuedOrder | Order]:
-        """Each build `unit` was ordered: issued this turn, sent and maybe not shown yet, or shown by the unit."""
-        ordered: list[IssuedOrder | Order] = [*self._order_book.issued_to(unit, include_sent=True)]
+    def _builds_ordered_to(self, unit: OwnUnit[Any]) -> Iterator[Command | Order]:
+        """Each build `unit` was commanded: pending, or shown by the unit."""
+        ordered: list[Command | Order] = [*self._command_book._pending_for(unit)]
         # Asked of the report first, since reading every unit's orders whole costs more than the rest of the grid.
         reported = (AbilityId.get(order.ability_id) or AbilityId.NULL for order in unit._latest_report.orders)
         if any(self._ability_places_structure(ability) for ability in reported):
@@ -70,11 +70,11 @@ class _BuildSites:
     def _reserve_site(
         self,
         reserved: Grid[bool],
-        build: IssuedOrder | Order,
+        build: Command | Order,
         builder: OwnUnit[Any],
         standing: Collection[tuple[int, int]],
     ) -> None:
-        """Mark on `reserved` the ground that `build`, ordered to `builder`, takes, unless one of this player's
+        """Mark on `reserved` the ground that `build`, given to `builder`, takes, unless one of this player's
         structures stands centered on its site already, `standing` being their centers by `_placement_key`: the build
         begun, whatever type it stands as, a rich geyser's refinery among them, or finished while its worker still
         shows the build, as an SCV did the observation its depot finished (in game)."""
@@ -130,5 +130,5 @@ def _standing_centers(own_units: Iterable[OwnUnit[Any]]) -> set[tuple[int, int]]
 
 def _placement_key(center: Point) -> tuple[int, int]:
     """`center` in half tiles, where a structure stands snapped: the same for a structure standing there and the site
-    its build was ordered at."""
+    its build was commanded at."""
     return round(2 * center.x), round(2 * center.y)

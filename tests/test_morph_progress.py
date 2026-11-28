@@ -111,7 +111,7 @@ class TestAStructuresMorph:
         game.observe(0, _command_center(_TRAIN_SCV))
         assert game.progress(1) is None
 
-    def test_a_cancelled_morph_is_gone_and_one_ordered_again_begins_afresh(self) -> None:
+    def test_a_cancelled_morph_is_gone_and_one_commanded_again_begins_afresh(self) -> None:
         game = _Game()
         game.observe(0, _command_center())
         game.observe(8, _command_center(_ORBITAL))

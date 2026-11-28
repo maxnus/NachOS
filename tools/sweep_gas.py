@@ -302,12 +302,12 @@ class _TrialGame:
             builder = self._builder_by_geyser.get(geyser)
             if geyser.position in standing or (builder is not None and builder.is_alive and builder.orders):
                 continue
-            miners = [scv for scv in api.extensions.miners if scv.is_orderable]
+            miners = [scv for scv in api.extensions.miners if scv.is_commandable]
             if minerals < cost or not miners:
                 return
             builder = min(miners, key=lambda scv: scv.distance_to(geyser))
             api.extensions.release(builder)
-            api.orders.issue(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
+            api.commands.command(builder, AbilityId.SCV_BUILD_REFINERY, target=geyser)
             self._builder_by_geyser[geyser] = builder
             minerals -= cost
 
@@ -323,7 +323,7 @@ class _TrialGame:
                 refinery is None
                 or not refinery.is_complete
                 or builder is None
-                or not builder.is_orderable
+                or not builder.is_commandable
                 or builder.is_constructing
             ):
                 return None
@@ -369,7 +369,7 @@ class _TrialGame:
     def _note_the_collectors_mining(self) -> None:
         """Note each collector on a gather at a mineral field, by its refinery."""
         for scv, refinery in self._refinery_by_collector.items():
-            current_order = scv.current_order if scv.is_orderable else None
+            current_order = scv.current_order if scv.is_commandable else None
             if current_order is None or current_order.ability is not AbilityId.GATHER:
                 continue
             target = current_order.known_target
@@ -410,7 +410,7 @@ class _TrialGame:
         for geyser, refinery in zip(main.geysers, refineries, strict=True):
             builder = self._builder_by_geyser[geyser]
             miners = sorted(
-                (scv for scv in speed_mining.miners if scv.is_orderable), key=lambda scv: scv.distance_to(refinery)
+                (scv for scv in speed_mining.miners if scv.is_commandable), key=lambda scv: scv.distance_to(refinery)
             )
             for index, scv in enumerate([builder, *miners[: self._trial.collectors - 1]]):
                 if variant.speed_collected:
@@ -432,12 +432,12 @@ class _TrialGame:
         """Release `scv` from speed mining and send it to gather at `refinery`, behind a return of any cargo it
         carries, as `collect` sends a worker."""
         self.api.extensions.release(scv)
-        order_book = self.api.orders
+        command_book = self.api.commands
         if scv.is_carrying_resource:
-            order_book.issue(scv, AbilityId.RETURN, force=True)
-            order_book.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+            command_book.command(scv, AbilityId.RETURN, force=True)
+            command_book.command(scv, AbilityId.GATHER, target=refinery, queued=True)
         else:
-            order_book.issue(scv, AbilityId.GATHER, target=refinery)
+            command_book.command(scv, AbilityId.GATHER, target=refinery)
 
     def _give_the_moves(self, main: Expansion) -> None:
         """Give the moves at each refinery, as `_give_the_moves_at` says, and count the collectors that begin to
@@ -466,15 +466,15 @@ class _TrialGame:
         move, each collector that yields. Returns the ids of those that yield. A collector returning minerals, handed
         over with them, is left to its return and the gather `collect` queued behind it, which a move would drop,
         sending the collector back to its field (`sc2` run 41849753359)."""
-        order_book = self.api.orders
+        command_book = self.api.commands
         yielding_ids: set[int] = set()
         on_their_moves: list[OwnUnit[UnitType.Worker]] = []
         route_by_collector: dict[OwnUnit[UnitType.Worker], list[tuple[AbilityId, Point | Unit[Any]]]] = {}
         for scv in collectors:
-            if not scv.is_orderable:
+            if not scv.is_commandable:
                 continue
-            if issued := order_book.issued_to(scv, include_sent=True):
-                if any(order.ability is AbilityId.MOVE for order in issued):
+            if sent := scv.pending_commands:
+                if any(command.ability is AbilityId.MOVE for command in sent):
                     on_their_moves.append(scv)
                 continue
             current_order = scv.current_order
@@ -491,9 +491,9 @@ class _TrialGame:
                     self._put_back_on_the_plain_order(scv, refinery)
         for scv, route in route_by_collector.items():
             (first_ability, first_target), *queued_behind = route
-            order_book.issue(scv, first_ability, target=first_target, force=True)
+            command_book.command(scv, first_ability, target=first_target, force=True)
             for ability, target in queued_behind:
-                order_book.issue(scv, ability, target=target, queued=True)
+                command_book.command(scv, ability, target=target, queued=True)
             self._moves_given += 1
         return yielding_ids
 
@@ -553,12 +553,12 @@ class _TrialGame:
     def _put_back_on_the_plain_order(self, scv: OwnUnit[UnitType.Worker], refinery: Unit[UnitType.GasBuilding]) -> None:
         """Put `scv`, on its move or given one, back on its plain gather at `refinery`, or, carrying vespene, on its
         plain return with the gather queued behind."""
-        order_book = self.api.orders
+        command_book = self.api.commands
         if scv.is_carrying_resource:
-            order_book.issue(scv, AbilityId.RETURN, force=True)
-            order_book.issue(scv, AbilityId.GATHER, target=refinery, queued=True)
+            command_book.command(scv, AbilityId.RETURN, force=True)
+            command_book.command(scv, AbilityId.GATHER, target=refinery, queued=True)
         else:
-            order_book.issue(scv, AbilityId.GATHER, target=refinery, force=True)
+            command_book.command(scv, AbilityId.GATHER, target=refinery, force=True)
 
     def _read_the_findings(self, main: Expansion) -> _TrialFindings:
         """What the time measured gave, read at its end."""

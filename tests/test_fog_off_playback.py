@@ -4,8 +4,8 @@ import pytest
 from s2clientprotocol import common_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos.api._fog_off_playback import _FogOffPlayback, _raw_data_with_unseen_units_shown_visible
+from sc2nachos.commands import CommandBook
 from sc2nachos.ids import AbilityId, UnitTypeId
-from sc2nachos.orders import OrderBook
 from sc2nachos.units import Alliance, OwnUnit, UnknownTagError, Visibility
 from support import make_bytes, make_enemy, make_observation, make_tables, make_unit
 
@@ -20,7 +20,7 @@ _TOWNHALL = 7
 def _playback() -> _FogOffPlayback:
     """A playback with the fog off, from its first observation, with no creep anywhere."""
     tables = make_tables()
-    return _FogOffPlayback(tables, make_enemy(tables), OrderBook(tables), on_creep=lambda _point: False)
+    return _FogOffPlayback(tables, make_enemy(tables), CommandBook(tables), on_creep=lambda _point: False)
 
 
 def _observed(
@@ -155,17 +155,17 @@ class TestThePlayersView:
 
 
 class TestTheWholeGamesUnits:
-    def test_this_players_unit_is_ordered_into_the_games_order_book(self) -> None:
+    def test_this_players_unit_is_commanded_into_the_games_command_book(self) -> None:
         playback = _playback()
         _read(playback, 0, make_unit(1, at=_OUT_OF_SIGHT))
         marine = playback.whole_game_tracker.unit_tracker.by_tag(1)
         assert isinstance(marine, OwnUnit)
 
-        order = marine.issue(AbilityId.MOVE, target=(2.0, 3.0))
+        command = marine.command(AbilityId.MOVE, target=(2.0, 3.0))
 
-        order_book = playback.whole_game_tracker.order_book
-        assert order_book is not None
-        assert order_book.pending == (order,)
+        command_book = playback.whole_game_tracker.command_book
+        assert command_book is not None
+        assert command_book.staged == (command,)
 
 
 class TestTheWholeGamesRawData:

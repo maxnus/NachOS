@@ -118,7 +118,7 @@ class TestCentering:
         ],
         ids=["depot", "barracks"],
     )
-    def test_it_snaps_as_the_game_snapped_a_build_ordered_off_the_grid(
+    def test_it_snaps_as_the_game_snapped_a_build_commanded_off_the_grid(
         self, footprint: Footprint, ordered_at: Point, stood_at: Point
     ) -> None:
         """Where a builder's order showed its structure's site (tool `sweep_orders`)."""

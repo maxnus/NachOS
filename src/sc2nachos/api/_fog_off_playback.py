@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import common_pb2
 
+    from sc2nachos.commands import CommandBook
     from sc2nachos.gamedata import GameData
     from sc2nachos.match import Enemy
-    from sc2nachos.orders import OrderBook
 
 _VISIBLE_DISPLAY = raw_pb2.DisplayType.Visible
 _HIDDEN_DISPLAY = raw_pb2.DisplayType.Hidden
@@ -48,11 +48,11 @@ class _FogOffPlayback:
     )
 
     def __init__(
-        self, game_data: GameData, enemy: Enemy | None, order_book: OrderBook, *, on_creep: Callable[[Point], bool]
+        self, game_data: GameData, enemy: Enemy | None, command_book: CommandBook, *, on_creep: Callable[[Point], bool]
     ) -> None:
         """Read a playback of a game whose tables are `game_data`, against `enemy`, from its first observation, its
-        player's units ordered into `order_book`, and where creep covers the ground as `on_creep` tells."""
-        self._whole_game_tracker = _Tracker(game_data, enemy, order_book=order_book, on_creep=on_creep)
+        player's units ordered into `command_book`, and where creep covers the ground as `on_creep` tells."""
+        self._whole_game_tracker = _Tracker(game_data, enemy, command_book=command_book, on_creep=on_creep)
         # The tags of the enemy units the player has seen.
         self._enemy_tags_seen: set[int] = set()
         # The copy of each unit the player remembers in the fog, by the unit's tag: its report as it went into the fog,

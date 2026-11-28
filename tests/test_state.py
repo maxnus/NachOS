@@ -25,7 +25,7 @@ from sc2nachos.state import (
     Research,
     Supply,
     UiUnitCounts,
-    UnitCommand,
+    UnitAction,
     ValueScore,
     VitalScore,
 )
@@ -509,14 +509,14 @@ class TestWhatHappened:
         ]
         state = game.observe(16, units=[make_unit(1), make_unit(2)], dead=(9,), actions=actions)
         assert state.actions == (
-            UnitCommand(GameTime(steps=15), AbilityId.MOVE, Units([marine, other]), Point((5.0, 6.0)), queued=False),
-            UnitCommand(GameTime(steps=15), AbilityId.ATTACK, Units([marine]), enemy, queued=False),
-            UnitCommand(GameTime(steps=15), AbilityId.STOP, Units([other]), None, queued=True),
+            UnitAction(GameTime(steps=15), AbilityId.MOVE, Units([marine, other]), Point((5.0, 6.0)), queued=False),
+            UnitAction(GameTime(steps=15), AbilityId.ATTACK, Units([marine]), enemy, queued=False),
+            UnitAction(GameTime(steps=15), AbilityId.STOP, Units([other]), None, queued=True),
         )
         # Hashed as their fields are, their units among them.
         assert len(set(state.actions)) == 3
         assert enemy.is_dead
-        assert [cast(UnitCommand, action).known_target for action in state.actions] == [Point((5.0, 6.0)), enemy, None]
+        assert [cast(UnitAction, action).known_target for action in state.actions] == [Point((5.0, 6.0)), enemy, None]
 
     def test_a_command_aimed_at_a_unit_the_game_never_reported_has_its_target_not_reported(self) -> None:
         """As a gather sent to a mineral field in the fog by its snapshot's tag comes back, aimed at a tag no
@@ -526,7 +526,7 @@ class TestWhatHappened:
         scv = game.tracker.unit_tracker.present.by_id(100001)
         gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
         (command,) = game.observe(16, units=[make_unit(1, UnitTypeId.SCV)], actions=[gather]).actions
-        assert isinstance(command, UnitCommand)
+        assert isinstance(command, UnitAction)
         assert (command.ability, command.units, command.known_target) == (AbilityId.GATHER, Units([scv]), None)
         with pytest.raises(NotReportedError, match="this GATHER was aimed at by no tag it reports"):
             _ = command.target
@@ -541,7 +541,7 @@ class TestWhatHappened:
             sc2api_pb2.Action(action_raw=raw_pb2.ActionRaw(toggle_autocast=toggle), game_loop=3),
         ]
         state = game.observe(16, units=[make_unit(1, UnitTypeId.MEDIVAC)], actions=actions)
-        assert [cast(UnitCommand | AutocastToggle, action).units for action in state.actions] == [
+        assert [cast(UnitAction | AutocastToggle, action).units for action in state.actions] == [
             Units([medivac]),
             Units([medivac]),
         ]
@@ -611,8 +611,8 @@ class TestThroughTheApi:
     def test_a_command_aimed_at_a_unit_the_game_never_reported_is_handed_out_and_the_game_plays_on(self) -> None:
         """The gather that ended AvocaDOS's smoke games (in game), through the turn that hands it out."""
         api = Api()
-        handed_out: list[UnitCommand] = []
-        api.on(OwnActionEvent)(lambda event: handed_out.append(cast(UnitCommand, event.action)))
+        handed_out: list[UnitAction] = []
+        api.on(OwnActionEvent)(lambda event: handed_out.append(cast(UnitAction, event.action)))
         gather = _command(RawAbilityId.Harvest_Gather_SCV, 1, target_unit_tag=8614707213)
         self._play(
             api,
@@ -667,7 +667,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         game.order(AbilityId.MOVE, drone, target=out_there)
         game.turn(1)
         (command,) = game.state.actions
-        assert isinstance(command, UnitCommand)
+        assert isinstance(command, UnitAction)
         assert (command.ability, command.units) == (AbilityId.MOVE, Units([drone]))
         # The game sends points in single precision.
         assert command.target == pytest.approx(out_there, abs=1e-3)
@@ -699,7 +699,7 @@ def test_in_a_real_game_the_state_is_what_was_done_and_seen() -> None:
         game.order(AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1, chamber)
         game.turn(1)
         (research,) = game.state.actions
-        assert isinstance(research, UnitCommand)
+        assert isinstance(research, UnitAction)
         assert research.ability is AbilityId.EVOLUTION_CHAMBER_RESEARCH_MELEE_WEAPONS_1
         game.turn(240)
         assert game.state.upgrades == {UpgradeId.ZERG_MELEE_WEAPONS_1}

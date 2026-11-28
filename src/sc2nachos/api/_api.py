@@ -10,6 +10,7 @@ from sc2nachos._shared.checks import check_file_to_write
 from sc2nachos._shared.errors import NachOSError
 from sc2nachos.api._game import _Game
 from sc2nachos.camera import Camera
+from sc2nachos.commands import CommandBook
 from sc2nachos.debug import DebugCommands
 from sc2nachos.events import (
     Event,
@@ -31,7 +32,6 @@ from sc2nachos.gametime._game_time import check_game_time
 from sc2nachos.geometry import Grid
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Enemy, Player, Result
-from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client, GameEndedError
@@ -213,9 +213,9 @@ class Api[E]:
         meanwhile runs at `EventPriority.BEFORE`, before every handler of the bot's of its event and of the turn's
         events handed out with it, or at `EventPriority.AFTER`, after every one, in the order they subscribed; one
         subscribed at another priority raises `ValueError`. So what an extension works out before the bot is up to date
-        when the bot's handlers read it, an order a bot's handler gives a unit an extension ordered before it goes out
-        last and stands, and an extension working after the bot sees every order the bot gave in the turn. A handler an
-        extension subscribes later is subscribed as the bot's are.
+        when the bot's handlers read it, a command a bot's handler gives a unit an extension commanded before it goes
+        out last and stands, and an extension working after the bot sees every command the bot gave in the turn. A
+        handler an extension subscribes later is subscribed as the bot's are.
 
         Raises `NotPlayingError` before the game starts, and `RuntimeError` while the extensions are being built, or
         once building them raised.
@@ -280,12 +280,13 @@ class Api[E]:
         return self._current_game().result
 
     @property
-    def orders(self) -> OrderBook:
-        """This player's orders for the turn.
+    def commands(self) -> CommandBook:
+        """This player's commands for the turn.
 
-        Orders are sent in one request after the turn's last handler returns. A turn that orders nothing sends nothing.
+        Commands are sent in one request after the turn's last handler returns. A turn that commands nothing sends
+        nothing.
         """
-        return self._current_game().orders
+        return self._current_game().commands
 
     @property
     def units(self) -> Units[Unit[Any]]:
@@ -328,12 +329,12 @@ class Api[E]:
     @property
     def budget(self) -> ResourcesAndSupply:
         """What this player has left to spend: the minerals and vespene of `resources` and the supply free under its
-        cap, less what the turn's orders will cost once they go out, `orders.pending_cost`. Read again, it takes off the
-        orders given since. A bot that sets money aside, for what it cannot pay for yet, keeps the one it read and takes
-        that off itself: `budget -= cost`."""
+        cap, less what the turn's commands will cost once they go out, `commands.staged_cost`. Read again, it takes off
+        the commands given since. A bot that sets money aside, for what it cannot pay for yet, keeps the one it read and
+        takes that off itself: `budget -= cost`."""
         resources = self.resources
         bank = ResourcesAndSupply(resources.minerals, resources.vespene, self.supply.left)
-        return bank - self.orders.pending_cost
+        return bank - self.commands.staged_cost
 
     @property
     def ui_unit_counts(self) -> UiUnitCounts:
@@ -382,8 +383,8 @@ class Api[E]:
 
         There is one for each unit: a train a structure shows, queued ones included; an egg or a cocoon becoming one; a
         structure going up, a structure morphing into one, a unit warping in; and a build a worker has been sent to
-        make, or an add-on its host has been ordered to build, until the structure stands. A reactor's two marines are
-        two. The turn's orders are not among them; they are in `api.orders.issued_to`. Takes the types as
+        make, or an add-on its host has been commanded to build, until the structure stands. A reactor's two marines are
+        two. The turn's commands are not among them; they are in `api.commands.staged`. Takes the types as
         `Units.of_type` does.
         """
         wanted = frozenset((types,)) if isinstance(types, UnitTypeId) else _type_ids_of(types, unit_types)
@@ -397,13 +398,13 @@ class Api[E]:
 
     @property
     def action_failures(self) -> tuple[ActionFailure, ...]:
-        """The orders the game refused when the last turn's were sent, one for each unit a refused command named, then
+        """The commands the game refused when the last turn's were sent, one for each unit a refused action named, then
         those it accepted earlier and gave up on since the observation before.
 
         Raises `UncuratedIdError` if one the game gave up on names an ability the curated ids leave out.
         """
         game = self._current_game()
-        return game.orders._refusals + game.state.action_failures
+        return game.commands._refusals + game.state.action_failures
 
     @property
     def player(self) -> Player:
@@ -433,12 +434,12 @@ class Api[E]:
     @property
     def placement(self) -> PlacementGrids:
         """Where a structure may stand: on the map whatever happens in the game, and now as far as this player knows;
-        and the ground this player's ordered builds are to stand on, and what it has reserved."""
+        and the ground this player's commanded builds are to stand on, and what it has reserved."""
         return self._current_game().placement
 
     @property
     def debug(self) -> DebugCommands:
-        """Drawing on the game's screen, cheats and debug commands, sent after each turn's orders."""
+        """Drawing on the game's screen, cheats and debug commands, sent after each turn's commands."""
         return self._current_game().debug
 
     @property
@@ -463,7 +464,7 @@ class Api[E]:
         return self._current_game().state.effects
 
     def chat(self, text: str, *, team_only: bool = False) -> None:
-        """Send `text` to every player, or to this player's team only if `team_only`, with the turn's orders: after
+        """Send `text` to every player, or to this player's team only if `team_only`, with the turn's commands: after
         them and the camera's move, each message of the turn in the order given. The game drops chat that comes too
         fast without a word, once some 500 bytes have gone out in a row, counting by the clock rather than in steps
         (in game).
@@ -481,8 +482,8 @@ class Api[E]:
         game.queue_chat(text, team_only=team_only)
 
     def leave_game(self) -> None:
-        """Leave the game, conceding it, once the turn's handlers have run and its orders, chat and debug commands have
-        gone out. `play` then returns `Result.DEFEAT`, as the protocol counts leaving a surrender: the game reports
+        """Leave the game, conceding it, once the turn's handlers have run and its commands, chat and debug commands
+        have gone out. `play` then returns `Result.DEFEAT`, as the protocol counts leaving a surrender: the game reports
         nothing to a client that has left, even when both players leave in the same step (in game). Leaving a replay
         stops its playback, and `play` returns `Result.UNDECIDED`. Asking again in the turn changes nothing.
         """

@@ -12,6 +12,7 @@ from s2clientprotocol import data_pb2
 from sc2nachos.gamedata import Attribute, GameData
 from sc2nachos.gamedata import _unit_type as unit_type_module
 from sc2nachos.gamedata._techtree import TECH_TREE
+from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawUnitTypeId
 from sc2nachos.match import Race
@@ -442,6 +443,7 @@ def _each_read_only_some_types_have_is_limited_to_them(
     for factory in factories:
         assert_type(factory.has_reactor, bool)
         assert_type(factory.has_tech_lab, bool)
+        assert_type(factory.add_on_position, Point)
     assert_type(depot.builder, OwnUnit[Any] | None)
     assert_type(unit.mineral_contents, int)
     assert_type(unit.vespene_contents, int)
@@ -449,6 +451,7 @@ def _each_read_only_some_types_have_is_limited_to_them(
     assert_type(unit.ideal_harvesters, int)
     assert_type(unit.has_reactor, bool)
     assert_type(unit.has_tech_lab, bool)
+    assert_type(unit.add_on_position, Point)
     _ = marine.mineral_contents  # pyright: ignore[reportAttributeAccessIssue]
     _ = marine.vespene_contents  # pyright: ignore[reportAttributeAccessIssue]
     _ = marine.assigned_harvesters  # pyright: ignore[reportAttributeAccessIssue]
@@ -457,6 +460,8 @@ def _each_read_only_some_types_have_is_limited_to_them(
     _ = marine.has_tech_lab  # pyright: ignore[reportAttributeAccessIssue]
     _ = marine.builder  # pyright: ignore[reportAttributeAccessIssue]
     _ = structure.add_on  # pyright: ignore[reportAttributeAccessIssue]
+    _ = marine.add_on_position  # pyright: ignore[reportAttributeAccessIssue]
+    _ = barracks.add_on_position  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def _the_reads_every_unit_has_stay_on_every_unit(marine: OwnUnit[UnitType.Marine]) -> None:

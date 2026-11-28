@@ -133,6 +133,14 @@ class TestUnitReport:
         assert barracks.add_on is not None and barracks.add_on.tag == 2
         assert barracks.has_tech_lab
 
+    def test_a_host_reads_where_its_add_on_stands(self):
+        """A barracks's tech lab stands 2.5 right of its center and 0.5 below (in game)."""
+        tech_lab_report = UnitReport(2, UnitTypeId.TECH_LAB_BARRACKS, at=(13.0, 10.0))
+        barracks, tech_lab = MadeUpUnits().observe(
+            UnitReport(1, UnitTypeId.BARRACKS, at=(10.5, 10.5), add_on=tech_lab_report), tech_lab_report
+        )
+        assert barracks.add_on_position == tech_lab.position
+
     def test_an_ally_raises(self):
         """The game made up has two players."""
         with pytest.raises(ValueError, match="no ALLY units"):
@@ -177,17 +185,17 @@ class TestOrders:
             (AbilityId.BARRACKS_TRAIN_MARINE, None, 0.5)
         ]
 
-    def test_every_order_given_a_unit_stays_in_the_orders_since_nothing_is_sent(self):
+    def test_every_command_given_a_unit_stays_staged_since_nothing_is_sent(self):
         made_up = MadeUpUnits()
         (marine,) = made_up.observe(UnitReport(1, UnitTypeId.MARINE), step=16)
-        move = marine.issue(AbilityId.MOVE, target=(20.0, 21.0))
+        move = marine.command(AbilityId.MOVE, target=(20.0, 21.0))
         made_up.observe(UnitReport(1, UnitTypeId.MARINE))
 
-        stop = marine.issue(AbilityId.STOP)
+        stop = marine.command(AbilityId.STOP)
 
-        assert made_up.orders.pending == (move, stop)
-        assert made_up.orders.issued_to(marine) == (move, stop)
-        assert (move.issued_time, stop.issued_time) == (GameTime(steps=16), GameTime(steps=17))
+        assert made_up.commands.staged == (move, stop)
+        assert marine.staged_commands == (move, stop)
+        assert (move.time, stop.time) == (GameTime(steps=16), GameTime(steps=17))
 
 
 class TestObservations:

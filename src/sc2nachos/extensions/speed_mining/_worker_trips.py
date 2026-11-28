@@ -1,5 +1,5 @@
-"""Speed mining's trips: the orders that keep a worker it holds at its field or gas building each turn, each trip ending
-in a move, a collector coming out yielding to one going in."""
+"""Speed mining's trips: the commands that keep a worker it holds at its field or gas building each turn, each trip
+ending in a move, a collector coming out yielding to one going in."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ _TYPES_NEVER_IN_THE_WAY = UnitType.Structure.type_ids | UnitType.Larva.type_ids
 
 @final
 class WorkerTrips:
-    """The orders of each trip of the workers speed mining holds, each turn: the move at the end of the trip, with the
+    """The commands of each trip of the workers speed mining holds, each turn: the move at the end of the trip, with the
     gather or return queued behind, a collector coming out yielding to one going in, and plain gathers and returns off
     the move."""
 
@@ -75,8 +75,8 @@ class WorkerTrips:
     ) -> None:
         """Keep `collectors_to_order`, of `gas_building`'s `collectors`, collecting from it, with `townhall` taking
         their cargo, as `_speed_trip` says: those going in first, and then those coming out, each yielding to any
-        collector going in on its move, ordered this turn or not, that has yet to pass it. Two on their moves meet head
-        on, and the one shoved back nearly stops, where one on its return passes through (in game)."""
+        collector going in on its move, commanded this turn or not, that has yet to pass it. Two on their moves meet
+        head on, and the one shoved back nearly stops, where one on its return passes through (in game)."""
         gather_point = trip_end_points.gather_point
         return_point = trip_end_points.return_point
         ordered = set(collectors_to_order)
@@ -123,12 +123,12 @@ class WorkerTrips:
         """Have `worker` hand in its cargo and then gather at `resource`: a return with the gather queued behind it,
         which waits for the cargo to be handed in, so that a worker carrying vespene does not go back to its geyser (in
         game)."""
-        order_book = self._api.orders
+        command_book = self._api.commands
         # Forced: NachOS leaves out a return to a worker the game reports returning aimed at nothing, and a gather
         # queued behind the return the worker shows of itself takes its place, the worker carrying its cargo to the
         # field first (in game).
-        order_book.issue(worker, AbilityId.RETURN, force=True)
-        order_book.issue(worker, AbilityId.GATHER, target=resource, queued=True)
+        command_book.command(worker, AbilityId.RETURN, force=True)
+        command_book.command(worker, AbilityId.GATHER, target=resource, queued=True)
 
     def _speed_trip[R: UnitType.AnyResource](
         self,
@@ -170,14 +170,14 @@ class WorkerTrips:
             or _is_any_in_the_way(units_near_the_trip_end(trip_end), worker.position, trip_end)
         ):
             return False
-        order_book = self._api.orders
-        order_book.issue(worker, AbilityId.MOVE, target=trip_end, force=True)
+        command_book = self._api.commands
+        command_book.command(worker, AbilityId.MOVE, target=trip_end, force=True)
         if returning:
             # Aimed at the townhall, so the worker goes on into it at speed; a return aimed at nothing stops it at the
             # end of the move first (in game).
-            order_book.issue(worker, AbilityId.SMART, target=townhall, queued=True)
+            command_book.command(worker, AbilityId.SMART, target=townhall, queued=True)
         else:
-            order_book.issue(worker, AbilityId.GATHER, target=resource, queued=True)
+            command_book.command(worker, AbilityId.GATHER, target=resource, queued=True)
         return True
 
     def _mine_plainly(self, worker: OwnUnit[UnitType.Worker], field: Unit[UnitType.AnyMineralField]) -> None:
@@ -187,7 +187,7 @@ class WorkerTrips:
             if current_order is None or current_order.ability is not AbilityId.RETURN:
                 self.hand_in_then_gather(worker, field)
         elif not _is_gathering_at(current_order, field):
-            self._api.orders.issue(worker, AbilityId.GATHER, target=field)
+            self._api.commands.command(worker, AbilityId.GATHER, target=field)
 
     def _collect_plainly(self, worker: OwnUnit[UnitType.Worker], gas_building: Unit[UnitType.GasBuilding]) -> None:
         """Keep `worker` collecting from `gas_building` with a plain gather, or returning its cargo with the gather
@@ -198,12 +198,12 @@ class WorkerTrips:
         if worker.is_carrying_resource:
             self.hand_in_then_gather(worker, gas_building)
         else:
-            self._api.orders.issue(worker, AbilityId.GATHER, target=gas_building)
+            self._api.commands.command(worker, AbilityId.GATHER, target=gas_building)
 
     def _is_on_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
         """Whether `worker` is on speed mining's move to `trip_end`, or was sent it lately, which its orders may not
         show yet."""
-        if not worker.is_orderable:
+        if not worker.is_commandable:
             return False
         current_order = worker.current_order
         if (
@@ -215,11 +215,11 @@ class WorkerTrips:
         return self._was_sent_the_move_to(worker, trip_end)
 
     def _was_sent_the_move_to(self, worker: OwnUnit[UnitType.Worker], trip_end: Point) -> bool:
-        """Whether the latest order that replaced `worker`'s, sent lately or issued this turn, is speed mining's move to
-        `trip_end`, so that no other order, the bot's included, has taken its place since."""
-        if not worker.is_orderable:
+        """Whether the latest command that replaced `worker`'s orders, sent lately or given this turn, is speed
+        mining's move to `trip_end`, so that no other command, the bot's included, has taken its place since."""
+        if not worker.is_commandable:
             return False
-        replacing = [order for order in self._api.orders.issued_to(worker, include_sent=True) if not order.queued]
+        replacing = [command for command in worker.pending_commands if not command.queued]
         return bool(replacing) and replacing[-1].ability is AbilityId.MOVE and replacing[-1].target == trip_end
 
 

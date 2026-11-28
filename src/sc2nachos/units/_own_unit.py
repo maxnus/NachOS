@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from sc2nachos.gamedata._footprints import ADD_ON_OFFSET
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gametime import GameTime
+from sc2nachos.geometry import Point
 from sc2nachos.ids import AbilityId
 from sc2nachos.units._snapshot import _Snapshot
 from sc2nachos.units._unit import Unit
@@ -16,9 +18,9 @@ if TYPE_CHECKING:
 
     from s2clientprotocol import raw_pb2
 
+    from sc2nachos.commands import Command
     from sc2nachos.geometry import PointLike
     from sc2nachos.ids import UnitTypeId, UpgradeId
-    from sc2nachos.orders import IssuedOrder
 
 
 class OwnUnit[K: UnitType.AnyType](Unit[K]):
@@ -29,21 +31,21 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     __slots__ = ()
 
-    def issue(
+    def command(
         self,
         ability: AbilityId,
         *,
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> IssuedOrder:
-        """Order the unit to use `ability`, aimed at a point, a unit or nothing, and return the `IssuedOrder`, as
-        `sc2nachos.orders.OrderBook.issue` orders it: `unit.issue(AbilityId.MOVE, target=point)` is
-        `api.orders.issue(unit, AbilityId.MOVE, target=point)`.
+    ) -> Command:
+        """Command the unit to use `ability`, aimed at a point, a unit or nothing, and return the `Command`, as
+        `sc2nachos.commands.CommandBook.command` commands it: `unit.command(AbilityId.MOVE, target=point)` is
+        `api.commands.command(unit, AbilityId.MOVE, target=point)`.
 
-        Raises as `OrderBook.issue` does.
+        Raises as `CommandBook.command` does.
         """
-        return self._tracker.order_book.issue(self, ability, target=target, queued=queued, force=force)
+        return self._tracker.command_book.command(self, ability, target=target, queued=queued, force=force)
 
     def train(
         self: OwnUnit[UnitType.Structure | UnitType.Larva],
@@ -52,14 +54,14 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> IssuedOrder:
-        """Order the structure or larva to make a unit of `unit_type` and return the `IssuedOrder`, as
-        `sc2nachos.orders.OrderBook.train` orders it: `barracks.train(UnitTypeId.MARINE)` is
-        `api.orders.train(barracks, UnitTypeId.MARINE)`.
+    ) -> Command:
+        """Command the structure or larva to make a unit of `unit_type` and return the `Command`, as
+        `sc2nachos.commands.CommandBook.train` commands it: `barracks.train(UnitTypeId.MARINE)` is
+        `api.commands.train(barracks, UnitTypeId.MARINE)`.
 
-        Raises as `OrderBook.train` does.
+        Raises as `CommandBook.train` does.
         """
-        return self._tracker.order_book.train(self, unit_type, target=target, queued=queued, force=force)
+        return self._tracker.command_book.train(self, unit_type, target=target, queued=queued, force=force)
 
     def build(
         self: OwnUnit[UnitType.Worker | UnitType.AnyBarracks | UnitType.AnyFactory | UnitType.AnyStarport],
@@ -68,25 +70,60 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         target: PointLike | Unit[Any] | None = None,
         queued: bool = False,
         force: bool = False,
-    ) -> IssuedOrder:
-        """Order the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
-        return the `IssuedOrder`, as `sc2nachos.orders.OrderBook.build` orders it: `scv.build(UnitTypeId.BUNKER,
-        target=site)` is `api.orders.build(scv, UnitTypeId.BUNKER, target=site)`.
+    ) -> Command:
+        """Command the worker to make a structure of `unit_type`, or the barracks, factory or starport its add-on, and
+        return the `Command`, as `sc2nachos.commands.CommandBook.build` commands it: `scv.build(UnitTypeId.BUNKER,
+        target=site)` is `api.commands.build(scv, UnitTypeId.BUNKER, target=site)`.
 
-        Raises as `OrderBook.build` does.
+        Raises as `CommandBook.build` does.
         """
-        return self._tracker.order_book.build(self, unit_type, target=target, queued=queued, force=force)
+        return self._tracker.command_book.build(self, unit_type, target=target, queued=queued, force=force)
 
     def research(
         self: OwnUnit[UnitType.Structure], upgrade: UpgradeId, *, queued: bool = False, force: bool = False
-    ) -> IssuedOrder:
-        """Order the structure to research `upgrade` and return the `IssuedOrder`, as
-        `sc2nachos.orders.OrderBook.research` orders it: `tech_lab.research(UpgradeId.STIMPACK)` is
-        `api.orders.research(tech_lab, UpgradeId.STIMPACK)`.
+    ) -> Command:
+        """Command the structure to research `upgrade` and return the `Command`, as
+        `sc2nachos.commands.CommandBook.research` commands it: `tech_lab.research(UpgradeId.STIMPACK)` is
+        `api.commands.research(tech_lab, UpgradeId.STIMPACK)`.
 
-        Raises as `OrderBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
+        Raises as `CommandBook.research` does: `ValueError` for a barracks given one of its tech lab's upgrades.
         """
-        return self._tracker.order_book.research(self, upgrade, queued=queued, force=force)
+        return self._tracker.command_book.research(self, upgrade, queued=queued, force=force)
+
+    @property
+    def staged_commands(self) -> tuple[Command, ...]:
+        """The commands given to the unit this turn, which go out at its end, in the order they were given. Withdrawn
+        ones are left out.
+
+        A handler late in a turn reads this to leave alone a unit an earlier handler has commanded, since only the last
+        command a unit is given in a turn goes out.
+        """
+        return self._tracker.command_book._staged_for(self)
+
+    @property
+    def pending_commands(self) -> tuple[Command, ...]:
+        """The commands the unit's reported orders and effects may not show yet: those that went out to it in the turns
+        of the last two observations, that the game did not refuse and that none sent after replaced, in the order they
+        went out, then `staged_commands`. What the unit carries out at once is among them, a stim, a rally or a MULE,
+        whose effect, a stim's buff say, may not show yet either.
+
+        Nothing is checked against the observations: a command is pending for as long as it may take to show, the next
+        observation in a stepped game and the one after it on the ladder or in realtime. A bot reads this to leave
+        alone a unit it has commanded until its orders show the command.
+        """
+        return self._tracker.command_book._pending_for(self)
+
+    def commands(self, *, since: GameTime) -> tuple[Command, ...]:
+        """The commands given to the unit at or after `since`, oldest first: those that went out to it and that the game
+        did not refuse, then `staged_commands`. A command replaced since is still among them, and one the game took and
+        later gave up on, which `api.action_failures` lists; one not sent to the unit since it was already carrying it
+        out is not. A command sent to several units in one action counts as sent to each if the game took it, which it
+        does if any of them could.
+
+        Raises `ValueError` for a `since` more than 60 seconds of game time before the last observation, for which the
+        commands are no longer kept.
+        """
+        return self._tracker.command_book._commands_since(self, since)
 
     @property
     def orders(self) -> tuple[Order, ...]:
@@ -157,7 +194,7 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
 
     @property
     def is_constructing(self) -> bool:
-        """Whether the unit builds a structure, or walks to the site of one it was ordered to build: it has a
+        """Whether the unit builds a structure, or walks to the site of one it was commanded to build: it has a
         `construction`, or its current order's ability places a structure, a barracks building its add-on and a queen
         placing a creep tumor among them."""
         return self.construction is not None or self.is_doing(self._tracker.game_data._placing_abilities)
@@ -169,8 +206,8 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         whether it can attack at all.
 
         It reads 0 too while an attack is under way, for 0 to 6 steps before it by type and up to 8 for an ultralisk,
-        and a move ordered 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a unit
-        that moves between attacks keeps each by waiting for the cooldown to rise, in the step of the attack.
+        and a move commanded 2 steps or more before the attack cancels it, 1 step before it does not (in game). So a
+        unit that moves between attacks keeps each by waiting for the cooldown to rise, in the step of the attack.
         `docs/reference/game-behavior/damage-and-buffs.md` has the steps each type reads 0.
         """
         return GameTime(steps=self._latest_report.weapon_cooldown)
@@ -260,6 +297,13 @@ class OwnUnit[K: UnitType.AnyType](Unit[K]):
         """The finished add-on of a barracks, factory or starport, or `None`, as while the add-on is built, when it is
         the host's `construction` (in game)."""
         return self._attached_add_on
+
+    @property
+    def add_on_position(self: OwnUnit[UnitType.Barracks | UnitType.Factory | UnitType.Starport]) -> Point:
+        """Where the add-on of a landed barracks, factory or starport stands, or would stand once built: 2.5 right of
+        the structure's center and 0.5 below (in game)."""
+        position = self.position
+        return Point((position.x + ADD_ON_OFFSET[0], position.y + ADD_ON_OFFSET[1]))
 
     @property
     def _attached_add_on(self) -> OwnUnit[Any] | None:

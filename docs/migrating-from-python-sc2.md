@@ -45,7 +45,7 @@ api = Api()
 
 @api.on(TurnEvent, once=True)
 def rush(event: TurnEvent) -> None:
-    api.orders.issue(api.units.own.workers, AbilityId.ATTACK, target=api.map.opponent_start_locations[0])
+    api.commands.command(api.units.own.workers, AbilityId.ATTACK, target=api.map.opponent_start_locations[0])
 
 
 @api.on(TurnEvent)
@@ -53,7 +53,7 @@ def train_scvs(event: TurnEvent) -> None:
     cost = api.data.abilities[AbilityId.COMMAND_CENTER_TRAIN_SCV].cost
     for townhall in api.units.own.townhalls.complete.idle:
         if api.budget.covers(cost):
-            townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
+            townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
 
 
 run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TERRAN, steps_per_turn=4)
@@ -62,9 +62,9 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
 - **No subclass and no `async`.** Handlers subscribe to an `Api`, which can be made at import time, anywhere in the bot.
 - **`iteration == 0` is `once=True`.** There is no iteration: `event.time` is when the event came, and `min_interval`
   counts game time.
-- **An order goes to the units given, all at once**, and is sent when the turn's handlers have run.
+- **A command goes to the units given, all at once**, and is sent when the turn's handlers have run.
 - **`can_afford` is `api.budget.covers(cost)`.** `api.budget` is the bank and the supply free, less what the turn's
-  orders will cost, and read again it takes off each order given since.
+  commands will cost, and read again it takes off each command given since.
 - **`steps_per_turn=4` matches python-sc2's `game_step`.** NachOS takes a turn every step unless told otherwise, and its
   `Computer()` defaults to very hard.
 
@@ -89,8 +89,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
   Faster speed ([in detail](reference/python-sc2.md#units)).
 - **The tables are keyed by id, and the relations between them were swept in game**, replacing python-sc2's
   hand-written dicts ([in detail](reference/python-sc2.md#the-tables)).
-- **Orders are buffered and sent once a turn** through `api.orders`, and what the game refuses is listed in
-  `api.action_failures` ([orders](orders.md), [in detail](reference/python-sc2.md#orders)).
+- **Commands are buffered and sent once a turn** through `api.commands`, and what the game refuses is listed in
+  `api.action_failures` ([commands](commands.md), [in detail](reference/python-sc2.md#commands)).
 - **Drawing, cheats and debug commands go through `api.debug`**, and chat through `api.chat`
   ([debugging](debugging.md), [in detail](reference/python-sc2.md#debug-chat-the-camera-and-leaving)).
 - **One script plays the ladder's games and local ones**: `run_from_command_line` reads the ladder's arguments, which a
@@ -98,12 +98,12 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.EASY), race=Race.TE
 
 ## Where a translation goes wrong
 
-- **A unit takes the last order a turn gives it.** A second train given to a structure replaces the first; a reactor's
-  second marine needs `queued=True` ([orders](orders.md#one-order-a-unit-a-turn)).
+- **A unit takes the last command a turn gives it.** A second train given to a structure replaces the first; a
+  reactor's second marine needs `queued=True` ([commands](commands.md#one-command-a-unit-a-turn)).
 - **A larva's morph is given to a larva**, a drone or an overlord say, not to the hatchery, which refuses it
-  ([in detail](reference/python-sc2.md#orders)).
+  ([in detail](reference/python-sc2.md#commands)).
 - **A tag is not a unit.** A structure gets a new tag each time it leaves sight; keep `unit.id`, or the unit itself,
-  and before ordering a unit you kept, check `unit.is_orderable`, false while it is in a transport or under a neural
+  and before commanding a unit you kept, check `unit.is_commandable`, false while it is in a transport or under a neural
   parasite ([in detail](reference/python-sc2.md#units)).
 - **`api.units` is every unit**, of every side; python-sc2's `bot.units` is this player's non-structures, which is
   `api.units.own.non_structures` ([in detail](reference/python-sc2.md#units)).

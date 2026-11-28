@@ -1,4 +1,4 @@
-"""Drawing, cheats and debug commands: what goes out after each turn's orders, and when."""
+"""Drawing, cheats and debug commands: what goes out after each turn's commands, and when."""
 
 import math
 from collections.abc import Callable, Sequence
@@ -93,12 +93,12 @@ def _texts(commands: Sequence[debug_pb2.DebugCommand]) -> list[str]:
 
 
 class TestDrawing:
-    def test_what_a_turn_draws_goes_out_after_its_orders_as_one_debug_request(self) -> None:
+    def test_what_a_turn_draws_goes_out_after_its_commands_as_one_debug_request(self) -> None:
         api = Api()
 
         def turn(step: int) -> None:
             if step == 0:
-                api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(5.0, 5.0))
+                api.commands.command(api.units.own[0], AbilityId.MOVE, target=(5.0, 5.0))
                 api.debug.draw((2.0, 3.0), DebugText("here"))
 
         observations = [make_observation(step, units=[make_unit(1)]) for step in range(3)]

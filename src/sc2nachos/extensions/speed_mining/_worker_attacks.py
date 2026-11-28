@@ -59,7 +59,7 @@ class WorkerAttacks:
         if not reachable:
             return False
         target = min(reachable, key=lambda enemy: enemy.life)
-        self._api.orders.issue(worker, AbilityId.ATTACK, target=target)
+        self._api.commands.command(worker, AbilityId.ATTACK, target=target)
         self._target_by_attacker[worker] = target
         return True
 

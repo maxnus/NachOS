@@ -15,7 +15,7 @@ codebases read alike. A new rule of style goes here, with an example from the co
   where it is called: `_holds_a_tag_of(dead, unit)`, `_new_tag_is_same_unit(unit, display)`. A pull request renames a
   one-word name in the code it touches, not only in the code it adds. An enum's member may be one word, its enum
   naming the rest: `EventPriority.BEFORE`, `Race.TERRAN` (the owner, #232).
-- **A name that holds an instance of a NachOS class follows the class**: `order_book: OrderBook`, never `orders`. A
+- **A name that holds an instance of a NachOS class follows the class**: `command_book: CommandBook`, never `orders`. A
   constructor's parameter is named for what it takes: `static_placement_grid`, `present_units`.
 - **A classmethod that turns a value of another kind into an instance of its class is named `from_` that value**:
   `Footprint.from_rows`, `GamePorts.from_start_port`, `Player._from_game`. One that builds a shape or a state names
@@ -30,7 +30,7 @@ codebases read alike. A new rule of style goes here, with an example from the co
 - **Type hints** on all parameters and return types.
 - **A filter takes one value or a collection** (`UnitTypeId | Collection[UnitTypeId]`) and normalizes inside.
 - **Several units handed to a bot are a `Units`**, the established public interface, unless there is a good reason
-  for another type (the owner, review of #229): `SpeedMining.workers_at` and its releases return one, and `IssuedOrder`
+  for another type (the owner, review of #229): `SpeedMining.workers_at` and its releases return one, and `Command`
   and the actions read off an observation hold one, where they had tuples. A `Units` equals another of the same units
   in the same order, so a frozen dataclass holding one compares by value. Inside, a list built up or sorted is wrapped
   where it is handed out.

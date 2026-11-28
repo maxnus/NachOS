@@ -11,6 +11,7 @@ import pytest
 from s2clientprotocol import common_pb2, data_pb2, error_pb2, query_pb2, raw_pb2, sc2api_pb2
 
 from sc2nachos import Api, GameTime
+from sc2nachos.commands import CommandBook
 from sc2nachos.events import TurnEvent
 from sc2nachos.gamedata import GameData
 from sc2nachos.gamedata._footprints import ADD_ON_OFFSET, FOOTPRINTS
@@ -18,7 +19,6 @@ from sc2nachos.gamemap import GameMap, Ramp
 from sc2nachos.geometry import Circle, Footprint, Grid, Point, Tile, TileSet
 from sc2nachos.ids import AbilityId, UnitTypeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race
-from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids, ProtossWall, TerranWall
 from sc2nachos.protocol import Client, Recording, WebSocketTransport
 from sc2nachos.run import GameProcess, MapFile, MapNotFoundError
@@ -94,7 +94,7 @@ class _Game:
     def __init__(self) -> None:
         self.tracker = make_tracker(_TABLES)
         self.map = GameMap(make_game_info(*_MAP), start_location=Point((0.5, 0.5)))
-        self.book = OrderBook(_TABLES)
+        self.book = CommandBook(_TABLES)
         self.grids: PlacementGrids | None = None
 
     def observe(
@@ -116,7 +116,7 @@ class _Game:
                 state=state,
                 step=step,
                 game_data=_TABLES,
-                order_book=self.book,
+                command_book=self.book,
             )
         else:
             self.grids._update(present, state, step)
@@ -128,7 +128,7 @@ class _Game:
         return unit
 
     def flush(self) -> None:
-        """Send the turn's orders, each command taken."""
+        """Send the turn's commands, each taken."""
         client, _ = make_client(make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.Success] * 8)))
         self.book._send(client)
 
@@ -259,32 +259,32 @@ class TestTheDynamicGrid:
 
 
 class TestTheReservedGrid:
-    def test_nothing_is_reserved_with_no_build_ordered(self) -> None:
+    def test_nothing_is_reserved_with_no_build_commanded(self) -> None:
         assert not _Game().observe(0, _scv(1)).reserved.any()
 
-    def test_a_build_issued_this_turn_reserves_its_site(self) -> None:
+    def test_a_build_given_this_turn_reserves_its_site(self) -> None:
         game = _Game()
         game.observe(0, _scv(1))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.3, 7.8)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.3, 7.8)))
         grids = game.observe(0, _scv(1))
         assert _picture(grids.reserved, x0=6, y0=6, x1=9, y1=9) == ["....", ".##.", ".##.", "...."]
 
     def test_a_withdrawn_build_frees_its_site(self) -> None:
         game = _Game()
         grids = game.observe(0, _scv(1))
-        order = game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        command = game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         assert grids.reserved.any()
-        order.withdraw()
+        command.withdraw()
         assert not grids.reserved.any()
 
     def test_a_build_sent_and_not_observed_yet_reserves_its_site(self) -> None:
         """The game may show an order an observation late, as on the ladder."""
         game = _Game()
         game.observe(0, _scv(1, at=(9.5, 8.5)))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         game.flush()
         grids = game.observe(8, _scv(1, at=(9.5, 8.5)))
-        assert not game.book.issued_to(game.own(1))
+        assert not game.own(1).staged_commands
         assert grids.reserved[Point((8.0, 8.0))]
 
     def test_a_build_the_worker_shows_reserves_its_site_until_construction_begins(self) -> None:
@@ -299,7 +299,7 @@ class TestTheReservedGrid:
         game = _Game()
         geyser = make_unit(2, UnitTypeId.VESPENE_GEYSER, at=(8.5, 8.5), alliance=_NEUTRAL)
         game.observe(0, _scv(1), geyser)
-        game.book.issue(game.own(1), _BUILD_REFINERY, target=game.tracker.unit_tracker.by_tag(2))
+        game.book.command(game.own(1), _BUILD_REFINERY, target=game.tracker.unit_tracker.by_tag(2))
         grids = game.observe(0, _scv(1), geyser)
         assert _picture(grids.reserved, x0=6, y0=6, x1=10, y1=10) == [
             ".....",
@@ -326,7 +326,7 @@ class TestTheReservedGrid:
     def test_an_add_on_reserves_the_ground_beside_its_host(self) -> None:
         game = _Game()
         game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
-        game.book.issue(game.own(1), _BUILD_REACTOR)
+        game.book.command(game.own(1), _BUILD_REACTOR)
         grids = game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
         assert _picture(grids.reserved, x0=4, y0=6, x1=10, y1=10) == [
             ".......",
@@ -336,11 +336,22 @@ class TestTheReservedGrid:
             ".......",
         ]
 
+    def test_a_host_s_add_on_position_is_where_its_add_on_s_ground_is_reserved(self) -> None:
+        game = _Game()
+        game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
+        game.book.command(game.own(1), _BUILD_REACTOR)
+        grids = game.observe(0, make_unit(1, UnitTypeId.BARRACKS, at=(6.5, 8.5)))
+        add_on_position = game.own(1).add_on_position
+        assert add_on_position == Point((9.0, 8.0))
+        add_on_ground = Grid.like(grids.reserved, dtype=bool)
+        add_on_ground.fill_footprint(Footprint.square(2), at=add_on_position, value=True)
+        assert _picture(add_on_ground) == _picture(grids.reserved)
+
     def test_a_lifted_hosts_add_on_reserves_where_it_lands_too(self) -> None:
         game = _Game()
         flying = make_unit(1, UnitTypeId.BARRACKS_FLYING, at=(12.0, 3.0), is_flying=True)
         game.observe(0, flying)
-        game.book.issue(game.own(1), _BUILD_REACTOR, target=Point((6.5, 8.5)))
+        game.book.command(game.own(1), _BUILD_REACTOR, target=Point((6.5, 8.5)))
         grids = game.observe(0, flying)
         assert _picture(grids.reserved, x0=4, y0=6, x1=10, y1=10) == [
             ".......",
@@ -501,7 +512,7 @@ class TestTheFreeGrids:
     def test_free_is_static_and_dynamic_less_reserved(self) -> None:
         game = _Game()
         game.observe(0, _scv(1), make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         grids = game.observe(0, _scv(1), make_unit(2, UnitTypeId.SUPPLY_DEPOT, at=(12.0, 12.0)))
         assert grids.free.equals(grids.static & grids.dynamic & ~grids.reserved)
         assert not grids.free[Point((1.5, 1.5))]
@@ -612,11 +623,11 @@ class TestPlacingOneStructure:
         with pytest.raises(error, match=message):
             grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=3.0, margin=margin)  # pyright: ignore[reportArgumentType]
 
-    def test_a_build_issued_earlier_in_the_turn_takes_its_site(self) -> None:
+    def test_a_build_given_earlier_in_the_turn_takes_its_site(self) -> None:
         game = _Game()
         grids = game.observe(0, _scv(1))
         assert grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
-        game.book.issue(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
+        game.book.command(game.own(1), _BUILD_DEPOT, target=Point((8.0, 8.0)))
         assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((8.0, 8.0)))
         assert not grids.is_free(UnitTypeId.SUPPLY_DEPOT, at=Point((9.0, 9.0)))
         assert grids.nearest_free(UnitTypeId.SUPPLY_DEPOT, near=Point((8.0, 8.0)), max_distance=1.0) is None
@@ -680,7 +691,7 @@ def _grids_at_the_start(path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
     """The map of a recorded game, a tracker that has taken in its first observation, and the grids made from it."""
     game_map, tracker, data, observation = _first_observation(path)
     state = _State(observation, tracker, game_map)
-    order_book = OrderBook(data)
+    command_book = CommandBook(data)
     present_units = tracker.unit_tracker.present
     grids = PlacementGrids._build_at_start(
         game_map,
@@ -688,7 +699,7 @@ def _grids_at_the_start(path: Path) -> tuple[GameMap, _Tracker, PlacementGrids]:
         state=state,
         step=observation.observation.game_loop,
         game_data=data,
-        order_book=order_book,
+        command_book=command_book,
     )
     return game_map, tracker, grids
 
@@ -714,7 +725,7 @@ class TestARecordedGamesStart:
             assert not grids.dynamic[field.position + (-0.5, 0.0)]
             assert not grids.dynamic[field.position + (0.5, 0.0)]
 
-    def test_nothing_is_reserved_before_an_order(self, path: Path) -> None:
+    def test_nothing_is_reserved_before_a_command(self, path: Path) -> None:
         _, _, grids = _grids_at_the_start(path)
         assert not grids.reserved.any()
 
@@ -996,7 +1007,7 @@ class _DepotBot:
             if api.resources.minerals >= 100:
                 self.site = _depot_site(api)
                 scv = api.units.own.of_type(UnitTypeId.SCV).closest_to(self.site)
-                api.orders.issue(scv, _BUILD_DEPOT, target=self.site)
+                api.commands.command(scv, _BUILD_DEPOT, target=self.site)
             return
         placement = api.placement
         stands = bool(api.units.own.of_type(UnitTypeId.SUPPLY_DEPOT))

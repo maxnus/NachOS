@@ -45,6 +45,7 @@ from loguru import logger
 from record_corpus import GAMES
 from s2clientprotocol import data_pb2, error_pb2, raw_pb2
 
+from sc2nachos.commands import CommandBook
 from sc2nachos.gamedata import Attribute, GameData, TargetType
 from sc2nachos.gamedata._unit_type import UnitType
 from sc2nachos.gamemap import GameMap
@@ -53,7 +54,6 @@ from sc2nachos.geometry import Footprint, Point, Tile
 from sc2nachos.ids import AbilityId, UncuratedIdError, UnitTypeId
 from sc2nachos.ids.raw import RawAbilityId, RawUnitTypeId
 from sc2nachos.match import Race
-from sc2nachos.orders import OrderBook
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import GameEndedError
 from sc2nachos.run import Installation
@@ -642,8 +642,8 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
         )
         observation = game.client.observation()
         game_map = GameMap._from_game(game.client.game_info(), observation)
-        order_book = OrderBook(data)
-        tracker = _Tracker(data, None, order_book=order_book)
+        command_book = CommandBook(data)
+        tracker = _Tracker(data, None, command_book=command_book)
         raw, _ = without_uncurated_units(observation.observation.raw_data)
         tracker.update(raw, observation.observation.game_loop)
         state = _State(observation, tracker, game_map)
@@ -654,7 +654,7 @@ def _check_grids_on(installation: Installation, map_name: str) -> GridCheck:
             state=state,
             step=observation.observation.game_loop,
             game_data=data,
-            order_book=order_book,
+            command_book=command_book,
         )
         free = placement.free
         tiles = sorted(game_map.playable_area.tiles())

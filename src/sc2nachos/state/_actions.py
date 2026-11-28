@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Action:
-    """An action of this player's, as the game carried it out: a `UnitCommand`, an `AutocastToggle` or a
+    """An action of this player's, as the game carried it out: a `UnitAction`, an `AutocastToggle` or a
     `CameraMove`."""
 
     time: GameTime
@@ -32,7 +32,7 @@ class Action:
 
 @final
 @dataclass(frozen=True, slots=True)
-class UnitCommand(Action):
+class UnitAction(Action):
     """An order given to units of this player's."""
 
     ability: AbilityId
@@ -154,7 +154,7 @@ def read_action(action: sc2api_pb2.Action, unit_by_tag: Callable[[int], Unit[Any
     time = GameTime(steps=action.game_loop)
     match raw.WhichOneof("action"):
         case "unit_command":
-            return UnitCommand._from_proto(time, raw.unit_command, unit_by_tag)
+            return UnitAction._from_proto(time, raw.unit_command, unit_by_tag)
         case "toggle_autocast":
             return AutocastToggle._from_proto(time, raw.toggle_autocast, unit_by_tag)
         case "camera_move":

@@ -1,6 +1,6 @@
 """The game's data tables: unit types, abilities, upgrades and effects."""
 
-from sc2nachos.gamedata._ability_data import AbilityData, OrderBehavior, TargetType
+from sc2nachos.gamedata._ability_data import AbilityData, CommandBehavior, TargetType
 from sc2nachos.gamedata._cost import Cost
 from sc2nachos.gamedata._creep_requirement import CreepRequirement
 from sc2nachos.gamedata._effect_data import EffectData
@@ -19,7 +19,7 @@ __all__ = [
     "CreepRequirement",
     "EffectData",
     "GameData",
-    "OrderBehavior",
+    "CommandBehavior",
     "Resources",
     "ResourcesAndSupply",
     "Tech",

@@ -100,7 +100,11 @@ _TABLES = make_tables(
     data_pb2.UnitTypeData(unit_id=UnitTypeId.BARRACKS, attributes=_STRUCTURE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.SUPPLY_DEPOT, attributes=_STRUCTURE),
     data_pb2.UnitTypeData(unit_id=UnitTypeId.ENGINEERING_BAY, attributes=_STRUCTURE),
-    abilities=[data_pb2.AbilityData(ability_id=_WEAPONS), data_pb2.AbilityData(ability_id=_ARMOR)],
+    abilities=[
+        data_pb2.AbilityData(ability_id=_WEAPONS),
+        data_pb2.AbilityData(ability_id=_ARMOR),
+        data_pb2.AbilityData(ability_id=AbilityId.RALLY_UNITS, target=data_pb2.AbilityData.Target.PointOrUnit),
+    ],
     upgrades=[
         *(
             data_pb2.UpgradeData(upgrade_id=upgrade, mineral_cost=100, vespene_cost=100, research_time=2560.0)
@@ -1003,22 +1007,39 @@ class TestIdle:
         assert [(event.time.steps, event.unit.tag) for event in seen] == [(0, 1), (16, 2)]
 
     @pytest.mark.parametrize("shown", [True, False], ids=["the order shows", "the game drops it"])
-    def test_a_unit_sent_an_order_the_observations_may_not_show_yet_is_not_idle(self, shown: bool) -> None:
+    def test_a_unit_sent_a_command_the_observations_may_not_show_yet_is_not_idle(self, shown: bool) -> None:
         """An order shows by the second observation after its turn on the ladder (in game); one that has not by then
         was dropped, and the unit is idle."""
         game = _Game()
         seen = record(game.events, OwnUnitBecameIdleEvent)
         game.observe(0, make_unit(1, build_progress=1.0, orders=[_moving()]))
         assert game._game is not None
-        orders = game._game.orders
-        orders.issue(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
+        command_book = game._game.commands
+        command_book.command(_own_unit(game, 1), AbilityId.MOVE, target=(30.0, 30.0))
         client, _ = make_client(
             make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
         )
-        orders._send(client)
+        command_book._send(client)
         game.observe(16, make_unit(1, build_progress=1.0))
         game.observe(32, make_unit(1, build_progress=1.0, orders=[_moving()] if shown else []))
         assert [(event.time.steps, event.unit.tag) for event in seen] == ([] if shown else [(32, 1)])
+
+    def test_a_unit_sent_only_what_it_carries_out_at_once_stays_idle(self) -> None:
+        """A rally leaves a structure's orders as they were (in game), so an idle barracks given one is not reported
+        idle a second time once the observations must show it."""
+        game = _Game()
+        seen = record(game.events, OwnUnitBecameIdleEvent)
+        game.observe(0, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
+        assert game._game is not None
+        command_book = game._game.commands
+        command_book.command(_own_unit(game, 1), AbilityId.RALLY_UNITS, target=(30.0, 30.0))
+        client, _ = make_client(
+            make_response(action=sc2api_pb2.ResponseAction(result=[error_pb2.ActionResult.Success]))
+        )
+        command_book._send(client)
+        game.observe(16, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
+        game.observe(32, make_unit(1, UnitTypeId.BARRACKS, build_progress=1.0))
+        assert [(event.time.steps, event.unit.tag) for event in seen] == [(0, 1)]
 
     def test_a_handler_subscribed_mid_game_hears_of_every_unit_idle_then(self) -> None:
         game = _Game()

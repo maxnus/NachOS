@@ -44,8 +44,8 @@ DEFEND_WITHIN = 15.0
 
 
 class Budget:
-    """What is left to spend this turn: `api.budget` as the turn starts, less each order's cost as the bot gives it, and
-    what it sets aside."""
+    """What is left to spend this turn: `api.budget` as the turn starts, less each command's cost as the bot gives it,
+    and what it sets aside."""
 
     def __init__(self) -> None:
         self.left = api.budget
@@ -82,10 +82,10 @@ def train_workers(budget: Budget) -> None:
     for townhall in townhalls.idle:
         if count >= wanted:
             return
-        if api.orders.issued_to(townhall, include_sent=True):
+        if townhall.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.COMMAND_CENTER_TRAIN_SCV):
-            townhall.issue(AbilityId.COMMAND_CENTER_TRAIN_SCV)
+            townhall.command(AbilityId.COMMAND_CENTER_TRAIN_SCV)
             count += 1
 
 
@@ -107,29 +107,22 @@ def hand_scvs_to_speed_mining(_: TurnEvent) -> None:
 def _free_scvs() -> Units[OwnUnit[Any]]:
     """The SCVs free to build: neither building nor on their way to build, and given nothing lately. Besides building,
     this bot's SCVs only mine."""
-    return api.units.own.workers.filter(
-        lambda scv: not scv.is_constructing and not api.orders.issued_to(scv, include_sent=True)
-    )
+    return api.units.own.workers.filter(lambda scv: not scv.is_constructing and not scv.pending_commands)
 
 
 def _order_scv_to_build(ability: AbilityId, site: Point) -> bool:
-    """Order the free SCV nearest `site` to build there. The game charges the build at once, while the SCV walks."""
+    """Command the free SCV nearest `site` to build there. The game charges the build at once, while the SCV walks."""
     scvs = _free_scvs()
     if not scvs:
         return False
-    scvs.closest_to(site).issue(ability, target=site)
+    scvs.closest_to(site).command(ability, target=site)
     return True
 
 
 def _ordered_count(ability: AbilityId) -> int:
-    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: ordered this turn, or
+    """How many builds of `ability` SCVs were given that `api.in_production` may not count yet: staged this turn, or
     sent and maybe not shown. One shown already may count in both for an observation or two."""
-    return sum(
-        1
-        for scv in api.units.own.workers
-        for order in api.orders.issued_to(scv, include_sent=True)
-        if order.ability is ability
-    )
+    return sum(1 for scv in api.units.own.workers for command in scv.pending_commands if command.ability is ability)
 
 
 def build_supply(budget: Budget) -> None:
@@ -156,7 +149,7 @@ def _depot_anchor() -> Point:
 @api.on(OwnConstructionFinishedEvent.only(UnitType.SupplyDepot))
 def lower_depot(event: OwnConstructionFinishedEvent) -> None:
     """Lower a finished depot, so it blocks nothing."""
-    event.unit.issue(AbilityId.SUPPLY_DEPOT_LOWER)
+    event.unit.command(AbilityId.SUPPLY_DEPOT_LOWER)
 
 
 def take_next_expansion(budget: Budget) -> None:
@@ -211,10 +204,10 @@ def build_barracks(budget: Budget) -> None:
 def train_marines(budget: Budget) -> None:
     """Train a marine at each idle barracks."""
     for barracks in api.units.own.of_type(UnitType.Barracks).complete.idle:
-        if api.orders.issued_to(barracks, include_sent=True):
+        if barracks.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.BARRACKS_TRAIN_MARINE):
-            barracks.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+            barracks.command(AbilityId.BARRACKS_TRAIN_MARINE)
 
 
 # --- The army
@@ -240,16 +233,16 @@ class Army:
             self.attacking = False
         if threats and not self.attacking:
             for marine in marines:
-                marine.issue(AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
+                marine.command(AbilityId.ATTACK, target=threats.closest_to(marine.position).position)
         elif self.attacking:
-            api.orders.issue(marines, AbilityId.ATTACK, target=self._attack_target(marines))
+            api.commands.command(marines, AbilityId.ATTACK, target=self._attack_target(marines))
         elif was_attacking:
-            api.orders.issue(marines, AbilityId.MOVE, target=self._defense_location())
+            api.commands.command(marines, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = marines.idle.beyond(4, of=defense_location)
             if idle:
-                api.orders.issue(idle, AbilityId.ATTACK, target=defense_location)
+                api.commands.command(idle, AbilityId.ATTACK, target=defense_location)
 
     def _defense_location(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""

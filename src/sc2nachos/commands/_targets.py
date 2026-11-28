@@ -1,4 +1,4 @@
-"""An order's target: reading it, checking it, and storing it as the game will."""
+"""A command's target: reading it, checking it, and storing it as the game will."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from sc2nachos.ids import AbilityId
     from sc2nachos.units import Target
 
-# What each target type takes, for the error message when an order is aimed at the wrong thing.
+# What each target type takes, for the error message when a command is aimed at the wrong thing.
 _TARGETS_WANTED = {
     TargetType.NOTHING: "no target",
     TargetType.POINT: "a point",
@@ -25,10 +25,10 @@ _TARGETS_WANTED = {
 
 
 def aimed_at(target: PointLike | Unit[Any] | None) -> Target | None:
-    """An order's target as the game will read it: the unit itself, or the ground point.
+    """A command's target as the game will read it: the unit itself, or the ground point.
 
     Any height is dropped: the game takes a target on the ground and reports a height of zero for every one. The
-    coordinates are cut to the 32-bit floats the protocol carries, so the point an order holds is the one the game
+    coordinates are cut to the 32-bit floats the protocol carries, so the point a command holds is the one the game
     is given and the one it reports back.
     """
     if target is None or isinstance(target, Unit):
@@ -62,13 +62,13 @@ def target_as_kept(target: Target | None) -> Target | None:
 
 
 def same_point(target: Point, x: float, y: float) -> bool:
-    """Whether a point the game reports is the one ordered. The game keeps a point to `POINT_PRECISION`, rounded
+    """Whether a point the game reports is the one commanded. The game keeps a point to `POINT_PRECISION`, rounded
     down."""
     return _point_as_kept(target) == _point_as_kept(Point((x, y)))
 
 
 def same_target(one: Target | None, other: Target | None) -> bool:
-    """Whether two orders are aimed at the same thing: the same unit, the same point as the game keeps it, or
+    """Whether two commands are aimed at the same thing: the same unit, the same point as the game keeps it, or
     nothing."""
     if isinstance(one, Point) and isinstance(other, Point):
         return _point_as_kept(one) == _point_as_kept(other)

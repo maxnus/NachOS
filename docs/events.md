@@ -227,10 +227,10 @@ An `AnyUnitEvent`.
 
 | event | fields | selected by | comes when |
 |---|---|---|---|
-| `OwnUnitBecameIdleEvent` | `unit` | `only(*unit_types)` | a finished unit of this player's has no orders, and none NachOS sent it that may not show yet, having had orders or such an order, been unfinished or another side's, or not been listed in the observation before |
+| `OwnUnitBecameIdleEvent` | `unit` | `only(*unit_types)` | a finished unit of this player's has no orders, and no command NachOS sent it that may not show yet, having had orders or such a command, been unfinished or another side's, or not been listed in the observation before |
 
 A unit trained with no rally gets it, as do a structure just finished, a worker whose mineral field ran out, a unit
-whose order the game dropped, and one a neural parasite just took over. A unit just ordered does not, though on the
+whose order the game dropped, and one a neural parasite just took over. A unit just commanded does not, though on the
 ladder its order can take two observations to show
 ([game behavior](reference/game-behavior/protocol.md#time-and-steps)). A larva, or a depot even as it lowers, holds no
 order and gets it once. A sieged tank and a burrowed lurker show the order that made the form for as long as they keep

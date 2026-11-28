@@ -171,21 +171,21 @@ class TestWhereTheirHandlersRun:
         [(EventPriority.BEFORE, AbilityId.STOP), (EventPriority.AFTER, AbilityId.MOVE)],
         ids=["before the bot, the bot's", "after the bot, the extension's"],
     )
-    def test_of_an_order_the_bot_and_an_extension_give_a_unit_the_last_goes_out_and_stands(
+    def test_of_a_command_the_bot_and_an_extension_give_a_unit_the_last_goes_out_and_stands(
         self, extensions_priority: EventPriority, standing: AbilityId
     ) -> None:
-        """A unit takes the last unqueued order of a turn."""
+        """A unit takes the last unqueued command of a turn."""
 
         def build_extensions(api: Api[object]) -> None:
             api.on(TurnEvent, priority=extensions_priority)(
-                lambda event: api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(3.0, 3.0))
+                lambda event: api.commands.command(api.units.own[0], AbilityId.MOVE, target=(3.0, 3.0))
             )
 
         api = Api(extensions=build_extensions)
 
         @api.on(TurnEvent)
         def stop(event: TurnEvent) -> None:
-            api.orders.issue(api.units.own[0], AbilityId.STOP)
+            api.commands.command(api.units.own[0], AbilityId.STOP)
 
         game = _play_turns(api, turns=1)
 

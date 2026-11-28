@@ -7,7 +7,7 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, final
 
-from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, order_behaviors
+from sc2nachos.gamedata._ability_data import AbilityData, ability_costs, cancel_abilities, command_behaviors
 from sc2nachos.gamedata._effect_data import EffectData
 from sc2nachos.gamedata._missing_attacks import with_missing_attacks
 from sc2nachos.gamedata._tech import Tech
@@ -60,7 +60,7 @@ class GameData:
         step_costs = _step_costs(unit_rows)
         self._units = _with_costs_from_steps(unit_rows, step_costs)
         structures = frozenset(row.id for row in self._units.values() if Attribute.STRUCTURE in row.attributes)
-        behaviors = order_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
+        behaviors = command_behaviors(TECH_TREE, structures, frozenset(self._units.keys() - structures))
         self._upgrades = _read_table(
             data.upgrades, lambda upgrade: UpgradeData._from_proto(upgrade, TECH_TREE), lambda row: row.id
         )

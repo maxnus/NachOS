@@ -12,6 +12,7 @@ from s2clientprotocol import sc2api_pb2
 
 from sc2nachos.api._fog_off_playback import _FogOffPlayback
 from sc2nachos.camera import Camera
+from sc2nachos.commands import CommandBook
 from sc2nachos.debug import DebugCommands
 from sc2nachos.events import (
     AlertEvent,
@@ -68,7 +69,6 @@ from sc2nachos.gametime import GameTime
 from sc2nachos.geometry import Area, Point
 from sc2nachos.ids import UnitTypeId, UpgradeId
 from sc2nachos.match import Enemy, Player, Race, Result
-from sc2nachos.orders import OrderBook
 from sc2nachos.pathing import Pathing
 from sc2nachos.placement import PlacementGrids
 from sc2nachos.protocol import Client
@@ -102,7 +102,7 @@ class _Game:
     player: Final[Player]
     enemy: Final[Enemy | None]
     tracker: Final[_Tracker]
-    orders: Final[OrderBook]
+    commands: Final[CommandBook]
     observation: sc2api_pb2.ResponseObservation
     state: _State
     placement: Final[PlacementGrids]
@@ -143,7 +143,7 @@ class _Game:
         if (player_id := client.player_id) is None:
             raise ValueError("the client has joined no game")
         enemy = Enemy._from_game(info, player_id, game_data=game_data, ladder_id=enemy_ladder_id)
-        order_book = OrderBook(game_data)
+        command_book = CommandBook(game_data)
 
         def on_creep(point: Point) -> bool:
             # A unit's speed reads the creep under it off the game's current state, which decodes it once an
@@ -152,17 +152,17 @@ class _Game:
 
         fog_off_playback = None
         if client.fog_disabled:
-            fog_off_playback = _FogOffPlayback(game_data, enemy, order_book, on_creep=on_creep)
+            fog_off_playback = _FogOffPlayback(game_data, enemy, command_book, on_creep=on_creep)
             tracker = _Tracker(
                 game_data,
                 enemy,
                 id_provider=fog_off_playback.id_of_unit,
-                order_book=order_book,
+                command_book=command_book,
                 on_creep=on_creep,
             )
             observation = fog_off_playback.read(observation, step)
         else:
-            tracker = _Tracker(game_data, enemy, order_book=order_book, on_creep=on_creep)
+            tracker = _Tracker(game_data, enemy, command_book=command_book, on_creep=on_creep)
         game_map = GameMap._from_game(info, observation)
         tracker.update(observation.observation.raw_data, step)
         present_units = tracker.unit_tracker.present
@@ -180,7 +180,7 @@ class _Game:
             ),
             enemy=enemy,
             tracker=tracker,
-            orders=order_book,
+            commands=command_book,
             observation=observation,
             state=state,
             placement=PlacementGrids._build_at_start(
@@ -189,7 +189,7 @@ class _Game:
                 state=state,
                 step=step,
                 game_data=game_data,
-                order_book=order_book,
+                command_book=command_book,
             ),
             vision=Vision._build_at_start(game_map, state=state, step=step),
             pathing=Pathing(client),
@@ -237,7 +237,7 @@ class _Game:
         changes = self.tracker.last_changes
         changed_hands = (unit for unit, _ in changes.units_alliance_changed)
         lost = itertools.chain(changes.units_died, changes.units_found_dead, changed_hands)
-        self.orders._observe(self.time, lost)
+        self.commands._observe(self.time, lost)
         if self.enemy is not None:
             self._read_enemy(self.enemy, changes.enemy_units_first_seen)
 
@@ -481,13 +481,17 @@ class _Game:
     def _units_become_idle(self) -> list[OwnUnit[Any]]:
         """The units of this player's that are idle now and were not at the update before, by
         `OwnUnitBecameIdleEvent`'s reckoning, in the order the tracker lists them. Every idle unit counts as newly so
-        when the update before was not looked at. Keeps the idle units for the next update: call it once an update."""
+        when the update before was not looked at. What a unit carries out at once, a rally or a MULE, leaves it idle.
+        Keeps the idle units for the next update: call it once an update."""
         update = self.tracker.last_changes.update
         before = self._idle_unit_ids.at(update - 1, default=frozenset())
+        commands = self.commands
         idle = [
             unit
             for unit in self.tracker.unit_tracker.present.own
-            if unit.is_complete and unit.is_idle and not self.orders.issued_to(unit, include_sent=True)
+            if unit.is_complete
+            and unit.is_idle
+            and all(commands._is_carried_out_at_once(command, unit) for command in unit.pending_commands)
         ]
         self._idle_unit_ids = _Snapshot(frozenset(unit.id for unit in idle), update)
         return [unit for unit in idle if unit.id not in before]
@@ -523,11 +527,11 @@ class _Game:
         self._chat_to_send.append(sc2api_pb2.Action(action_chat=sc2api_pb2.ActionChat(channel=channel, message=text)))
 
     def send_turn(self) -> None:
-        """Send what the turn's handlers asked for: the orders, then the camera's move and the chat, in one request,
+        """Send what the turn's handlers asked for: the commands, then the camera's move and the chat, in one request,
         and after it the debug commands and drawing."""
         chat, self._chat_to_send = self._chat_to_send, []
         move = self.camera._create_move_action()
-        self.orders._send(self.client, then=[*([] if move is None else [move]), *chat])
+        self.commands._send(self.client, then=[*([] if move is None else [move]), *chat])
         self.debug._send()
 
     def outcome(self) -> Result | None:

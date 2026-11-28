@@ -67,8 +67,8 @@ TUMOR_PLANTS_AFTER_ITS_BURROW = GameTime(steps=289)
 
 
 class Budget:
-    """What is left to spend this turn: `api.budget` as the turn starts, less each order's cost as the bot gives it, and
-    what it sets aside."""
+    """What is left to spend this turn: `api.budget` as the turn starts, less each command's cost as the bot gives it,
+    and what it sets aside."""
 
     def __init__(self) -> None:
         self.left = api.budget
@@ -99,21 +99,14 @@ def spend_money(_: TurnEvent) -> None:
 
 
 def _ordered_count(ability: AbilityId) -> int:
-    """How many orders of `ability` this player's units were given that `api.in_production` may not count yet: ordered
-    this turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
-    return sum(
-        1
-        for unit in api.units.own
-        for order in api.orders.issued_to(unit, include_sent=True)
-        if order.ability is ability
-    )
+    """How many commands of `ability` this player's units were given that `api.in_production` may not count yet:
+    staged this turn, or sent and maybe not shown. One shown already may count in both for an observation or two."""
+    return sum(1 for unit in api.units.own for command in unit.pending_commands if command.ability is ability)
 
 
 def _free_larvae() -> Units[OwnUnit[UnitType.Larva]]:
     """The larvae given nothing yet."""
-    return api.units.own.of_type(UnitType.Larva).filter(
-        lambda larva: not api.orders.issued_to(larva, include_sent=True)
-    )
+    return api.units.own.of_type(UnitType.Larva).filter(lambda larva: not larva.pending_commands)
 
 
 # --- Larvae
@@ -130,7 +123,7 @@ def build_overlords(budget: Budget) -> None:
         return
     larvae = _free_larvae()
     if larvae and budget.try_pay_for(AbilityId.LARVA_MORPH_OVERLORD, save=True):
-        larvae[0].issue(AbilityId.LARVA_MORPH_OVERLORD)
+        larvae[0].command(AbilityId.LARVA_MORPH_OVERLORD)
 
 
 def spend_larvae(budget: Budget) -> None:
@@ -143,7 +136,7 @@ def spend_larvae(budget: Budget) -> None:
         ability = _next_larva_morph(budget, drones, army_supply, threatened=threatened)
         if ability is None or not budget.try_pay_for(ability):
             return
-        larva.issue(ability)
+        larva.command(ability)
         if ability is AbilityId.LARVA_MORPH_DRONE:
             drones += 1
         else:
@@ -192,17 +185,17 @@ def hand_drones_to_speed_mining(_: TurnEvent) -> None:
 
 def _free_drones() -> Units[OwnUnit[Any]]:
     """The drones free to build: given nothing lately. Besides building, this bot's drones only mine and collect."""
-    return api.units.own.workers.filter(lambda drone: not api.orders.issued_to(drone, include_sent=True))
+    return api.units.own.workers.filter(lambda drone: not drone.pending_commands)
 
 
 def _order_drone_to_build(ability: AbilityId, target: Point | Unit[Any]) -> bool:
-    """Order the free drone nearest `target` to morph into a structure there. The game charges it at once, while the
+    """Command the free drone nearest `target` to morph into a structure there. The game charges it at once, while the
     drone walks."""
     drones = _free_drones()
     if not drones:
         return False
     site = target.position if isinstance(target, Unit) else target
-    drones.closest_to(site).issue(ability, target=target)
+    drones.closest_to(site).command(ability, target=target)
     return True
 
 
@@ -311,10 +304,10 @@ def train_queens(budget: Budget) -> None:
     for townhall in own.townhalls.complete.idle:
         if queens >= wanted:
             return
-        if api.orders.issued_to(townhall, include_sent=True):
+        if townhall.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.HATCHERY_TRAIN_QUEEN):
-            townhall.issue(AbilityId.HATCHERY_TRAIN_QUEEN)
+            townhall.command(AbilityId.HATCHERY_TRAIN_QUEEN)
             queens += 1
 
 
@@ -323,10 +316,10 @@ def research_zergling_speed(budget: Budget) -> None:
     if UpgradeId.ZERGLING_SPEED in api.upgrades or UpgradeId.ZERGLING_SPEED in api.researches:
         return
     for pool in api.units.own.of_type(UnitType.SpawningPool).complete.idle:
-        if api.orders.issued_to(pool, include_sent=True):
+        if pool.pending_commands:
             continue
         if budget.try_pay_for(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED):
-            pool.issue(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED)
+            pool.command(AbilityId.SPAWNING_POOL_RESEARCH_ZERGLING_SPEED)
 
 
 # --- Queens and creep
@@ -348,7 +341,7 @@ class QueenCommander:
 
     @api.on(TurnEvent, min_interval=GameTime(steps=8))
     def order_queens(self, _: TurnEvent) -> None:
-        """Pair the queens with the townhalls, and order each that is free."""
+        """Pair the queens with the townhalls, and command each that is free."""
         queens = api.units.own.of_type(UnitType.Queen)
         self._pair(queens)
         threats = api.units.enemy.non_structures
@@ -357,8 +350,8 @@ class QueenCommander:
             home = townhall.position if townhall is not None else api.player.start_location.center
             near = threats.within(DEFEND_WITHIN, of=home)
             if near:
-                queen.issue(AbilityId.ATTACK, target=near.closest_to(queen.position).position)
-            elif queen.is_idle and not api.orders.issued_to(queen, include_sent=True):
+                queen.command(AbilityId.ATTACK, target=near.closest_to(queen.position).position)
+            elif queen.is_idle and not queen.pending_commands:
                 self._order_free_queen(queen, townhall)
 
     def _pair(self, queens: Units[OwnUnit[UnitType.Queen]]) -> None:
@@ -378,14 +371,14 @@ class QueenCommander:
         """Inject the queen's townhall if it can, or plant a creep tumor while keeping the energy for the next inject,
         or walk back to its townhall."""
         if townhall is not None and queen.energy >= 25 and not townhall.has_buff(BuffId.QUEEN_INJECTED):
-            queen.issue(AbilityId.QUEEN_INJECT, target=townhall)
+            queen.command(AbilityId.QUEEN_INJECT, target=townhall)
         elif queen.energy >= (50 if townhall is not None else 25):
             origin = townhall.position if townhall is not None else queen.position
             site = _creep_tumor_site(origin)
             if site is not None:
-                queen.issue(AbilityId.BUILD_CREEP_TUMOR, target=site)
+                queen.command(AbilityId.BUILD_CREEP_TUMOR, target=site)
         elif townhall is not None and queen.distance_to(townhall) > 6:
-            queen.issue(AbilityId.MOVE, target=townhall.position)
+            queen.command(AbilityId.MOVE, target=townhall.position)
 
 
 class CreepSpread:
@@ -397,7 +390,7 @@ class CreepSpread:
 
     @api.on(TurnEvent, min_interval=GameTime(steps=16))
     def plant_tumors(self, _: TurnEvent) -> None:
-        """Order each tumor that can plant one now, and has not been ordered to, to plant one toward the enemy."""
+        """Command each tumor that can plant one now, and has not been commanded to, to plant one toward the enemy."""
         for tumor in api.units.own.of_type(UnitType.CreepTumorBurrowed):
             if tumor.orders:
                 continue
@@ -406,7 +399,7 @@ class CreepSpread:
                 continue
             site = _creep_tumor_site(tumor.position)
             if site is not None:
-                tumor.issue(AbilityId.BUILD_CREEP_TUMOR, target=site)
+                tumor.command(AbilityId.BUILD_CREEP_TUMOR, target=site)
                 self.plants_at[tumor] = None
 
 
@@ -463,16 +456,16 @@ class Army:
             self.attacking = False
         if threats and not self.attacking:
             for unit in army:
-                unit.issue(AbilityId.ATTACK, target=threats.closest_to(unit.position).position)
+                unit.command(AbilityId.ATTACK, target=threats.closest_to(unit.position).position)
         elif self.attacking:
-            api.orders.issue(army, AbilityId.ATTACK, target=self._attack_target(army))
+            api.commands.command(army, AbilityId.ATTACK, target=self._attack_target(army))
         elif was_attacking:
-            api.orders.issue(army, AbilityId.MOVE, target=self._defense_location())
+            api.commands.command(army, AbilityId.MOVE, target=self._defense_location())
         else:
             defense_location = self._defense_location()
             idle = army.idle.beyond(4, of=defense_location)
             if idle:
-                api.orders.issue(idle, AbilityId.ATTACK, target=defense_location)
+                api.commands.command(idle, AbilityId.ATTACK, target=defense_location)
 
     def _defense_location(self) -> Point:
         """Where the army waits: toward the map's center from this player's townhall furthest from its start."""

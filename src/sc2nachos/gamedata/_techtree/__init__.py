@@ -2,7 +2,7 @@
 
 from sc2nachos.gamedata._techtree._build_75689 import TECH_TREE
 from sc2nachos.gamedata._techtree._overrides import (
-    ABILITIES_JOINING_OTHER_ORDERS,
+    ABILITIES_JOINING_OTHER_COMMANDS,
     ABILITIES_PLACING_AT_THE_TARGET,
     ABILITIES_SENT_AS_ANOTHER,
     COCOON_PRODUCTS,
@@ -21,7 +21,7 @@ from sc2nachos.gamedata._techtree._overrides import (
 from sc2nachos.gamedata._techtree._tech_tree import TechTree, TechTreeAbility, TechTreeUnitType, TechTreeUpgrade
 
 __all__ = [
-    "ABILITIES_JOINING_OTHER_ORDERS",
+    "ABILITIES_JOINING_OTHER_COMMANDS",
     "ABILITIES_PLACING_AT_THE_TARGET",
     "ABILITIES_SENT_AS_ANOTHER",
     "COCOON_PRODUCTS",

@@ -89,7 +89,7 @@ PRODUCERS_FALLBACK: Final[Mapping[UnitTypeId, frozenset[UnitTypeId]]] = MappingP
 # unit is offered replaced its orders (tool `sweep_orders`). `tools/generate_tech_tree.py` does not write this, and no
 # ability belongs here that a sweep has not seen keep a moving unit's orders.
 #
-# This is not the whole of `OrderBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
+# This is not the whole of `CommandBehavior.KEEPS_ORDERS`: `gamedata/_ability_data.py` also reads an ability that makes
 # nothing and is offered only to types that hold no order of their own as keeping orders, which covers a structure's
 # own rally, load, cancel and energy casts. An action several types perform is here where it keeps every type's orders;
 # where it keeps only some types', those are in `KEEPS_ORDERS_BY_TYPE`.
@@ -370,13 +370,13 @@ MULTI_UNIT_ABILITIES: Final[frozenset[AbilityId]] = frozenset(
     }
 )
 
-ABILITIES_JOINING_OTHER_ORDERS: Final[frozenset[AbilityId]] = MULTI_UNIT_ABILITIES - {
+ABILITIES_JOINING_OTHER_COMMANDS: Final[frozenset[AbilityId]] = MULTI_UNIT_ABILITIES - {
     # It merges the two templar its order names (in game), and what one command naming four does was never seen.
     AbilityId.MORPH_ARCHON,
     # One command naming two command centers took in the workers of one of them in one run and of both in the next
     # (tool `sweep_orders`, `group-abilities-terran`).
     AbilityId.LOAD_ALL,
 }
-"""The abilities whose orders given apart in one turn join one command where they share a target and a queue flag, as
-`AbilityData.joins_other_orders` reads them: every one of `MULTI_UNIT_ABILITIES` but those whose group is part of what
-an order of them does, or which a command naming several was not seen to carry out for each."""
+"""The abilities whose commands given apart in one turn join one action where they share a target and a queue flag, as
+`AbilityData.joins_other_commands` reads them: every one of `MULTI_UNIT_ABILITIES` but those whose group is part of
+what a command of them does, or which an action naming several was not seen to carry out for each."""

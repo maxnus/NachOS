@@ -19,6 +19,7 @@ from sc2nachos import (
     run_recording,
     run_replay,
 )
+from sc2nachos.commands import Command
 from sc2nachos.events import (
     AnyUnitDiedEvent,
     Event,
@@ -33,7 +34,6 @@ from sc2nachos.gamedata._techtree import TECH_TREE
 from sc2nachos.gamemap import Expansion
 from sc2nachos.ids import AbilityId, UnitTypeId, UpgradeId
 from sc2nachos.match import Computer, Difficulty, Participant, Race, Result
-from sc2nachos.orders import IssuedOrder
 from sc2nachos.protocol import (
     Client,
     ConnectionClosedError,
@@ -360,7 +360,7 @@ class TestPlaying:
             failures = api.action_failures
             listed.append([(f.time.steps, f.unit and f.unit.tag, f.ability, f.action_result) for f in failures])
             if event.time.steps == 0:
-                api.orders.issue(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
+                api.commands.command(api.units.own[0], AbilityId.MOVE, target=(20.0, 21.0))
 
         api.play(client, steps_per_turn=2)
 
@@ -372,7 +372,7 @@ class TestPlaying:
             ],
         ]
 
-    def test_a_unit_ordered_through_itself_is_ordered_into_the_api_s_orders(self) -> None:
+    def test_a_unit_commanded_through_itself_is_commanded_into_the_api_s_commands(self) -> None:
         client, transport = _joined(
             make_response(game_info=make_game_info()),
             make_response(data=sc2api_pb2.ResponseData()),
@@ -382,17 +382,17 @@ class TestPlaying:
             make_response(Status.ENDED, observation=make_observation(2, (1, Result.VICTORY), units=[make_unit(1)])),
         )
         api = Api()
-        issued: list[tuple[IssuedOrder, tuple[IssuedOrder, ...]]] = []
+        given: list[tuple[Command, tuple[Command, ...]]] = []
 
         @api.on(TurnEvent, once=True)
         def turn(event: TurnEvent) -> None:
-            order = api.units.own[0].issue(AbilityId.MOVE, target=(20.0, 21.0))
-            issued.append((order, api.orders.pending))
+            move = api.units.own[0].command(AbilityId.MOVE, target=(20.0, 21.0))
+            given.append((move, api.commands.staged))
 
         api.play(client, steps_per_turn=2)
 
-        ((order, pending),) = issued
-        assert pending == (order,)
+        ((move, pending),) = given
+        assert pending == (move,)
         (request,) = [request.action for request in transport.requests if request.HasField("action")]
         (action,) = request.actions
         command = action.action_raw.unit_command
@@ -477,8 +477,8 @@ class TestPlaying:
             (built, True, True, True, True),
         ]
 
-    def test_the_budget_is_the_bank_and_the_supply_free_less_what_the_turn_s_orders_will_cost(self) -> None:
-        """Read again after an order, it takes that order off too. Over the cap, its supply is negative."""
+    def test_the_budget_is_the_bank_and_the_supply_free_less_what_the_turn_s_commands_will_cost(self) -> None:
+        """Read again after a command, it takes that command off too. Over the cap, its supply is negative."""
         barracks = [make_unit(tag, UnitTypeId.BARRACKS, build_progress=1.0) for tag in (1, 2)]
         observations = [
             make_observation(
@@ -497,9 +497,9 @@ class TestPlaying:
             seen.append(api.budget)
             if len(seen) == 1:
                 first, second = api.units.own
-                first.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+                first.command(AbilityId.BARRACKS_TRAIN_MARINE)
                 seen.append(api.budget)
-                second.issue(AbilityId.BARRACKS_TRAIN_MARINE)
+                second.command(AbilityId.BARRACKS_TRAIN_MARINE)
                 seen.append(api.budget)
 
         api.play(ScriptedGame(observations, data=shipped_game_data()).joined())

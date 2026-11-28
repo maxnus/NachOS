@@ -47,9 +47,9 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
   unit once it dies.
 - **Events** for what happens in a game, from a unit's death to an upgrade finishing, each subscribed to with
   `api.on` ([guide](https://github.com/maxnus/NachOS/blob/main/docs/events.md)).
-- **Orders** through `unit.issue`, or `api.orders.issue` for several units at once, or by what they make:
+- **Commands** through `unit.command`, or `api.commands.command` for several units at once, or by what they make:
   `unit.train`, `build` and `research`. What the game refused is listed in `api.action_failures` on the next turn
-  ([guide](https://github.com/maxnus/NachOS/blob/main/docs/orders.md)).
+  ([guide](https://github.com/maxnus/NachOS/blob/main/docs/commands.md)).
 - **The game's data**: `api.data`, every unit type, ability, upgrade and weapon from the game's tables, with the tech
   tree, the structures' footprints and what the tables leave out, measured in the game
   ([reference](https://maxnus.github.io/NachOS/sc2nachos/gamedata.html)).
@@ -78,7 +78,7 @@ NachOS; the bare `nachos` name on PyPI belongs to an unrelated project.
 ## Design
 
 **You instantiate the API. You do not subclass it, and your bot does not live inside it.** NachOS exposes an
-`Api` that owns the client, game state, game data, units, orders and event handlers. Construct one and reach it
+`Api` that owns the client, game state, game data, units, commands and event handlers. Construct one and reach it
 however suits your bot — most bots will want a module-level singleton:
 
 ```python
@@ -128,8 +128,8 @@ run_local("PylonAIE_v4", api, Computer(Race.ZERG, Difficulty.VERY_HARD), race=Ra
   for the latest release.
 - [Events](https://github.com/maxnus/NachOS/blob/main/docs/events.md): every event a game hands out, and how to
   subscribe to only some of them.
-- [Orders](https://github.com/maxnus/NachOS/blob/main/docs/orders.md): how a bot orders its units, and what it learns
-  about each order.
+- [Commands](https://github.com/maxnus/NachOS/blob/main/docs/commands.md): how a bot commands its units, and what it
+  learns about each command.
 - [Debugging](https://github.com/maxnus/NachOS/blob/main/docs/debugging.md): drawing on the game's screen, cheats, and
   creating units.
 - [Extensions](https://github.com/maxnus/NachOS/blob/main/docs/extensions.md): features a bot opts into, how to use
