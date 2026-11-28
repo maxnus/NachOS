@@ -87,9 +87,10 @@ rows of the table below and a few sentences of the decisions, can be run again f
    production after, lost workers replaced.
 7. **The builder is an occupancy interval per race, and walks shift it.** Terran's SCV is away from the walk there
    through the build to the walk back; Protoss's probe for the two walks only; Zerg's drone walks there and is gone.
-   Walk times are per structure, and the bot's (decision 11): `EconomyModel.builder_walk_time`, by default 10 seconds to
-   a command center, about the walk from a main's mineral line to its natural on every map of the pool (corpus), and 6
-   to any other structure; the planner reads no path for them. A structure cannot start before its walk unless a worker
+   Walk times are per structure, and the bot's (decision 11): `EconomyModel.builder_walk_time`, by default 8 seconds to
+   a command center, about the walk from a main's mineral line to its natural on every map of the pool, and 3 to any
+   other structure (the owner, 2026-11-27, from the example bot's walks in game, where they had been 10 and 6, the 10
+   from the corpus); the planner reads no path for them. A structure cannot start before its walk unless a worker
    is already on its way. Walks cost Terran 2% and two SCVs.
 8. **A plan is executed as an order, not a timetable.** The next item starts when affordable; the predicted times
    are for monitoring and the debug overlay. In AvocaDOS the order maps onto the priorities of the production,
@@ -318,9 +319,17 @@ file as it was at `807304c`.
       `EconomyModel.initial_harvest_delay`, 3 seconds by default, is how long a worker that starts to collect brings in
       nothing. The 3 seconds are assumed, not measured in game.
     - **Every start of mining pays too** ("I think workers immediately assigned to mining should pay too"): a new SCV's
-      first walk to a field, and a worker moved between minerals and vespene. A builder back from its structure pays its
-      walk back instead. The solve is a tenth to a quarter slower in all, and a plan from a game's start worth 0.6 to
-      1.5% less.
+      first walk to a field, and a worker moved between minerals and vespene. The solve is a tenth to a quarter slower
+      in all, and a plan from a game's start worth 0.6 to 1.5% less.
+    - **A builder back pays it too, out of its walk back** (the owner, 2026-11-27: "I am not sure I like the
+      inconsistency between minerals and gas"). A builder back at the minerals had paid its walk back alone, and one
+      back at a refinery its walk back and the delay as well. Each now walks back for its walk less the delay and pays
+      the delay as it starts, at minerals or vespene alike, so that the two together are its walk back, and all of the
+      delay where the walk is shorter. Gone with it are the variables and the row that let a builder start to mine for
+      nothing: 45 variables and 45 rows on the default grid, the integers as they were. It solves as fast (the
+      benchmark's `reference` and `replans` in 30.7 s before and 31.7 after, single runs), its plans are worth up to
+      0.4% more, most likely from builders that go straight on to another build, which no longer pay the delay, and the
+      example bot plays as well (42 of 126 games won against Cheater 3 after, 47 before, within the noise).
     - **A plan holds its intervals** ("Would it not be better to have a new class that represents all these values for a
       single bucket and then have a single tuple over objects of this class?"), each a `PlanInterval`. An interval was a
       bucket until he renamed it ("I don't really like the name").

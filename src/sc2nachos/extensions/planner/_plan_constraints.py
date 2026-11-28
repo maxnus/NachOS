@@ -102,18 +102,14 @@ class PlanConstraints(PlanVariables):
         intervals = self._interval_count
         working = self._working_in((*self._mining, *self._collecting))
         builders = RowExpression(intervals)
-        back_from_builds = RowExpression(intervals)
         built = [(index, item) for index, item in enumerate(self._items) if item.is_built_by_worker]
         for index, item in built:
-            walk = self._walk_seconds_of(item)
-            busy_share = self._busy_seconds(index, before=walk, after=walk) / self._widths[:, None]
+            walk_there, walk_back = self._walk_seconds_of(item), self._walk_back_seconds_of(item)
+            busy_share = self._busy_seconds(index, before=walk_there, after=walk_back) / self._widths[:, None]
             self._add_starts_to(builders, index, busy_share)
-            self._add_starts_to(back_from_builds, index, _falls_of(busy_share, from_share=0.0))
         for free_after in self._builders_free_after:
-            busy_share = self._busy_seconds_until(free_after) / self._widths
-            builders.constant += busy_share
-            back_from_builds.constant += _falls_of(busy_share[:, None], from_share=1.0)[:, 0]
-        self._constrain_work_starts(back_from_builds)
+            builders.constant += self._busy_seconds_until(free_after) / self._widths
+        self._constrain_work_starts()
         workers = self._count_alive(UnitTypeId.SCV, at_end=False)
         self._constrain_at_most(RowExpression(intervals).add_expression(working).add_expression(builders), workers)
         if not built or any(self._walk_seconds_of(item) for _, item in built):
@@ -127,11 +123,11 @@ class PlanConstraints(PlanVariables):
             builders_whole.constant += self._busy_seconds_until(free_after) > SECONDS_TOLERANCE
         self._constrain_at_most(builders_whole.selected(short_and_whole), workers.selected(short_and_whole))
 
-    def _constrain_work_starts(self, back_from_builds: RowExpression) -> None:
+    def _constrain_work_starts(self) -> None:
         """Hold the workers that start to mine or to collect in each interval at no fewer than those of each tier rise
         by: over what the interval before had left of them, as its SCVs survive, or over those of the state, where every
-        SCV that neither collects nor builds mines. Of the miners, as many as are `back_from_builds` in the interval
-        start for nothing: their walk back was the builder's."""
+        SCV that neither collects nor builds mines. A builder back from its structure is one of them, at minerals or
+        vespene alike."""
         if not self._started_mining and not self._started_collecting:
             return
         state = self._state
@@ -149,7 +145,6 @@ class PlanConstraints(PlanVariables):
             self._started_mining,
             working_now=mining_now,
             sites=state.mineral_fields,
-            back_from_builds=back_from_builds,
         )
 
     def _hold_starts_at_rises(
@@ -159,27 +154,18 @@ class PlanConstraints(PlanVariables):
         *,
         working_now: float,
         sites: int,
-        back_from_builds: RowExpression | None = None,
     ) -> None:
         """Hold the workers `started` in each of `tiers` in each interval at no fewer than the tier rises by, from the
-        `working_now` in them, as many in each tier as the `sites` now take, the better tiers first; less as many in
-        all as are `back_from_builds`."""
+        `working_now` in them, as many in each tier as the `sites` now take, the better tiers first."""
         intervals = self._interval_count
         survival = self._survival.share_surviving(UnitTypeId.SCV, self._edges[:-1], self._edges[1:])
         risen_by = np.eye(intervals) - np.eye(intervals, k=-1) * survival[None, :]
-        started_for_nothing = RowExpression(intervals)
         for tier, started_in_tier in zip(tiers, started, strict=True):
             in_tier_now = min(working_now, float(tier.workers_per_site * sites))
             working_now -= in_tier_now
             risen = RowExpression(intervals).add(tier.block, risen_by).add(started_in_tier, -np.eye(intervals))
             risen.constant[0] = -in_tier_now
-            if back_from_builds is not None:
-                back_in_tier = self._program.add_variables(intervals)
-                risen.add(back_in_tier, -np.eye(intervals))
-                started_for_nothing.add(back_in_tier, np.eye(intervals))
             self._program.constrain(risen, upper=0.0)
-        if back_from_builds is not None:
-            self._program.constrain(started_for_nothing.add_expression(back_from_builds, -1.0), upper=0.0)
 
     def _initial_harvest_delay_shares(self) -> FloatArray:
         """The share of each interval, by row, within the economy's `initial_harvest_delay` of each interval's start, by
@@ -434,9 +420,3 @@ class PlanConstraints(PlanVariables):
         needed = RowExpression(intervals).add(unlocked, np.eye(intervals) * self._unlock_fraction)
         self._constrain_at_most(needed, done)
         return RowExpression(intervals).add(unlocked, np.eye(intervals))
-
-
-def _falls_of(shares: FloatArray, *, from_share: float) -> FloatArray:
-    """How far each column of `shares` falls from the row before to each row, to the first row from `from_share`."""
-    before = np.vstack([np.full((1, shares.shape[1]), from_share), shares[:-1]])
-    return np.maximum(before - shares, 0.0)
